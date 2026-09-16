@@ -5,8 +5,11 @@
 //        title -> PLAY -> select -> READY -> the run starts on the map with the picked critter aboard;
 //        title -> ONLINE -> HOST A TABLE on the broadcast transport -> the lobby mints a host key, reaches its
 //        'connecting' phase and draws the table ticket without a page error;
-//        the pause overlay opening and closing over the map (and the screenshot the art director looks at).
-import { withPage, assert } from '../playtest.js';
+//        the pause overlay opening and closing over the map (and the screenshot the art director looks at);
+//   uiroom - two real pages driven through the LOBBY SCREEN rather than the net hooks: the host's key is typed
+//        into the guest's ticket on a real keyboard, both seats appear on the stools, a pick and a READY round
+//        trip, and tools/screens/lobby-room.png is what a filling room actually looks like.
+import { withPage, withPeers, assert } from '../playtest.js';
 
 const ROOM_CODE = /^[23456789BCDFGHJKMNPQRSTVWXYZ]{6}$/;
 
@@ -73,6 +76,61 @@ export const SCENARIOS = {
       await api.press(0, { down: true }, 2, 4);
       await api.press(0, { action: true }, 2, 6);
       assert((await api.screen()) === 'title', `QUIT TO TITLE resets to the title (now on ${await api.screen()})`);
+    });
+  },
+
+  async uiroom(server) {
+    await withPeers(server, ['skipTo=lobby&host=1&transport=broadcast', 'skipTo=lobby&transport=broadcast'], async (pages, apis) => {
+      const [host, guest] = pages, [hostApi, guestApi] = apis;
+      await hostApi.step(20);
+      await guestApi.step(5);
+      const code = (await hostApi.summary()).top.code;
+      assert(ROOM_CODE.test(code), `the host's ticket carries a six-character host key (${code})`);
+      assert((await guestApi.summary()).top.phase === 'role', 'the guest is asked host or join');
+
+      // JOIN A TABLE, then type the key on a REAL keyboard: every code letter is a bound game key, so this is
+      // the path that proves the screen reads raw KeyboardEvent.code values rather than actions.
+      await guestApi.press(0, { down: true }, 2, 4);
+      await guestApi.press(0, { action: true }, 2, 4);
+      assert((await guestApi.summary()).top.phase === 'code', `JOIN opens the code ticket (phase ${(await guestApi.summary()).top.phase})`);
+      await guest.bringToFront();
+      for (const ch of code) await guest.keyboard.press(/[0-9]/.test(ch) ? 'Digit' + ch : 'Key' + ch);
+      await guestApi.step(2);
+      const typed = (await guestApi.summary()).top.code;
+      assert(typed === code, `every glyph typed lands on the ticket (${typed} vs ${code})`);
+      await guest.keyboard.press('Backspace');
+      await guestApi.step(2);
+      assert((await guestApi.summary()).top.code === code.slice(0, -1), 'backspace rubs one out again');
+      await guest.keyboard.press(/[0-9]/.test(code[5]) ? 'Digit' + code[5] : 'Key' + code[5]);
+      await guest.keyboard.press('Enter');
+      await guestApi.step(2);
+
+      // the room fills over real WebRTC; both screens then show two stools taken
+      const seated = (n) => n && n.state === 'lobby' && n.party.length === 2;
+      await host.waitForFunction(`(${seated.toString()})(window.__game.netState())`, null, { timeout: 30000 });
+      await guest.waitForFunction(`(${seated.toString()})(window.__game.netState())`, null, { timeout: 30000 });
+      await hostApi.step(10); await guestApi.step(10);
+      const h1 = await hostApi.summary(), g1 = await guestApi.summary();
+      assert(h1.top.phase === 'lobby' && g1.top.phase === 'lobby', `both screens reach the lobby phase (${h1.top.phase}, ${g1.top.phase})`);
+      assert(h1.top.party.length === 2 && g1.top.party.length === 2, 'two stools are taken on both machines');
+      assert(g1.top.slot === 1, `the guest is seated in slot 1 (got ${g1.top.slot})`);
+
+      // a pick and a READY round-trip through the host's roster
+      const before = g1.top.party[1].critter;
+      await guestApi.press(0, { right: true }, 2, 10);
+      await guestApi.step(20); await hostApi.step(20);
+      const g2 = await guestApi.summary();
+      assert(g2.top.party[1].critter !== before, `right moves the guest onto a free critter (${before} -> ${g2.top.party[1].critter})`);
+      await guestApi.press(0, { action: true }, 2, 10);
+      await guestApi.step(30); await hostApi.step(30);
+      const h3 = await hostApi.summary();
+      assert(h3.top.party[1].ready === true, 'the guest READY reaches the host');
+      assert(h3.top.party[0].ready === false, '...and the host is still choosing, so nothing starts');
+      await hostApi.shot('lobby-room');
+      // un-ready peels the stamp off again
+      await guestApi.press(0, { cancel: true }, 2, 10);
+      await guestApi.step(30); await hostApi.step(30);
+      assert((await hostApi.summary()).top.party[1].ready === false, 'cancel un-readies rather than leaving');
     });
   },
 };

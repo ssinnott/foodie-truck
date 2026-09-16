@@ -70,7 +70,7 @@ export class TitleScreen extends Screen {
   draw(ctx) {
     drawLane(ctx);
     // the parked truck, then the crew in front of it: a y-sort of two rows, each on its own contact shadow
-    drawShadow(ctx, TRUCK_X, TRUCK_Y, 140, 0.3);
+    drawShadow(ctx, TRUCK_X, TRUCK_Y, 112, 0.28);
     drawTruck(ctx, TRUCK_X, TRUCK_Y, TRUCK_OPTS);
     for (let i = 0; i < this.crew.length; i++) {
       const s = this.crew[i], x = CREW_X[i];
@@ -78,7 +78,7 @@ export class TitleScreen extends Screen {
       drawRig(ctx, s.rig, s.player.pose, { x, y: CREW_Y, facing: 1, scale: 1 });
     }
     // the A-frame: two legs and a ground shadow under the slate, so the board stands rather than floats
-    drawShadow(ctx, SLATE.x + SLATE.w / 2, SLATE.y + SLATE.h + 24, 96, 0.22);
+    drawShadow(ctx, SLATE.x + SLATE.w / 2, SLATE.y + SLATE.h + 24, 80, 0.2);
     ctx.fillStyle = UI.ink; ctx.fillRect(SLATE.x + 25, SLATE.y + SLATE.h - 1, 10, 26); ctx.fillRect(SLATE.x + SLATE.w - 35, SLATE.y + SLATE.h - 1, 10, 26);
     ctx.fillStyle = UI.wood; ctx.fillRect(SLATE.x + 26, SLATE.y + SLATE.h, 8, 24); ctx.fillRect(SLATE.x + SLATE.w - 34, SLATE.y + SLATE.h, 8, 24);
     ctx.fillStyle = UI.woodDark; ctx.fillRect(SLATE.x + 32, SLATE.y + SLATE.h, 2, 24); ctx.fillRect(SLATE.x + SLATE.w - 28, SLATE.y + SLATE.h, 2, 24);

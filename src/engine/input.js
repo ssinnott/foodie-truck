@@ -26,8 +26,13 @@ const STICK_DEAD = 0.45;
 
 const NEVER = 1e9;
 const keysDown = new Set();
-/** Codes that went down since the last update() (for text entry and "any key" prompts). */
+/** Codes that went down since the last update(), still being collected from DOM events. */
 let typed = [];
+/**
+ * The codes THIS fixed step owns. update() runs before every screen's update() (see main.js), so a screen asked
+ * for typedCodes() during its own update() must still see what was typed for this step, not an emptied array.
+ */
+let typedStep = [];
 let anyKeyPending = false, anyKeyThisStep = false;
 let boundCodes = null;
 let virtualPads = null;
@@ -111,6 +116,7 @@ export const input = {
   },
   /** Poll devices once per fixed step; ages buffers; computes edges. */
   update() {
+    typedStep = typed; typed = [];      // hand this step its own codes; the DOM keeps filling a fresh array
     if (!boundCodes) rebuildBoundCodes();
     anyKeyThisStep = anyKeyPending; anyKeyPending = false;
     claimPads();
@@ -134,7 +140,6 @@ export const input = {
       pl.ax = ((pl.cur & BIT.right) ? 1 : 0) - ((pl.cur & BIT.left) ? 1 : 0);
       pl.ay = ((pl.cur & BIT.down) ? 1 : 0) - ((pl.cur & BIT.up) ? 1 : 0);
     }
-    typed.length = 0;
   },
   /** The mask a seat holds this step. */
   mask(p) { return players[p].cur; },
@@ -152,8 +157,8 @@ export const input = {
   anyKey() { return anyKeyThisStep; },
   /** Any player pressed `a` this step; returns the slot or -1. */
   anyPressed(a) { for (let p = 0; p < players.length; p++) if (players[p].joined && (players[p].pressedNow & BIT[a])) return p; return -1; },
-  /** KeyboardEvent.code values that went down since the last update() (text entry: room codes). Read before update() clears it. */
-  typedCodes() { return typed; },
+  /** KeyboardEvent.code values typed for the step in progress (text entry: room codes). Stable for the whole step. */
+  typedCodes() { return typedStep; },
   /** Test / netplay hook: hold a seat's input at `mask` (a number or an action map) until cleared. */
   setVirtual(p, mask) { players[p].virtual = mask == null ? -1 : (typeof mask === 'number' ? mask & 0xff : packMask(mask)); },
   clearVirtual(p) { players[p].virtual = -1; },

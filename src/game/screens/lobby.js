@@ -74,10 +74,12 @@ const FLIP_FRAMES = 6;
 const LINK_MAX = 62;
 /** The four stools, their busts and the status column under each. */
 const SEAT_X = [92, 244, 396, 548];
-const BUST_Y = 138, BUST_W = 92, BUST_H = 90, BUST_SCALE = 1.4;
-const STOOL_Y = 226, PLATE_Y = 270, NAME_Y = 284, STATE_Y = 298;
-const TAG_Y = 192;
-const STATUS_Y = 318, STATUS_W = 330;
+const BUST_Y = 138, BUST_W = 92, BUST_H = 96, BUST_SCALE = 1.4;
+const STOOL_Y = 226, PLATE_Y = 274, NAME_Y = 288, STATE_Y = 302;
+const TAG_Y = 196;
+/** The READY stamp slams across the seated critter's chest, clear of the status column under the stool. */
+const STAMP_Y = BUST_Y + 62;
+const STATUS_Y = 322, STATUS_W = 330;
 const BANNER_Y = 114;
 /** The role menu, and the slate it stands on when no session exists yet. */
 const ROLE_ROWS = ['HOST A TABLE', 'JOIN A TABLE'];
@@ -327,19 +329,24 @@ export class LobbyScreen extends Screen {
   drawSeats(ctx) {
     for (let i = 0; i < SEAT_X.length; i++) {
       const cx = SEAT_X[i], m = this.party[i];
-      drawShadow(ctx, cx, STOOL_Y + 42, 56, 0.35);
+      drawShadow(ctx, cx, STOOL_Y + 36, 46, 0.35);
       if (m) {
         const c = this.crit[((m.critter % this.crit.length) + this.crit.length) % this.crit.length];
         drawBust(ctx, c.rigs[i], c.player.pose, c.anchor, cx - BUST_W / 2, BUST_Y, BUST_W, BUST_H, BUST_SCALE, this.bustOpts);
         this.drawStool(ctx, cx, PLAYER_COLORS[i]);
         drawNamePlate(ctx, i, m.local ? SEAT_YOU[i] : SEAT_LABEL[i], cx, PLATE_Y);
         drawTextOutlined(ctx, c.def.name, cx, NAME_Y, { size: 1, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
-        if (m.ready) drawStamp(ctx, READY_TEXT, cx, STATE_Y + 4, Math.min(1, this.readyT[i] / STAMP_FRAMES), STAMP_OPTS);
-        else drawTextOutlined(ctx, CHOOSING_TEXT, cx, STATE_Y, { size: 1, color: UI.paperDark, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
+        drawTextOutlined(ctx, m.ready ? READY_TEXT : CHOOSING_TEXT, cx, STATE_Y, { size: 1, color: m.ready ? UI.cream : UI.paperDark, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
+        if (m.ready) {
+          // beetroot ink on dark fur is no read at all, so the stamp lands on a paper docket pinned to the critter
+          ctx.fillStyle = UI.ink; ctx.fillRect(cx - 40, STAMP_Y - 14, 80, 28);
+          ctx.fillStyle = UI.paper; ctx.fillRect(cx - 39, STAMP_Y - 13, 78, 26);
+          drawStamp(ctx, READY_TEXT, cx, STAMP_Y, Math.min(1, this.readyT[i] / STAMP_FRAMES), STAMP_OPTS);
+        }
       } else {
         this.drawStool(ctx, cx, null);
         // an OPEN paper tag hanging where a head would be
-        ctx.fillStyle = UI.ink; ctx.fillRect(cx - 1, TAG_Y - 14, 2, 14);
+        ctx.fillStyle = UI.ink; ctx.fillRect(cx - 1, TAG_Y + 15, 2, STOOL_Y - 7 - TAG_Y - 15);
         ctx.fillStyle = UI.ink; ctx.fillRect(cx - 20, TAG_Y - 1, 40, 17);
         ctx.fillStyle = UI.paper; ctx.fillRect(cx - 19, TAG_Y, 38, 15);
         ctx.fillStyle = UI.paperDark; ctx.fillRect(cx - 19, TAG_Y + 11, 38, 4);

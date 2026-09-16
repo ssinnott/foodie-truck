@@ -10,7 +10,7 @@ import { drawSlate, drawMenuRows, drawHint, drawDim } from '../ui.js';
 import { confirmPressed, cancelPressed, navY } from '../menuinput.js';
 
 const ROWS = ['RESUME', 'QUIT TO TITLE'];
-const SLATE = { x: 210, y: 118, w: 220, h: 96 };
+const SLATE = { x: 210, y: 126, w: 220, h: 78 };
 
 export class PauseScreen extends Screen {
   constructor(game) { super(game, 'pause'); this.transparent = true; this.sel = 0; }
@@ -45,7 +45,7 @@ export class PauseScreen extends Screen {
   draw(ctx) {
     drawDim(ctx);
     drawSlate(ctx, SLATE.x, SLATE.y, SLATE.w, SLATE.h, { title: 'PAUSED' });
-    drawMenuRows(ctx, ROWS, SLATE.x, SLATE.y + 44, SLATE.w, this.sel, this.frame, 16);
+    drawMenuRows(ctx, ROWS, SLATE.x, SLATE.y + 42, SLATE.w, this.sel, this.frame, 16);
     drawHint(ctx, this.hint);
   }
 

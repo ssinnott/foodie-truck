@@ -1,9 +1,11 @@
 // Online co-op scenarios for tools/playtest.js (docs/MULTIPLAYER.md): real headless pages in ONE browser
 // context (BroadcastChannel signalling needs it), real WebRTC data channels over loopback, one lockstep match.
-// The lobby screen does not exist yet, so the room is driven through the window.__game net hooks
-// (net/session.js installNetHooks) exactly as that screen will drive the session.
+// The room is driven through the window.__game net hooks (net/session.js installNetHooks) rather than through
+// the lobby screen, so these scenarios test the session itself and survive any redraw of that screen.
+// The match opens on the ORCHARD, not the map: the map has one shared truck, so it cannot show that a key held
+// on one machine is attributed to the seat that held it and to no other. The orchard gives every seat its own x.
 //
-//   netplay - two pages: host key -> join -> picks -> ready -> a match on the map, 120+ frames with no desync,
+//   netplay - two pages: host key -> join -> picks -> ready -> a match, 120+ frames with no desync,
 //             a key held on the GUEST moving seat 1 identically on both machines, and the host's session
 //             ending cleanly when the guest's page closes.
 //   netquad - four pages, every guest refusing direct guest-guest links (?netrelay=1) so their traffic rides
@@ -15,7 +17,8 @@ const ROOM_CODE = /^[23456789BCDFGHJKMNPQRSTVWXYZ]{6}$/;
 const TIMEOUT = 30000;
 
 const netState = (p) => p.evaluate(() => window.__game.netState());
-const dotsOf = (p) => p.evaluate(() => (window.__game.summary().top || {}).dots || []);
+/** Per-seat [slot, x, count] off the top screen: the orchard's own summary (see the match scene below). */
+const dotsOf = (p) => p.evaluate(() => ((window.__game.summary().top || {}).seats || []).filter((s) => Array.isArray(s)));
 const dot = (dots, slot) => (dots.find((d) => d[0] === slot) || [slot, null, null]);
 const open = (pages) => pages.filter((p) => !p.isClosed());
 /** Wait for every open page to satisfy a predicate on its netState. */
@@ -53,8 +56,17 @@ async function fillRoom(pages) {
 
 /** Everybody picks a critter and readies up; the host auto-starts once the latency measurement is in. */
 async function readyAll(pages, seats) {
+  // The host's opening scene travels in the START packet; SCENES[1] is the orchard, where each seat walks its
+  // own x, so pressRight below can prove a key is attributed to one seat and not shared out.
+  await pages[0].evaluate(() => { window.__game.net().lobby.scene = 1; });
   const cast = await pages[0].evaluate(() => window.__game.critterList().length);
-  const picks = await Promise.all(pages.map((p, i) => p.evaluate((c) => window.__game.netSetCritter(c), cast > 1 ? i % cast : 0)));
+  // Ask for the critter that matches each peer's OWN SEAT, not its page index: guests race for the room, so
+  // the host may seat page 2 in slot 1, and a pick keyed to the page index would ask for a critter its
+  // neighbour already holds and be refused for the right reason at the wrong moment.
+  const picks = await Promise.all(pages.map((p) => p.evaluate((c) => {
+    const slot = window.__game.netState().slot;
+    return window.__game.netSetCritter(c > 1 ? slot % c : 0);
+  }, cast)));
   assert(picks.every(Boolean), `every peer's critter pick is accepted (cast of ${cast})`);
   if (cast > 1) {
     const clash = await pages[0].evaluate((c) => window.__game.netSetCritter(c), 1 % cast);
@@ -65,8 +77,8 @@ async function readyAll(pages, seats) {
   const ok = await Promise.all(pages.map((p) => p.evaluate(() => window.__game.netReady(true))));
   assert(ok.every(Boolean), 'every peer registered its ready flag');
   await step('everyone reaches the match', pages, () => waitAll(pages, (n) => !!n && n.state === 'playing'));
-  const states = await Promise.all(pages.map((p) => p.evaluate(() => ({ screen: window.__game.screen(), party: (window.__game.summary().run || { party: [] }).party.length, dots: ((window.__game.summary().top || {}).dots || []).length }))));
-  assert(states.every((s) => s.screen === 'map'), `the START opens the map on every machine (${states.map((s) => s.screen).join()})`);
+  const states = await Promise.all(pages.map((p) => p.evaluate(() => ({ screen: window.__game.screen(), party: (window.__game.summary().run || { party: [] }).party.length, dots: ((window.__game.summary().top || {}).seats || []).length }))));
+  assert(states.every((s) => s.screen === 'orchard'), `the START opens the same scene on every machine (${states.map((s) => s.screen).join()})`);
   assert(states.every((s) => s.party === seats && s.dots === seats), `every machine built a run with ${seats} seats (${states.map((s) => s.party).join()})`);
 }
 
@@ -137,7 +149,7 @@ export const SCENARIOS = {
       const g0 = await host.evaluate(() => window.__game.game.frame);
       await host.waitForFunction((g) => window.__game.game.frame > g + 10, g0, { timeout: TIMEOUT });
       const solo = await host.evaluate(() => ({ screen: window.__game.screen(), errs: window.__game.errors.length }));
-      assert(solo.screen === 'map' && solo.errs === 0, 'the host keeps playing on the map with no errors');
+      assert(solo.screen === 'orchard' && solo.errs === 0, `the host keeps playing on their own with no errors (${solo.screen})`);
     });
   },
 
