@@ -134,3 +134,25 @@ export function drawHint(ctx, text, y = 346) {
 export function drawDim(ctx, alpha = 1) { const a = ctx.globalAlpha; ctx.globalAlpha = a * alpha; ctx.fillStyle = UI.dim; ctx.fillRect(0, 0, VIEW_W, 360); ctx.globalAlpha = a; }
 
 export { PLAYER_LABELS };
+
+/**
+ * The ORDER TICKET (docs/GDD.md section 4): customer, dish, one `NEED` row per ingredient with an ink tick when
+ * gathered, and a gold arrow on the first missing one. Shared by the map HUD and the kitchen rail.
+ * Returns the ticket's height. `foods` is art/food.js drawFood (passed in so this module stays free of it).
+ */
+export function drawOrderTicket(ctx, run, x, y, w, drawFood, o = {}) {
+  const order = run.order, rows = order.needs.length;
+  const h = 16 + ROW * (2 + rows) + 4;
+  const top = drawTicket(ctx, x, y, w, h, { title: o.title || `ORDER ${String(run.served + 1).padStart(2, '0')}` });
+  drawText(ctx, `FOR ${order.customer.toUpperCase()}`, x + 6, top + 2, { size: 1, color: UI.ink, shadow: false });
+  drawText(ctx, order.dish, x + 6, top + 2 + ROW, { size: 1, color: UI.ink, shadow: false });
+  let arrow = false;
+  for (let i = 0; i < rows; i++) {
+    const n = order.needs[i], ry = top + 2 + ROW * (2 + i), done = n.have >= n.amount;
+    if (drawFood) drawFood(ctx, o.icons ? o.icons[n.id] : n.id, x + 11, ry + 4, 4, o.hexes ? o.hexes[n.id] : undefined);
+    drawText(ctx, `${n.id.toUpperCase()} ${n.have}/${n.amount}`, x + 20, ry, { size: 1, color: UI.ink, shadow: false });
+    if (done) { ctx.fillStyle = UI.ink; ctx.fillRect(x + w - 14, ry + 3, 2, 3); ctx.fillRect(x + w - 12, ry + 1, 2, 5); ctx.fillRect(x + w - 10, ry - 1, 2, 3); }
+    else if (!arrow) { arrow = true; ctx.fillStyle = UI.ink; ctx.fillRect(x + w - 15, ry, 7, 7); ctx.fillStyle = SIGNAL.map; ctx.fillRect(x + w - 14, ry + 2, 2, 3); ctx.fillRect(x + w - 12, ry + 1, 2, 5); ctx.fillRect(x + w - 10, ry + 2, 2, 3); }
+  }
+  return h;
+}
