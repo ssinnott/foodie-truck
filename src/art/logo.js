@@ -6,8 +6,7 @@
 // is shared by title / select / lobby on purpose - three screens of one place, painted once - so its row bands are
 // exported and the screens stand everything on them.
 //
-// Seed block 160..169 (the scene blocks in docs/ART_STYLE.md section 7 stop at the map's 140..159; the front-of-
-// house needed one of its own - see `deviations`).
+// Seed block 160..169, which docs/ART_STYLE.md section 7 now lists beside the scene blocks.
 import { makeLayer, vGradient, blitAt, INK, VIEW_W, VIEW_H } from './layers.js';
 import { UI, PLUM } from '../constants.js';
 import { drawText, drawTextOutlined, measureText } from '../engine/text.js';
@@ -99,6 +98,35 @@ export function titleLayer() {
 }
 /** Blit the lane at the origin. */
 export function drawLane(ctx) { blitAt(ctx, titleLayer(), 0, 0); }
+
+// ---------------------------------------------------------------- the card porthole
+
+/**
+ * The doily porthole a select card's bust sits in: a cream ring scalloped with paper-dark dots, one ink line and
+ * the plum disc the pale furs read against. Nothing in it ever changes, so it is painted ONCE and blitted four
+ * times a frame instead of costing 64 arcs (docs/ART_STYLE.md section 7).
+ */
+export const PORT_R = 40;
+const PORT_PAD = 7;
+
+function paintPorthole(g) {
+  const c = PORT_R + PORT_PAD;
+  g.beginPath(); g.arc(c, c, PORT_R + 3, 0, TAU); g.fillStyle = UI.cream; g.fill();
+  g.fillStyle = UI.paperDark;
+  for (let k = 0; k < 16; k++) {
+    const a = k * TAU / 16;
+    g.beginPath(); g.arc(c + Math.cos(a) * (PORT_R + 3), c + Math.sin(a) * (PORT_R + 3), 3, 0, TAU); g.fill();
+  }
+  g.beginPath(); g.arc(c, c, PORT_R + 1, 0, TAU); g.fillStyle = INK; g.fill();
+  g.beginPath(); g.arc(c, c, PORT_R, 0, TAU); g.fillStyle = PLUM.shadow; g.fill();
+}
+
+let portLayer = null;
+/** Blit the porthole centred on (cx, cy). The bust is drawn live on top, clipped to the same circle. */
+export function drawPorthole(ctx, cx, cy) {
+  if (!portLayer) portLayer = makeLayer((PORT_R + PORT_PAD) * 2, (PORT_R + PORT_PAD) * 2, paintPorthole, SEED + 2);
+  blitAt(ctx, portLayer, cx - (PORT_R + PORT_PAD), cy - (PORT_R + PORT_PAD));
+}
 
 // ---------------------------------------------------------------- the logo
 

@@ -5,17 +5,20 @@
 //
 // The room code is the table number on a big paper ticket, the party is four stools at the truck's hatch with a
 // bust behind each, and everything the screen does to the session goes through the session's own API
-// (start / setCritter / setReady / leave). The session applies START and resets the game to the map itself, so
-// the `starting` phase does nothing but wait to be replaced.
+// (start / setCritter / setReady / leave). The session applies START and resets the game to the map itself in the
+// same call that flips its state, so the `starting` PHASE is never actually drawn: the GDD's STARTING! beat is
+// keyed off the roster being all-ready, which is the window a guest really sits in while the host settles.
 //
 // Two things here are deliberately not like a gameplay screen, because this screen never runs under lockstep
 // (once net.state is 'playing' the session has already reset us away):
 //   * the room code is read RAW from the keyboard - every code letter is a bound game key, so there is no action
-//     to read it through (docs/MULTIPLAYER.md "Deferred");
+//     to read it through (docs/MULTIPLAYER.md "Deferred"). The codes come from engine/input.js's per-step buffer
+//     (`typedCodes()`), which holds what was typed for the step a screen is updating in, so there is one keystream
+//     and one reader;
 //   * the invite link and the address bar come from window.location, which no simulation ever sees.
 import { VIEW_W, UI, NET_MIN_PLAYERS, NET_PLAYERS, PLAYER_COLORS } from '../../constants.js';
 import { Screen } from '../game.js';
-import { drawText, drawTextOutlined } from '../../engine/text.js';
+import { drawText, drawTextOutlined, measureText } from '../../engine/text.js';
 import { drawShadow } from '../../art/fx.js';
 import { drawTruck, TRUCK } from '../../art/truck.js';
 import { drawBust, idlePoseOf } from '../../art/portraits.js';
@@ -25,7 +28,7 @@ import { AnimPlayer } from '../animation.js';
 import { createNetSession } from '../../net/session.js';
 import { drawTicket, drawSlate, drawMenuRows, drawStamp, drawNamePlate, drawHint, drawDim, ROW } from '../ui.js';
 import { confirmPressed, cancelPressed, navY } from '../menuinput.js';
-import { drawLane } from '../../art/logo.js';
+import { drawLane, TRUCK_Y } from '../../art/logo.js';
 
 const R = Math.round;
 /** A host key is six characters; a typed one is allowed a little slack in case the alphabet ever grows. */
@@ -41,28 +44,12 @@ function codeChar(code) {
 }
 
 /**
- * The raw keyboard tap the code entry reads.
- *
- * engine/input.js collects typed KeyboardEvent.code values and hands them out through `typedCodes()`, but it
- * empties that buffer at the END of `input.update()`, which main.js runs BEFORE `game.update()` - so by the time
- * a screen is asked to update, the codes typed this frame are already gone. Until that is fixed (see
- * `deviations`) this listens for itself, and defers to the engine's buffer the moment anything arrives in it,
- * so the screen picks up the fix without a change here. It is installed only while the code is being typed.
+ * The truck is parked up the lane at the right, hatch toward the stools, with its tyres ON the lane's row band
+ * (art/logo.js owns those bands, so nothing here invents a y). It is drawn at scale 2 rather than the 320x192 of
+ * ART_STYLE section 1: at 4x it is wider than the half of the screen the stools do not use - recorded as a
+ * deviation.
  */
-function makeKeyTap() {
-  const queue = [];
-  const onKey = (e) => { if (!e.repeat) queue.push(e.code); };
-  let on = false;
-  return {
-    start() { if (on) return; on = true; try { window.addEventListener('keydown', onKey); } catch { on = false; } },
-    stop() { if (!on) return; on = false; queue.length = 0; try { window.removeEventListener('keydown', onKey); } catch { /* gone already */ } },
-    /** Whichever source has the codes this step. */
-    drain(engineCodes) { if (engineCodes && engineCodes.length) { queue.length = 0; return engineCodes; } return queue; },
-    clear() { queue.length = 0; },
-  };
-}
-/** The truck parks at the right, hatch toward the stools; the ticket is pegged to a rail beside it. */
-const TRUCK_X = 556, TRUCK_Y = 136, TRUCK_OPTS = { scale: 2, facing: -1, wheel: 0 };
+const TRUCK_X = 552, TRUCK_OPTS = { scale: 2, facing: 1, wheel: 0 };
 const RAIL_Y = 26, RAIL_X0 = 16, RAIL_X1 = 470;
 /** The table ticket: 400x72, the code at size 4 spaced 2 on the first rule, the invite link on the second. */
 const TICKET = { x: 66, y: 30, w: 400, h: 72 };
@@ -72,13 +59,16 @@ const CODE_SIZE = 4, CODE_SPACING = 2, CODE_ADV = (5 + CODE_SPACING) * CODE_SIZE
 const FLIP_FRAMES = 6;
 /** Longest link that fits the ticket at size 1. */
 const LINK_MAX = 62;
-/** The four stools, their busts and the status column under each. */
-const SEAT_X = [92, 244, 396, 548];
+/** The four stools, their busts and the status column under each: the row sits LEFT of the parked truck. */
+const SEAT_X = [62, 177, 292, 407];
 const BUST_Y = 138, BUST_W = 92, BUST_H = 96, BUST_SCALE = 1.4;
 const STOOL_Y = 226, PLATE_Y = 274, NAME_Y = 288, STATE_Y = 302;
 const TAG_Y = 196;
-/** The READY stamp slams across the seated critter's chest, clear of the status column under the stool. */
-const STAMP_Y = BUST_Y + 62;
+/**
+ * The READY stamp slams onto a paper docket on the critter's SHOULDER line - high enough that the apron (the
+ * seat's own colour) still reads under it, and the docket is sized from the stamp rather than a slab of paper.
+ */
+const STAMP_Y = BUST_Y + 58;
 const STATUS_Y = 322, STATUS_W = 330;
 const BANNER_Y = 114;
 /** The role menu, and the slate it stands on when no session exists yet. */
@@ -89,14 +79,20 @@ const SEAT_YOU = ['P1 (YOU)', 'P2 (YOU)', 'P3 (YOU)', 'P4 (YOU)'];
 const SEAT_LABEL = ['P1', 'P2', 'P3', 'P4'];
 const WAIT_TEXT = ['WAITING FOR PLAYER 2', 'WAITING FOR PLAYER 2 .', 'WAITING FOR PLAYER 2 . .', 'WAITING FOR PLAYER 2 . . .'];
 const READY_TEXT = 'READY', CHOOSING_TEXT = 'CHOOSING', OPEN_TEXT = 'OPEN', EMPTY_TEXT = '- - -';
+const STARTING_TEXT = 'STARTING!';
+/** The docket under the stamp is sized from the stamp, and pinned at the SAME tilt, so the ink never bursts out of the paper. */
+const DOCKET_W = measureText(READY_TEXT, 2) + 24, DOCKET_H = 28, DOCKET_TILT = -0.14;
 const STAMP_FRAMES = 24;
-const STAMP_OPTS = { size: 2, color: '#7E3A56', light: '#9A5470' };
+/**
+ * Beetroot stamp ink from the truck's own body rather than a copied hex. Beetroot over UI.red is a deliberate
+ * deviation from ART_STYLE section 4: apple red is the orchard's signal colour and is banned as decor elsewhere.
+ */
+const STAMP_OPTS = { size: 2, color: TRUCK.body, light: TRUCK.bodyHi, angle: DOCKET_TILT };
 
 export class LobbyScreen extends Screen {
   constructor(game) {
     super(game, 'lobby');
     this.net = null; this.crit = []; this.party = []; this.readyT = [0, 0, 0, 0];
-    this.tap = makeKeyTap();
   }
 
   enter(params) {
@@ -118,7 +114,10 @@ export class LobbyScreen extends Screen {
     this.codeAt = -1;               // frame the code arrived, for the flip-in
     this.link = '';
     this.statusLine = '';
-    this.statusKey = '';
+    // the four scalars the status line is built from: compared as numbers so refresh() joins a string only when
+    // one of them actually moves (ART_STYLE section 9)
+    this.sRoom = ''; this.sParty = -1; this.sPing = ''; this.sDelay = -1;
+    this.allReady = false;
     this.party = [];
     this.readyT = [0, 0, 0, 0];
     this.bustOpts = { margin: 8, facing: 1 };
@@ -137,7 +136,6 @@ export class LobbyScreen extends Screen {
   }
 
   exit() {
-    this.tap.stop();
     // The session outlives this screen (the match is about to start), so only the callback is taken back.
     if (this.net && this.net.onStateChange) this.net.onStateChange(null);
   }
@@ -155,7 +153,6 @@ export class LobbyScreen extends Screen {
     game.net = net;
     this.net = net;
     this.typing = false;
-    this.tap.stop();
     net.start();
     this.noteCode();
   }
@@ -184,18 +181,22 @@ export class LobbyScreen extends Screen {
   refresh() {
     const net = this.net;
     this.party = net ? net.party() : [];
+    // Is the room full enough and has every seat in it stamped? draw() reads this rather than walking the roster
+    // with a closure every frame, and it is what puts STARTING! on the screen.
+    let ready = this.party.length >= NET_MIN_PLAYERS;
+    for (let i = 0; i < this.party.length && ready; i++) if (!this.party[i] || !this.party[i].ready) ready = false;
+    this.allReady = ready;
     if (!net) return;
     this.noteCode();
     const s = net.summary();
     const ping = s.rtt == null ? '--' : R(s.rtt);
-    const key = `${s.room}|${this.party.length}|${ping}|${s.delay}`;
-    if (key !== this.statusKey) {
-      this.statusKey = key;
+    if (s.room !== this.sRoom || this.party.length !== this.sParty || ping !== this.sPing || s.delay !== this.sDelay) {
+      this.sRoom = s.room; this.sParty = this.party.length; this.sPing = ping; this.sDelay = s.delay;
       this.statusLine = `TABLE ${s.room}  PARTY ${this.party.length}/${NET_PLAYERS}  PING ${ping}MS  DELAY ${s.delay}F`;
     }
   }
 
-  /** role | code | connecting | lobby | starting | error */
+  /** role | code | connecting | lobby | starting | error. STARTING! on the screen is `allReady`, not this. */
   get phase() {
     const net = this.net;
     if (!net) return this.typing ? 'code' : 'role';
@@ -233,7 +234,7 @@ export class LobbyScreen extends Screen {
       if (cancelPressed(inp) >= 0) { this.game.reset('title'); return; }
       if (confirmPressed(inp) >= 0) {
         if (this.sel === 0) this.open(true, '');
-        else { this.typing = true; this.code = ''; this.codeChars = []; this.shownCode = ''; this.codeAt = -1; this.tap.start(); }
+        else { this.typing = true; this.code = ''; this.codeChars = []; this.shownCode = ''; this.codeAt = -1; }
       }
       return;
     }
@@ -255,13 +256,13 @@ export class LobbyScreen extends Screen {
 
   /**
    * Code entry. Every letter of the alphabet is a bound game key, so this reads KeyboardEvent.code values
-   * rather than actions - see lobbykeys.js for where they come from and why.
+   * rather than actions; engine/input.js holds them for the step this update belongs to.
    */
   updateCode(inp) {
-    const raw = this.tap.drain(inp.typedCodes());
+    const raw = inp.typedCodes();
     for (let i = 0; i < raw.length; i++) {
       const code = raw[i];
-      if (code === 'Escape') { this.typing = false; this.tap.stop(); this.code = ''; this.codeChars = []; break; }
+      if (code === 'Escape') { this.typing = false; this.code = ''; this.codeChars = []; break; }
       if (code === 'Backspace') { this.code = this.code.slice(0, -1); this.codeChars = this.code.split(''); continue; }
       if (code === 'Enter' || code === 'NumpadEnter') {
         if (this.code.length >= 4) { this.open(false, this.code); return; }
@@ -270,7 +271,6 @@ export class LobbyScreen extends Screen {
       const ch = codeChar(code);
       if (ch && this.code.length < MAX_CODE) { this.code += ch; this.codeChars = this.code.split(''); }
     }
-    this.tap.clear();
   }
 
   // ---- drawing --------------------------------------------------------------------------------
@@ -294,7 +294,7 @@ export class LobbyScreen extends Screen {
       x += CODE_ADV;
     }
     if (caret && chars.length < MAX_CODE && this.frame % 60 < 30) {
-      drawText(ctx, '_', x + 5 * CODE_SIZE / 2, CODE_Y, { size: CODE_SIZE, color: '#7E3A56', align: 'center', shadow: false });
+      drawText(ctx, '_', x + 5 * CODE_SIZE / 2, CODE_Y, { size: CODE_SIZE, color: TRUCK.body, align: 'center', shadow: false });
     }
   }
 
@@ -305,7 +305,8 @@ export class LobbyScreen extends Screen {
     drawTicket(ctx, TICKET.x, TICKET.y, TICKET.w, TICKET.h, { title: 'TABLE', rules: false });
     ctx.fillStyle = UI.paperLine; ctx.fillRect(TICKET.x + 8, LINK_RULE_Y, TICKET.w - 16, 1);
     this.drawCode(ctx, chars, caret);
-    if (this.link) drawText(ctx, this.link, TICKET.x + TICKET.w / 2, LINK_Y, { size: 1, color: UI.paperLine, align: 'center', shadow: false });
+    // the link is the one string a host reads out, so it is wood on paper (4.2:1), never the ruled-line colour
+    if (this.link) drawText(ctx, this.link, TICKET.x + TICKET.w / 2, LINK_Y, { size: 1, color: UI.wood, align: 'center', shadow: false });
     // the wooden peg that clips the ticket to the rail
     ctx.fillStyle = UI.ink; ctx.fillRect(R(TICKET.x + TICKET.w / 2) - 3, RAIL_Y - 1, 6, 12);
     ctx.fillStyle = UI.wood; ctx.fillRect(R(TICKET.x + TICKET.w / 2) - 2, RAIL_Y, 4, 10);
@@ -339,8 +340,11 @@ export class LobbyScreen extends Screen {
         drawTextOutlined(ctx, m.ready ? READY_TEXT : CHOOSING_TEXT, cx, STATE_Y, { size: 1, color: m.ready ? UI.cream : UI.paperDark, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
         if (m.ready) {
           // beetroot ink on dark fur is no read at all, so the stamp lands on a paper docket pinned to the critter
-          ctx.fillStyle = UI.ink; ctx.fillRect(cx - 40, STAMP_Y - 14, 80, 28);
-          ctx.fillStyle = UI.paper; ctx.fillRect(cx - 39, STAMP_Y - 13, 78, 26);
+          ctx.save();
+          ctx.translate(cx, STAMP_Y); ctx.rotate(DOCKET_TILT);
+          ctx.fillStyle = UI.ink; ctx.fillRect(-R(DOCKET_W / 2), -R(DOCKET_H / 2), DOCKET_W, DOCKET_H);
+          ctx.fillStyle = UI.paper; ctx.fillRect(-R(DOCKET_W / 2) + 1, -R(DOCKET_H / 2) + 1, DOCKET_W - 2, DOCKET_H - 2);
+          ctx.restore();
           drawStamp(ctx, READY_TEXT, cx, STAMP_Y, Math.min(1, this.readyT[i] / STAMP_FRAMES), STAMP_OPTS);
         }
       } else {
@@ -395,6 +399,12 @@ export class LobbyScreen extends Screen {
     this.drawStatusLine(ctx);
     if (phase === 'connecting') {
       drawTextOutlined(ctx, WAIT_TEXT[(this.frame >> 4) % WAIT_TEXT.length], TICKET.x + TICKET.w / 2, BANNER_Y, { size: 2, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
+    } else if (this.allReady || phase === 'starting') {
+      // The 'starting' PHASE is never drawn - the session resets us to the map in the same call that flips its
+      // state - so the GDD's STARTING! beat is keyed off the ROSTER being all-ready instead. That window is real:
+      // the host refuses to start until the round-trip times have settled, and every guest sits in it between its
+      // own READY and the host's START packet.
+      drawTextOutlined(ctx, STARTING_TEXT, TICKET.x + TICKET.w / 2, BANNER_Y, { size: 2, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
     }
     drawHint(ctx, this.lobbyHint);
   }
@@ -402,7 +412,7 @@ export class LobbyScreen extends Screen {
   summary() {
     const net = this.net;
     return {
-      phase: this.phase, code: this.shownCode || this.code, typing: this.typing,
+      phase: this.phase, banner: this.allReady ? STARTING_TEXT : '', code: this.shownCode || this.code, typing: this.typing,
       state: net ? net.state : '', slot: net ? net.localSlot : -1,
       party: this.party.map((m) => ({ slot: m.slot, critter: m.critter, ready: m.ready, local: m.local })),
       link: this.link, reason: net ? (net.endReason || net.error) : '',

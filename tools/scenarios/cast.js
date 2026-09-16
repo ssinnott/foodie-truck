@@ -9,7 +9,9 @@
 //          page recorded no error.
 import { withPage, assert } from '../playtest.js';
 
-const ANIMS = ['idle', 'walk', 'run', 'carry', 'carryWalk', 'reach', 'catch', 'cheer', 'sad', 'eat', 'chop', 'stir', 'bump', 'hop', 'wave', 'sit'];
+// The gallery owns its own list (game/screens/gallery.js ANIMS) and may grow it; the scenario reads the list off
+// the screen rather than holding a copy that goes stale the day a signature key is added.
+const BASE_ANIMS = ['idle', 'walk', 'run', 'carry', 'carryWalk', 'reach', 'catch', 'cheer', 'sad', 'eat', 'chop', 'stir', 'bump', 'hop', 'wave', 'sit'];
 const FRAMES_PER_ANIM = 40;
 /** Keys no screen plays yet, so nothing else in the suite would ever draw them. */
 const SIGNATURE = ['sneak', 'honk', 'cast'];
@@ -58,8 +60,9 @@ export const SCENARIOS = {
       assert(cast.join() === 'barley,sorrel,chicory,cress', `the cast is Barley, Sorrel, Chicory, Cress in that order (${cast.join()})`);
       const first = await api.summary();
       assert(first.screen === 'gallery' && first.top.critters === 4, `the gallery seats all four critters (${first.top.critters})`);
+      // Walk the gallery one step at a time until it comes back to where it started: that IS the list.
       const seen = [];
-      for (let i = 0; i < ANIMS.length; i++) {
+      for (let i = 0; i < 64; i++) {
         const before = (await api.summary()).top.anim;
         seen.push(before);
         await api.step(FRAMES_PER_ANIM);
@@ -68,10 +71,12 @@ export const SCENARIOS = {
         await api.press(0, { right: true });
         const errs = await api.errors();
         if (errs.length) { assert(false, `no error while cycling ${before} -> next (${JSON.stringify(errs.slice(0, 2))})`); break; }
+        if ((await api.summary()).top.anim === seen[0]) break;      // wrapped
       }
-      assert(seen.join() === ANIMS.join(), `every animation in the gallery list was shown (${seen.join()})`);
+      const missing = BASE_ANIMS.filter((a) => !seen.includes(a));
+      assert(!missing.length, `every animation in the shared table was shown (${seen.length} shown, missing ${missing.join() || 'none'})`);
       const last = await api.summary();
-      assert(last.screen === 'gallery' && last.top.anim === ANIMS[0], `the gallery wrapped back to ${ANIMS[0]} and is still up (${last.screen}/${last.top.anim})`);
+      assert(last.screen === 'gallery' && last.top.anim === seen[0], `the gallery wrapped back to ${seen[0]} and is still up (${last.screen}/${last.top.anim})`);
       await api.shot('40-cast-gallery');
 
       // Every authored key, including the ones no screen plays yet.

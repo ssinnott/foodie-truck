@@ -6,6 +6,8 @@
 //        title -> ONLINE -> HOST A TABLE on the broadcast transport -> the lobby mints a host key, reaches its
 //        'connecting' phase and draws the table ticket without a page error;
 //        the pause overlay opening and closing over the map (and the screenshot the art director looks at);
+//        a READY that is called off again before the hold runs out, which must NOT start the run;
+//        a full table on the lobby stools (staged roster) showing the GDD's STARTING! beat;
 //   uiroom - two real pages driven through the LOBBY SCREEN rather than the net hooks: the host's key is typed
 //        into the guest's ticket on a real keyboard, both seats appear on the stools, a pick and a READY round
 //        trip, and tools/screens/lobby-room.png is what a filling room actually looks like.
@@ -76,6 +78,52 @@ export const SCENARIOS = {
       await api.press(0, { down: true }, 2, 4);
       await api.press(0, { action: true }, 2, 6);
       assert((await api.screen()) === 'title', `QUIT TO TITLE resets to the title (now on ${await api.screen()})`);
+    });
+  },
+
+  async selectCancel(server) {
+    // A seat that changes its mind inside the 30-frame start hold calls the countdown off. The arm used to latch,
+    // so a cancel left the run starting on schedule with the seat's pick still in it.
+    await withPage(server, 'skipTo=select', async (api) => {
+      await api.step(5);
+      await api.press(0, { action: true }, 2, 4);
+      assert((await api.summary()).top.starting === true, 'READY arms the start hold');
+      await api.press(0, { cancel: true }, 2, 4);
+      const s0 = await api.summary();
+      assert(s0.top.starting === false, 'cancel inside the hold disarms it');
+      await api.step(90);
+      const s1 = await api.summary();
+      assert(s1.screen === 'select', `...and nothing starts (now on ${s1.screen})`);
+      assert(s1.top.started === false, 'the run was never handed over behind the cancelled countdown');
+      // stamping again still starts, so the disarm did not break the path
+      await api.press(0, { action: true }, 2, 4);
+      await api.step(90);
+      assert((await api.summary()).screen === 'map', 'a second READY starts the run as before');
+    });
+  },
+
+  async lobbyfull(server) {
+    // Four seats need four peers, which no headless run can hold steady, so the ROSTER is staged and the screen's
+    // own draw path does the rest: the busts, the READY dockets and the STARTING! banner GDD section 10 asks for.
+    await withPage(server, 'skipTo=lobby', async (api, page) => {
+      await api.step(5);
+      await page.evaluate(() => {
+        const sc = window.__game.game.screen;
+        const seats = [0, 1, 2, 3].map((i) => ({ slot: i, critter: i, ready: true, local: i === 0 }));
+        sc.net = {
+          state: 'lobby', room: 'BCDFGH', isHost: true, localSlot: 0, endReason: '', error: '',
+          lobby: { myCritter: 0, myReady: true },
+          party() { return seats; },
+          summary() { return { room: 'BCDFGH', rtt: 42, delay: 3 }; },
+          onStateChange() {}, critterTaken() { return false; }, setCritter() {}, setReady() {}, leave() {},
+        };
+        sc.noteCode();
+      });
+      await api.step(60);
+      const l = await api.summary();
+      assert(l.top.party.length === 4, `all four stools are taken (${l.top.party.length})`);
+      assert(l.top.banner === 'STARTING!', `a full table of readies shows the STARTING! beat (banner "${l.top.banner}")`);
+      await api.shot('lobby-full');
     });
   },
 

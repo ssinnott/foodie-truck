@@ -41,7 +41,9 @@ export class TitleScreen extends Screen {
     this.game.input.resetClaims();
     this.sel = 0;
     this.crew = CRITTERS.map((def, i) => {
-      const seat = { rig: critterRig(def, i), player: new AnimPlayer(def.anims) };
+      // nobody is seated on the title, so the crew wears the off-duty apron: the four player colours mean "this
+      // seat is taken" everywhere else (constants.js OFF_DUTY_APRON, docs/ART_STYLE.md section 4)
+      const seat = { rig: critterRig(def, -1), player: new AnimPlayer(def.anims) };
       seat.player.play('idle');
       // desync the idles by i*11 ticks so four breathing critters never share a beat
       for (let k = 0; k < i * 11; k++) seat.player.tick();
@@ -77,8 +79,10 @@ export class TitleScreen extends Screen {
       drawShadow(ctx, x, CREW_Y, 30, 0.4);
       drawRig(ctx, s.rig, s.player.pose, { x, y: CREW_Y, facing: 1, scale: 1 });
     }
-    // the A-frame: two legs and a ground shadow under the slate, so the board stands rather than floats
-    drawShadow(ctx, SLATE.x + SLATE.w / 2, SLATE.y + SLATE.h + 24, 80, 0.2);
+    // the A-frame: two legs, each on its OWN contact shadow. One wide ellipse between the feet touched neither of
+    // them and read as a smudge on the verge.
+    drawShadow(ctx, SLATE.x + 30, SLATE.y + SLATE.h + 24, 22, 0.28);
+    drawShadow(ctx, SLATE.x + SLATE.w - 30, SLATE.y + SLATE.h + 24, 22, 0.28);
     ctx.fillStyle = UI.ink; ctx.fillRect(SLATE.x + 25, SLATE.y + SLATE.h - 1, 10, 26); ctx.fillRect(SLATE.x + SLATE.w - 35, SLATE.y + SLATE.h - 1, 10, 26);
     ctx.fillStyle = UI.wood; ctx.fillRect(SLATE.x + 26, SLATE.y + SLATE.h, 8, 24); ctx.fillRect(SLATE.x + SLATE.w - 34, SLATE.y + SLATE.h, 8, 24);
     ctx.fillStyle = UI.woodDark; ctx.fillRect(SLATE.x + 32, SLATE.y + SLATE.h, 2, 24); ctx.fillRect(SLATE.x + SLATE.w - 28, SLATE.y + SLATE.h, 2, 24);

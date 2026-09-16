@@ -6,7 +6,7 @@
 // path as P1. Everything the screen simulates is two numbers per seat (which card, ready or not), which is what
 // `checksumFields` reports. The rigs are built ONCE in enter() - one per card per possible seat, so a cursor
 // moving to a card changes which pre-built rig is drawn rather than building one in draw().
-import { VIEW_W, UI, PLUM, PLAYER_COLORS, MAX_PLAYERS } from '../../constants.js';
+import { VIEW_W, UI, PLAYER_COLORS, MAX_PLAYERS } from '../../constants.js';
 import { Screen } from '../game.js';
 import { drawText, drawTextOutlined, measureText } from '../../engine/text.js';
 import { pathRR } from '../../art/shading.js';
@@ -16,24 +16,29 @@ import { CRITTERS } from '../../content/critters/index.js';
 import { AnimPlayer } from '../animation.js';
 import { startRun } from '../run.js';
 import { CARD_W, CARD_H, RING_POS, cardX, drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.js';
-import { drawLane } from '../../art/logo.js';
+import { drawLane, drawPorthole, PORT_R } from '../../art/logo.js';
+import { TRUCK } from '../../art/truck.js';
 
 const R = Math.round, TAU = Math.PI * 2;
 /** Card row: 4 x 140 with 12 px gaps is 596 of the 640, centred by ui.cardX. */
 const CARD_Y = 52;
-/** The doily porthole the bust sits in, in card space. */
-const PORT_CY = 58, PORT_R = 40, BUST_SCALE = 1.9;
+/**
+ * The doily porthole the bust sits in, in card space. The scale is set by the two limiting rigs: Chicory's 16 px
+ * upright ears and Sorrel's toque are the species cues (docs/ART_STYLE.md section 0), so the rig has to clear the
+ * circle's CHORD, not its tangent - hence the margin under the aperture's top and the calmer scale.
+ */
+const PORT_CY = 58, BUST_SCALE = 1.55, BUST_MARGIN = 10;
 /** Text rows in card space. */
 const NAME_Y = 104, ROLE_Y = 124, RULE_Y = 136, STAT_Y = 146, STAT_PITCH = 14;
-/** Five pips per stat, 5 px each at a 7 px pitch: 33 px of bar, right-aligned in the card. */
+/** Five pips per stat, 6 px each at a 9 px pitch: 42 px of bar, right-aligned in the card. */
 const PIP_X = 82, PIP_N = 5, PIP_W = 6, PIP_PITCH = 9;
 const STAT_LABELS = ['SPEED', 'KITCHEN', 'FORAGE'];
 /**
  * Role flavour as five-pip bars (docs/GDD.md section 2: roles are flavour and small differences, never gates).
- * The hungry one carries, the chef cooks, the driver drives, the forager gathers - and every bar is 2..5 so no
- * card reads as the wrong pick.
+ * The hungry one carries, the chef cooks, the forager is fastest in the mini-games (GDD section 2 puts SPEED on
+ * the forager, not the driver) - and every bar is 2..5 so no card reads as the wrong pick.
  */
-const STATS = { barley: [2, 3, 4], sorrel: [3, 5, 2], chicory: [5, 2, 3], cress: [4, 3, 5] };
+const STATS = { barley: [2, 3, 4], sorrel: [3, 5, 2], chicory: [4, 2, 3], cress: [5, 3, 5] };
 const STATS_DEFAULT = [3, 3, 3];
 /** Slot numbers as strings, so the cursor's disc never builds one per frame. */
 const SLOT_TEXT = ['1', '2', '3', '4'];
@@ -41,6 +46,12 @@ const SLOT_TEXT = ['1', '2', '3', '4'];
 const PICKS_TEXT = ['P1 PICKS', 'P2 PICKS', 'P3 PICKS', 'P4 PICKS'];
 /** The stamp's arrival, and how long the crew hold their READY before the fade. */
 const STAMP_FRAMES = 24, START_HOLD = 30;
+/**
+ * Beetroot stamp ink, taken from the truck's own body rather than copied as a hex - a palette change to the truck
+ * now reaches the stamps. Beetroot over UI.red is a deliberate deviation from ART_STYLE section 4: the apple red
+ * is the orchard's signal colour, and a signal colour is banned as decor on another screen.
+ */
+const STAMP_OPTS = { size: 3, color: TRUCK.body, light: TRUCK.bodyHi };
 const HEAD_TEXT = 'CHOOSE YOUR CRITTER';
 /** The bio strip under the cards: a torn-off order pad with whoever P1 is standing on written on it. */
 const BIO = { x: 150, y: 284, w: 340, h: 30 };
@@ -67,11 +78,18 @@ export class SelectScreen extends Screen {
     this.starting = -1; this.started = false;
     this.joinHint = `P2: PRESS ${inp.keyText(1, 'action')} TO JOIN`;
     this.hint = `${inp.keyText(0, 'action')}: READY    ${inp.keyText(0, 'cancel')}: BACK`;
-    this.bustOpts = { margin: 6, facing: 1 };
+    this.bustOpts = { margin: BUST_MARGIN, facing: 1 };
   }
 
   /** Seats that are actually in the room (P1 always; P2 after a drop-in; 2 and 3 are online seats). */
   joinedCount() { let n = 0; for (const s of this.seats) if (s.on) n++; return n; }
+
+  /** Somebody is here and every seat that is here has stamped. A plain loop: update() allocates nothing. */
+  allReady() {
+    let on = 0;
+    for (const s of this.seats) { if (!s.on) continue; if (!s.ready) return false; on++; }
+    return on > 0;
+  }
 
   update() {
     super.update();
@@ -93,8 +111,12 @@ export class SelectScreen extends Screen {
       }
     }
     for (const c of this.cards) c.player.tick();
-    // every joined seat has stamped: hold the stamps for a beat, then start the run and fade to the map
-    if (this.starting < 0 && !this.started && this.joinedCount() > 0 && this.seats.every((s) => !s.on || s.ready)) this.starting = this.frame + START_HOLD;
+    // Every joined seat has stamped: hold the stamps for a beat, then start the run and fade to the map. The
+    // condition is re-read EVERY step, so a seat that cancels - or a couch seat that drops in - during the hold
+    // calls the countdown off instead of being dragged into a run on a card it never chose.
+    const allIn = this.allReady();
+    if (!allIn) this.starting = -1;
+    else if (this.starting < 0 && !this.started) this.starting = this.frame + START_HOLD;
     if (!this.started && this.starting >= 0 && this.frame >= this.starting) {
       this.started = true;
       const picks = [];
@@ -138,13 +160,10 @@ export class SelectScreen extends Screen {
     ctx.fillRect(x + 1, y + 1, CARD_W - 2, 14);
     ctx.fillStyle = UI.ink; ctx.fillRect(x + 1, y + 15, CARD_W - 2, 1);
     drawText(ctx, slot >= 0 ? PICKS_TEXT[slot] : c.def.species, x + CARD_W / 2, y + 5, { size: 1, color: UI.ink, align: 'center', shadow: false });
-    // the plum doily porthole: the pale furs never sit on paper (docs/ART_STYLE.md section 1, the risk note)
+    // the plum doily porthole: the pale furs never sit on paper (docs/ART_STYLE.md section 1, the risk note).
+    // The ring never changes, so it is one blit of a layer painted in art/logo.js; only the bust is live.
     const cx = x + CARD_W / 2, cy = y + PORT_CY;
-    ctx.beginPath(); ctx.arc(cx, cy, PORT_R + 3, 0, TAU); ctx.fillStyle = UI.cream; ctx.fill();
-    ctx.fillStyle = UI.paperDark;
-    for (let k = 0; k < 16; k++) { const a = k * TAU / 16; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * (PORT_R + 3), cy + Math.sin(a) * (PORT_R + 3), 3, 0, TAU); ctx.fill(); }
-    ctx.beginPath(); ctx.arc(cx, cy, PORT_R + 1, 0, TAU); ctx.fillStyle = UI.ink; ctx.fill();
-    ctx.beginPath(); ctx.arc(cx, cy, PORT_R, 0, TAU); ctx.fillStyle = PLUM.shadow; ctx.fill();
+    drawPorthole(ctx, cx, cy);
     ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, PORT_R, 0, TAU); ctx.clip();
     drawBust(ctx, c.rigs[slot + 1], c.player.pose, c.anchor, cx - PORT_R, cy - PORT_R, PORT_R * 2, PORT_R * 2, BUST_SCALE, this.bustOpts);
     ctx.restore();
@@ -174,7 +193,7 @@ export class SelectScreen extends Screen {
     for (const seat of this.seats) {
       if (!seat.on || !seat.ready) continue;
       const x = cardX(seat.card, this.cards.length) + CARD_W / 2;
-      drawStamp(ctx, 'READY', x, CARD_Y + PORT_CY + 46, Math.min(1, seat.t / STAMP_FRAMES), { size: 3, color: '#7E3A56', light: '#9A5470' });
+      drawStamp(ctx, 'READY', x, CARD_Y + PORT_CY + 46, Math.min(1, seat.t / STAMP_FRAMES), STAMP_OPTS);
     }
     if (!this.game.input.joined(1)) {
       drawTextOutlined(ctx, this.joinHint, VIEW_W / 2, JOIN_Y, { size: 1, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
