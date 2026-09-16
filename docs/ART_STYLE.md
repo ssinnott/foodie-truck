@@ -212,8 +212,9 @@ Timing windows (a chop's beat, the bite window) belong to `docs/GDD.md`; the art
 ## 9. Performance
 
 Zero allocation in draw hooks; count shapes, not maths: a critter stays under ~40 cel shapes and ~100 flat rects
-per draw (measured reference: see `node tools/sheet-capture.js … bench`, 0.67 ms/draw headless for the stand-in).
-Four critters + a scene's props + 200 particles at 60 fps on a mid laptop.
+per draw. Measured with `node tools/sheet-capture.js <dir> critter=<id> bench` on the shipped cast, headless:
+Sorrel 0.72 ms, Cress 0.79, Barley 0.87, Chicory 0.90 per `drawRig`. A critter that costs more than ~1 ms is
+carrying a hook it does not need. Four critters + a scene's props + 200 particles at 60 fps on a mid laptop.
 
 ## 10. Contact-sheet workflow
 
