@@ -4,7 +4,7 @@ Aether & Brass drew four heroes, thirty-one enemies, eight bosses and sixteen ba
 primitives, and spent most of its 210 commits on one complaint: *"muddled, hard to pick out arms, legs, items and
 the face."* This document is the distilled answer, written so a **new** procedural-art game — Foodie Truck — starts
 where that one finished. Every principle names where it came from. Where a number is quoted, it is the number the
-shipped code uses, not the one the docs claimed (the two drifted, which is itself lesson 27).
+shipped code uses, not the one the docs claimed (the two drifted, which is itself lesson 52).
 
 Sections: A pipeline · B characters · C backdrops · D user interface · E multiplayer and determinism ·
 F process and tooling · G what to do differently this time.
@@ -192,19 +192,34 @@ F process and tooling · G what to do differently this time.
     page and checked before upload.
 46. **Keep files under ~700 lines and split by concern**, keep content as data plus small draw hooks, never hardcode
     a number twice, and put every shared number in one constants module.
+47. **Open every document with its place in the precedence chain.** Line one says who wins a disagreement: the design
+    doc owns names and numbers, the architecture doc owns technical matters, a reconciliation table wins on numbers
+    where the two disagree, and the style guide supersedes the design doc's renderer line. Write the banner before
+    the content.
+48. **Finish one canonical reference rig first, then calibrate everything on it.** Every rule in the guide quotes the
+    reference's actual numbers; the suite's thresholds are measured from it and can never set a bar above what the
+    reference draws, so the reference is built to the standard before any rule exists.
+49. **Prefer parameterised default parts over per-species hooks.** A renderer fix reaches only the rigs on the default
+    path; the sibling game had to count, per faction, which rigs a fix actually reached and then run a content pass
+    on the rest. Give the shared head, limb and body renderers parameters (ear shape, muzzle size, tail, paw) and
+    keep custom hooks for the rare prop, so one fix lands on the whole cast.
+50. **Art commits freeze gameplay data and prove it.** An art pass changes pose values only; the commit says every
+    timing window, hit field and animation name is unchanged and backs it with a dump-and-diff. Severity is a
+    policy: errors are cheap to get right and silent on the reference, warnings are the work list, info prints the
+    measured table, and a tier that did not run is listed as SKIPPED, never silently green.
 
 ## G. What to do differently this time
 
-47. **Write the tooling on day one, not after the art.** Server, sheet, capture, build and playtest arrived together
+51. **Write the tooling on day one, not after the art.** Server, sheet, capture, build and playtest arrived together
     in the sibling game's first tooling commit and the readability pass could not have happened without them; the
     invariant suite followed the same day. Foodie Truck starts with all of them in place.
-48. **Keep the docs honest against the code.** The shipped shading gates, the contact-shadow default, the face pixel
+52. **Keep the docs honest against the code.** The shipped shading gates, the contact-shadow default, the face pixel
     sizes and the outline width all drifted from the prose; the suite records the drift in a `DOC_BUGS` list. Quote
     the code, and when a number changes, change it in one place.
-49. **One player palette, one ink, one set of UI tokens.** Route every colour through the constants module from the
+53. **One player palette, one ink, one set of UI tokens.** Route every colour through the constants module from the
     first screen; the sibling game had ~30 hex literals bypassing its UI table by the end.
-50. **Design for the small rig.** Feature sizes that are fixed pixels (pupils, brows, bands) do not shrink with a
+54. **Design for the small rig.** Feature sizes that are fixed pixels (pupils, brows, bands) do not shrink with a
     chibi head; arm poses that clear a 36 px human face cover a 24 px animal face; chain gains need raising because
     a smaller anchor moves fewer pixels. Measure the first reference critter, then set the budgets.
-51. **Decide the light flip, the reserved colour and the scene signal colours before authoring**, and write each
+55. **Decide the light flip, the reserved colour and the scene signal colours before authoring**, and write each
     scene's palette note (6–8 muted hexes, one signal colour, the hue gap to the cast) at the top of its module.

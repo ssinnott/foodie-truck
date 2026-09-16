@@ -35,6 +35,8 @@ jobs:
         run: npm ci
       - name: Syntax and type checks
         run: npm run lint
+      - name: Art invariants (cast palette ladder, animation table, distinctness)
+        run: npm run art-check
       - name: Net protocol and lockstep tests
         run: npm run nettest
       - name: Build the single-file game
