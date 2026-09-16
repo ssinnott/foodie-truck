@@ -14,10 +14,16 @@ const ANIMS = ['idle', 'walk', 'run', 'carry', 'carryWalk', 'reach', 'catch', 'c
 /** Which held item a pose is authored around, so the gallery shows the pair. */
 const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: 'food', chop: 'knife', stir: 'spoon' };
 const FLOOR_Y = 250;
-/** Where the paper wall gives way to the plum dado behind the crew. */
-const DADO_Y = 150;
+/** Each critter hangs on its own card, so no fur ever sits on a plane of its own value. */
+const CARD_TOP_PAD = 10;
+/** Relative luminance of a #rrggbb, 0..1 (docs/ART_STYLE.md section 0 judges contrast by value). */
+function lum(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+}
 /** Contact shadow: plum, never black (docs/ART_STYLE.md section 1). */
-const SHADOW = 'rgba(47,35,56,0.35)';
+const SHADOW = 'rgba(20,12,16,0.35)';
+const R = Math.round;
 
 export class GalleryScreen extends Screen {
   constructor(game) { super(game, 'gallery'); }
@@ -44,11 +50,9 @@ export class GalleryScreen extends Screen {
   }
   draw(ctx) {
     // A pinboard in the truck: paper wall, plum dado, wooden shelf floor (docs/ART_STYLE.md section 1).
-    ctx.fillStyle = UI.paper; ctx.fillRect(0, 0, VIEW_W, DADO_Y);
+    ctx.fillStyle = UI.paper; ctx.fillRect(0, 0, VIEW_W, FLOOR_Y + 1);
     ctx.fillStyle = UI.paperDark;
-    for (let y = 12; y < DADO_Y; y += 24) ctx.fillRect(0, y, VIEW_W, 1);
-    ctx.fillStyle = PLUM.shadow; ctx.fillRect(0, DADO_Y, VIEW_W, FLOOR_Y + 1 - DADO_Y);
-    ctx.fillStyle = PLUM.deep; ctx.fillRect(0, DADO_Y, VIEW_W, 2);
+    for (let y = 12; y < FLOOR_Y; y += 24) ctx.fillRect(0, y, VIEW_W, 1);
     ctx.fillStyle = UI.wood; ctx.fillRect(0, FLOOR_Y + 2, VIEW_W, VIEW_H - FLOOR_Y - 2);
     ctx.fillStyle = UI.woodDark; ctx.fillRect(0, FLOOR_Y + 2, VIEW_W, 4);      // the shelf falls into shadow at the wall
     ctx.fillStyle = UI.woodLight; ctx.fillRect(0, FLOOR_Y + 6, VIEW_W, 2);
@@ -56,9 +60,19 @@ export class GalleryScreen extends Screen {
     for (let x = 12; x < VIEW_W; x += 64) ctx.fillRect(x, FLOOR_Y + 8, 1, VIEW_H - FLOOR_Y - 8);
     ctx.fillStyle = UI.ink; ctx.fillRect(0, FLOOR_Y + 1, VIEW_W, 1);
     const n = Math.max(1, this.slots.length), pitch = Math.min(150, Math.floor((VIEW_W - 40) / n));
+    // One card top for the whole row, measured off the tallest critter: a row of matched portraits, not a skyline.
+    const tallest = this.slots.reduce((m, s) => Math.max(m, s.rig.height || 64), 64);
+    const cardTop = Math.max(62, FLOOR_Y - Math.round(tallest * this.zoom) - CARD_TOP_PAD);
     const x0 = Math.round(VIEW_W / 2 - (n - 1) * pitch / 2);
     for (let i = 0; i < this.slots.length; i++) {
       const s = this.slots[i], x = x0 + i * pitch;
+      // The card: a plum panel tall enough to hold this critter's whole silhouette at this zoom, so the two
+      // pale furs never sit on the pale paper (docs/ART_STYLE.md section 0: never pale on pale).
+      const cw = pitch - 12, top = cardTop;
+      const pale = lum(s.rig.palette.skin) > 0.5;                      // pale furs on plum, dark furs on paper
+      ctx.fillStyle = UI.ink; ctx.fillRect(R(x - cw / 2) - 1, top - 1, cw + 2, FLOOR_Y - top + 2);
+      ctx.fillStyle = pale ? PLUM.shadow : UI.paperDark; ctx.fillRect(R(x - cw / 2), top, cw, FLOOR_Y - top + 1);
+      ctx.fillStyle = pale ? PLUM.deep : UI.paperLine; ctx.fillRect(R(x - cw / 2), top, cw, 2);
       ctx.fillStyle = SHADOW; ctx.beginPath(); ctx.ellipse(x, FLOOR_Y + 2, 14 * this.zoom, 4 * this.zoom, 0, 0, Math.PI * 2); ctx.fill();
       drawRig(ctx, s.rig, s.player.pose, { x, y: FLOOR_Y, facing: this.facing, scale: this.zoom });
       drawNamePlate(ctx, i, s.def.name, x, FLOOR_Y + 12);
