@@ -1,1 +1,74 @@
-# foodie-truck
+# Foodie Truck
+
+A cozy co-op cooking adventure for one to four players, drawn entirely in code. A customer phones in an order, the
+crew of a countryside food truck is missing an ingredient, so they drive out to where it comes from, gather it in a
+short mini-game, drive home and cook the dish step by step. The customer eats. The phone rings again.
+
+The cast are original anthropomorphic countryside animals: **Barley** the Suffolk sheep (the hungry one), **Sorrel**
+the field mouse (the chef), **Chicory** the brown hare (the driver) and **Cress** the pond frog (the forager).
+
+The whole game is vanilla JavaScript ES modules and one HTML5 canvas at 640×360, scaled up with nearest-neighbour
+filtering. There are no image, audio or font files: every sprite, backdrop, glyph and particle is drawn from code
+so the repository stays reviewable in a diff.
+
+## The three parts
+
+| Part | Screen | What happens |
+|---|---|---|
+| **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. Arriving where a missing ingredient comes from opens its mini-game. Arriving home with everything opens the kitchen. |
+| **Mini-games** | `orchard`, `pond`, `coop` | Catch apples under the trees, fish the millpond, collect eggs from the hens. Everyone seated plays at once and the party's total counts. |
+| **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (chop, mix, stove, oven, plate), serve, and watch the customer eat for a star rating. |
+
+## Play
+
+```
+npm install
+npm run dev        # http://localhost:8080
+```
+
+| Action | P1 | P2 (couch) | Gamepad |
+|---|---|---|---|
+| Move | Arrows / W A S D | T F G H | D-pad / left stick |
+| ACTION (confirm, catch, cast, chop) | Z or Space | V | A |
+| ALT (honk, bite, flip) | X | B | X |
+| CANCEL (back) | C or Esc | N | B |
+| START (pause, ready) | Enter | 5 | Start |
+
+Any screen can be opened directly for a look: `index.html?debug=1&skipTo=orchard&critters=0,1,2,3&seed=7`. The title's
+CREW row opens the gallery, a contact sheet of every critter and animation.
+
+## Online co-op with a host key
+
+Two to four players over the internet with no server of our own. The host picks ONLINE, hosts a table and reads
+out the six-character host key (or sends the invite link the address bar turns into). Guests type the key. Every
+browser runs the same simulation in deterministic lockstep and exchanges only one-byte input masks over WebRTC,
+with a public MQTT broker used just to find each other. `docs/MULTIPLAYER.md` explains the flow, the mesh, the
+input delay and what a screen has to do to stay in sync.
+
+## Documents
+
+- `docs/ART_PRINCIPLES.md` — the portable lessons from making *Aether & Brass*: the pipeline, characters, backdrops,
+  UI, determinism and process. Read this first if you want to reuse the approach elsewhere.
+- `docs/ART_STYLE.md` — the binding style guide for this game: the Hedgerow Dusk look, the cast table, palettes,
+  outline and shading rules, animation bar, self-review checklist.
+- `docs/GDD.md` — the design: loop, map, mini-game rules, kitchen stations, results, controls, screen contract.
+- `docs/ARCHITECTURE.md` — the technical contract: modules, coordinate systems, screen API, test hooks, tooling.
+- `docs/MULTIPLAYER.md` — the online session.
+
+## Tooling
+
+```
+npm run lint         # node --check on every module, then tsc over the JSDoc types
+npm run art-check    # data-tier art invariants (palettes, player-colour contrast, cast table)
+npm run nettest      # pure-node protocol, lockstep and trig tests
+npm run playtest     # headless Playwright: boots every screen, walks the flow, holds a netplay room
+npm run capture -- tools/screens map "kitchen:critters=0,1,2,3"   # screenshots of any screen at 2x
+node tools/sheet-capture.js tools/screens critter=barley          # critter contact sheets
+npm run build        # single-file dist/index.html
+```
+
+The GitHub Pages workflow runs lint, art-check, nettest and build on every push and deploys `main`.
+
+## Licence
+
+MIT.
