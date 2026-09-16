@@ -11,7 +11,13 @@ export const INK = UI.ink;
 /** The line is 2 px mid-brown, never 1 px ink (the judges' graft: the 1 px line broke the floor). */
 export const LINE = '#5E4A3A';
 export const TROUT = Object.freeze({ body: '#B8C4C9', back: '#7FA9B8', gill: '#D9A2AE' });
-export const FLOAT = Object.freeze({ body: '#FFF6E0', band: SIGNAL.pond });
+/**
+ * The float: cream body, a neutral dark-willow band and the seat's colour on the cap and the tag (ART_STYLE
+ * section 1 "Pond"). The band used to be SIGNAL.pond, which spent the scene's one saturated colour on a mark that
+ * is on screen at all times — ART_STYLE section 4 binds mint to ONE meaning, the bite. It is now lit mint only
+ * while that seat's bite window is open, so the only thing wearing mint is the thing asking to be pressed.
+ */
+export const FLOAT = Object.freeze({ body: '#FFF6E0', band: '#5E3A1B', bite: SIGNAL.pond });
 export const BUCKET = Object.freeze({ willow: '#6B4E3A', tip: '#B8C4C9' });
 
 // ---------------------------------------------------------------- tables
@@ -44,6 +50,31 @@ export const POND_ANIMS = Object.freeze({
     F(26, { ...IDLE_ARMS, armR: [48, 30], weapon: -58, torso: 0, root: [0, 0] }),
     F(26, { ...IDLE_ARMS, armR: [50, 32], weapon: -52, torso: 2, root: [0, 1], head: 2 }),
   ] },
+  /**
+   * The nibble telegraph on the CRITTER (the float's 2 px dip is 300 px away from where the player is looking):
+   * the rod tip dips twice, 10 degrees, on the same 8/7/8/7 beat as the NIBBLE table above.
+   */
+  rodNibble: { loop: false, frames: [
+    F(8, { ...IDLE_ARMS, armR: [46, 33], weapon: -48, torso: 1, head: 1, face: 'neutral' }, { ease: 'out' }),
+    F(7, { ...IDLE_ARMS, armR: [48, 30], weapon: -58, torso: 0, head: 0, face: 'neutral' }, { ease: 'inout' }),
+    F(8, { ...IDLE_ARMS, armR: [46, 33], weapon: -48, torso: 1, head: 1, face: 'neutral' }, { ease: 'out' }),
+    F(7, { ...IDLE_ARMS, armR: [48, 30], weapon: -58, torso: 0, head: 0, face: 'neutral' }, { ease: 'inout' }),
+  ] },
+  /** The bite: the tip is yanked down and the critter leans into it, gritting — the 18-frame "press now". */
+  rodBite: { loop: false, frames: [
+    F(4, { ...IDLE_ARMS, armR: [44, 26], weapon: -30, torso: 6, head: 4, root: [0, 1], face: 'grit' }, { ease: 'out' }),
+    F(14, { ...IDLE_ARMS, armR: [46, 28], weapon: -34, torso: 5, head: 3, root: [0, 1], face: 'grit' }),
+  ] },
+  /**
+   * The miss. The shared `bump` sets no `weapon`, so it snapped the rod to 0 (straight down) and held it there for
+   * the whole 40-frame beat — shaft, float and slot tag under the waterline. This one keeps the rod at the waiting
+   * angle through the flinch and walks it back to the rodIdle angle over the last 25 frames, under the reel-in.
+   */
+  bump: { loop: false, frames: [
+    F(5, { ...IDLE_ARMS, armR: [60, 20], weapon: -58, torso: -8, head: -6, root: [0, 0], squash: 1.08, face: 'hurt' }, { ease: 'out' }),
+    F(10, { ...IDLE_ARMS, armR: [52, 28], weapon: -58, torso: 2, head: 2, root: [0, 0], face: 'hurt' }, { ease: 'inout' }),
+    F(25, { ...IDLE_ARMS, armR: [22, 12], weapon: -99, torso: 2, head: 0, root: [0, 0], face: 'dazed' }, { ease: 'inout' }),
+  ] },
   /** The hook: rod straight up in front (the reach key, so the paw lands beside the muzzle), happy. */
   pull: { loop: false, frames: [
     F(6, { armR: [140, 30], armL: [-150, -10], weapon: 0, torso: -6, head: -8, root: [0, 0], stretch: 1.03, face: 'happy' }, { ease: 'out' }),
@@ -51,9 +82,13 @@ export const POND_ANIMS = Object.freeze({
   ] },
 });
 /**
- * The generic rod whip for critters without a `cast` of their own (Cress has one): wind-up `in` 8f with the rod
- * back over the shoulder, the snap `overshoot` 4f with a smear (the chop's beat on the rod arm), a hold, and a
- * return `inout` onto the rodWait stance so the float's landing and the stance change share one moment.
+ * The rod whip EVERY seat casts with: wind-up `in` 8f with the rod back over the shoulder, the snap `overshoot` 4f
+ * with a smear (the chop's beat on the rod arm), a hold, and a return `inout` onto the rodWait stance so the float's
+ * landing and the stance change share one moment.
+ *
+ * It overrides an authored `cast` on purpose. Cress's own cast is written for her basket and ends at `weapon: 60`;
+ * rodWait opens at -58, so handing her the rod gave a 118-degree rod swing between two adjacent keys — a flail by
+ * ART_STYLE section 10. This whip ends ON the rodWait pose, so no seat has a seam there.
  */
 export const POND_ANIMS_CAST = Object.freeze({
   ...POND_ANIMS,
@@ -84,15 +119,18 @@ export function drawLine(ctx, x0, y0, x1, y1) {
 }
 
 /**
- * The float, centred on (x, y): a 6x8 cream capsule with the 3 px mint band (the scene's signal, the same on every
- * float), a 4x4 top cap in the seat colour and the 8x5 slot tag 6 px above it (the judges' graft).
+ * The float, centred on (x, y): a 6x8 cream capsule with a 3 px band, a 4x4 top cap in the seat colour and the 8x5
+ * slot tag 6 px above it (the judges' graft). `tag` is off while the float dangles under the rod tip — up there the
+ * tag would land ABOVE the tip with the shaft between it and the float it labels, reading as a card stapled to the
+ * rod; the seat's colour is already on the cap, the bucket band and the name plate. `bite` lights the band mint.
  */
-export function drawFloat(ctx, x, y, slot) {
+export function drawFloat(ctx, x, y, slot, tag = true, bite = false) {
   const col = PLAYER_COLORS[slot] || UI.paperDark;
   pathRR(ctx, x - 3, y - 4, 6, 8, 3); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = FLOAT.body; ctx.fill();
-  ctx.fillStyle = FLOAT.band; ctx.fillRect(x - 3, y - 1, 6, 3);
+  ctx.fillStyle = bite ? FLOAT.bite : FLOAT.band; ctx.fillRect(x - 3, y - 1, 6, 3);
   ctx.fillStyle = INK; ctx.fillRect(x - 3, y - 8, 6, 6);
   ctx.fillStyle = col; ctx.fillRect(x - 2, y - 7, 4, 4);
+  if (!tag) return;
   ctx.fillStyle = INK; ctx.fillRect(x - 5, y - 20, 10, 7);
   ctx.fillStyle = col; ctx.fillRect(x - 4, y - 19, 8, 5);
 }
@@ -109,13 +147,19 @@ export function drawTrout(ctx, cx, cy, facing = 1) {
   ctx.restore();
 }
 
-/** The bucket at a seat's feet: 14x12 dark willow with a 3 px slot band, and a 2 px silver tail tip per fish (up to 5). */
-export function drawBucket(ctx, x, y, slot, fish) {
+/**
+ * The bucket at a seat's feet: 14x12 dark willow with a 3 px slot band, and a 2 px silver tail tip per fish (up to
+ * 5). `squash` above 1 widens and squats it about its base for the few frames after a trout drops in, so the
+ * landing has a contact beat instead of the count simply ticking over.
+ */
+export function drawBucket(ctx, x, y, slot, fish, squash = 1) {
   const col = PLAYER_COLORS[slot] || UI.paperDark;
   const n = fish > 5 ? 5 : fish;
+  if (squash !== 1) { ctx.save(); ctx.translate(x + 7, y); ctx.scale(squash, 1 / squash); ctx.translate(-(x + 7), -y); }
   for (let i = 0; i < n; i++) { ctx.fillStyle = INK; ctx.fillRect(x + 1 + i * 3, y - 16, 3, 5); ctx.fillStyle = BUCKET.tip; ctx.fillRect(x + 2 + i * 3, y - 15, 2, 3); }
   ctx.beginPath(); ctx.moveTo(x - 1, y - 12); ctx.lineTo(x + 15, y - 12); ctx.lineTo(x + 13, y); ctx.lineTo(x + 1, y); ctx.closePath();
   ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = BUCKET.willow; ctx.fill();
   ctx.fillStyle = col; ctx.fillRect(x, y - 10, 14, 3);
   ctx.fillStyle = INK; ctx.fillRect(x - 1, y - 13, 16, 2);
+  if (squash !== 1) ctx.restore();
 }

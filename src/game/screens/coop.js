@@ -1,7 +1,7 @@
 // COOP - COLLECT (docs/GDD.md section 5; docs/ART_STYLE.md section 1 "Coop"). An interior in daylight with a deep
 // floor band: every seat walks in eight directions across it with a basket, eggs appear in the nesting boxes along
-// the back wall and on the floor, `action` within reach plucks one (a 12-frame reach up into a nest, a 12-frame
-// crouch to the floor), five hens wander between seeded waypoints and bump whoever they touch (the top egg pops out
+// the back wall and on the floor, `action` within reach plucks one (a 12-frame reach up into a nest from the gold
+// ring the nest egg drops on the floor to mark its reach point, a 12-frame crouch to a floor egg), five hens wander between seeded waypoints and bump whoever they touch (the top egg pops out
 // and cracks into a yolk puddle), and every ~600 frames the rooster telegraphs for 20 frames and charges across the
 // band, tossing anyone it hits for two eggs. The round ends when the party's total reaches the order's amount or the
 // 40-second clock runs out; the EGGS sign drops, is held, then run.gather() and back to the map.
@@ -18,7 +18,7 @@ import { dhypot } from '../../engine/trig.js';
 import { particles } from '../../engine/particles.js';
 import { blitAt } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt, burstDust } from '../../art/fx.js';
-import { drawFood } from '../../art/food.js';
+import { drawFood, foodTones } from '../../art/food.js';
 import { drawRig, jointScreen } from '../../art/rig.js';
 import { pathEllipse } from '../../art/shapes.js';
 import { F } from '../../content/critters/common.js';
@@ -32,7 +32,9 @@ const R = Math.round;
 /** Movement: px/frame per axis, and the feet clamp (the band's walkable rows). */
 const SPEED_X = 2.0, SPEED_Y = 1.2, X_MIN = 20, X_MAX = 620, Y_MIN = 262, Y_MAX = 336;
 /** Eggs: a fixed pool, one laid every 90..150 frames (a nest half the time), plucked within 14 px of the reach point. */
-const MAX_EGGS = 8, SPAWN_MIN = 90, SPAWN_MAX = 150, EGG_S = 4, PLUCK_R = 14, REACH_FRAMES = 12;
+const MAX_EGGS = 8, SPAWN_MIN = 90, SPAWN_MAX = 150, EGG_S = 5, PLUCK_R = 14, REACH_FRAMES = 12;
+/** At most three nests hold an egg at once: nest eggs share the pool, and six unreachable ones would starve the floor spawns. */
+const NEST_CAP = 3;
 /** Floor eggs land inside the band but never in its back 12 rows (the dark strip) or under the lip. */
 const EGG_X_MIN = 30, EGG_X_MAX = 610, EGG_Y_MIN = 250, EGG_Y_MAX = 334;
 /** Hens: five, 0.6 px/frame between seeded waypoints with 30..90 frame pauses; touching a seat within 12 px is a bump. */
@@ -43,8 +45,11 @@ const BUMP_FRAMES = 21, PUSH = 8, SAFE_FRAMES = 45;
 const ROOSTER_MIN = 540, ROOSTER_MAX = 660, TELEGRAPH = 20, CHARGE_SPEED = 3, ROOSTER_R = 14, ROOSTER_LOSS = 2, ROOSTER_OFF = 40, ROOSTER_EDGE = 22;
 /** Cosmetic pools: the egg's hop into the basket, the popped egg's arc and its splat. */
 const HOP_FRAMES = 12, ARC_N = 12, SPLAT_FRAMES = 30, CRACK_TOTAL = ARC_N + SPLAT_FRAMES, MAX_HOPS = 4, MAX_CRACKS = 6, POP_N = 12;
-/** The popped egg's height above the floor over its 12-frame arc: out of the basket, up, and down onto the floor. */
-const ARC = [14, 20, 25, 28, 29, 28, 25, 20, 14, 8, 3, 0];
+/**
+ * The popped egg's height above the floor over its 12-frame arc: it leaves ABOVE the basket's rim (22 px, clear of the
+ * eggs drawn inside the basket - at 14 the shell spent three frames as one more oval in that pile), up, and down.
+ */
+const ARC = [22, 28, 32, 34, 34, 32, 28, 23, 17, 10, 4, 0];
 /**
  * ...starting ARC_X0 px out and flying ARC_VX px/frame away from whatever bumped the seat: a cream shell over a cream
  * sheep is invisible, so the arc has to clear the critter's own body (half a torso, ~14 px) by its second frame.
@@ -52,20 +57,35 @@ const ARC = [14, 20, 25, 28, 29, 28, 25, 20, 14, 8, 3, 0];
 const ARC_X0 = 10, ARC_VX = 3.5;
 /** The rooster's toss: the seat's root pops up and lands over 12 frames (draw-only offset). */
 const POP = [3, 6, 8, 9, 9, 8, 6, 4, 2, 1, 0, 0];
-const PLUS_ONE = '+1', BWAK = 'BWAK', SQUAWK = 'BWAAK!', TITLE = 'CLUCKET COOP', SIGN_PREFIX = 'EGGS: ';
+const PLUS_ONE = '+1', MINUS_ONE = '-1', BWAK = 'BWAK', SQUAWK = 'BWAAK!', TITLE = 'CLUCKET COOP', SIGN_PREFIX = 'EGGS: ';
 const EGG_HEX = INGREDIENTS.egg.hex, YOLK = HEN.beak, SHELL = '#F7EAD0';
+/** drawFood's egg is base + one big shade ellipse and no highlight, so at rest it read as a grey pebble with a cream
+ *  rim; a resting egg gets the 2 px cap the other big food glyphs get, inside the shape's own ink (ART_STYLE 0.5). */
+const EGG_HI = foodTones(EGG_HEX).hi;
 /** The sort tiebreak: seats by slot (0..3), then eggs, then birds, so a stack at one y always draws the same way. */
 const TIE_EGG = 4, TIE_HEN = 8, TIE_ROOSTER = 9;
 
-/** The crouch to a floor egg: the basket dips to the ground and comes back up, both paws on it (an AnimPlayer overlay). */
+/**
+ * The two pluck beats, as AnimPlayer overlays on top of the shared table:
+ *   pluck     - the crouch to a floor egg: the basket dips to the ground and comes back up, both paws on it.
+ *   reachNest - up into a nesting box. NOT the shared `reach`: that raises the NEAR arm, and the near paw carries the
+ *               ribbon basket, so paw and basket both swung across the muzzle for the whole 12 frames (worst on
+ *               Chicory, whose face vanished behind it) - ART_STYLE section 0.7. Here the FAR arm goes up and back
+ *               toward the wall (it draws behind the head) while the near arm stays low with `weapon: 90`, so the
+ *               basket hangs upright in front of the belly and the face and the apron stay open.
+ */
 const COOP_ANIMS = Object.freeze({
   pluck: { loop: false, frames: [
     F(5, { armR: [44, 36], armL: [40, 40], weapon: 90, legR: [20, 30], legL: [-14, 30], torso: 14, head: 8, root: [0, 4], squash: 1.1, face: 'happy' }, { ease: 'in' }),
     F(7, { armR: [60, 50], armL: [56, 54], weapon: 90, torso: 2, root: [0, 0], face: 'happy' }, { ease: 'out' }),
   ] },
+  reachNest: { loop: false, frames: [
+    F(5, { armL: [-150, -10], armR: [56, 44], weapon: 90, torso: -4, head: -8, root: [0, -1], stretch: 1.02, face: 'happy' }, { ease: 'in' }),
+    F(7, { armL: [-158, -14], armR: [50, 40], weapon: 90, torso: -6, head: -10, root: [0, -2], stretch: 1.04, face: 'happy' }, { ease: 'out' }),
+  ] },
 });
 
-function clockIcon(ctx, x, y) { drawFood(ctx, 'egg', x, y, 4, EGG_HEX); }
+function clockIcon(ctx, x, y) { drawFood(ctx, 'egg', x, y, 5, EGG_HEX); }
 
 export class CoopScreen extends Screen {
   constructor(game) { super(game, 'coop'); }
@@ -178,7 +198,7 @@ export class CoopScreen extends Screen {
     if (e.nest >= 0) this.nestFull[e.nest] = 0;
     s.count++; this.setTotal(this.total + 1);
     s.reachT = REACH_FRAMES; s.moving = false;
-    seatAnim(s, e.nest >= 0 ? 'reach' : 'pluck', true);
+    seatAnim(s, e.nest >= 0 ? 'reachNest' : 'pluck', true);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     h.t = 0; h.x0 = e.x; h.y0 = e.y; h.seat = s.index;
     ringAt(e.x, e.y, 3, 10, UI.cream, 2, 12, false, true);
@@ -186,7 +206,11 @@ export class CoopScreen extends Screen {
     if (e.nest >= 0) burstDust(e.x, e.y + 4, 3, 1, true);
   }
 
-  /** Lay an egg every 90..150 frames while fewer than eight are out: in a free nest half the time, else on the floor. */
+/**
+   * Lay an egg every 90..150 frames while fewer than eight are out: in a free nest half the time, else on the floor.
+   * Nests are capped at NEST_CAP: a nest egg costs a pool slot and can only be taken from one 14 px strip, so six of
+   * them would lock the pool and stop the floor spawns a party that has not found the back row depends on.
+   */
   updateEggs() {
     if (--this.nextSpawn > 0) return;
     this.nextSpawn = rng.int(SPAWN_MIN, SPAWN_MAX);
@@ -194,8 +218,9 @@ export class CoopScreen extends Screen {
     for (let i = 0; i < this.eggs.length; i++) if (!this.eggs[i].active) { slot = i; break; }
     if (slot < 0) return;
     const e = this.eggs[slot];
-    let nest = -1;
-    if (rng.chance(0.5)) {
+    let nest = -1, full = 0;
+    for (let i = 0; i < this.nestFull.length; i++) full += this.nestFull[i];
+    if (full < NEST_CAP && rng.chance(0.5)) {
       const start = rng.int(0, NEST_X.length - 1);
       for (let k = 0; k < NEST_X.length; k++) { const j = (start + k) % NEST_X.length; if (!this.nestFull[j]) { nest = j; break; } }
     }
@@ -222,7 +247,7 @@ export class CoopScreen extends Screen {
           this.bump(s, h.x, 1, false);
           h.facing = s.x < h.x ? -1 : 1;
           h.state = 0; h.t = rng.int(PAUSE_MIN, PAUSE_MAX);
-          floatText(h.x, h.y - 24, BWAK, UI.cream, 1, true);
+          floatText(h.x - (s.x < h.x ? -1 : 1) * 14, h.y - 34, BWAK, UI.cream, 1, true);   // away from the seat it just shoved, above its comb
         }
       }
     }
@@ -263,6 +288,11 @@ export class CoopScreen extends Screen {
       s.count--; this.setTotal(this.total - 1);
       const c = this.cracks[this.crackCursor]; this.crackCursor = (this.crackCursor + 1) % this.cracks.length;
       c.t = 0; c.x = s.x + dir * k * 6; c.y = s.y + 2 + k * 3; c.dir = dir;
+      // the mirror of the pluck's ring and +1, thrown from where the shell actually leaves (the arc's first key) and
+      // out along its flight, so neither mark sits on the critter's own wool: a loss used to be the scene's quietest beat
+      const mx = s.x + dir * ARC_X0;
+      ringAt(mx, s.y - ARC[0], 3, 11, UI.cream, 2, 12, false, true);
+      floatText(mx + dir * 18, s.y - ARC[0] - 14 - k * 8, MINUS_ONE, s.colour, 1, true);
     }
     this.bumps++;
   }
@@ -282,6 +312,7 @@ export class CoopScreen extends Screen {
     for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; if (e.active && e.nest >= 0) this.drawEgg(ctx, e, i, f); }
     blitAt(ctx, L.floor.L, 0, L.floor.y);
     particles.draw(ctx, null, 'back');
+    for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; if (e.active && e.nest >= 0) this.drawNestCue(ctx, e, i, f); }
     // ground contact first: the slot ring under each seat's shadow, then every bird and floor egg
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
@@ -337,15 +368,30 @@ export class CoopScreen extends Screen {
 
   drawRoosterAt(ctx, f) {
     const r = this.rooster;
-    // the telegraph flashes the comb HOT at (frame >> 3) & 1; the charge keeps it muted and swaps the legs fast
-    const comb = r.state === 1 && ((f >> 3) & 1) ? SIGNAL.hot : HEN.comb;
+    // the comb flashes HOT through the telegraph AND the charge itself (the charge is the scene's real threat, and it
+    // used to run its ~210 frames in the muted comb); the charge's tick is twice as fast, so it reads as motion
+    const hot = (r.state === 1 && ((f >> 3) & 1)) || (r.state === 2 && ((f >> 2) & 1));
+    const comb = hot ? SIGNAL.hot : HEN.comb;
     drawRooster(ctx, R(r.x), R(r.y), r.dir, r.state === 2 ? (f >> 1) & 1 : 0, comb);
+  }
+
+  /**
+   * The floor spot a nest egg is reached from: the nests are 100 px above the feet line, so without a mark on the
+   * floor the 14 px strip the pluck works from is invisible. A ring where the feet go, with the same blink as the
+   * egg's own sparkle so a player joins the two.
+   */
+  drawNestCue(ctx, e, i, f) {
+    const x = R(e.x);
+    ctx.globalAlpha = 0.45; ctx.strokeStyle = SIGNAL.coop; ctx.lineWidth = 2;
+    pathEllipse(ctx, x, Y_MIN, 10, 4); ctx.stroke(); ctx.globalAlpha = 1;
+    if (((f + i * 7) >> 3) & 1) { ctx.fillStyle = SIGNAL.coop; ctx.fillRect(x - 1, Y_MIN - 9, 2, 6); ctx.fillRect(x - 3, Y_MIN - 7, 6, 2); }
   }
 
   /** An egg at rest, with the fresh-egg sparkle blinking above it on an index hash. */
   drawEgg(ctx, e, i, f) {
     const x = R(e.x), y = R(e.y);
     drawFood(ctx, 'egg', x, y, EGG_S, EGG_HEX);
+    ctx.fillStyle = EGG_HI; ctx.fillRect(x - 2, y - 3, 2, 2);
     if (((f + i * 7) >> 3) & 1) { ctx.fillStyle = SIGNAL.coop; ctx.fillRect(x + 3, y - 10, 2, 6); ctx.fillRect(x + 1, y - 8, 6, 2); }
   }
 

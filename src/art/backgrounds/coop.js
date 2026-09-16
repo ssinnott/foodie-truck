@@ -4,7 +4,7 @@
 // from the coop block 120..129, every one blitted at offset 0 by the screen:
 //   wall    rows 0..190     grey-green boards with 1 px seams, the open window at x 520, six nesting boxes on a shelf
 //   floor   rows 190..340   packed earth (cool blue-grey, L .32) with a darker back strip and cream straw scatter kept
-//                           OUT of the middle lane rows 250..290 where feet mostly stand
+//                           OUT of every row from 250 down - the whole walk lane, where the feet and the floor eggs are
 //   near    rows 340..360   the straw-and-plank lip in front of everything (below the feet clamp, so never solid at
 //                           critter height)
 //   rafter  rows 0..40      the beam and two hanging lanterns pinned to the top edge, drawn over the crew's plates
@@ -97,16 +97,19 @@ function paintFloor(g, w, h, rnd) {
   g.fillStyle = COOP.floor; g.fillRect(0, 0, w, h);
   g.fillStyle = COOP.floorBack; g.fillRect(0, 0, w, ROWS.backStrip - ROWS.floor);
   g.fillStyle = INK; g.fillRect(0, 0, w, 2);
-  // straw scatter: 2x1 cream (a few in the nest straw tone), never inside the middle lane where the feet are
-  const top = ROWS.laneTop - ROWS.floor, bot = ROWS.laneBot - ROWS.floor;
+  // straw scatter: 2x1 cream (a few in the nest straw tone), never below laneTop. The WALK LANE is not the old
+  // laneTop..laneBot strip: the seats' feet clamp runs from y 262 to the bottom of the band and the floor eggs land
+  // in it, so every row from laneTop down is lane and stays bare (ART_STYLE section 7) - cream specks down there read
+  // in the egg's own family and a clump can be mistaken for an egg. The count stays, so the back band keeps its texture.
+  const top = ROWS.laneTop - ROWS.floor;
   for (let i = 0; i < 130; i++) {
     const x = R(rnd() * w), y = 14 + R(rnd() * (h - 16));
-    if (y >= top - 2 && y <= bot) continue;
+    if (y >= top - 2) continue;
     g.fillStyle = rnd() < 0.75 ? COOP.strawLight : COOP.straw; g.fillRect(x, y, 2, 1);
   }
-  // a few small clumps along the back strip and the front edge (still outside the lane)
+  // a few small clumps, back band only (the front edge is walkable floor now)
   for (let i = 0; i < 14; i++) {
-    const x = R(rnd() * w), y = rnd() < 0.5 ? 14 + R(rnd() * 30) : h - 26 + R(rnd() * 20);
+    const x = R(rnd() * w), y = 14 + R(rnd() * 30);
     g.fillStyle = COOP.straw; g.fillRect(x, y, 4, 2); g.fillRect(x + 2, y - 1, 2, 1);
     g.fillStyle = COOP.strawLight; g.fillRect(x + 1, y, 2, 1);
   }

@@ -1,6 +1,6 @@
 // The coop's birds (docs/ART_STYLE.md section 1 "Coop"): five hens, rust or speckled grey, and one rooster. Drawn
 // like every prop in the rig style - 1 px warm ink round each object, three tones on the body (base, a shadow band,
-// the wing as a colour change inside the body's own line), beak and feet in mustard - at 20x16 for a hen and 24x20
+// the wing as a colour change inside the body's own line), beak and feet in dull ochre - at 20x16 for a hen and 24x20
 // for the rooster, feet on the ground point. Two frames of walk (the legs swap) and of peck (the head drops 3 px).
 // Screen space, integer coordinates, no allocation per call; the screen draws drawShadow under each bird first.
 // The rooster's comb is the ONE place in the scene the reserved HOT colour appears, and only while it telegraphs
@@ -12,7 +12,9 @@ import { PLUM } from '../constants.js';
 const TAU = Math.PI * 2;
 /** Bird colours: the only rust and grey things in the scene (no critter wears either). */
 export const HEN = Object.freeze({
-  rust: '#A8623A', grey: '#8C8A93', beak: '#E2B44A',
+  /** Beak and feet: a darkened straw ochre, NOT the mustard that read as SIGNAL.coop - ten gold legs out-shouted the
+   *  one 6x6 egg sparkle the gold is reserved for (ART_STYLE section 4). */
+  rust: '#A8623A', grey: '#8C8A93', beak: '#B98A46',
   /** A hen's comb and the rooster's resting comb: the map's roof red, muted, never the reserved HOT. */
   comb: '#A65A48',
   /** The rooster's tail plumes: the wall's seam green, so they read dark against the floor and never as a fourth fur. */
@@ -25,7 +27,7 @@ const SPECKS = [-5, -11, -1, -13, 3, -10, -3, -8];
 /** One stroked-then-filled path: the ink shows 1 px outside the fill. */
 function ink(ctx, fill) { ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = fill; ctx.fill(); }
 
-/** A leg: a 2x`h` mustard post inside a 1 px ink line, foot toward +x. */
+/** A leg: a 2x`h` ochre post inside a 1 px ink line, foot toward +x. */
 function leg(ctx, x, h) {
   ctx.fillStyle = INK; ctx.fillRect(x - 1, -h - 1, 4, h + 2); ctx.fillRect(x - 1, -2, 6, 3);
   ctx.fillStyle = HEN.beak; ctx.fillRect(x, -h, 2, h); ctx.fillRect(x, -1, 4, 1);

@@ -2,11 +2,10 @@
 // view. Four layers painted ONCE with the pond's seed block (110..119) and blitted at integer offsets by the screen:
 //   far    sky gradient, a low sun disc, two hill tiers              (rows 0..200)
 //   mid    the plum tree-line behind the critters, its foot strip     (rows 90..200)
-//   ground the near bank the crew stands on, the lip, the water, the pre-painted ripples, lily pads, the jetty (200..360)
+//   ground the near bank, the lip, the jetty deck the crew stands on, the water, ripples, lily pads (200..360)
 //   near   reeds at the far right and a turf edge along the bottom    (rows 300..360)
-// There is no camera on the pond, so the parallax factors are recorded (PARALLAX_OF) for a scene that adds one, and
-// every blit lands at offset 0. Nothing here animates: the 24 glints (GLINTS) are the screen's only per-frame marks
-// on the water, index-hashed twinkles at positions this module seeds.
+// There is no camera on the pond, so every blit lands at offset 0. Nothing here animates: the 24 glints (GLINTS) are
+// the screen's only per-frame marks on the water, index-hashed twinkles at positions this module seeds.
 import { makeLayer, vGradient, INK } from '../layers.js';
 import { makeRng } from '../../engine/rng.js';
 import { VIEW_W, PLUM } from '../../constants.js';
@@ -16,27 +15,33 @@ const R = Math.round, TAU = Math.PI * 2;
 /** The pond's muted constants (six ground tones + the sky). The one saturated colour on the pond is SIGNAL.pond. */
 export const POND = Object.freeze({
   skyTop: '#FBE3C4', skyLow: '#F4C9A0', sun: '#FDF0CC', hillFar: '#C9AE9A', hillNear: '#A89C82',
-  plum: PLUM.shadow, foot: '#4F5A40', reflection: '#F1E4C8',
+  // `reflection` is the lit edge where the far bank meets the water behind the crew. It used to be #F1E4C8 — the
+  // sheep's exact wool hex — painted as one unbroken band right behind four chins, so the cast's heads fused into
+  // it (ART_STYLE section 7 wants that plane 25 % off the lightest fur). It is now a value step down and painted
+  // in dashes, so it reads as a glinting edge instead of a rule ruled through the faces.
+  plum: PLUM.shadow, foot: '#4F5A40', reflection: '#C9B79A',
   turf: '#6E7A5A', turfShade: '#5C684C', tuft: '#8A9B4E',
   water: '#4E7A8C', surface: '#6F9FB0', lily: '#7FA36A', lilyShade: '#5F8A50',
   jetty: '#9A6234', jettyDark: '#5E3A1B', reed: '#8A9B4E', reedHead: '#6B4E3A', glint: '#F1E4C8',
 });
 /** Seed block 110..119 belongs to the pond (ART_STYLE section 7). */
 const SEED0 = 110;
-/** Parallax each layer would move by if the pond ever got a camera (ART_STYLE section 7). */
-export const PARALLAX_OF = Object.freeze({ far: 0.2, mid: 0.5, ground: 1, near: 1.2 });
 
-/** Row bands (screen y). */
+/** Row bands (screen y). `feet` is the jetty deck's top plank: GDD section 5 stands the crew on a jetty. */
 export const ROWS = Object.freeze({
-  sky: 110, trees: 90, bank: 200, lip: 235, feet: 236, water: 237, surface: 249, near: 300, edge: 350, bottom: 360,
+  sky: 110, trees: 90, bank: 200, lip: 235, feet: 232, water: 237, surface: 249, near: 300, edge: 350, bottom: 360,
 });
 /** Where each seat stands (x of the feet centre) and the float column it owns; both in seat order, left to right. */
 export const SEAT_X = Object.freeze([56, 120, 184, 248]);
 export const FLOAT_X = Object.freeze([340, 410, 480, 550]);
 /** The float's resting y: on the surface band. */
 export const SURFACE_Y = 243;
-/** The jetty deck: x 280..316, rows 230..242, so it juts off the bank over the water. */
-export const JETTY = Object.freeze({ x: 280, y: 230, w: 36, h: 12 });
+/**
+ * The jetty deck the crew fishes from (GDD section 5 "fixed standing spots on a jetty"): x 40..300, rows 232..246,
+ * so it runs along the bank's lip and juts 9 rows out over the water. Every seat in SEAT_X stands on it with its
+ * feet on ROWS.feet, which puts the contact shadows on planks instead of in the pond.
+ */
+const JETTY = Object.freeze({ x: 40, y: ROWS.feet, w: 260, h: 14, post: 60 });
 /** Half-width of a float column that ripples and lily pads keep out of. */
 const COLUMN_HALF = 16;
 function inColumn(x, w) { for (let i = 0; i < FLOAT_X.length; i++) if (x + w > FLOAT_X[i] - COLUMN_HALF && x < FLOAT_X[i] + COLUMN_HALF) return true; return false; }
@@ -78,9 +83,15 @@ function paintMid(g, w, h, rnd) {
   g.lineTo(w + 8, foot); g.closePath();
   g.strokeStyle = INK; g.lineWidth = 4; g.lineJoin = 'round'; g.stroke();
   g.fillStyle = POND.plum; g.fill();
-  // the far bank's foot: a dark olive strip and the 2 px cream reflection line where it meets the water behind
-  g.fillStyle = POND.foot; g.fillRect(0, foot, w, 4);
-  g.fillStyle = POND.reflection; g.fillRect(0, foot + 4, w, 2);
+  // The far bank's foot: a dark olive strip (the separator) and, under it, the lit edge in 40..80 px dashes with
+  // 20..60 px gaps. Unbroken it was a hard rule across all four jaws; broken it reads as light catching a far edge.
+  g.fillStyle = POND.foot; g.fillRect(0, foot, w, 6);
+  g.fillStyle = POND.reflection;
+  for (let x2 = -10 - Math.floor(rnd() * 40); x2 < w; ) {
+    const run = 40 + Math.floor(rnd() * 41);
+    g.fillRect(x2, foot + 4, run, 2);
+    x2 += run + 20 + Math.floor(rnd() * 41);
+  }
 }
 
 function paintGround(g, w, h, rnd) {
@@ -109,14 +120,17 @@ function paintGround(g, w, h, rnd) {
     g.save(); g.beginPath(); g.ellipse(px, py, 7, 5, 0, 0, TAU); g.clip(); g.fillStyle = POND.lilyShade; g.fillRect(px - 8, py + 1, 16, 5); g.restore();
     g.fillStyle = POND.water; g.fillRect(px + 3, py + 1, 2, 5);
   }
-  // the jetty: two dark posts into the water, then the deck with its lower shade band and three plank seams
+  // the jetty the crew stands on: posts every JETTY.post px down into the water, then the deck with its lower
+  // shade band and a plank seam every 26 px. Painted after the water so the deck's front edge overlaps it.
   const J = JETTY, jy = J.y - y0;
-  g.fillStyle = INK; g.fillRect(J.x + 3, jy + J.h, 6, 16); g.fillRect(J.x + J.w - 9, jy + J.h, 6, 16);
-  g.fillStyle = POND.jettyDark; g.fillRect(J.x + 4, jy + J.h, 4, 15); g.fillRect(J.x + J.w - 8, jy + J.h, 4, 15);
+  for (let px = J.x + 8; px < J.x + J.w - 8; px += J.post) {
+    g.fillStyle = INK; g.fillRect(px - 1, jy + J.h, 6, 15);
+    g.fillStyle = POND.jettyDark; g.fillRect(px, jy + J.h, 4, 14);
+  }
   g.fillStyle = INK; g.fillRect(J.x - 2, jy - 2, J.w + 4, J.h + 4);
   g.fillStyle = POND.jetty; g.fillRect(J.x, jy, J.w, J.h);
   g.fillStyle = POND.jettyDark; g.fillRect(J.x, jy + J.h - 4, J.w, 4);
-  for (let i = 1; i < 4; i++) g.fillRect(J.x + i * 9 - 1, jy, 2, J.h - 4);
+  for (let sx = J.x + 26; sx < J.x + J.w; sx += 26) g.fillRect(sx - 1, jy, 2, J.h - 4);
 }
 
 /** Reeds pinned to the far right (x >= 600) and a 10-row turf edge along the bottom; blitted at ROWS.near. */

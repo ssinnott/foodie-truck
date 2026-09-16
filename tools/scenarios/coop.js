@@ -5,7 +5,8 @@
 //          holding the stick toward it), presses action and has one egg in its basket; then seat 0 is walked into
 //          the nearest hen so a bump is caught on camera (tools/screens/coop-bump.png, when one lands); then the
 //          clock is forced to its last frames: the EGGS sign drops, is held, and the screen returns to the map with
-//          the order's egg line updated by the party's total. Also writes tools/screens/coop-pluck.png.
+//          the order's egg line updated by the party's total. Also writes tools/screens/coop-pluck.png and, from a
+//          forced charge down seat 0's lane, tools/screens/coop-charge.png.
 import { withPage, assert } from '../playtest.js';
 
 const SLAM = 6, HOLD = 60;
@@ -75,6 +76,21 @@ export const SCENARIOS = {
       }
       await api.release(0);
       assert(bumpShot, `seat 0 walked into a hen and lost its egg to the bump (${b.top.bumps} bumps so far)`);
+
+      // the rooster: drop the next charge into seat 0's lane and catch it mid-run (tools/screens/coop-charge.png -
+      // the comb has to be HOT for the whole charge, not just the telegraph) and check the toss lands
+      const preCharge = (await api.summary()).top;
+      if (preCharge.phase === 0) {
+        await page.evaluate(() => {
+          const sc = window.__game.game.screen, seat = sc.seats[0], r = sc.rooster;
+          r.state = 2; r.dir = 1; r.y = seat.y; r.x = seat.x - 60;   // mid-charge, 20 frames short of the seat
+        });
+        await api.step(8);
+        await api.shot('coop-charge');
+        await api.step(24);
+        const ch = await api.summary();
+        assert(ch.top.bumps > preCharge.bumps, `the rooster's charge tossed seat 0 (${preCharge.bumps} -> ${ch.top.bumps} bumps)`);
+      }
 
       // force the clock to its end (or watch the early ending) and expect the sign, then the map
       let s2 = await api.summary();

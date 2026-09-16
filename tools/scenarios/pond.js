@@ -1,10 +1,11 @@
 // Playtest scenarios for the pond work (registered in tools/scenarios/index.js). Each export is
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
-//   pond - four seats on the millpond: seat 0 casts, the float lands in its column, a nibble is telegraphed and a
+//   pond - four seats on the millpond jetty: seat 0 casts, the float lands in its column, a nibble is telegraphed and a
 //          bite opens; pressing inside the 18-frame window hooks a trout (count 1, the bucket shows it), pressing
 //          too early on a second cast pops the float (PLOP, no count), and forcing the clock drops the FISH sign and
-//          returns to the map with the catch gathered. Also writes tools/screens/pond-bite.png at the bite moment.
+//          returns to the map with the catch gathered. Writes pond-cast / pond-bite / pond-hooked / pond-miss /
+//          pond-sign into tools/screens along the way.
 import { withPage, assert } from '../playtest.js';
 
 const seat0 = (s) => s.top.seats[0];
@@ -32,7 +33,7 @@ export const SCENARIOS = {
       await api.shot('pond-cast');
       const w = await untilState(api, 'wait', 60);
       assert(seat0(w).state === 'wait' && seat0(w).fx === 340 && seat0(w).fy === 243, `the float lands in P1's column (${seat0(w).fx}, ${seat0(w).fy}) and waits ${seat0(w).t} frames`);
-      assert(seat0(w).t >= 60 && seat0(w).t <= 240, `the wait is seeded inside 90..240 (${seat0(w).t} left after landing)`);
+      assert(seat0(w).t >= 90 && seat0(w).t <= 240, `the wait is seeded inside 90..240 (${seat0(w).t} left after landing)`);
       assert(w.top.seats.slice(1).every((x) => x.state === 'idle'), 'the other seats did not cast');
 
       // the nibble telegraph, then the bite window; hook inside it
@@ -58,16 +59,19 @@ export const SCENARIOS = {
       await api.press(0, { action: true }, 1, 0);
       const m = await api.summary();
       assert(seat0(m).state === 'missed' && seat0(m).count === 1, `pulling early misses (state ${seat0(m).state}, count still ${seat0(m).count})`);
+      // mid-miss: the rod must still be out over the water, not flopped down with the float under the waterline
+      await api.step(8);
+      await api.shot('pond-miss');
 
       // the clock runs out: the FISH sign drops, the catch is gathered, and the pond hands back to the map
       const errsBefore = (await api.errors()).length;
-      await page.evaluate(() => { window.__game.game.screen.timer = 1; });
+      await page.evaluate(() => { window.__game.game.screen.clock.timer = 1; });
       await api.step(2);
       const e = await api.summary();
       assert(e.top.ending === true, 'the round ends when the clock runs out');
       await api.step(20);
       await api.shot('pond-sign');
-      await api.step(SIGN_FRAMES + 10);
+      await api.step(SIGN_SLAM + SIGN_HOLD + 10);
       const end = await api.summary();
       assert(end.screen === 'map', `the pond returns to the map after the sign (now on ${end.screen})`);
       assert(end.run.needs.some((x) => x.startsWith('fish:1/')) || end.run.needs.every((x) => !x.startsWith('fish')), `the catch was gathered into the order (${end.run.needs.join()})`);
@@ -75,4 +79,5 @@ export const SCENARIOS = {
     });
   },
 };
-const SIGN_FRAMES = 60;
+/** game/minigame.js: the end sign slams in over 6 frames and hangs for the GDD's 60. */
+const SIGN_SLAM = 6, SIGN_HOLD = 60;
