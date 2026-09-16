@@ -2,11 +2,13 @@
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
 //   map - four seats on the map: holding right on seat 0 drives the truck east off home, a honk stamps, the river
-//         stops it short of a bridge, a scenery landmark drops a COMING SOON sign, and driving to the orchard with
-//         apples on the order opens the orchard screen. Also writes tools/screens/map-driving.png.
+//         stops it short of a bridge, the mill's wall stops it outside the tower, a scenery landmark drops a
+//         COMING SOON sign, and driving to the orchard with apples on the order opens the orchard screen. Every
+//         signpost is checked off the driving lane so none of them can drift back onto it. Also writes
+//         tools/screens/map-driving.png.
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.js';
-import { BRIDGES, RIVER_BLOCK, riverDist } from '../../src/art/backgrounds/map.js';
+import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, riverDist, laneDist, wallBlocked } from '../../src/art/backgrounds/map.js';
 
 const placeOf = (id) => PLACES.find((p) => p.id === id);
 const teleport = (page, x, y, heading) => page.evaluate(([px, py, h]) => { const t = window.__game.game.run.truck; t.x = px; t.y = py; t.at = ''; if (h != null) t.heading = h; }, [x, y, heading == null ? null : heading]);
@@ -51,12 +53,26 @@ export const SCENARIOS = {
       assert(s4.screen === 'map' && s4.run.truckAt === 'mill', `arriving at the mill stays on the map (screen ${s4.screen}, at '${s4.run.truckAt}')`);
       assert(s4.top.sign === 'COMING SOON', `...with a COMING SOON sign (got '${s4.top.sign}')`);
 
+      // the mill tower is painted into the ground chunk and never y-sorts against the truck, so a wall test has to
+      // keep the token out of it: drive north into the tower and stop at its base
+      await teleport(page, mill.x, mill.y + 60, 12);
+      await api.hold(0, { up: true }); await api.step(150); await api.release(0);
+      const sw = await api.summary();
+      assert(sw.top.truck.y > mill.y - 82 && sw.top.truck.y < mill.y, `the mill's wall stops the truck outside the tower (y ${sw.top.truck.y}, tower ${mill.y - 82}..${mill.y - 6})`);
+
       // the orchard supplies the missing apples: arriving there opens its screen
       const o = placeOf('orchard');
       await teleport(page, o.x + 70, o.y + 70, 10);
       await api.hold(0, { up: true, left: true }); await api.step(150); await api.release(0);
       const s5 = await api.summary();
       assert(s5.screen === 'orchard', `arriving at the orchard opens the orchard screen (now on ${s5.screen}, truck at '${s5.run.truckAt}')`);
+
+      // every signpost stands off the lane and out of a wall: the truck drives through anything that does not
+      for (const p of PLACES) {
+        const g = SIGN_AT[p.id], d = laneDist(g.x, g.y);
+        assert(d > SIGN_CLEAR, `the ${p.id} signpost clears the driving lane (${d.toFixed(1)} px > ${SIGN_CLEAR})`);
+        assert(!wallBlocked(g.x, g.y), `the ${p.id} signpost is not planted inside a building`);
+      }
     });
   },
 };

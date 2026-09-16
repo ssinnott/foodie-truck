@@ -18,9 +18,9 @@ const INK = '#2A1F1A';
 export const TRUCK = Object.freeze({
   body: '#7E3A56', bodyShade: '#5A2A40', bodyHi: '#9A5470', cream: '#F1E4C8', mustard: '#E2B44A', window: '#D9C9A8',
   reflect: '#FBE3C4', brass: '#E2B44A', lamp: '#FFD27A', board: '#2F4B3C', wood: '#9A6234', woodDark: '#5E3A1B', chalk: '#F2EFE6',
-  // dusk glass: a MID value (L .31) on purpose - pale glass lost the two light furs and dark glass loses the two dark
+  // dusk glass: a warm MID value (L .31) on purpose - pale glass lost the two light furs and dark glass loses the two dark
   // ones, and only a middle tone clears all four by the 25 % ladder (ART_STYLE section 0.1)
-  glass: '#8A96A2', glassLow: '#6B7682',
+  glass: '#A8907E', glassLow: '#87705F',
 });
 /** Master size (scale 1). */
 export const TRUCK_W = 80, TRUCK_H = 48;
