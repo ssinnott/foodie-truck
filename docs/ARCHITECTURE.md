@@ -37,14 +37,16 @@ src/constants.js         every shared number and UI colour (never hardcode these
 src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, input (8-action masks), rng, math, trig, text (5x7 pixel font)
 src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (the paper-doll), layers (offscreen
-               backdrop helpers), palettes, portraits, food (ingredient glyphs)
+               backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
+               fishing + hens + kitchenProps (per-scene props), logo, backgrounds/ (one pre-rendered scene each)
 src/game/      game (screen stack), run (the order + party, the only cross-screen state), animation, menuinput,
-               screens/ (one file per screen)
-src/content/   critters/ (the cast: common rig hooks + one file per critter + items), recipes, places
+               ui (the paper/chalk/wood kit), minigame (shared mini-game furniture), maphud, screens/ (one per screen)
+src/content/   critters/ (the cast: common rig hooks + one file per critter + items + customers), recipes, places
 src/net/       signal (room codes over MQTT / BroadcastChannel), mqtt-codec, peer (WebRTC), lockstep, protocol,
                checksum, session
 tools/         server, build, check, capture (screenshots of any screen), sheet (critter contact sheets),
-               playtest (headless scenarios), nettest (pure node), browser (Playwright lookup)
+               playtest + scenarios/ (headless scenarios, one module per feature owner), nettest (pure node),
+               art-check (data-tier art invariants), browser (Playwright lookup)
 docs/          this file, GDD, ART_STYLE, ART_PRINCIPLES, MULTIPLAYER
 ```
 
