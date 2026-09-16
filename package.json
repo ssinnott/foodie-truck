@@ -1,0 +1,23 @@
+{
+  "name": "foodie-truck",
+  "version": "0.1.0",
+  "description": "Cozy co-op cooking adventure for 1-4 players: drive the truck, gather the ingredients, cook the order. Vanilla JS + Canvas, no assets.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "node tools/server.js",
+    "build": "node tools/build.js",
+    "test": "node tools/nettest.js && node tools/playtest.js",
+    "playtest": "node tools/playtest.js",
+    "nettest": "node tools/nettest.js",
+    "capture": "node tools/capture.js",
+    "lint": "node tools/check.js && npm run typecheck",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright-core": "^1.63.0",
+    "typescript": "^5.9.3"
+  }
+}
