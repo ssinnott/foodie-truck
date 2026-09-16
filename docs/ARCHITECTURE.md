@@ -101,6 +101,14 @@ Offscreen pre-render: `makeLayer(w, h, paint(g, w, h, rnd), seed)`, `blitTiled`,
 camY)`, `vGradient`, `radialGlow`, `makeGlowSprite`, `boxOutlined`, `boxShaded`, `discShaded`, `polyOutlined`,
 `makePool`, `pulse`, `PARALLAX`, `INK`. Backdrops paint ONCE with a seeded rng and blit per frame at integer offsets.
 
+### `engine/particles.js`, `art/fx.js` (ported)
+One 600-slot pool, visual only (its own rng stream): `particles.spawn(kind, x, y, opts)`, `burst(kind, x, y, n, opts)`,
+`update()`, `draw(ctx, cam, layer)` with kinds `sparkle dust smoke steam ember crumb leaf drop text ring`; world coords
+minus `cam`, or `opts.screen`. Helpers: `drawShadow(ctx, sx, sy, w, alpha, height)` (the ground-contact ellipse every
+sprite draws before the y-sorted pass), `drawRing`, `steamPuff(ctx, x, y, phase)`, `burstDust/Steam/Crumbs/Sparkle/Drops`,
+`floatText`, `ringAt`. A scene calls `particles.update()` in its update and `particles.draw(ctx, cam, 'back'|'front')`
+around its sprites; `particles.clear()` on enter.
+
 ### `art/portraits.js`, `art/food.js`
 `drawHeadPortrait(ctx, rig, pose, x, y, size)`, `drawBust(...)`, `idlePoseOf(def)`; `drawFood(ctx, icon, cx, cy, s, hex)`
 and `FOOD.<icon>` for `apple egg fish milk sack jar carrot`.
