@@ -19,6 +19,8 @@ const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: '
 const FLOOR_Y = 250;
 /** Each critter hangs on its own card, so no fur ever sits on a plane of its own value. */
 const CARD_TOP_PAD = 10;
+/** Paper mount inside a dark critter's frame, in px. */
+const MAT = 3;
 /** Relative luminance of a #rrggbb, 0..1 (docs/ART_STYLE.md section 0 judges contrast by value). */
 function lum(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -77,10 +79,13 @@ export class GalleryScreen extends Screen {
       // The card: a plum panel tall enough to hold this critter's whole silhouette at this zoom, so the two
       // pale furs never sit on the pale paper (docs/ART_STYLE.md section 0: never pale on pale).
       const cw = pitch - 12, top = cardTop;
-      const pale = lum(s.rig.palette.skin) > 0.5;                      // pale furs on plum, dark furs on paper
-      ctx.fillStyle = UI.ink; ctx.fillRect(R(x - cw / 2) - 1, top - 1, cw + 2, FLOOR_Y - top + 2);
-      ctx.fillStyle = pale ? PLUM.shadow : UI.paperDark; ctx.fillRect(R(x - cw / 2), top, cw, FLOOR_Y - top + 1);
-      ctx.fillStyle = pale ? PLUM.deep : UI.paperLine; ctx.fillRect(R(x - cw / 2), top, cw, 2);
+      // One card for the whole row: four matched frames, not two pairs. Plum carries every fur in the cast;
+      // a dark fur gets a MAT px paper mount inside the frame so it is never dark on dark at the edges.
+      const cx0 = R(x - cw / 2), ch = FLOOR_Y - top + 1, m = lum(s.rig.palette.skin) > 0.5 ? 0 : MAT;
+      ctx.fillStyle = UI.ink; ctx.fillRect(cx0 - 1, top - 1, cw + 2, ch + 1);
+      if (m) { ctx.fillStyle = UI.paperDark; ctx.fillRect(cx0, top, cw, ch); }
+      ctx.fillStyle = PLUM.shadow; ctx.fillRect(cx0 + m, top + m, cw - m * 2, ch - m);
+      ctx.fillStyle = PLUM.deep; ctx.fillRect(cx0 + m, top + m, cw - m * 2, 2);
       ctx.fillStyle = SHADOW; ctx.beginPath(); ctx.ellipse(x, FLOOR_Y + 2, 14 * this.zoom, 4 * this.zoom, 0, 0, Math.PI * 2); ctx.fill();
       drawRig(ctx, s.rig, s.player.pose, { x, y: FLOOR_Y, facing: this.facing, scale: this.zoom });
       drawNamePlate(ctx, i, s.def.name, x, FLOOR_Y + 12);

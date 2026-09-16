@@ -113,8 +113,11 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
 
 Two-and-a-third heads tall, 56 px standing at scale 1 (`CHIBI` in `content/critters/common.js`):
 `headR 12, neck 1, torsoW 24, torsoH 18, hip 20, upperArm 8, lowerArm 7, handR 4.5, upperLeg 6, lowerLeg 6, footL 9,
-footH 5, armR 3.5, legR 4, bulge 0.15, shoulderX 3, hipX 4`. Height = `upperLeg + lowerLeg + footH − 2 + torsoH − 2 +
-neck + 2·headR`. Species vary within: the hungry one headR 14–16 / torsoW 28 (the widest), the chef headR 11–12
+footH 5, armR 3.5, legR 4, bulge 0.15, shoulderX 6, hipX 4` (per-critter shoulderX 7–9). The shoulders sit
+out at about a quarter of the torso width, not the humanoid rig's 2 px, so both arms hang down the torso's outer
+edges and neither crosses the apron — the apron is the player's identity and nothing may lie across it.
+Height = `upperLeg + lowerLeg + footH − 2 + torsoH − 2 + neck + 2·headR`. Species vary within: the hungry one
+headR 14–16 / torsoW 28 (the widest), the chef headR 11–12
 (smallest body, tallest hat), ears add 8–18 px above the skull. `art-check` holds height 46..68 and 1.9..2.8 heads.
 Paws `handR ≥ 0.33·headR` so they read from across the screen. Draw scales: 1× in mini-games and the kitchen,
 0.5× as the map's window busts, 2× on cards and the title, 2.5× on select busts.
@@ -198,7 +201,7 @@ effort and success keys. The shared table (`makeCritterAnims`) every critter shi
 | idle | 2–4, 52f | torso 2→4°, head ±2°, root y 0→1; ear flick / tail chain via `rig.tick` |
 | walk / carryWalk | 4, 28f | contact / down ×2, root y +1 and squash 1.03 on the down keys |
 | run | 4, 20f | lean 16°, root y −2 on the pass keys |
-| carry / catch | 2 loop | both paws forward, item `upright` in front of the belly (`weapon: 90`) |
+| carry / catch | 2 loop | near paw forward with the item `upright` (`weapon: 90`) and the off paw down at the far side, so the basket hangs BESIDE the hip and the apron stays visible |
 | reach / wave / cheer | 2–3 | near arm up **forward** (130–150°), far arm up back, `happy` |
 | eat | 5 | anticipation `in` 8f → paw to muzzle `overshoot` 6f (`shout`) → chew ×2 (`closed`) → return `out` (`happy`) |
 | chop | 4 | anticipation `in` 6f (item up, `grit`) → hit `overshoot` 3f with smear → hold 4f squash 1.04 → return `inout` 8f |
