@@ -7,12 +7,15 @@
 //             must reach results with the stars it scored, then the map with run.served 1 on confirm. A second pass
 //             runs the FISH CAKES order (chop, mix, stove, plate) for the stove's hot band and writes
 //             tools/screens/kitchen-stove.png with the pot lit mid-hold.
-//   kitchenPause - `start` in the kitchen pushes the pause overlay.
+//   kitchenPause - `start` from a seat pushes the pause overlay, `cancel` pops it and the kitchen underneath is
+//             exactly as it was left (step, scores, owners, seat positions); online the push is refused.
+//   kitchenGag - Barley's eat gag hands him an apple and TAKES IT BACK: the rig's held item is cleared with the
+//             state, at a spot where no station suggests one. Writes tools/screens/kitchen-gag.png.
 //   results - opens straight onto results and returns to the map on action, with the order banked.
 import { withPage, assert } from '../playtest.js';
 
 /** The standing spots (art/backgrounds/kitchen.js STATION_X); the scenario walks by summary, not by geometry. */
-const STATION_X = [80, 200, 320, 440, 560];
+const STATION_X = [80, 190, 300, 410, 490];
 /** The chop bar's beat is at t 20; a press within 6 frames of it counts, so the scenario aims at 18. */
 const ON_BEAT = 18, OFF_BEAT = 5;
 
@@ -129,29 +132,99 @@ export const SCENARIOS = {
       assert(s.top.step === 2 && s.top.scores[0] === 2 && s.top.scores[1] === 2, `a clean chop and mix are PERFECT (step ${s.top.step}, ${s.top.scores.slice(0, 2).join()})`);
       s = await walkTo(api, 2);
       assert(s.top.seats[0][2] === 2, `seat 0 is at the stove (station ${s.top.seats[0][2]})`);
+      // letting go short of the band is the stove's failure mode: the bar pauses where it is and the step can no
+      // longer be PERFECT, exactly as a paused dial caps MIX (the bar used to be tappable into the band for free)
       await api.hold(0, { action: true });
-      await api.step(126);            // 150 frames fill the bar; the hot band is its last 20 % (120..150)
+      await api.step(60);
+      await api.release(0);
+      await api.step(2);
       s = await api.summary();
-      assert(s.top.phase === 1 && s.top.t === 126, `the pot is on and the bar is in its hot band (${s.top.t}/150)`);
+      assert(s.top.phase === 0 && s.top.t === 60 && s.top.miss === 1, `letting go short of the band pauses the bar and costs a miss (t ${s.top.t}, miss ${s.top.miss})`);
+      await api.hold(0, { action: true });
+      await api.step(66);             // 150 frames fill the bar; the hot band is its last 20 % (120..150)
+      s = await api.summary();
+      assert(s.top.phase === 1 && s.top.t === 126, `the pot is back on and the bar is in its hot band (${s.top.t}/150)`);
       await api.shot('kitchen-stove');
       await api.release(0);
       await api.step(2);
       s = await api.summary();
-      assert(s.top.step === 3 && s.top.scores[2] === 2, `letting go inside the hot band is PERFECT (step ${s.top.step}, score ${s.top.scores[2]})`);
+      assert(s.top.step === 3 && s.top.scores[2] === 1, `hold, release, hold into the band is DONE, not PERFECT (step ${s.top.step}, score ${s.top.scores[2]})`);
       s = await walkTo(api, 4);
       await api.press(0, { action: true }, 1, 0);
       s = await api.summary();
-      assert(s.top.served === true && s.top.stars === 3, `a clean run serves three stars (total ${s.top.total}/8, stars ${s.top.stars})`);
+      assert(s.top.served === true && s.top.total === 7 && s.top.stars === 3, `the run serves three stars (total ${s.top.total}/8, stars ${s.top.stars})`);
     });
   },
 
-  /** The screen contract: `start` from any seat pushes the pause overlay while the game is offline. */
+  /** The screen contract: `start` pushes the pause overlay offline, `cancel` pops it, and the scene underneath
+   *  comes back untouched. Online the kitchen refuses to push at all (a paused peer stalls the room). */
   async kitchenPause(server) {
-    await withPage(server, 'skipTo=kitchen&critters=0,1', async (api) => {
+    await withPage(server, 'skipTo=kitchen&critters=0,1', async (api, page) => {
       await api.step(4);
+      // leave the kitchen in a state worth preserving: one claimed step with a miss on it, seat 0 off its spot
+      await walkTo(api, 0);
+      await api.press(0, { action: true }, 1, 0);
+      await api.hold(0, { right: true });
+      await api.step(6);
+      await api.release(0);
+      await api.step(2);
+      const before = (await api.summary()).top;
+
       await api.press(0, { start: true }, 1, 2);
-      // popping it again is the pause screen's own business (it is still the placeholder stub), so this stops here
       assert((await api.screen()) === 'pause', `start pushes the pause overlay (on ${await api.screen()})`);
+      await api.step(20);
+      assert((await api.summary()).top.row === 'RESUME', 'the overlay opens on RESUME');
+      await api.press(0, { cancel: true }, 1, 2);
+      assert((await api.screen()) === 'kitchen', `cancel pops it back to the kitchen (on ${await api.screen()})`);
+      const after = (await api.summary()).top;
+      assert(after.step === before.step && after.total === before.total && after.miss === before.miss,
+        `the step, the score and the miss survived the pause (${after.step}/${after.total}/${after.miss} vs ${before.step}/${before.total}/${before.miss})`);
+      assert(after.owners.join() === before.owners.join(), `the station owners survived the pause (${after.owners.join()} vs ${before.owners.join()})`);
+      assert(after.seats.map((x) => x[1]).join() === before.seats.map((x) => x[1]).join(),
+        `every seat is where it was left (${after.seats.map((x) => x[1]).join()} vs ${before.seats.map((x) => x[1]).join()})`);
+
+      // online the overlay is refused by the scene, so a room never stalls on one peer's start
+      await page.evaluate(() => { window.__game.game.net = { active: true }; });
+      await api.press(0, { start: true }, 1, 2);
+      assert((await api.screen()) === 'kitchen', `start is refused while the room is live (on ${await api.screen()})`);
+      await page.evaluate(() => { window.__game.game.net = null; });
+    });
+  },
+
+  /**
+   * Barley's eat gag hands him an ingredient for 42 frames. The rig has to give it back: the reconcile in
+   * updateSeats only runs when the wanted item CHANGES, so a gag that ends where no station suggests one used to
+   * leave the apple welded to his paw for the rest of the service.
+   */
+  async kitchenGag(server) {
+    await withPage(server, 'skipTo=kitchen&critters=0,1', async (api, page) => {
+      await api.step(2);
+      // park him in the gap between the bowl and the hob, where no station suggests an item and no other seat stands
+      await api.hold(0, { right: true });
+      await api.step(86);
+      await api.release(0);
+      await api.step(2);
+      let s = await api.summary();
+      assert(s.top.seats[0][2] === -1 && s.top.seats[0][5] === 0, `seat 0 stands at no station with empty paws (station ${s.top.seats[0][2]}, item ${s.top.seats[0][5]})`);
+
+      // the gag is a seeded one-in-six on each completed step, so force steps until it rolls (the step index is
+      // put back each time, so the order is never actually served out from under the test)
+      const eatT = await page.evaluate(() => {
+        const g = window.__game.game, k = g.screens[g.screens.length - 1];
+        for (let i = 0; i < 200 && k.seats[0].eatT === 0; i++) { k.completeStep(1, null); k.stepIdx = 0; }
+        return k.seats[0].eatT;
+      });
+      assert(eatT > 0, `the gag fires and locks the seat for ${eatT} frames`);
+      await api.step(4);
+      s = await api.summary();
+      assert(s.top.seats[0][3] === 'eat' && s.top.seats[0][5] === 1, `he is eating, with something in his paw (${s.top.seats[0][3]}, item ${s.top.seats[0][5]})`);
+      await api.shot('kitchen-gag');
+
+      await api.step(50);            // past EAT_FRAMES (42) with no station to suggest an item
+      s = await api.summary();
+      assert(s.top.seats[0][4] === 0, `the gag is over (eatT ${s.top.seats[0][4]})`);
+      assert(s.top.seats[0][5] === 0, `the rig's held item went with it (item ${s.top.seats[0][5]})`);
+      assert(s.top.seats[0][3] === 'idle', `and he is idling again (${s.top.seats[0][3]})`);
     });
   },
 

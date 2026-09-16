@@ -10,13 +10,14 @@ import { drawFood, foodTones } from './food.js';
 import { steamPuff } from './fx.js';
 import { pathRR } from './shading.js';
 import { drawText } from '../engine/text.js';
-import { ROWS, HATCH, PROP_X, TAG_POS, TAG_W, TAG_H, WIDGET_POS } from './backgrounds/kitchen.js';
+import { KITCHEN, ROWS, HATCH, PROP_X, TAG_POS, TAG_W, TAG_H, WIDGET_POS } from './backgrounds/kitchen.js';
 
 const R = Math.round, TAU = Math.PI * 2;
 /** The warm things in the room: wood, copper, enamel, brass, paper. Heat is SIGNAL.hot and the #FFD27A core, nowhere else. */
 export const PROPS = Object.freeze({
   maple: '#C9A05C', mapleEnd: '#6B4E3A', copper: '#B87333', copperSh: '#8A5220', copperHi: '#D9935A', hob: '#2A2428',
-  enamel: '#F1E4C8', enamelSh: '#C9B58E', steel: '#B8C4C9', steelSh: '#8A9AA2', brass: '#E2B44A', brassSh: '#B08A30',
+  // enamelware is duck-egg, not cream: #F1E4C8 is Barley's fleece, and furniture may not wear a fur's own hex
+  enamel: '#9DB5B2', enamelSh: '#76908C', range: '#7E9A8E', rangeSh: '#5E7A70', steel: '#B8C4C9', steelSh: '#8A9AA2', brass: KITCHEN.brass, brassSh: KITCHEN.brassSh,
   bowlIn: PLUM.shadow, plate: '#FFF6E0', plateRim: '#D8C093', core: '#FFD27A', burnt: '#3A2430', dough: '#EBDCC0',
 });
 const TOP = ROWS.counterTop;
@@ -49,7 +50,7 @@ function paintBoard(g) {
   g.fillStyle = INK; g.fillRect(B.x + 2, B.y + B.h, B.w - 4, 2);              // the shadow line under the board
   boxOutlined(g, B.x, B.y, B.w, B.h, PROPS.maple);
   g.fillStyle = PROPS.mapleEnd; g.fillRect(B.x, B.y, 2, B.h); g.fillRect(B.x + B.w - 2, B.y, 2, B.h);   // end-grain bands
-  g.fillStyle = PROPS.enamelSh; g.fillRect(B.x + 3, B.y + 1, B.w - 6, 1);
+  g.fillStyle = PROPS.mapleEnd; g.fillRect(B.x + 3, B.y + B.h - 3, B.w - 6, 2);   // the board's own shade band
   // the knife rack: a wooden bar on the wall with three knives hanging point down, open silhouettes
   boxOutlined(g, RACK.x, RACK.y, RACK.w, RACK.h, UI.wood);
   for (let i = 0; i < 3; i++) {
@@ -85,27 +86,29 @@ function paintHob(g) {
 function paintOven(g) {
   const O = OVEN;
   g.fillStyle = INK; g.fillRect(O.x - 2, O.y - 2, O.w + 4, O.h + 4);
-  g.fillStyle = PROPS.enamel; g.fillRect(O.x, O.y, O.w, O.h);
-  g.fillStyle = PROPS.enamelSh; g.fillRect(O.x + O.w - 6, O.y, 6, O.h); g.fillRect(O.x, O.y + O.h - 8, O.w, 8);   // shade: right edge and foot
-  g.fillStyle = '#4F5A62'; g.fillRect(O.x, O.y, O.w, 6);                               // a slate top plate
+  g.fillStyle = PROPS.range; g.fillRect(O.x, O.y, O.w, O.h);                          // duck-egg enamel: a hue family off every fur
+  g.fillStyle = PROPS.rangeSh; g.fillRect(O.x + O.w - 6, O.y, 6, O.h); g.fillRect(O.x, O.y + O.h - 8, O.w, 8);   // shade: right edge and foot
+  g.fillStyle = PROPS.hob; g.fillRect(O.x, O.y, O.w, 6);                              // the dark hob plate on top
   g.fillStyle = INK; g.fillRect(O.x, O.y + 6, O.w, 1);
-  g.fillStyle = PROPS.enamelSh; g.fillRect(O.x + 2, O.y + 13, O.w - 4, 35);                 // the door, one step darker than the body
+  // the door is the counter's own steel, dark enough that Cress's green and Barley's wool both clear it
+  g.fillStyle = KITCHEN.counterFront; g.fillRect(O.x + 2, O.y + 13, O.w - 4, 35);
   g.fillStyle = INK; g.fillRect(O.x, O.y + 12, O.w, 1); g.fillRect(O.x, O.y + 48, O.w, 1);   // the door's top and bottom seams
-  g.fillStyle = INK; g.fillRect(O.x, O.y + O.h - 6, O.w, 6);                                 // the plinth it stands on
+  g.fillStyle = PROPS.brass; g.fillRect(O.x + 2, O.y + 44, O.w - 4, 4);               // a 4 px brass trim: the room's one warm metal
+  g.fillStyle = PROPS.brassSh; g.fillRect(O.x + 2, O.y + 46, O.w - 4, 2);
+  g.fillStyle = INK; g.fillRect(O.x, O.y + O.h - 6, O.w, 6);                          // the plinth it stands on
   // the window: a steel frame round the dark interior (the glow is drawn per frame, clipped to it)
   g.fillStyle = INK; g.fillRect(O.winX - 2, O.winY - 2, O.winW + 4, O.winH + 4);
   g.fillStyle = PROPS.steel; g.fillRect(O.winX - 1, O.winY - 1, O.winW + 2, O.winH + 2);
   g.fillStyle = PLUM.deep; g.fillRect(O.winX, O.winY, O.winW, O.winH);
-  boxOutlined(g, O.winX + 10, O.winY + O.winH + 6, 20, 4, PROPS.steel);                // the handle bar
-  boxOutlined(g, O.x + 6, O.y + 52, 6, 6, PROPS.steel);                                // the dial
+  boxOutlined(g, O.winX + 10, O.winY + O.winH + 6, 20, 4, PROPS.brass);               // the handle bar
+  boxOutlined(g, O.x + 6, O.y + 52, 6, 6, PROPS.steel);                               // the dial
   g.fillStyle = INK; g.fillRect(O.x + 8, O.y + 53, 2, 2);
   g.fillStyle = INK; g.fillRect(O.x + 4, O.y + O.h, 6, 3); g.fillRect(O.x + O.w - 10, O.y + O.h, 6, 3);   // two feet
 }
 
 function paintShelfProps(g) {
-  // a stack of three plates at the shelf's left end
-  for (let i = 0; i < 3; i++) boxOutlined(g, HATCH.x + 10, HATCH.shelfY - 4 - i * 4, 26, 3, i & 1 ? PROPS.plateRim : PROPS.plate);
-  // the counter bell: an ink base, a brass dome with its shade crescent and a knob
+  // the counter bell: an ink base, a brass dome with its shade crescent and a knob. Nothing else stands on the
+  // shelf: its left half is where the dish is plated, its right half is where the customer leans in.
   const B = BELL;
   g.fillStyle = INK; g.fillRect(B.x + 2, B.y + B.h - 2, B.w - 4, 3);
   g.beginPath(); g.moveTo(B.x, B.y + B.h - 2); g.arc(B.x + B.w / 2, B.y + B.h - 2, B.w / 2, Math.PI, 0); g.closePath();
@@ -177,7 +180,6 @@ export function drawStove(ctx, lit, heat, frame, burnt) {
   ctx.fillStyle = INK; ctx.fillRect(P.x - 3, P.y, P.w + 6, 7);                              // the rim, inked
   ctx.fillStyle = body; ctx.fillRect(P.x - 2, P.y + 1, P.w + 4, 5);
   ctx.fillStyle = PLUM.deep; ctx.fillRect(P.x + 1, P.y + 1, P.w - 2, 3);                    // the dark inside over the rim
-  if (!burnt) { ctx.fillStyle = PROPS.copperHi; ctx.fillRect(P.x - 2, P.y + 5, P.w + 4, 1); }
   if (lit && heat > 0.15 && !burnt) { steamPuff(ctx, PROP_X[2] - 6, P.y - 2, frame, 20); steamPuff(ctx, PROP_X[2] + 7, P.y - 4, frame + 9, 24); }
 }
 
@@ -202,7 +204,7 @@ export function drawOvenWindow(ctx, heat, tray, burnt) {
 export function drawPlate(ctx, x, y, icons, hexes, n, squash) {
   ctx.fillStyle = INK; ctx.fillRect(x - 14, y - 1, 28, 8);
   ctx.fillStyle = PROPS.plate; ctx.fillRect(x - 13, y, 26, 6);
-  ctx.fillStyle = PROPS.plateRim; ctx.fillRect(x - 12, y + 4, 24, 1);
+  ctx.fillStyle = PROPS.plateRim; ctx.fillRect(x - 12, y + 4, 24, 2);
   for (let i = 0; i < n && i < icons.length; i++) {
     const last = i === n - 1, k = last ? squash : 1;
     const cx = x - 6 + i * 7 + (i > 1 ? 1 : 0), cy = y - 3 - (i > 1 ? 5 : 0);
@@ -257,15 +259,20 @@ export function drawDial(ctx, fill, paused) {
   ctx.fillStyle = paused ? UI.paperDark : UI.ink; ctx.fillRect(cx - 2, cy - 2, 4, 4);
 }
 
-/** STOVE: a bar that fills while held; the hot band is the last 20 %. */
+/** STOVE: a bar that fills while held; the hot band is an open frame over the last 20 %, so the green head runs
+ *  THROUGH it instead of painting over it and the target is still there when you are standing on it. */
 export function drawStoveBar(ctx, fill, hotFrom) {
   const x = WIDGET_POS[2][0], y = WIDGET_POS[2][1], bx = x + 6, by = y + 7, w = 36, h = 6;
   card(ctx, x, y, 48, 20);
   ctx.fillStyle = UI.ink; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
   ctx.fillStyle = UI.paperLine; ctx.fillRect(bx, by, w, h);
-  ctx.fillStyle = SIGNAL.hot; ctx.fillRect(bx + R(w * hotFrom), by, w - R(w * hotFrom), h);
   ctx.fillStyle = SIGNAL.good; ctx.fillRect(bx, by, R(w * Math.min(1, fill)), h);
-  ctx.fillStyle = UI.ink; ctx.fillRect(bx + R(w * hotFrom) - 1, by - 2, 2, h + 4);
+  // the band's frame: two inked hot rails above and below it, and the 2 px mark the hint tells you to pass
+  const hx = bx + R(w * hotFrom), hw = w - R(w * hotFrom);
+  ctx.fillStyle = UI.ink; ctx.fillRect(hx - 1, by - 5, hw + 2, 4); ctx.fillRect(hx - 1, by + h + 1, hw + 2, 4);
+  ctx.fillStyle = SIGNAL.hot; ctx.fillRect(hx, by - 4, hw, 2); ctx.fillRect(hx, by + h + 2, hw, 2);
+  ctx.fillStyle = UI.ink; ctx.fillRect(hx - 1, by - 2, 4, h + 4);
+  ctx.fillStyle = SIGNAL.hot; ctx.fillRect(hx, by - 1, 2, h + 2);
 }
 
 /** OVEN: a round paper timer; a HOT arc sweeps as the bake runs, the green notch is its last 40 frames. */
@@ -273,6 +280,7 @@ export function drawOvenTimer(ctx, k, windowK) {
   const cx = WIDGET_POS[3][0] + 24, cy = WIDGET_POS[3][1] + 12;
   disc(ctx, cx, cy, 12);
   ctx.beginPath(); ctx.arc(cx, cy, 9, -Math.PI / 2 + TAU * (1 - windowK), -Math.PI / 2 + TAU);
+  ctx.strokeStyle = UI.ink; ctx.lineWidth = 6; ctx.stroke();                 // UI.green on paper is always inked
   ctx.strokeStyle = SIGNAL.good; ctx.lineWidth = 4; ctx.stroke();
   if (k > 0) { ctx.beginPath(); ctx.arc(cx, cy, 9, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, k)); ctx.strokeStyle = SIGNAL.hot; ctx.lineWidth = 3; ctx.stroke(); }
   ctx.fillStyle = UI.ink; ctx.fillRect(cx - 2, cy - 2, 4, 4);
@@ -285,10 +293,15 @@ export function drawPlatePrompt(ctx, text) {
   drawText(ctx, text, x + 30, y + 5, WIDGET_TEXT);
 }
 
-/** The station's paper tag: `segs` segments, `filled` of them in the owner's slot colour (all paper when unowned). */
+/**
+ * The station's paper tag: the moment a seat claims the step the tag turns SOLID in that seat's colour, because
+ * the graft's whole point is that the tag says who owns the station and five 2 px ticks said nothing at a squint.
+ * Progress is an ink bar eaten along the tag's foot instead (`filled` of `segs`).
+ */
 export function drawTag(ctx, station, slot, segs, filled) {
-  if (slot < 0 || segs <= 0) return;
-  const x = TAG_POS[station][0] + 1, y = TAG_POS[station][1] + 1, w = TAG_W - 2, sw = Math.floor(w / segs);
-  ctx.fillStyle = PLAYER_COLORS[slot];
-  for (let i = 0; i < filled && i < segs; i++) ctx.fillRect(x + i * sw, y, sw - 1, TAG_H - 2);
+  if (slot < 0) return;
+  const x = TAG_POS[station][0] + 1, y = TAG_POS[station][1] + 1, w = TAG_W - 2, h = TAG_H - 2;
+  ctx.fillStyle = PLAYER_COLORS[slot] || UI.paperDark; ctx.fillRect(x, y, w, h);
+  const done = segs > 0 ? Math.min(w, R(w * filled / segs)) : 0;
+  if (done > 0) { ctx.fillStyle = UI.ink; ctx.fillRect(x, y + h - 2, done, 2); }
 }

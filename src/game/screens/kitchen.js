@@ -4,7 +4,8 @@
 // colour fills the paper tag over the station); its input alone drives the step:
 //   CHOP  five presses on the beat of a sliding bar (a 40-frame sweep, a press within 6 frames of centre counts)
 //   MIX   hold for 180 frames while a dial fills; letting go pauses it
-//   STOVE hold while a bar fills; let go inside the hot band (last 20 %) for perfect, before it for done, over = burnt
+//   STOVE hold while a bar fills; let go inside the hot band (the last 20 %) - letting go short of it costs a miss
+//         and pauses the bar exactly like MIX, so the band is the only way out short of burning it
 //   OVEN  a press loads the tray; 300 frames run; a press in the last 40 is perfect, earlier is done, none is burnt
 //   PLATE a press at the hatch plates the dish and rings the bell: ORDER UP!, then results
 // Each step scores 0..2; stars = max(1, round(total / (2 * steps) * 3)). Barley's gag: on every completed step, a
@@ -31,7 +32,7 @@ import { INGREDIENTS } from '../../content/recipes.js';
 import { AnimPlayer } from '../animation.js';
 import { drawTicket, drawOrderTicket, drawNamePlate, drawHint, drawStamp, ROW } from '../ui.js';
 import { drawText } from '../../engine/text.js';
-import { kitchenLayer, ROWS, HATCH, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.js';
+import { kitchenLayer, ROWS, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.js';
 import {
   paintStations, drawStationGlow, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
   drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, PLATE, BELL, POT, OVEN,
@@ -45,7 +46,7 @@ const SPEED = 2.0;
 /** The timing windows (docs/GDD.md section 6). */
 const CHOP_HITS = 5, CHOP_SWEEP = 40, CHOP_BEAT = 20, CHOP_WINDOW = 6;
 const MIX_FRAMES = 180;
-const STOVE_FRAMES = 150, STOVE_BAND = 0.8, STOVE_DONE = 0.5;
+const STOVE_FRAMES = 150, STOVE_BAND = 0.8;
 const OVEN_FRAMES = 300, OVEN_WINDOW = 40;
 /** After the bell: one component lands on the plate every DROP_FRAMES, the stamp slams, then results. */
 const SERVE_FRAMES = 96, DROP_FRAMES = 12, STAMP_AT = 40;
@@ -55,7 +56,10 @@ const ACT_FRAMES = 20, EAT_FRAMES = 42, CHOP_ANIM = 21, GAG_CHANCE = 1 / 6;
 const SEGS = [CHOP_HITS, 4, 4, 4, 1];
 /** Rows a critter's tallest head part reaches above its skull (ears, toque, sunhat), for the name plate. */
 const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18 };
-const HINTS = { chop: 'CHOP: TAP ON THE BEAT', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD, LET GO IN THE RED', oven: 'OVEN: LOAD, THEN TAKE OUT IN THE GREEN', plate: 'PLATE: RING THE BELL' };
+/** The lowest row a name plate's top may take: the module's own contract is that nothing to read sits in rows
+ *  156..200, where the pot, the bowl and the board's ingredient are. A tall crown lifts a plate above this. */
+const PLATE_Y_MAX = 160;
+const HINTS = { chop: 'CHOP: TAP ON THE BEAT', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD, LET GO PAST THE MARK', oven: 'OVEN: LOAD, THEN TAKE OUT IN THE GREEN', plate: 'PLATE: RING THE BELL' };
 const PERFECT = 'PERFECT!', DONE = 'DONE', BURNT = 'BURNT!', NOM = 'NOM', ORDER_UP = 'ORDER UP!', RING = 'RING!';
 const CARD_X = RECIPE.x, CARD_Y = RECIPE.y, CARD_W = RECIPE.w;
 const CARD_TEXT = { size: 1, color: UI.ink, shadow: false }, CARD_OPTS = { title: 'RECIPE' };
@@ -134,7 +138,9 @@ export class KitchenScreen extends Screen {
       const s = this.seats[i];
       s.player.tick();
       if (s.actT > 0) s.actT--;
-      if (s.eatT > 0) { s.eatT--; s.moving = false; if (s.eatT === 0) s.weapon = ''; continue; }   // the gag locks the seat
+      // the gag locks the seat; on its last frame the ITEM goes with the state, or the reconcile below (guarded
+      // by `want !== s.weapon`) leaves the apple in his paw for ever at any spot that suggests no item
+      if (s.eatT > 0) { s.eatT--; s.moving = false; if (s.eatT === 0) this.clearItem(s); continue; }
       const ax = inp.axisX(s.slot);
       s.moving = ax !== 0;
       if (s.moving) {
@@ -145,9 +151,12 @@ export class KitchenScreen extends Screen {
       s.station = -1;
       for (let k = 0; k < STATION_X.length; k++) { const d = s.x - STATION_X[k]; if (d >= -AT_RANGE && d <= AT_RANGE) { s.station = k; break; } }
       const want = s.station === CHOP ? 'knife' : s.station === MIX || s.station === STOVE ? 'spoon' : s.station === PLATE_S ? 'plate' : '';
-      if (want !== s.weapon) { s.weapon = want; s.rig.weapon = want ? ITEMS[want] : null; }
+      if (want !== s.weapon) { if (!want) this.clearItem(s); else { s.weapon = want; s.rig.weapon = ITEMS[want]; } }
     }
   }
+
+  /** Empty a seat's paws: the state and the rig always go together (an item left on a rig never comes off). */
+  clearItem(s) { s.weapon = ''; s.rig.weapon = null; s.rig.heldIcon = null; s.rig.heldHex = null; }
 
   /** The seat driving the current step: its owner if it is at the station, else the first seat there that acts (and claims it). */
   actor(inp, station, hold) {
@@ -189,8 +198,9 @@ export class KitchenScreen extends Screen {
           if (st.t >= STOVE_FRAMES) { this.stoveBurnt = 1; this.smoke(PROP_X[STOVE], POT.y); this.completeStep(0, s); }
         } else if (st.phase === 1) {
           st.phase = 0;
-          const k = st.t / STOVE_FRAMES;
-          if (k >= STOVE_BAND) this.completeStep(2, null); else if (k >= STOVE_DONE) this.completeStep(1, null);
+          // inside the band it is cooked; short of it the pot goes off the boil and costs a miss, so tapping the
+          // bar up to the band scores DONE, never PERFECT (MIX punishes the identical pause the same way)
+          if (st.t / STOVE_FRAMES >= STOVE_BAND) this.completeStep(st.miss === 0 ? 2 : 1, null); else st.miss++;
         }
         break;
       case OVEN_S:
@@ -263,8 +273,9 @@ export class KitchenScreen extends Screen {
   draw(ctx) {
     const f = this.frame, st = this.st, station = this.currentStation();
     blitAt(ctx, this.layer, 0, 0);
-    // the customer leans into the hatch, clipped to the opening so the shelf stays in front of them
-    drawBust(ctx, this.custRig, this.custPlayer.pose, this.custPose, HATCH.x + 6, HATCH.y + 4, 104, HATCH.shelfY - HATCH.y - 4, 1.7, this.custOpts);
+    // the customer leans into the RIGHT half of the hatch, clipped to the opening so the shelf stays in front of
+    // them and the cook plating at the shelf's left half is never drawn through them
+    drawBust(ctx, this.custRig, this.custPlayer.pose, this.custPose, BUST.x, BUST.y, BUST.w, BUST.h, 1.7, this.custOpts);
     if (station >= 0 && !this.served) drawStationGlow(ctx, station, f);
     this.drawStations(ctx, f, st, station);
     particles.draw(ctx, null, 'back');
@@ -278,7 +289,10 @@ export class KitchenScreen extends Screen {
     }
     particles.draw(ctx, null, 'front');
     for (let i = 0; i < this.steps.length; i++) drawTag(ctx, this.steps[i], this.owners[i], SEGS[this.steps[i]], this.tagFill(i));
-    for (let i = this.seats.length - 1; i >= 0; i--) { const s = this.seats[i]; drawNamePlate(ctx, s.slot, s.name, R(s.head.x), R(s.head.y - s.rig.p.headR - s.crown) - 14); }
+    for (let i = this.seats.length - 1; i >= 0; i--) {
+      const s = this.seats[i], py = R(s.head.y - s.rig.p.headR - s.crown) - 14;
+      drawNamePlate(ctx, s.slot, s.name, R(s.head.x), py < PLATE_Y_MAX ? py : PLATE_Y_MAX);
+    }
     if (!this.served) this.drawWidget(ctx, st, station);
     this.drawHud(ctx, f);
   }
@@ -344,7 +358,7 @@ export class KitchenScreen extends Screen {
     return {
       step: this.stepIdx, steps: this.stepNames, scores: this.scores.slice(), owners: this.owners.slice(), total: this.total, stars: this.stars, served: this.served,
       phase: this.st.phase, t: this.st.t, count: this.st.count, miss: this.st.miss,
-      seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim]),
+      seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
     };
   }
 

@@ -20,8 +20,8 @@ import { AnimPlayer } from '../animation.js';
 import { drawTicket, drawStamp, drawStars, drawHint, drawDim, ROW } from '../ui.js';
 import { confirmPressed } from '../menuinput.js';
 import { drawText } from '../../engine/text.js';
-import { kitchenLayer, HATCH } from '../../art/backgrounds/kitchen.js';
-import { paintStations, drawPlate, drawBellRing, PLATE, PROPS } from '../../art/kitchenProps.js';
+import { kitchenLayer, BUST } from '../../art/backgrounds/kitchen.js';
+import { paintStations, drawPlate, drawBellRing, drawStove, PLATE, PROPS } from '../../art/kitchenProps.js';
 import { ITEMS } from '../../content/critters/items.js';
 
 const R = Math.round;
@@ -33,8 +33,10 @@ const CONFIRM_AT = 20;
 /** Index by stars (1..3); index 0 is unreachable (stars are clamped to 1) but keeps the lookup flat. */
 const STAMPS = ['EDIBLE', 'EDIBLE', 'TASTY', 'DELICIOUS'];
 const COINS = [0, 4, 8, 12];
+/** The tip's coins are laid out in rows of four under the receipt: the picture counts what the paper printed. */
+const COIN_COLS = 4, COIN_PITCH = 11, COIN_R = 4;
 /** Where the plate slides from (the kitchen side of the shelf) to (under the customer's chin). */
-const PLATE_X0 = PLATE.x + 13, PLATE_X1 = HATCH.x + 30;
+const PLATE_X0 = PLATE.x + 13, PLATE_X1 = BUST.x + 10;
 /** The paper column, left of the hatch: the stamp, the stars and the receipt under them. */
 const COL_X = 250, STAMP_Y = 98, STARS_Y = 138;
 const RECEIPT_W = 156, RECEIPT_H = 16 + ROW * 4 + 6, RECEIPT_X = COL_X - RECEIPT_W / 2, RECEIPT_Y = 158;
@@ -81,9 +83,12 @@ export class ResultsScreen extends Screen {
       this.player.play('eat', { restart: true });
       // the dish goes down over the three chews whatever it is made of, so the last bite empties the plate
       this.eaten = Math.min(this.icons.length, R(this.chews * this.icons.length / CHEWS));
+      if (this.eaten >= this.icons.length) this.dropFood();
       burstCrumbs(PLATE_X1 + 4, PLATE.y - 14, PLATE.y + 6, this.hexes[0], 5, true);
     }
-    if (this.chews >= CHEWS && this.player.done && this.player.name !== 'cheer') this.player.play('cheer');
+    // `cheer` raises the near arm forward: the paw must be empty before it, or the apple lands on the beak and
+    // the near eye - the one thing ART_STYLE section 0.7 forbids outright, on the shot this screen is built around
+    if (this.chews >= CHEWS && this.player.done && this.player.name !== 'cheer') { this.dropFood(); this.player.play('cheer'); }
     if (f === STAMP_AT) burstSparkle(COL_X, STAMP_Y + 10, 6, UI.cream, true);
     if (this.left) return;
     if ((f >= CONFIRM_AT && confirmPressed(game.input) >= 0) || f >= AUTO_AT) {
@@ -93,12 +98,18 @@ export class ResultsScreen extends Screen {
     }
   }
 
+  /** The dish is gone: empty the customer's paw so the raised arm carries nothing across their face. */
+  dropFood() { this.rig.weapon = null; this.rig.heldIcon = null; this.rig.heldHex = null; }
+
   draw(ctx) {
     const f = this.frame;
     blitAt(ctx, this.layer, 0, 0);
+    // the copper pot's body is a per-frame mark in the kitchen, so it has to be drawn here too or the hob is a
+    // bare slab; it goes UNDER the dim with the rest of the room (off the heat, no flame, no steam)
+    drawStove(ctx, false, 0, f, false);
     drawDim(ctx, 0.8);
     // the customer fills the hatch; the plate slides along the shelf to them, both over the dim
-    drawBust(ctx, this.rig, this.player.pose, this.anchor, HATCH.x + 6, HATCH.y + 4, 104, HATCH.shelfY - HATCH.y - 4, 1.7, this.bustOpts);
+    drawBust(ctx, this.rig, this.player.pose, this.anchor, BUST.x, BUST.y, BUST.w, BUST.h, 1.7, this.bustOpts);
     const k = f >= SLIDE_FRAMES ? 1 : f / SLIDE_FRAMES;
     const px = R(PLATE_X0 + (PLATE_X1 - PLATE_X0) * (1 - (1 - k) * (1 - k)));
     drawPlate(ctx, px, PLATE.y, this.icons, this.hexes, Math.max(0, this.icons.length - this.eaten), 1);
@@ -117,13 +128,12 @@ export class ResultsScreen extends Screen {
     drawText(ctx, STARS_LABEL, x + 6, top + 2 + ROW, ROW_TEXT); drawText(ctx, this.starsText, right, top + 2 + ROW, ROW_RIGHT);
     drawText(ctx, TIP_LABEL, x + 6, top + 2 + ROW * 2, ROW_TEXT); drawText(ctx, this.tipText, right, top + 2 + ROW * 2, ROW_RIGHT);
     drawText(ctx, TOTAL_LABEL, x + 6, top + 2 + ROW * 3, ROW_TEXT); drawText(ctx, this.totalText, right, top + 2 + ROW * 3, ROW_RIGHT);
-    // the tip's coins: one brass disc per star, stacked at the receipt's foot
-    for (let i = 0; i < this.stars; i++) {
-      const cx = x + 20 + i * 17, cy = RECEIPT_Y + RECEIPT_H + 10;
-      ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+    // the tip's coins: one brass disc per coin the receipt promised, in rows of four at the receipt's foot
+    for (let i = 0; i < this.tip; i++) {
+      const cx = x + 22 + (i % COIN_COLS) * COIN_PITCH, cy = RECEIPT_Y + RECEIPT_H + 10 + ((i / COIN_COLS) | 0) * COIN_PITCH;
+      ctx.beginPath(); ctx.arc(cx, cy, COIN_R, 0, Math.PI * 2);
       ctx.strokeStyle = UI.ink; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = PROPS.brass; ctx.fill();
-      ctx.fillStyle = PROPS.brassSh; ctx.fillRect(cx - 2, cy - 1, 4, 4);
-      ctx.fillStyle = UI.ink; ctx.fillRect(cx - 1, cy - 3, 2, 6);
+      ctx.fillStyle = PROPS.brassSh; ctx.fillRect(cx - 1, cy, 3, 3);
     }
   }
 

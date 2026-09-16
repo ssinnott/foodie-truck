@@ -12,9 +12,11 @@
 // feet line y 252 so torsos read on the counter front and heads on the wall.
 //
 // The wall's furniture is laid out around ONE rule: at these proportions the counter top is at the cast's head
-// height, so nothing a critter needs to read may sit in the band their heads and name plates occupy (rows 156..200).
-// Everything on the wall therefore lives above row 156, and every station's prop stands PROP_DX px to the right of
-// the spot its cook stands on, clear of that cook's head.
+// height, so nothing a critter needs to read may sit in the band their heads and name plates occupy. Everything
+// hung on the WALL lives above row 156. The props that STAND on the counter (the pot at 164, the bowl at 178, the
+// ingredient on the board at ~180) cannot, so the two are kept apart instead: every prop stands PROP_DX px to the
+// right of its cook's spot, clear of a seven-letter name plate, and the screen clamps the plate's top row to 160
+// (kitchen.js PLATE_Y_MAX) so a short crown can never drop it onto the pot's rim.
 import { makeLayer, boxOutlined, boxShaded, INK, VIEW_W, VIEW_H } from '../layers.js';
 import { PLUM, UI } from '../../constants.js';
 
@@ -24,6 +26,9 @@ const R = Math.round;
 export const KITCHEN = Object.freeze({
   wall: PLUM.shadow, seam: '#3A2430', counterTop: '#4F5A62', counterHi: '#6B7880', counterFront: '#3E4A55',
   tileA: '#4E4450', tileB: '#5A4E5C', skirting: PLUM.deep, wood: UI.wood,
+  // the one warm metal in the room: the rail, the bell and the oven's trim are the same brass as the truck's
+  // headlamp. SIGNAL gold (#F2C14E) means "the thing you want" on the map and in the coop and is banned here.
+  brass: '#E2B44A', brassSh: '#B08A30',
 });
 /** The lane beyond the window and the hatch: the map's own sky, hedge and lane tones, so outside is outside. */
 const OUT = Object.freeze({ skyHi: '#FBE3C4', sky: '#F4C9A0', far: PLUM.shadow, hedge: '#4F6B3A', hedgeHi: '#6E8A48', lane: '#C9AE78', laneEdge: '#B99A6A' });
@@ -36,16 +41,20 @@ export const ROWS = Object.freeze({
   feet: 252,
 });
 /** The serving hatch: an opening in the wall at the right, and the plating shelf across its foot. */
-export const HATCH = Object.freeze({ x: 500, y: 90, w: 140, h: 140, shelfY: 230, shelfH: 14, shelfW: 130 });
+export const HATCH = Object.freeze({ x: 500, y: 90, w: 140, h: 140, shelfY: 230, shelfH: 14 });
+/** Where the customer's bust leans in: the RIGHT half of the opening, so the cook plating at the shelf's left
+ *  half is never drawn on top of them (the review's fused-critters defect). Both screens draw the bust here. */
+export const BUST = Object.freeze({ x: 548, y: 94, w: 92, h: 136 });
 /** The window onto the lane, high on the wall so the cast's name plates never collide with it. */
 export const WINDOW = Object.freeze({ x: 150, y: 44, w: 90, h: 50 });
 /** The order ticket and the recipe card hang from the rail at its two ends (the screen draws them). */
 export const TICKET = Object.freeze({ x: 8, y: 12, w: 112 });
 export const RECIPE = Object.freeze({ x: 384, y: 12, w: 108 });
 /** Where each station's critter stands (feet centre) for STATIONS chop / mix / stove / oven / plate, left to right. */
-export const STATION_X = Object.freeze([80, 200, 320, 440, 560]);
-/** How far right of its standing spot each station's prop sits: far enough that the cook's head never hides it. */
-export const PROP_DX = Object.freeze([40, 40, 40, 34, 26]);
+export const STATION_X = Object.freeze([80, 190, 300, 410, 490]);
+/** How far right of its standing spot each station's prop sits: far enough that the cook's head never hides it,
+ *  and (MIX, STOVE) far enough that a seven-letter name plate clears the bowl and the pot. */
+export const PROP_DX = Object.freeze([46, 52, 56, 34, 26]);
 /** Prop centres on the counter (and, for the plate, on the hatch shelf). */
 export const PROP_X = Object.freeze(STATION_X.map((x, i) => x + PROP_DX[i]));
 /** A seat is "at" a station within this many px of its standing spot. */
@@ -55,8 +64,9 @@ export const X_MIN = 30, X_MAX = 606;
 /** The paper progress tag over each station: 20x8, and the timing widget's card under it. The plate's pair hangs
  *  above the hatch instead, which is an opening, not wall. */
 export const TAG_W = 20, TAG_H = 8;
-export const TAG_POS = Object.freeze([[110, 108], [230, 108], [350, 108], [464, 108], [566, 36]]);
-export const WIDGET_POS = Object.freeze([[96, 120], [216, 120], [336, 120], [450, 120], [540, 52]]);
+/** Both hang over their own station's prop; the plate's pair hangs over the hatch, which is an opening, not wall. */
+export const TAG_POS = Object.freeze(PROP_X.map((x, i) => [x - R(TAG_W / 2), i === 4 ? 36 : 108]));
+export const WIDGET_POS = Object.freeze(PROP_X.map((x, i) => [x - 24, i === 4 ? 52 : 120]));
 
 /** The panelled wall, a seam every 16 px, and its foot where the counter meets it. */
 function paintWall(g, w) {
@@ -69,7 +79,8 @@ function paintWall(g, w) {
 /** The ticket rail: a 2 px brass rod across the whole wall on ink brackets, with a peg under each hanging paper. */
 function paintRail(g, w) {
   g.fillStyle = INK; g.fillRect(0, ROWS.rail + 1, w, 4);
-  g.fillStyle = UI.yellow; g.fillRect(0, ROWS.rail + 2, w, 2);
+  g.fillStyle = KITCHEN.brass; g.fillRect(0, ROWS.rail + 2, w, 2);
+  g.fillStyle = KITCHEN.brassSh; g.fillRect(0, ROWS.rail + 4, w, 1);
   for (let x = 40; x < w; x += 80) { g.fillStyle = INK; g.fillRect(x, ROWS.rail - 4, 3, 5); }   // brackets to the ceiling
   for (const x of [TICKET.x + 20, TICKET.x + TICKET.w - 24, RECIPE.x + 20, RECIPE.x + RECIPE.w - 24]) boxOutlined(g, x, ROWS.rail + 4, 4, 6, KITCHEN.wood);
 }
@@ -130,10 +141,12 @@ function paintHatch(g, rnd) {
   const H = HATCH;
   g.fillStyle = INK; g.fillRect(H.x - 2, H.y - 2, H.w + 2, H.h + 4);
   paintOutside(g, H.x, H.y, H.w, H.h, rnd, 52);
-  boxOutlined(g, H.x, H.shelfY, H.shelfW, H.shelfH, KITCHEN.wood, INK, 2);
-  g.fillStyle = UI.woodLight; g.fillRect(H.x + 1, H.shelfY + 1, H.shelfW - 2, 2);
-  g.fillStyle = UI.woodDark; g.fillRect(H.x, H.shelfY + H.shelfH - 5, H.shelfW, 5);
-  g.fillStyle = KITCHEN.counterFront; g.fillRect(H.x, H.shelfY + H.shelfH + 2, VIEW_W - H.x, ROWS.floor - H.shelfY - H.shelfH - 2);
+  // the whole band from the shelf down to the floor is the counter's own front FIRST, so no pixel of the page
+  // shows through at the screen edge, and the shelf then spans the full opening on top of it
+  g.fillStyle = KITCHEN.counterFront; g.fillRect(H.x, H.shelfY, VIEW_W - H.x, ROWS.floor - H.shelfY);
+  boxOutlined(g, H.x, H.shelfY, H.w, H.shelfH, KITCHEN.wood, INK, 2);
+  g.fillStyle = UI.woodLight; g.fillRect(H.x + 1, H.shelfY + 1, H.w - 2, 2);
+  g.fillStyle = UI.woodDark; g.fillRect(H.x, H.shelfY + H.shelfH - 5, H.w, 5);
 }
 
 /** The counter: the slate top with its 1 px highlight, the steel front with a seam every 80 px. */
@@ -141,7 +154,7 @@ function paintCounter(g) {
   const w = HATCH.x;
   g.fillStyle = INK; g.fillRect(0, ROWS.counterTop - 1, w, 1);
   g.fillStyle = KITCHEN.counterTop; g.fillRect(0, ROWS.counterTop, w, ROWS.counterFront - ROWS.counterTop);
-  g.fillStyle = KITCHEN.counterHi; g.fillRect(0, ROWS.counterTop, w, 1);
+  g.fillStyle = KITCHEN.counterHi; g.fillRect(0, ROWS.counterTop, w, 2);
   g.fillStyle = INK; g.fillRect(0, ROWS.counterFront, w, 1);
   g.fillStyle = KITCHEN.counterFront; g.fillRect(0, ROWS.counterFront + 1, w, ROWS.floor - ROWS.counterFront - 1);
   g.fillStyle = '#35404A';
@@ -156,7 +169,9 @@ function paintFloor(g) {
     const h = Math.min(T, ROWS.skirting - y);
     for (let x = 0, col = 0; x < VIEW_W; x += T, col++) { g.fillStyle = (row + col) & 1 ? KITCHEN.tileB : KITCHEN.tileA; g.fillRect(x, y, T, h); }
   }
-  g.globalAlpha = 0.45; g.fillStyle = PLUM.deep; g.fillRect(0, ROWS.floor, VIEW_W, 6); g.globalAlpha = 1;   // the counter's shadow grounds the room
+  // the counter's shadow grounds it against its OWN front, above the floor line: rows 246..252 are where the
+  // cast's dark hooves land and the verdict pinned them at L >= .30
+  g.globalAlpha = 0.45; g.fillStyle = PLUM.deep; g.fillRect(0, ROWS.floor - 6, VIEW_W, 6); g.globalAlpha = 1;
   // two pools of afternoon light off the window and the hatch: the only marks on the floor, so the walk lane
   // stays clear of scatter while the empty foot of the room still reads as a lit floor (ART_STYLE section 7)
   g.globalAlpha = 0.09; g.fillStyle = OUT.skyHi;
@@ -176,12 +191,12 @@ function lightPool(g, x0, x1, spread) {
 
 /** One crate of stores in the near corner, below the walk lane, so the empty foot of the room has a weight in it. */
 function paintCrate(g) {
-  const x = 12, y = 300, w = 46, h = 36;
+  const x = 12, y = 306, w = 46, h = 36;
   boxShaded(g, x, y, w, h, KITCHEN.wood, UI.woodDark, INK, 2, 0.34);
   g.fillStyle = UI.woodLight; g.fillRect(x + 3, y + 3, w - 6, 3);
   g.fillStyle = UI.woodDark; g.fillRect(x + 3, y + 15, w - 6, 3);
-  boxOutlined(g, x + 30, y - 12, 22, 14, '#E3C68F');                    // a flour sack leaning on it
-  g.fillStyle = '#C9B58E'; g.fillRect(x + 32, y - 4, 18, 4);
+  boxOutlined(g, x + 30, y - 6, 22, 14, '#E3C68F');                     // a flour sack leaning on it
+  g.fillStyle = '#C9B58E'; g.fillRect(x + 32, y + 2, 18, 4);
 }
 
 /** The blank paper progress tags on the wall over every station; the screen colours their segments per frame. */
