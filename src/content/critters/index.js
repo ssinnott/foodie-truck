@@ -5,7 +5,7 @@ import { critterBuild, makeCritterAnims } from './common.js';
 
 const GENERIC = {
   id: 'generic', name: 'CRITTER', fullName: 'A Generic Critter', role: 'STAND-IN', species: 'bear',
-  build: critterBuild({ ears: 'round', tail: 'stub', palette: {} }),
+  build: critterBuild({ ears: 'round', tail: 'stub', palette: { primary: '#2E8B7A', secondary: '#4A3320' } }),
   anims: makeCritterAnims(),
 };
 

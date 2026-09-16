@@ -15,7 +15,8 @@ function anchor(rig, pose) {
   if (c && c.pose === pose) return c;
   const full = makePose(pose);
   const J = computeJoints(rig, full);
-  const a = { pose, headX: J.head.x + full.root.x, headY: J.head.y + full.root.y, top: J.top + full.root.y, headR: rig.p.headR };
+  // `top` allows for ears and hats: a critter's silhouette reaches ~0.5 headR above the skull (content/critters/common.js EAR_*).
+  const a = { pose, headX: J.head.x + full.root.x, headY: J.head.y + full.root.y, top: J.top + full.root.y - Math.round(rig.p.headR * 0.5), headR: rig.p.headR };
   rig._portraitAnchor = a;
   return a;
 }
@@ -26,9 +27,9 @@ function anchor(rig, pose) {
  */
 export function drawHeadPortrait(ctx, rig, pose, x, y, size, o = {}) {
   const facing = o.facing || 1, a = anchor(rig, pose);
-  const sc = (size * (o.fill || 0.62)) / (a.headR * 2 * rig.scale);
+  const sc = (size * (o.fill || 0.7)) / (a.headR * 2 * rig.scale);
   const fs = facing * sc * rig.scale, ss = sc * rig.scale;
-  const cx = x + size / 2, cy = y + size * (o.cy != null ? o.cy : 0.5);
+  const cx = x + size / 2, cy = y + size * (o.cy != null ? o.cy : 0.54);
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, size, size); ctx.clip();
   if (o.bg !== null) { ctx.fillStyle = o.bg || '#f7e9c9'; ctx.fillRect(x, y, size, size); }
   drawRig(ctx, rig, pose, { x: cx - a.headX * fs, y: cy - a.headY * ss, facing, scale: sc, still: true, flash: !!o.flash, tint: o.tint || null, tintAlpha: o.tintAlpha });

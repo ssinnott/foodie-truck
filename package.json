@@ -12,7 +12,8 @@
     "nettest": "node tools/nettest.js",
     "capture": "node tools/capture.js",
     "lint": "node tools/check.js && npm run typecheck",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "art-check": "node tools/art-check.js"
   },
   "license": "MIT",
   "devDependencies": {

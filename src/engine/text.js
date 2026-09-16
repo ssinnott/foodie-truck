@@ -37,6 +37,7 @@ const RAW = {
   '▶': '#....|##...|###..|####.|###..|##...|#....', '♥': '.#.#.|#####|#####|.###.|..#..|.....|.....',
   '←': '..#..|.#...|#####|.#...|..#..|.....|.....', '→': '..#..|...#.|#####|...#.|..#..|.....|.....',
   '↑': '..#..|.###.|#.#.#|..#..|..#..|..#..|..#..', '↓': '..#..|..#..|..#..|..#..|#.#.#|.###.|..#..',
+  '★': '..#..|..#..|#####|.###.|.###.|#...#|.....', '$': '..#..|.####|#.#..|.###.|..#.#|####.|..#..',
   ' ': '.....|.....|.....|.....|.....|.....|.....',
 };
 const GLYPHS = {};
@@ -98,7 +99,7 @@ export function drawText(ctx, text, x, y, opts = {}) {
   const color = opts.color || '#ffffff';
   const align = opts.align || 'left';
   const shadow = opts.shadow !== false;
-  const shadowColor = opts.shadowColor || '#120c14';
+  const shadowColor = opts.shadowColor || '#2A1F1A';
   const spacing = opts.spacing == null ? 1 : opts.spacing;
   const lines = normalize(text).split('\n');
   const lh = lineHeight(size);
@@ -135,7 +136,7 @@ export function drawText(ctx, text, x, y, opts = {}) {
 export function drawTextOutlined(ctx, text, x, y, opts = {}) {
   const size = Math.max(1, Math.round(opts.size || 2));
   const th = Math.max(1, Math.round(opts.thickness || 1));
-  const outline = opts.outline || '#120c14';
+  const outline = opts.outline || '#2A1F1A';
   const base = { size, align: opts.align, spacing: opts.spacing, shadow: false };
   if (opts.shadow !== false) {
     const off = opts.shadowOffset == null ? th + size : opts.shadowOffset;
