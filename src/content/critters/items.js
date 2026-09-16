@@ -7,14 +7,21 @@ import { LIGHT_X, LIGHT_Y } from '../../art/shading.js';
 import { drawFood } from '../../art/food.js';
 
 const R = Math.round;
-const WOOD = '#C48A52', WOOD_DARK = '#8B5A2B', STEEL = '#D8DCE0', ROD = '#9A6234';
+const WOOD = '#C48A52', WOOD_DARK = '#8B5A2B', ROD = '#9A6234';
+/** Blade steel is a mid grey-blue: the old #D8DCE0 vanished on the mouse's #E2DDEA fur (relDiff 0.05); this clears both pale furs by .24. */
+const STEEL = '#9FB0B8';
 /** Baskets are dark willow with cream weave lines: wicker (#C9A05C) measured 0.03 against P2's marmalade apron. */
 const WILLOW = '#6B4E3A', WILLOW_LINE = '#C9B58E';
 
-/** Rotate the context so +y points down in root space (the item hangs from the paw), then draw. */
+/**
+ * Rotate the context so +y points down in root space (the item hangs from the paw), then draw. rig.light is the
+ * root light turned by MINUS the space's total rotation (rig.js setLight), so the space's rotation is the negative
+ * of the light's swing and undoing it is a rotate by `a`, not `-a`: the old sign doubled the hand angle and every
+ * basket hung at 2x the arm's tilt (the carry sheet showed it at 136 degrees).
+ */
 function upright(ctx, rig, fn) {
   const a = Math.atan2(rig.light.y, rig.light.x) - Math.atan2(LIGHT_Y, LIGHT_X);
-  ctx.save(); ctx.rotate(-a); fn(); ctx.restore();
+  ctx.save(); ctx.rotate(a); fn(); ctx.restore();
 }
 
 export const ITEMS = {
@@ -52,6 +59,13 @@ export const ITEMS = {
   /** A held apple / egg / fish: `rig.heldIcon` and `rig.heldHex` pick which. */
   food: { attach: 'handR', length: 8, draw(ctx, rig) {
     upright(ctx, rig, () => drawFood(ctx, rig.heldIcon || 'apple', 2, 2, 5, rig.heldHex));
+  } },
+  /** Bulb horn for the driver's HONK: a brass bell forward along the paw, a plum rubber bulb behind it. */
+  horn: { attach: 'handR', length: 12, draw(ctx, rig) {
+    celCapsule(ctx, rig, 2, 0, 9, 0, 2, '#E2B44A', 0);
+    celPoly(ctx, rig, [9, -3, 15, -5, 15, 5, 9, 3], '#E2B44A', 0.4, 0);
+    ctx.beginPath(); ctx.arc(-3, 0, 4, 0, Math.PI * 2);
+    celPoly(ctx, rig, [-7, -4, 1, -4, 1, 4, -7, 4], '#5A3A46', 0.4, 0);
   } },
   /** A tray / plate held flat in front. */
   plate: { attach: 'handR', length: 14, draw(ctx, rig) {

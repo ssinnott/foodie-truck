@@ -7,7 +7,7 @@
 // and add accessories (hat, bandana, scarf). Every hook obeys the readability rules: one 1 px outline per
 // OBJECT (an ear is an object, a muzzle patch is a colour change inside the head's own ink), two tones on
 // narrow parts, colours through rig.col() so the hit flash still works, nothing under 2 px, no allocation.
-import { celPath, celBall, celRect, celCapsule, celTaper, celPoly, tones, pathRR, band, wantSh } from '../../art/shading.js';
+import { celPath, celBall, celRect, celCapsule, celTaper, celPoly, tones, pathRR, pathCap, band, wantSh } from '../../art/shading.js';
 import { getChain } from '../../art/secondary.js';
 import { P, FACE } from '../../art/poses.js';
 import { brow } from '../../art/rigParts.js';
@@ -29,7 +29,9 @@ export const CHIBI = Object.freeze({
 /**
  * Palette keys a critter uses (docs/ART_STYLE.md section 4):
  *   skin = fur, hair = dark fur / markings / brows, belly = light fur (muzzle, belly, inner ear, paw pads),
- *   primary = apron, secondary = shorts, accent = trim / bandana, dark = nose + boots, sleeve = fur (set for you).
+ *   primary = apron, secondary = legs, shorts = the hip block, accent = trim / hat / bell, dark = nose + boots,
+ *   sleeve = fur (set for you). The defaults are a neutral warm-brown critter so a half-written species file still
+ *   passes the ladder; every cast member overrides all of skin/hair/belly/secondary/shorts (art-check holds it).
  */
 export const DEFAULT_PALETTE = Object.freeze({
   skin: '#B07A4A', hair: '#6B4326', belly: '#F3E5CF', primary: OFF_DUTY_APRON, secondary: '#5E3A1B', shorts: '#5E3A1B', accent: '#F2C14E', metal: '#C8C0B0', dark: '#2A1F1A', glow: '#FFE28A',
@@ -37,9 +39,11 @@ export const DEFAULT_PALETTE = Object.freeze({
 
 // ---------------------------------------------------------------- ears (head space, behind the skull)
 const EAR_NEAR = { x: 0.42, y: -0.8 }, EAR_FAR = { x: -0.5, y: -0.72 };
-function drawEar(ctx, rig, kind, x, y, r, fur, light, tip, isFar, ang) {
+/** Plum for straps and hat bands: the world's shadow colour, so a strap never reads as a fifth player colour. */
+export const PLUM_STRAP = '#5A3A46';
+function drawEar(ctx, rig, kind, x, y, r, fur, light, tip, isFar, ang, earR) {
   ctx.save(); ctx.translate(x, y); if (ang) ctx.rotate(rad(ang));
-  const er = R(r * 0.4);
+  const er = R(r * earR);
   if (kind === 'round') {
     celBall(ctx, rig, 0, 0, er, fur, false);
     if (!rig.override) { ctx.fillStyle = rig.col(light); ctx.beginPath(); ctx.arc(0, 1, R(er * 0.5), 0, TAU); ctx.fill(); }
@@ -55,36 +59,54 @@ function drawEar(ctx, rig, kind, x, y, r, fur, light, tip, isFar, ang) {
   } else if (kind === 'long') {
     const w = R(r * 0.3), h = R(r * 1.5);
     celCapsule(ctx, rig, 0, 0, 0, -h, w, fur, 0);
-    if (!rig.override) { ctx.fillStyle = rig.col(light); ctx.beginPath(); ctx.ellipse(0, -R(h * 0.5), R(w * 0.45), R(h * 0.4), 0, 0, TAU); ctx.fill(); }
-  } else if (kind === 'dome') {
-    // a frog's eye dome: a light ball on top of the head; critterFace draws the pupil on it (opts.domeEyes)
-    celBall(ctx, rig, 0, 0, R(r * 0.36), light, false);
+    if (!rig.override) {
+      ctx.save(); pathCap(ctx, 0, 0, 0, -h, w); ctx.clip();
+      if (tip) { ctx.fillStyle = rig.col(tip); ctx.fillRect(-w - 1, -h - w - 1, w * 2 + 2, R(h * 0.3)); }   // dark tip inside the ear's own ink
+      ctx.fillStyle = rig.col(light); ctx.beginPath(); ctx.ellipse(0, -R(h * 0.45), R(w * 0.45), R(h * 0.32), 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  } else if (kind === 'droop') {
+    // a sheep's ear: a short flap hanging back and down from under the wool; only the part past the skull shows
+    const L = R(r * 0.62), w = R(r * 0.2);
+    celCapsule(ctx, rig, 0, 0, -L, R(L * 0.9), w, fur, 0);
+    if (!rig.override) { ctx.fillStyle = rig.col(light); ctx.fillRect(-L - 1, R(L * 0.9) - 1, 3, 3); }   // one inner-ear mark at the tip
   }
   ctx.restore();
 }
-/** Both ears; long ears lag on a two-segment chain so they flop when the head moves. */
-function drawEars(ctx, rig, r, kind, pose) {
-  if (kind === 'none') return;
+/** Both ears; long ears lag on a two-segment chain, drooping ones on one, so they flop when the head moves. */
+function drawEars(ctx, rig, r, kind, spec) {
+  if (kind === 'none' || kind === 'dome') return;   // domes are eyes: drawn over the skull by makeHead
   const pal = rig.palette, far = rig.paletteFar;
   const tip = rig.build.earTip ? rig.col(pal.hair) : null;
+  const slot = spec.earSlot || 'skin', earR = spec.earR || 0.4;
+  const pos = spec.earPos || null, pn = pos ? pos.near : EAR_NEAR, pf = pos ? pos.far : EAR_FAR;
   let a0 = 0, a1 = 0;
   if (kind === 'long') {
     const ch = getChain(rig, 'ears', 2, { joint: 'head', rest: [0, -1], stiffness: 0.18, damping: 0.68, gain: 1.5, maxAng: 32 });
     a0 = ch.ang[0]; a1 = ch.ang[0] * 0.7 + ch.ang[1];
+  } else if (kind === 'droop') {
+    const ch = getChain(rig, 'ears', 1, { joint: 'head', rest: [-1, 0.9], stiffness: 0.16, damping: 0.7, gain: 2.2, maxAng: 28 });
+    a0 = ch.ang[0]; a1 = ch.ang[0] * 0.8;
   }
-  const ex = kind === 'dome' ? 0.3 : 1, ey = kind === 'dome' ? -0.72 : 1;   // domes sit closer together on the crown
-  drawEar(ctx, rig, kind, R(r * (kind === 'dome' ? -0.42 : EAR_FAR.x)), R(r * (kind === 'dome' ? ey : EAR_FAR.y)), r, far.skin, far.belly, tip, true, a1 + (kind === 'long' ? -18 : 0));
-  drawEar(ctx, rig, kind, R(r * (kind === 'dome' ? 0.38 * ex / 0.3 * 0.3 : EAR_NEAR.x)), R(r * (kind === 'dome' ? ey : EAR_NEAR.y)), r, pal.skin, pal.belly, tip, false, a0 + (kind === 'long' ? 12 : 0));
+  drawEar(ctx, rig, kind, R(r * pf.x), R(r * pf.y), r, far[slot], far.belly, tip, true, a1 + (kind === 'long' ? -18 : 0), earR);
+  drawEar(ctx, rig, kind, R(r * pn.x), R(r * pn.y), r, pal[slot], pal.belly, tip, false, a0 + (kind === 'long' ? 12 : 0), earR);
 }
 
 // ---------------------------------------------------------------- head (head space, faces +x)
-function muzzleGeom(r, size) { return { mx: R(r * 0.5), my: R(r * 0.4), rx: R(r * 0.62 * size), ry: R(r * 0.4 * size) }; }
+const MUZZLE = { mx: 0, my: 0, rx: 0, ry: 0 };
+/** Muzzle ellipse in head space for a head of radius r (one shared object: hooks never retain it). */
+export function muzzleGeom(r, size) { MUZZLE.mx = R(r * 0.5); MUZZLE.my = R(r * 0.4); MUZZLE.rx = R(r * 0.62 * size); MUZZLE.ry = R(r * 0.4 * size); return MUZZLE; }
+/**
+ * A frog's eye domes (ears: 'dome'): two light balls that sit ON the crown, drawn after the skull so they bulge
+ * out of it; critterFace puts the pupils at their centres. Fractions of headR; the near one is drawn last.
+ */
+export const DOME = Object.freeze({ nearX: 0.44, farX: -0.34, y: -0.86, r: 0.4 });
 /** Animal head: ears, then skull + muzzle as ONE inked contour, a lighter muzzle patch inside it, markings, nose. */
 export function makeHead(spec) {
-  const ears = spec.ears || 'round', size = spec.muzzle != null ? spec.muzzle : 1;
+  const ears = spec.ears || 'round', size = spec.muzzle != null ? spec.muzzle : 1, nose = spec.nose !== false;
   return function head(ctx, rig, pose, inf) {
     const r = inf.r, pal = rig.palette;
-    drawEars(ctx, rig, r, ears, pose);
+    drawEars(ctx, rig, r, ears, spec);
     const g = muzzleGeom(r, size);
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, TAU);
@@ -99,10 +121,19 @@ export function makeHead(spec) {
     ctx.restore();
     if (spec.markings) spec.markings(ctx, rig, pose, inf);
     // nose: one dark rounded mark at the muzzle tip, 5x4 (above the 2 px floor, below "a separate object")
-    ctx.fillStyle = rig.col(pal.dark);
-    pathRR(ctx, g.mx + g.rx - 5, g.my - 4, 5, 4, 2); ctx.fill();
+    if (nose) { ctx.fillStyle = rig.col(pal.dark); pathRR(ctx, g.mx + g.rx - 5, g.my - 4, 5, 4, 2); ctx.fill(); }
+    if (ears === 'dome') {
+      celBall(ctx, rig, R(r * DOME.farX), R(r * DOME.y), R(r * DOME.r), pal.belly, false);
+      celBall(ctx, rig, R(r * DOME.nearX), R(r * DOME.y), R(r * DOME.r), pal.belly, false);
+    }
   };
 }
+/**
+ * The y a hat band's bottom edge sits at: one pixel above the brow row, whatever the head size. Chibi heads have
+ * almost no forehead, so a hat placed at a fixed fraction of r lands on the brows of one critter and floats over
+ * the skull of the next; a critter that wears a hat lowers its eyes a little (face.eyeY) to make room.
+ */
+export function hatY(rig) { const fo = rig.faceOpts || {}; return R(-rig.p.headR * 0.42) + (fo.eyeY || 0) - 5; }
 /** Raccoon-style mask: a dark band across the eye row, drawn before the face so the eyes sit on it. */
 export function maskMarking(ctx, rig, pose, inf) {
   const r = inf.r;
@@ -132,9 +163,12 @@ export function critterFace(ctx, rig, pose, inf) {
   const ink = rig.col(rig.outline), white = rig.col('#FFF8EC'), pupil = rig.col('#1E1512');
   // dome eyes (ears: 'dome'): the whites are the domes on the crown, so the eye row moves up onto them
   const dome = !!fo.domeEyes;
-  const ew = R(r * 0.5), eh = R(r * 0.42), ey = dome ? R(-r * 0.86) : R(-r * 0.42) + (fo.eyeY || 0), ex = dome ? R(r * 0.2) : R(r * 0.32), fx = dome ? R(-r * 0.6) : R(-r * 0.36);
+  // dome eyes: the 3 px pupil (drawn at ex + 2, ey + 1) lands on each dome's centre
+  const ew = R(r * 0.5), eh = R(r * 0.42), ey = dome ? R(r * DOME.y) - 2 : R(-r * 0.42) + (fo.eyeY || 0), ex = dome ? R(r * DOME.nearX) - 3 : R(r * 0.32), fx = dome ? R(r * DOME.farX) - 3 : R(-r * 0.36);
   const happy = face === FACE.happy, closed = face === FACE.closed, hurt = face === FACE.hurt, dazed = face === FACE.dazed;
   const angry = face === FACE.angry || face === FACE.grit, shout = face === FACE.shout;
+  // whitesAlways (a dark face): an ink arc or blink on dark fur is invisible, so the whites stay under them
+  if (fo.whitesAlways && !dome && (dazed || happy || closed)) { ctx.fillStyle = white; ctx.fillRect(ex, ey, ew, eh); ctx.fillRect(fx, ey, ew, eh); }
   ctx.fillStyle = ink;
   if (dazed) {
     for (const x of [ex, fx]) for (let i = 0; i < 4; i++) { ctx.fillRect(x + i, ey + i, 2, 2); ctx.fillRect(x + 4 - i, ey + i, 2, 2); }
@@ -147,7 +181,7 @@ export function critterFace(ctx, rig, pose, inf) {
   } else {
     if (!dome) { ctx.fillStyle = white; ctx.fillRect(ex, ey, ew, eh); ctx.fillRect(fx, ey, ew, eh); }
     ctx.fillStyle = pupil;
-    const py = hurt ? ey + 1 : ey + 1, px = 2;   // pupils sit forward (toward facing) in the white
+    const py = ey + 1, px = 2;   // pupils sit forward (toward facing) in the white
     ctx.fillRect(ex + px, py, 3, 3); ctx.fillRect(fx + px, py, 3, 3);
     if (angry) { ctx.fillStyle = ink; ctx.fillRect(ex, ey, ew, 1); ctx.fillRect(fx, ey, ew, 1); }   // lids pressed down
     ctx.fillStyle = white; ctx.fillRect(ex + px, py, 1, 1); ctx.fillRect(fx + px, py, 1, 1);      // catchlight
@@ -167,6 +201,13 @@ function drawCritterMouth(ctx, rig, r, face, ink) {
   const g = muzzleGeom(r, rig.build.muzzle != null ? rig.build.muzzle : 1);
   const mx = g.mx + R(g.rx * 0.2), my = g.my + R(g.ry * 0.45);
   ctx.fillStyle = ink;
+  // wideMouth (a frog): the calm mouths are one long 2 px line across the muzzle instead of the small curl
+  if (rig.faceOpts && rig.faceOpts.wideMouth && !shout && !hurt) {
+    const w = R(g.rx * 1.1), x0 = mx - R(w * 0.55);
+    if (happy) { ctx.fillRect(x0 - 1, my - 2, 2, 2); ctx.fillRect(x0 + w - 1, my - 2, 2, 2); }
+    ctx.fillRect(x0, my, w, 2);
+    return;
+  }
   if (shout) { ctx.fillRect(mx - 3, my - 2, 6, 5); ctx.fillStyle = rig.col('#A03030'); ctx.fillRect(mx - 2, my, 4, 2); }
   else if (hurt) { ctx.fillRect(mx - 3, my + 1, 2, 2); ctx.fillRect(mx - 1, my, 4, 2); ctx.fillRect(mx + 3, my + 1, 2, 2); }
   else if (happy || face === FACE.neutral && false) { ctx.fillRect(mx - 3, my - 1, 2, 2); ctx.fillRect(mx - 1, my, 4, 2); ctx.fillRect(mx + 3, my - 1, 2, 2); }
@@ -196,13 +237,14 @@ export function makeTorso(spec) {
       ctx.restore();
     }
     if (apron) {
-      const aw = R(W * 0.66), ah = R(H * 0.6), ax = R(-aw / 2) + 2, ay = -R(H * 0.62);
-      // straps first (under the bib), 3 px inked bands up to the shoulders
-      band(ctx, rig, ax + 2, -H + 3, 3, ay + 3 - (-H + 3), pal.primary);
-      band(ctx, rig, ax + aw - 5, -H + 3, 3, ay + 3 - (-H + 3), pal.primary);
+      // The apron is the player spot (ART_STYLE section 4), so the bib runs from just under the collar down
+      // beneath the hip block: on a 20 px torso that is ~11 px of player colour showing, straps included.
+      const aw = R(W * 0.64), ax = R(-aw / 2) + 2, ay = -H + 5, ah = H;
+      band(ctx, rig, ax + 2, -H + 1, 4, 7, pal.primary);            // straps first (under the bib), 4 px inked bands
+      band(ctx, rig, ax + aw - 6, -H + 1, 4, 7, pal.primary);
       pathRR(ctx, ax, ay, aw, ah, 3);
       celPath(ctx, rig, pal.primary, ax + aw / 2, ay + ah / 2, R(Math.max(aw, ah) / 2), 0.36, 0.25);
-      if (!rig.override) { ctx.fillStyle = tones(rig, pal.primary).sh; ctx.fillRect(ax + 3, ay + ah - 6, aw - 6, 1); ctx.fillRect(ax + R(aw / 2) - 1, ay + ah - 8, 1, 3); } // one pocket seam
+      if (!rig.override) { ctx.fillStyle = tones(rig, pal.primary).sh; ctx.fillRect(ax + 3, -9, aw - 6, 2); } // one pocket seam, 2 px
     }
     if (spec.chest) spec.chest(ctx, rig, pose, inf);
   };
@@ -210,8 +252,9 @@ export function makeTorso(spec) {
 /** Short trousers: a rounded block over the leg roots, so the near leg emerges from inside it rather than sitting on it. */
 export function makeHips(spec) {
   return function hips(ctx, rig, pose, inf) {
-    const hip = inf.w, hw = R(hip / 2);
-    celRect(ctx, rig, -hw, -5, hip, 10, 4, rig.palette.shorts || rig.palette.secondary, 0.4, 0.2);
+    // the block scales with the torso (6..10 px) so a 14 px mouse torso is not half shorts
+    const hip = inf.w, hw = R(hip / 2), h = Math.max(6, Math.min(10, R(rig.p.torsoH * 0.5)));
+    celRect(ctx, rig, -hw, -R(h / 2), hip, h, 4, rig.palette.shorts || rig.palette.secondary, 0.4, 0.2);
   };
 }
 
@@ -245,6 +288,7 @@ export function makeBoot(hex) {
 // ---------------------------------------------------------------- tail (hip space, back layer, +x forward)
 export function makeTail(kind, hex = null) {
   return { attach: 'hip', layer: 'back', draw(ctx, rig, pose) {
+    if (kind === 'none') return;   // a frog
     const pal = rig.palette, fur = hex || pal.skin, hw = R(rig.p.hip / 2);
     const ch = getChain(rig, 'tail', 2, { joint: 'torso', rest: [-1, 0.2], stiffness: 0.12, damping: 0.72, gain: 1.8, maxAng: 35 });
     ctx.save(); ctx.translate(-hw + 2, -3); ctx.rotate(rad(ch.ang[0]));
@@ -267,13 +311,25 @@ export function makeTail(kind, hex = null) {
 }
 
 // ---------------------------------------------------------------- accessories
-/** Chef hat: a puffed white cap above the hairline (head space). */
-export const chefHat = { attach: 'head', draw(ctx, rig) {
-  const r = rig.p.headR, w = R(r * 1.2), y = R(-r * 0.7);
-  band(ctx, rig, -R(w / 2) - 1, y - 5, w + 2, 6, '#F4F0E6');
-  celBall(ctx, rig, -R(w * 0.3), y - 10, R(r * 0.42), '#F4F0E6', false);
-  celBall(ctx, rig, R(w * 0.2), y - 12, R(r * 0.48), '#F4F0E6', false);
-} };
+const TOQUE = '#F4F0E6';
+/**
+ * Chef's toque: a 4 px inked band in `bandHex` (null = white) on the hairline and one puffed white mass above it,
+ * drawn as ONE path (a rounded block with two balls on top) so the puff carries a single scalloped outline.
+ */
+export function toque(bandHex = null) {
+  return { attach: 'head', draw(ctx, rig) {
+    const r = rig.p.headR, y = hatY(rig), w = R(r * 1.3), hw = R(w / 2), h = R(r * 0.8);
+    const top = y - 4 - h;
+    ctx.beginPath();
+    pathRR(ctx, -hw, top, w, h + 2, 3);
+    ctx.moveTo(-hw + R(w * 0.3) + R(r * 0.3), top); ctx.arc(-hw + R(w * 0.3), top, R(r * 0.3), 0, TAU);
+    ctx.moveTo(-hw + R(w * 0.68) + R(r * 0.36), top - 1); ctx.arc(-hw + R(w * 0.68), top - 1, R(r * 0.36), 0, TAU);
+    celPath(ctx, rig, TOQUE, 0, top + R(h * 0.4), R(w * 0.6), 0.34, 0.3);
+    band(ctx, rig, -hw - 1, y - 4, w + 2, 4, bandHex || TOQUE);
+  } };
+}
+/** Chef hat with a white band (the pre-toque export; kept so nothing built against it moves). */
+export const chefHat = toque(null);
 /** Bandana: a triangle of `hex` tied round the head, knot at the back (head space). */
 export function bandana(hex) {
   return { attach: 'head', draw(ctx, rig) {
@@ -282,26 +338,43 @@ export function bandana(hex) {
     celPoly(ctx, rig, [-R(r * 0.9), -R(r * 0.5), -R(r * 1.35), -R(r * 0.3), -R(r * 1.25), -R(r * 0.7)], hex, 0.35, 0);
   } };
 }
-/** Neckerchief: a knotted triangle at the collar (torso space). */
+/** Neckerchief: a knotted triangle at the collar (torso space). Pair with scarfTail for the streaming end. */
 export function scarf(hex) {
   return { attach: 'torso', draw(ctx, rig) {
     const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2);
-    celPoly(ctx, rig, [-R(hw * 0.5), -H + 2, R(hw * 0.7), -H + 2, R(hw * 0.2), -H + 9], hex, 0.35, 0);
+    // a small knot: at hw*1.2 wide it covered the top third of the apron, the player spot
+    celPoly(ctx, rig, [-R(hw * 0.3), -H + 2, R(hw * 0.6), -H + 2, R(hw * 0.2), -H + 8], hex, 0.35, 0);
   } };
 }
-/** Cap with a peak (head space). */
+/** The scarf's loose end: two capsule segments streaming back from the nape on a chain (torso space, back layer). */
+export function scarfTail(hex) {
+  return { attach: 'torso', layer: 'back', draw(ctx, rig) {
+    const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2), L = R(hw * 0.55);
+    const ch = getChain(rig, 'scarf', 2, { joint: 'torso', rest: [-0.7, 0.7], stiffness: 0.14, damping: 0.7, gain: 2.6, maxAng: 45 });
+    ctx.save(); ctx.translate(-R(hw * 0.6), -H + 4);
+    for (let i = 0; i < 2; i++) {
+      ctx.rotate(rad(ch.ang[i]));
+      celCapsule(ctx, rig, 0, 0, -L, L, 2.5, hex, 0);
+      ctx.translate(-L, L);
+    }
+    ctx.restore();
+  } };
+}
+/** Flat cap: a low dome on the hairline with a 4 px peak forward (head space). */
 export function cap(hex) {
   return { attach: 'head', draw(ctx, rig) {
-    const r = rig.p.headR;
-    ctx.beginPath(); ctx.arc(0, -R(r * 0.45), R(r * 0.88), Math.PI, 0); ctx.closePath();
-    celPath(ctx, rig, hex, 0, -R(r * 0.8), R(r * 0.8), 0.35, 0.25);
-    band(ctx, rig, R(r * 0.4), -R(r * 0.5), R(r * 0.8), 4, hex, 2);
+    const r = rig.p.headR, y = hatY(rig);
+    ctx.beginPath(); ctx.ellipse(0, y, R(r * 0.98), R(r * 0.62), 0, Math.PI, 0); ctx.closePath();
+    celPath(ctx, rig, hex, 0, y - R(r * 0.3), R(r * 0.8), 0.35, 0.25);
+    band(ctx, rig, R(r * 0.45), y - 2, R(r * 0.8), 4, hex, 2);
   } };
 }
 
 /**
  * Assemble a critter build from a species spec:
- * { palette, ears: 'round'|'point'|'long'|'small', earTip, muzzle (size 0.8..1.2), markings (fn), tail: 'stub'|'puff'|'bushy'|'ring'|'thin',
+ * { palette, ears: 'round'|'point'|'long'|'small'|'droop'|'dome'|'none', earTip, earR (round ear radius / headR, 0.4),
+ *   earPos { near: {x,y}, far: {x,y} } (fractions of headR), earSlot ('skin' | 'hair': what colours the ear),
+ *   muzzle (size 0.8..1.2), nose (false = none), markings (fn), tail: 'stub'|'puff'|'bushy'|'ring'|'thin'|'none', tailHex,
  *   apron (false = none), boots (hex), proportions, scale, accessories: [], parts: {} (overrides), face: {} }
  */
 export function critterBuild(spec) {
@@ -336,7 +409,9 @@ export function critterRig(def, slot = -1) {
 /** Keyframe shorthand: F(dur, spec, extra) -> { dur, pose: P(spec), ...extra }. */
 export const F = (dur, spec, extra) => ({ dur, pose: P(spec), ...(extra || {}) });
 const REST = { armR: [18, 12], armL: [-14, 12] };
-const CARRY = { armR: [78, 70], armL: [70, 74], weapon: 90 };
+// both paws forward at shoulder height so the basket (8 px of handle below the paw) hangs in front of the belly,
+// not the chin: at [78, 70] the paws sat 4 px ABOVE the shoulder and the basket covered the muzzle
+const CARRY = { armR: [60, 50], armL: [56, 54], weapon: 90 };
 /**
  * Every critter's animation table (docs/ART_STYLE.md section 5). Screens play these by name:
  * idle walk run carry carryWalk reach catch cheer sad eat chop stir bump hop wave sit
@@ -376,8 +451,8 @@ export function makeCritterAnims(over = {}) {
       F(20, { armR: [146, 28], armL: [-156, -12], torso: -6, head: -10, root: [0, -1], stretch: 1.04 }),
     ] },
     catch: { loop: true, frames: [
-      F(20, { armR: [96, 46], armL: [88, 50], weapon: 90, torso: -4, head: -10, root: [0, 0] }),
-      F(20, { armR: [100, 48], armL: [92, 52], weapon: 90, torso: -6, head: -12, root: [0, -1] }),
+      F(20, { armR: [72, 48], armL: [66, 52], weapon: 90, torso: -4, head: -10, root: [0, 0] }),
+      F(20, { armR: [76, 50], armL: [70, 54], weapon: 90, torso: -6, head: -12, root: [0, -1] }),
     ] },
     cheer: { loop: true, frames: [
       F(10, { armR: [130, 20], armL: [-140, -20], torso: -4, head: -6, root: [0, 2], squash: 1.06, face: 'happy' }),
@@ -397,8 +472,9 @@ export function makeCritterAnims(over = {}) {
     ] },
     chop: { loop: false, frames: [
       F(6, { armR: [-110, -40], armL: [60, 70], torso: -6, head: -4, weapon: -30, face: 'grit' }, { ease: 'in' }),
-      F(3, { armR: [75, 30], armL: [60, 70], torso: 14, head: 6, weapon: 20, root: [1, 1], face: 'grit' }, { ease: 'overshoot', smear: { from: -100, to: 60, a: 0.4 } }),
-      F(4, { armR: [80, 34], armL: [60, 70], torso: 16, head: 8, weapon: 20, root: [1, 2], squash: 1.04, face: 'grit' }),
+      // the hit lands at [56, 24]: on a chibi the shoulder is at chin height, so a horizontal forearm would put the paw across the muzzle
+      F(3, { armR: [56, 24], armL: [60, 70], torso: 14, head: 6, weapon: 20, root: [1, 1], face: 'grit' }, { ease: 'overshoot', smear: { from: -100, to: 60, a: 0.4 } }),
+      F(4, { armR: [60, 28], armL: [60, 70], torso: 16, head: 8, weapon: 20, root: [1, 2], squash: 1.04, face: 'grit' }),
       F(8, { armR: [20, 20], armL: [60, 70], torso: 2, head: 0, weapon: 0 }, { ease: 'inout' }),
     ] },
     stir: { loop: true, frames: [

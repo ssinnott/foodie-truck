@@ -1,0 +1,121 @@
+// Fishing kit for the pond (docs/GDD.md section 5, docs/ART_STYLE.md section 1 "Pond"): the rod stances every
+// critter plays, the integer tables the simulation reads (a 24-entry parabola for the cast and the caught fish),
+// the tables only draw() reads (the float's bob, the nibble dips), and the sprites: the 2 px mid-brown line, the
+// float with its slot cap and tag, the trout, the bucket. Screen space, integer coordinates, no allocation per call.
+import { UI, PLAYER_COLORS, SIGNAL } from '../constants.js';
+import { pathRR } from './shading.js';
+import { F } from '../content/critters/common.js';
+
+const R = Math.round, TAU = Math.PI * 2;
+export const INK = UI.ink;
+/** The line is 2 px mid-brown, never 1 px ink (the judges' graft: the 1 px line broke the floor). */
+export const LINE = '#5E4A3A';
+export const TROUT = Object.freeze({ body: '#B8C4C9', back: '#7FA9B8', gill: '#D9A2AE' });
+export const FLOAT = Object.freeze({ body: '#FFF6E0', band: SIGNAL.pond });
+export const BUCKET = Object.freeze({ willow: '#6B4E3A', tip: '#B8C4C9' });
+
+// ---------------------------------------------------------------- tables
+/** Cast arc: 24 steps. PARA_T[i] is the along-track fraction, PARA_H[i] the lift in px (4t(1-t) * 36), integers. */
+export const PARA_N = 24;
+export const PARA_T = new Float64Array(PARA_N), PARA_H = new Int16Array(PARA_N);
+for (let i = 0; i < PARA_N; i++) { const t = i / (PARA_N - 1); PARA_T[i] = t; PARA_H[i] = R(4 * t * (1 - t) * 36); }
+/** The waiting float's bob, 32 entries of -1..1 px, read in draw only (index (frame >> 1) & 31). */
+export const BOB = new Int8Array(32);
+for (let i = 0; i < 32; i++) BOB[i] = R(Math.sin(i / 32 * TAU));
+/** The nibble telegraph: over its 30 frames the float dips 2 px twice (frames 0..7 and 15..22). */
+export const NIBBLE = new Int8Array(30);
+for (let i = 0; i < 30; i++) NIBBLE[i] = (i < 8 || (i >= 15 && i < 23)) ? 2 : 0;
+
+// ---------------------------------------------------------------- stances (an AnimPlayer overlay table)
+// Rod angles: the rig's weapon angle is the hand angle minus weapon.rot (0 = down, 90 = forward, 180 = up), so a
+// rod held ~45 degrees above level from an arm at [22, 12] (hand ~36) wants rot -99: the idle float then dangles a
+// clear 12 px short of the next seat's head (at -85 it hung on the neighbour's muzzle). The waiting rod at ~45
+// degrees from [48, 30] (hand ~78) wants -58, so the line drops from a raised tip to the float. Every key sets both
+// arms so the off-paw stays visible, and no rod crosses the face (a tip above the muzzle is beside it).
+const IDLE_ARMS = { armL: [-12, 12] };
+export const POND_ANIMS = Object.freeze({
+  /** Rod low at the side, breathing on two keys over 52 frames. */
+  rodIdle: { loop: true, frames: [
+    F(26, { ...IDLE_ARMS, armR: [22, 12], weapon: -99, torso: 2, root: [0, 0] }),
+    F(26, { ...IDLE_ARMS, armR: [24, 14], weapon: -93, torso: 4, root: [0, 1], head: 2 }),
+  ] },
+  /** Rod out over the water while the float waits; the same breath. */
+  rodWait: { loop: true, frames: [
+    F(26, { ...IDLE_ARMS, armR: [48, 30], weapon: -58, torso: 0, root: [0, 0] }),
+    F(26, { ...IDLE_ARMS, armR: [50, 32], weapon: -52, torso: 2, root: [0, 1], head: 2 }),
+  ] },
+  /** The hook: rod straight up in front (the reach key, so the paw lands beside the muzzle), happy. */
+  pull: { loop: false, frames: [
+    F(6, { armR: [140, 30], armL: [-150, -10], weapon: 0, torso: -6, head: -8, root: [0, 0], stretch: 1.03, face: 'happy' }, { ease: 'out' }),
+    F(34, { armR: [146, 28], armL: [-156, -12], weapon: 0, torso: -8, head: -10, root: [0, -1], stretch: 1.04, face: 'happy' }),
+  ] },
+});
+/**
+ * The generic rod whip for critters without a `cast` of their own (Cress has one): wind-up `in` 8f with the rod
+ * back over the shoulder, the snap `overshoot` 4f with a smear (the chop's beat on the rod arm), a hold, and a
+ * return `inout` onto the rodWait stance so the float's landing and the stance change share one moment.
+ */
+export const POND_ANIMS_CAST = Object.freeze({
+  ...POND_ANIMS,
+  cast: { loop: false, frames: [
+    F(8, { armR: [-120, -30], armL: [30, 40], torso: -10, head: -6, weapon: -60, root: [-2, 1], legR: [10, 6], legL: [-14, 12], face: 'grit' }, { ease: 'in' }),
+    F(4, { armR: [108, 30], armL: [40, 50], torso: 14, head: 4, weapon: 70, root: [2, 1], legR: [20, 4], legL: [-20, 20], squash: 1.04, face: 'shout' }, { ease: 'overshoot', smear: { from: -160, to: 40, a: 0.4 } }),
+    F(10, { armR: [100, 36], armL: [40, 50], torso: 10, head: 0, weapon: 62, root: [2, 1], legR: [20, 4], legL: [-20, 20], face: 'happy' }),
+    F(10, { armR: [48, 30], armL: [-12, 12], torso: 0, head: 0, weapon: -58, root: [0, 0], face: 'happy' }, { ease: 'inout' }),
+  ] },
+});
+/** The frame of the cast on which the float leaves the rod tip (the end of the whip key). */
+export const CAST_LAUNCH = 12;
+
+// ---------------------------------------------------------------- sprites
+/**
+ * The line: three 2 px segments from the rod tip to the float with a quadratic sag (draw-only maths). Falls
+ * straight down when the float dangles under the tip.
+ */
+export function drawLine(ctx, x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const sag = Math.min(14, Math.hypot(dx, dy) * 0.06);
+  ctx.strokeStyle = LINE; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(x0, y0);
+  ctx.lineTo(R(x0 + dx / 3), R(y0 + dy / 3 + sag * 0.9));
+  ctx.lineTo(R(x0 + dx * 2 / 3), R(y0 + dy * 2 / 3 + sag * 0.75));
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+}
+
+/**
+ * The float, centred on (x, y): a 6x8 cream capsule with the 3 px mint band (the scene's signal, the same on every
+ * float), a 4x4 top cap in the seat colour and the 8x5 slot tag 6 px above it (the judges' graft).
+ */
+export function drawFloat(ctx, x, y, slot) {
+  const col = PLAYER_COLORS[slot] || UI.paperDark;
+  pathRR(ctx, x - 3, y - 4, 6, 8, 3); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = FLOAT.body; ctx.fill();
+  ctx.fillStyle = FLOAT.band; ctx.fillRect(x - 3, y - 1, 6, 3);
+  ctx.fillStyle = INK; ctx.fillRect(x - 3, y - 8, 6, 6);
+  ctx.fillStyle = col; ctx.fillRect(x - 2, y - 7, 4, 4);
+  ctx.fillStyle = INK; ctx.fillRect(x - 5, y - 20, 10, 7);
+  ctx.fillStyle = col; ctx.fillRect(x - 4, y - 19, 8, 5);
+}
+
+/** The trout: a 24x12 inked body facing `facing`, a darker back inside the same ink, a rose gill dot, an ink eye. */
+export function drawTrout(ctx, cx, cy, facing = 1) {
+  ctx.save(); ctx.translate(cx, cy); if (facing < 0) ctx.scale(-1, 1);
+  ctx.beginPath(); ctx.ellipse(-2, 0, 9, 5, 0, 0, TAU);
+  ctx.moveTo(6, 0); ctx.lineTo(12, -5); ctx.lineTo(12, 5); ctx.closePath();
+  ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = TROUT.body; ctx.fill();
+  ctx.save(); ctx.clip(); ctx.fillStyle = TROUT.back; ctx.fillRect(-12, -6, 24, 4); ctx.restore();
+  ctx.fillStyle = TROUT.gill; ctx.fillRect(-6, 0, 2, 2);
+  ctx.fillStyle = INK; ctx.fillRect(-9, -2, 2, 2);
+  ctx.restore();
+}
+
+/** The bucket at a seat's feet: 14x12 dark willow with a 3 px slot band, and a 2 px silver tail tip per fish (up to 5). */
+export function drawBucket(ctx, x, y, slot, fish) {
+  const col = PLAYER_COLORS[slot] || UI.paperDark;
+  const n = fish > 5 ? 5 : fish;
+  for (let i = 0; i < n; i++) { ctx.fillStyle = INK; ctx.fillRect(x + 1 + i * 3, y - 16, 3, 5); ctx.fillStyle = BUCKET.tip; ctx.fillRect(x + 2 + i * 3, y - 15, 2, 3); }
+  ctx.beginPath(); ctx.moveTo(x - 1, y - 12); ctx.lineTo(x + 15, y - 12); ctx.lineTo(x + 13, y); ctx.lineTo(x + 1, y); ctx.closePath();
+  ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = BUCKET.willow; ctx.fill();
+  ctx.fillStyle = col; ctx.fillRect(x, y - 10, 14, 3);
+  ctx.fillStyle = INK; ctx.fillRect(x - 1, y - 13, 16, 2);
+}
