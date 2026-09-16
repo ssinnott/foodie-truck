@@ -87,11 +87,12 @@ export function drawTruck(ctx, x, y, o) {
     drawText(ctx, 'FOODIE TRUCK', 0, -58, { size: 1, color: TRUCK.cream, align: 'center', shadow: false });
     ctx.restore();
   } else { ctx.fillStyle = TRUCK.cream; ctx.fillRect(-32, -57, 28, 3); ctx.fillRect(2, -57, 30, 3); }
-  // the body: ONE inked path with the cab bump appended; the highlight cap clipped inside it (the third tone is the
-  // glass, so there is no separate shadow band to sit under a window and break the value ladder)
+  // the body: ONE inked path with the cab bump appended, with the highlight cap and the shadowed sill clipped
+  // inside it - three tones and no line of their own, because they are colour changes in one silhouette
   bodyPath(ctx); inkFill(ctx, ow, TRUCK.body);
   ctx.save(); bodyPath(ctx); ctx.clip();
   ctx.fillStyle = TRUCK.bodyHi; ctx.fillRect(13, -38, 25, 2); ctx.fillRect(-38, -40, 3, 8);
+  ctx.fillStyle = TRUCK.bodyShade; ctx.fillRect(-40, -13, 82, 4);   // the sill in shadow: 4 master px = 2 device at the token
   ctx.restore();
   // the awning over the hatch: mustard / cream stripes as one clipped fill under one outline
   pathRR(ctx, -37, -41, 48, 8, 2); inkFill(ctx, ow, TRUCK.cream);

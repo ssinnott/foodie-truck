@@ -1,25 +1,30 @@
-// Mini-game furniture shared by the orchard screen (docs/GDD.md section 5 common rules): the seats (one rig +
+// Mini-game furniture shared by the mini-game screens (docs/GDD.md section 5 common rules): the seats (one rig +
 // AnimPlayer per party member, built in enter(), never in draw()), the name plates above the tallest head part, the
 // paper clock, the wooden sign that drops in on ropes to end the round, and the basket wrapper that adds the seat's
 // ribbon and the catch squash to content/critters/items.js ITEMS.basket without touching it.
 //
+// SHARED, SO FROZEN. This started as the orchard's private helper and the coop now imports it too, which makes every
+// number in here another owner's timing as well. Until docs/ARCHITECTURE.md section 5 records it (the integrator's
+// call — see the orchard's deviations), treat this as the contract and change nothing in it for one screen's sake:
+//   ROUND_FRAMES 2400, SIGN_SLAM 6, SIGN_HOLD 60
+//   makeSeats(game, floorY) -> seats[]  | seatAnim(seat, name, restart?)
+//   drawSeatPlate(ctx, seat, stack?)    | makeClock() / tickClock(clock) / endRound(clock, text) / roundOver(clock)
+//   drawClock(ctx, clock, countStr, drawIcon, title) | drawEndSign(ctx, clock, frame)
+// Anything ONE screen needs lives in that screen (the orchard keeps its own catch boxes, seat draw and poses).
+//
 // Everything simulated here (the clock, the sign's frame counter) is plain integers driven by update(); every
-// Math.sin/atan2 lives in a draw helper. The basket's catch box is computed ONCE per seat in enter() from the rig's
-// proportions with dsin/dcos, so the sim never reads joints back from a draw (headless peers step without drawing).
+// Math.sin/atan2 lives in a draw helper, so headless peers step without drawing.
 import { PLAYER_COLORS, UI, SIGNAL, VIEW_W } from '../constants.js';
 import { critterRig } from '../content/critters/common.js';
 import { getCritter } from '../content/critters/index.js';
 import { ITEMS } from '../content/critters/items.js';
 import { AnimPlayer } from './animation.js';
-import { drawRig, jointScreen } from '../art/rig.js';
-import { drawShadow } from '../art/fx.js';
+import { jointScreen } from '../art/rig.js';
 import { LIGHT_X, LIGHT_Y } from '../art/shading.js';
-import { dsin, dcos } from '../engine/trig.js';
-import { drawText } from '../engine/text.js';
+import { drawText, measureText } from '../engine/text.js';
 import { drawTicket, drawBar, drawSign, drawNamePlate } from './ui.js';
 
 const R = Math.round;
-const DEG = Math.PI / 180;
 /** GDD section 5: a mini-game lasts 40 seconds. */
 export const ROUND_FRAMES = 2400;
 /** The end sign slams in over 6 frames and is held 60 (GDD section 5). */
@@ -43,31 +48,18 @@ const CLOCK_OPTS = { title: '', rules: false }, BAR_OPTS = { color: SIGNAL.good 
 export const RIBBON_BASKET = { attach: 'handR', length: 14, draw(ctx, rig) {
   const a = Math.atan2(rig.light.y, rig.light.x) - Math.atan2(LIGHT_Y, LIGHT_X);
   const k = rig.basketSquash || 1;
+  // the bow rides INSIDE the squash: the catch beat is the one moment a player looks straight at the rim, and a
+  // rigid bow on a squashing basket is the tell that the two are different objects bolted together
   if (k !== 1) { ctx.save(); ctx.rotate(a); ctx.translate(0, 8); ctx.scale(k, 1 / k); ctx.translate(0, -8); ctx.rotate(-a); }
   ITEMS.basket.draw(ctx, rig);
+  if (!rig.override) {
+    ctx.save(); ctx.rotate(a);
+    ctx.fillStyle = rig.col(rig.outline); ctx.fillRect(3, 5, 8, 6);
+    ctx.fillStyle = rig.col(rig.palette.primary); ctx.fillRect(4, 6, 6, 4);
+    ctx.restore();
+  }
   if (k !== 1) ctx.restore();
-  if (rig.override) return;
-  ctx.save(); ctx.rotate(a);
-  ctx.fillStyle = rig.col(rig.outline); ctx.fillRect(3, 5, 8, 6);
-  ctx.fillStyle = rig.col(rig.palette.primary); ctx.fillRect(4, 6, 6, 4);
-  ctx.restore();
 } };
-
-/**
- * Root-space position of the near paw for a torso lean and arm angles (degrees), the same chain as
- * art/rig.js computeJoints but through the deterministic trig, so a catch box built from it is bit-identical on
- * every peer. y is down-positive with the feet at 0 (so the paw's y is negative).
- */
-export function pawRoot(rig, torsoRot, upper, lower, out = SCRATCH) {
-  const p = rig.p, hipY = rig.hipY;
-  const c = dcos(torsoRot * DEG), s = dsin(torsoRot * DEG), shY = -(p.torsoH - 5);
-  const sx = p.shoulderX * c - shY * s, sy = hipY + p.shoulderX * s + shY * c;
-  const u = (torsoRot + upper) * DEG, l = (torsoRot + upper + lower) * DEG;
-  const ex = sx + dsin(u) * p.upperArm, ey = sy + dcos(u) * p.upperArm;
-  const wx = ex + dsin(l) * p.lowerArm, wy = ey + dcos(l) * p.lowerArm;
-  out.x = wx + dsin(l) * p.handR * 0.6; out.y = wy + dcos(l) * p.handR * 0.6;
-  return out;
-}
 
 /**
  * One seat per party member. `floorY(i)` gives the feet line for party index i. Each seat carries its own draw
@@ -95,22 +87,40 @@ export function seatAnim(seat, name, restart = false) {
   if (seat.anim !== name || restart) { seat.anim = name; seat.player.play(name, { restart, fallback: 'idle' }); }
 }
 
-/** The ground-contact ellipse every sprite draws before the sorted pass. */
-export function drawSeatShadow(ctx, seat) { drawShadow(ctx, seat.x, seat.y, seat.rig.width + 6, 0.4, 0); }
+/**
+ * A frame's worth of plate rectangles, so plates that would land on each other stack instead. Four seats, four
+ * numbers each (x, y, w, h), written in place — a screen calls `resetPlates()` before its plate pass and passes
+ * PLATES to every `drawSeatPlate`. A screen that passes nothing gets the old, unstacked behaviour.
+ */
+export const PLATES = { n: 0, v: new Int16Array(4 * 4) };
+export function resetPlates() { PLATES.n = 0; }
+/** Plate box: 9 px tall with its 1 px ink, and this much clear air between two stacked rows. */
+const PLATE_H = 11, PLATE_GAP = 2;
 
-/** Draw one seat's critter at its feet position with its held basket state. */
-export function drawSeat(ctx, seat, fill) {
-  const rig = seat.rig, o = seat.opts;
-  rig.basketFill = fill; rig.basketSquash = seat.catchT > 0 ? 1.15 : 1;
-  o.x = seat.x; o.y = seat.y; o.facing = seat.facing;
-  drawRig(ctx, rig, seat.player.pose, o);
-}
-
-/** Name plate above the tallest head part, read from the joints of the last draw of that seat. */
-export function drawSeatPlate(ctx, seat) {
+/**
+ * Name plate above the tallest head part, read from the joints of the last draw of that seat. The plate row is
+ * ragged by design (the judges' graft: y comes from ear tips, toque, sunhat) — ragged, but never occluded, so with a
+ * `stack` the plate climbs a row at a time until it clears every plate already drawn this frame. Two critters at the
+ * same x is the scoring moment, and a player has to be able to read whose basket is whose.
+ */
+export function drawSeatPlate(ctx, seat, stack) {
   const j = jointScreen(seat.rig, 'head', SCRATCH);
   const top = j.y - seat.rig.p.headR * seat.rig.scale - seat.crown;
-  drawNamePlate(ctx, seat.slot, seat.name, R(j.x), R(top) - 14);
+  const w = measureText(seat.name, 1) + 10, cx = R(j.x);
+  let y = R(top) - 14;
+  if (stack) {
+    const x = cx - R(w / 2), v = stack.v;
+    for (let pass = 0; pass < 4; pass++) {
+      let hit = false;
+      for (let i = 0; i < stack.n; i++) {
+        const k = i * 4;
+        if (x < v[k] + v[k + 2] && x + w > v[k] && y < v[k + 1] + v[k + 3] && y + PLATE_H > v[k + 1]) { y = v[k + 1] - PLATE_H - PLATE_GAP; hit = true; }
+      }
+      if (!hit) break;
+    }
+    if (stack.n * 4 < v.length) { const k = stack.n * 4; v[k] = x; v[k + 1] = y; v[k + 2] = w; v[k + 3] = PLATE_H; stack.n++; }
+  }
+  drawNamePlate(ctx, seat.slot, seat.name, cx, y);
 }
 
 /** The round's clock and ending, plain data: frames left, the phase (0 play, 1 sign), and the sign's frame counter. */

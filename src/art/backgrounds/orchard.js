@@ -2,7 +2,7 @@
 //
 // Four layers with seeds from the orchard block 100..109, side view, daylight. Row bands are the contract the screen
 // stands its critters on: sky 0..SKY_H, the canopy mass above the trunks, grass from GRASS_Y, the play band
-// (BAND_TOP..BAND_BOT) kept free of scatter so four rows of feet never stand on a leaf, and the fence rail pinned to
+// (BAND_TOP..BAND_BOT) trodden a step darker and kept free of scatter, and the fence rail pinned to
 // FENCE_Y..360 in the near layer. Nothing here animates: the petals, the apples, the splats and the critters are the
 // screen's per-frame marks. Every canopy is one inked mass (ink pass, fill pass, then caps and crescents clipped per
 // blob) so a reader sees one tree-line, not a heap of outlined circles.
@@ -12,18 +12,28 @@ import { PLUM, UI } from '../../constants.js';
 
 const R = Math.round, TAU = Math.PI * 2;
 
-/** The orchard's muted constants. The one saturated colour in the scene is SIGNAL.orchard, the ripe apple. */
+/**
+ * The orchard's muted constants. The one saturated colour in the scene is SIGNAL.orchard, the ripe apple, and it
+ * appears NOWHERE in here: a 2x2 fleck of a near-apple red on the grass the player is scanning IS a false apple
+ * (ART_STYLE section 4 binds the signal to one meaning and bans it as decor), so the windfall scatter is painted in
+ * the orchard's own browns instead. `plum` and `fence` are shared ladder colours, so the scene-only list is nine.
+ */
 export const ORCHARD = Object.freeze({
   skyTop: '#FBE3C4', skyLow: '#F4C9A0', hill: '#B4A48C', plum: PLUM.shadow,
   grass: '#5E7A3E', tuft: '#6E8A48', canopy: '#4F6B3A', trunk: '#6B4E3A', fence: UI.wood,
-  leaf: '#A65A48', straw: '#D9B15E',
-  /** A wormy apple: the same glyph in a dull brown, so "not the signal colour" is the whole tell. */
-  wormy: '#8A6A3A',
+  /** Windfall: a dull dry-grass brown, 0.42 off the grass by value and 0.42 off the map/coop signal gold. */
+  fallen: '#B39A62',
+  /**
+   * A wormy apple: a bruised brown a long way below the floor it falls across (0.62 relative luminance from the
+   * grass, 0.50 from the canopy, 0.30 from the trunks), because "not the signal colour" is too weak a tell on its
+   * own - the screen adds a bitten silhouette and a grub on top of it.
+   */
+  wormy: '#5E4030',
 });
 
 /** Row bands (screen y). */
 export const SKY_H = 120, GRASS_Y = 220, FENCE_Y = 340;
-/** The clean band: no tuft or leaf lands here, so four lanes of feet (292..316) and their shadows stand on plain grass. */
+/** The clean band: no tuft or windfall lands here, so four lanes of feet (292..316) and their shadows stand on plain grass. */
 export const BAND_TOP = 284, BAND_BOT = 322;
 /** Layers are painted this much wider than the screen on each side so a parallax blit never shows an edge. */
 export const BLEED_X = 64;
@@ -79,8 +89,9 @@ function paintMid(g, w, h, rnd) {
     g.fillStyle = INK; g.fillRect(tx - tw / 2 - 5, GRASS_Y - 8, tw + 10, 10);
     g.fillStyle = ORCHARD.trunk; g.fillRect(tx - tw / 2 - 3, GRASS_Y - 6, tw + 6, 8);
     g.fillStyle = trunkShade; g.fillRect(tx + 1, GRASS_Y - 6, tw / 2 + 2, 8);
-    // canopy: four or five blobs, big enough that the row closes into one mass whose top edge sits around row 40,
-    // so an apple spawning at y 40 drops out of the leaves rather than out of the sky
+    // canopy: four or five blobs, big enough that the row closes into one mass. Measured coverage across the visible
+    // width is 18 % at row 40, 58 % at row 50 and 78 % at row 60, so the screen spawns its apples at row 56 (see
+    // APPLE_Y0) - that is where "the apple drops out of the leaves" is actually true.
     const cy = 84 + R(rnd() * 12), n = 4 + (rnd() < 0.5 ? 1 : 0);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + rnd() * 0.8, d = 20 + rnd() * 10;
@@ -91,21 +102,34 @@ function paintMid(g, w, h, rnd) {
   crowns(g, blobs, ORCHARD.canopy, ORCHARD.tuft, shade);
 }
 
-/** Ground: grass with the trees' shade at its top edge, tufts and fallen leaves OUTSIDE the clean band. */
+/**
+ * Ground: grass with the trees' shade at its top edge, a trodden band under the four lanes, then tufts and windfall
+ * OUTSIDE that band.
+ *
+ * The band is the fix for the one pale-on-pale in the scene: Cress is a green frog (`#3F7D3B`) standing on green
+ * grass (`#5E7A3E`) — 0.04 apart by value, 28 deg apart by hue, which fails both clauses of ART_STYLE 0.1. Both
+ * hexes are pinned by ART_STYLE section 1, so the separation has to come from the layer: the rows the cast walks are
+ * trodden flat and a step toward the plum shadow, which lifts every seat off the floor by 0.28 and gives the
+ * scatter-free band a reason to be there. It stays at L .31 so Barley's and Chicory's dark feet still read on it.
+ */
 function paintGround(g, w, h, rnd) {
   g.fillStyle = ORCHARD.grass; g.fillRect(0, 0, w, h);
   g.fillStyle = mix(ORCHARD.grass, ORCHARD.plum, 0.4); g.fillRect(0, 0, w, 6);
   g.fillStyle = INK; g.fillRect(0, 0, w, 1);
   const top = BAND_TOP - GRASS_Y, bot = BAND_BOT - GRASS_Y;
+  const trodden = mix(ORCHARD.grass, ORCHARD.plum, 0.3), edge = mix(ORCHARD.grass, trodden, 0.5);
+  g.fillStyle = edge; g.fillRect(0, top - 5, w, bot - top + 10);
+  g.fillStyle = trodden; g.fillRect(0, top - 2, w, bot - top + 4);
   for (let i = 0; i < 150; i++) {
     const x = R(rnd() * w), y = 8 + R(rnd() * (h - 12));
-    if (y >= top - 3 && y <= bot) continue;
+    if (y >= top - 6 && y <= bot + 5) continue;
     g.fillStyle = ORCHARD.tuft; g.fillRect(x, y, 2, 3); g.fillRect(x + 3, y + 1, 2, 2);
   }
+  // windfall: the orchard's own browns, never the apple's red - at 2x2 px a near-signal fleck is a false apple
   for (let i = 0; i < 40; i++) {
     const x = R(rnd() * w), y = 8 + R(rnd() * (h - 12));
-    if (y >= top - 3 && y <= bot) continue;
-    g.fillStyle = rnd() < 0.5 ? ORCHARD.leaf : ORCHARD.straw; g.fillRect(x, y, 2, 2);
+    if (y >= top - 6 && y <= bot + 5) continue;
+    g.fillStyle = rnd() < 0.5 ? ORCHARD.trunk : ORCHARD.fallen; g.fillRect(x, y, 2, 2);
   }
 }
 

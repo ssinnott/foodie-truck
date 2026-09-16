@@ -6,38 +6,47 @@
 //
 // Determinism (docs/ARCHITECTURE.md section 0): the apples are a fixed array of plain sim objects, every random
 // number comes from the rng singleton inside update(), the sway is dsin, the catch boxes are built once in enter()
-// with dsin/dcos from the rig's proportions (game/minigame.js pawRoot) and never read back from a draw. The petals,
+// with dsin/dcos from the rig's proportions (pawRoot, below) and never read back from a draw. The petals,
 // splats, rings and float text are cosmetic and stay out of checksumFields().
 import { VIEW_W, UI, SIGNAL } from '../../constants.js';
 import { Screen } from '../game.js';
 import { rng, makeRng } from '../../engine/rng.js';
-import { dsin } from '../../engine/trig.js';
+import { dsin, dcos } from '../../engine/trig.js';
 import { particles } from '../../engine/particles.js';
 import { blitAt } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt } from '../../art/fx.js';
-import { drawFood } from '../../art/food.js';
+import { drawFood, foodTones } from '../../art/food.js';
+import { drawRig } from '../../art/rig.js';
 import { makeOrchardLayers, ORCHARD, GRASS_Y, FENCE_Y, BLEED_X, PARALLAX } from '../../art/backgrounds/orchard.js';
-import { makeSeats, seatAnim, drawSeatShadow, drawSeat, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, pawRoot } from '../minigame.js';
+import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.js';
 
-const R = Math.round;
+const R = Math.round, TAU = Math.PI * 2, DEG = Math.PI / 180;
 /** Movement: px/frame, and the lane's ends (a basket's width in from each edge). */
 const SPEED = 2.2, X_MIN = 24, X_MAX = 616;
 /** Seat i stands with its feet at LANE_Y0 - i * LANE_GAP: P1 in front, four lanes 8 px apart so bodies stack. */
 const LANE_Y0 = 316, LANE_GAP = 8;
-/** Apples: a fixed pool, spawned every 30..60 frames at y 40 above the canopy, falling 1.4..2.4 px/frame with a 3 px sway. */
-const MAX_APPLES = 12, SPAWN_MIN = 30, SPAWN_MAX = 60, APPLE_Y0 = 40, VY_MIN = 1.4, VY_MAX = 2.4, SWAY = 3, SWAY_RATE = 0.06;
+/**
+ * Apples: a fixed pool, spawned every 30..60 frames, falling 1.4..2.4 px/frame with a 3 px sway.
+ *
+ * Row 56 is where an apple can honestly be said to drop out of the leaves: the canopy covers 58 % of the width at
+ * row 50 and 78 % at row 60 (18 % at row 40, which is why it used to pop out of open sky), and it is the first row
+ * clear of the clock ticket's bottom edge at ~47 — the ticket draws after the apples, so anything seeded above that
+ * spends its first frames invisible behind paper.
+ */
+const MAX_APPLES = 12, SPAWN_MIN = 30, SPAWN_MAX = 60, APPLE_Y0 = 56, VY_MIN = 1.4, VY_MAX = 2.4, SWAY = 3, SWAY_RATE = 0.06;
 /** Drawn at s 5 (a 10 px apple); one in eight is wormy. */
 const APPLE_S = 5, WORMY_IN = 8;
 /** Where a missed apple lands: in front of the front lane, outside the clean band, above the fence. */
 const APPLE_FLOOR = 330;
-/** The catch box: the basket's rim, 16 wide, and the rows below the rim an apple's bottom counts in (vy < 4 never skips it). */
-const BOX_HALF = 8, BOX_ABOVE = 2, BOX_BELOW = 4, RIM_BELOW_PAW = 8;
+/** The catch box: the basket's drawn rim is 22 px across, so the box is too, and the rows below the rim an apple's bottom counts in (vy < 4 never skips it). */
+const BOX_HALF = 11, BOX_ABOVE = 2, BOX_BELOW = 4, RIM_BELOW_PAW = 8;
 /** The catch beat (basket squash 1.15) and the bump beat (4/10/6 frames of the shared `bump` anim, movement locked). */
 const CATCH_FRAMES = 3, BUMP_FRAMES = 21;
-/** Splats: a missed apple as three flat discs fading over 20 frames. */
-const SPLAT_FRAMES = 20, MAX_SPLATS = 8;
+/** Splats: a missed apple as one inked flat ellipse stepping down a size every 5 frames, gone in 20. */
+const SPLAT_FRAMES = 20, SPLAT_STEP = 5, MAX_SPLATS = 8;
+const SPLAT_RX = Int8Array.of(8, 6, 4, 3), SPLAT_RY = Int8Array.of(3, 3, 2, 2);
 /** Petals: a cosmetic stream (seed from the orchard block), one every few frames so about two dozen are in the air. */
-const PETAL_EVERY = 6, PETAL_SEED = 105;
+const PETAL_EVERY = 6, PETAL_SEED = 105, PETAL_PALE = '#F1E4C8';
 const PLUS_ONE = '+1', MINUS_ONE = '-1', TITLE = 'PIPPIN ORCHARD', SIGN_PREFIX = 'APPLES: ';
 /** The shared anim keys the boxes are built from (content/critters/common.js CARRY / catch frame 0). */
 const CATCH_POSE = { torso: -4, upper: 72, lower: 48 }, WALK_POSE = { torso: 6, upper: 60, lower: 50 };
@@ -45,6 +54,38 @@ const CATCH_POSE = { torso: -4, upper: 72, lower: 48 }, WALK_POSE = { torso: 6, 
 function clockIcon(ctx, x, y) { drawFood(ctx, 'apple', x, y, 4); }
 /** The backdrop is a pure function of its seeds: painted on the first visit, kept for every visit after. */
 let LAYERS = null;
+/** Reused by pawRoot so the catch-box maths allocates nothing (it runs four times, in enter()). */
+const PAW = { x: 0, y: 0 };
+
+/**
+ * Root-space position of the near paw for a torso lean and arm angles (degrees): the same chain as
+ * art/rig.js computeJoints but through the deterministic trig, so the catch box built from it in enter() is
+ * bit-identical on every peer. y is down-positive with the feet at 0 (so the paw's y is negative).
+ *
+ * This lives here, not in game/minigame.js, because the coop does not catch anything: minigame.js is shared with
+ * another owner's screen now, and only furniture BOTH screens use belongs in it.
+ */
+function pawRoot(rig, torsoRot, upper, lower) {
+  const p = rig.p, hipY = rig.hipY;
+  const c = dcos(torsoRot * DEG), s = dsin(torsoRot * DEG), shY = -(p.torsoH - 5);
+  const sx = p.shoulderX * c - shY * s, sy = hipY + p.shoulderX * s + shY * c;
+  const u = (torsoRot + upper) * DEG, l = (torsoRot + upper + lower) * DEG;
+  const ex = sx + dsin(u) * p.upperArm, ey = sy + dcos(u) * p.upperArm;
+  const wx = ex + dsin(l) * p.lowerArm, wy = ey + dcos(l) * p.lowerArm;
+  PAW.x = wx + dsin(l) * p.handR * 0.6; PAW.y = wy + dcos(l) * p.handR * 0.6;
+  return PAW;
+}
+
+/** The ground-contact ellipse every sprite draws before the sorted pass. */
+function drawSeatShadow(ctx, seat) { drawShadow(ctx, seat.x, seat.y, seat.rig.width + 6, 0.4, 0); }
+
+/** Draw one seat's critter at its feet position with its held basket state. */
+function drawSeat(ctx, seat, fill) {
+  const rig = seat.rig, o = seat.opts;
+  rig.basketFill = fill; rig.basketSquash = seat.catchT > 0 ? 1.15 : 1;
+  o.x = seat.x; o.y = seat.y; o.facing = seat.facing;
+  drawRig(ctx, rig, seat.player.pose, o);
+}
 
 export class OrchardScreen extends Screen {
   constructor(game) { super(game, 'orchard'); }
@@ -56,7 +97,7 @@ export class OrchardScreen extends Screen {
     this.layers = LAYERS;
     particles.clear();
     this.vis = makeRng(PETAL_SEED);
-    this.petalOpts = { color: '#F1E4C8', color2: ORCHARD.straw, size: 4, life: 130, vx: -0.3, vy: 0.5, screen: true };
+    this.petalOpts = { color: PETAL_PALE, color2: ORCHARD.fallen, size: 4, life: 130, vx: -0.3, vy: 0.5, screen: true };
     this.seats = makeSeats(game, (i) => LANE_Y0 - i * LANE_GAP);
     const n = this.seats.length, pitch = Math.min(120, R((X_MAX - X_MIN) / (n + 1)));
     for (let i = 0; i < n; i++) {
@@ -187,41 +228,59 @@ export class OrchardScreen extends Screen {
     // shadows first: every seat on its lane, every apple on the ground it will land on (shrinking with height)
     for (let i = 0; i < this.seats.length; i++) drawSeatShadow(ctx, this.seats[i]);
     for (let i = 0; i < this.apples.length; i++) { const a = this.apples[i]; if (a.active) drawShadow(ctx, a.x, APPLE_FLOOR, 14, 0.3, APPLE_FLOOR - a.y); }
-    for (let i = 0; i < this.splats.length; i++) this.drawSplat(ctx, this.splats[i]);
-    // the sorted pass: back lane to front lane, then the apples over everyone (they fall in front of the trees)
+    // the sorted pass: back lane to front lane, then the splats (they land in front of the front lane) and the
+    // apples over everyone (they fall in front of the trees)
     for (let i = this.seats.length - 1; i >= 0; i--) { const s = this.seats[i]; drawSeat(ctx, s, this.target ? s.count / this.target : 0); }
+    for (let i = 0; i < this.splats.length; i++) this.drawSplat(ctx, this.splats[i]);
     for (let i = 0; i < this.apples.length; i++) this.drawApple(ctx, this.apples[i]);
     blitAt(ctx, L.near, -BLEED_X - R(cam * PARALLAX.near), FENCE_Y);
     blitAt(ctx, L.eaves, -BLEED_X - R(cam * PARALLAX.near), 0);
     particles.draw(ctx, null, 'front');
-    for (let i = this.seats.length - 1; i >= 0; i--) drawSeatPlate(ctx, this.seats[i]);   // the front seat's plate wins an overlap
+    // plates front lane first, each one stacked clear of the ones already down: ragged row, no buried name
+    resetPlates();
+    for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
     drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
     drawEndSign(ctx, this.clock, this.frame);
     if (this.game.options.debug) this.drawBoxes(ctx);
   }
 
+  /**
+   * The apple, and the one the player must NOT catch.
+   *
+   * A colour swap alone was not a tell: the old dull brown was the same value as the grass it fell across, and the
+   * worm was a 4x2 cream rect with a square end that read as a price sticker. The wormy one now differs three ways
+   * at a squint — a bruised body two value steps below the grass, the canopy and the trodden band; an ink bite hole
+   * on its shoulder that takes the stem and the leaf with it (a ripe apple always keeps its leaf); and a grub of two
+   * inked cream beads climbing out of that hole and over the rim, so the silhouette breaks too. Each bead carries
+   * its own 1 px ink (ART_STYLE 0.2: separate objects, separate lines) and is 3 px across, over the 2 px floor.
+   */
   drawApple(ctx, a) {
     if (!a.active) return;
     const x = R(a.x), y = R(a.y);
-    if (a.kind === 0) drawFood(ctx, 'apple', x, y, APPLE_S);
-    else {
-      drawFood(ctx, 'apple', x, y, APPLE_S, ORCHARD.wormy);
-      ctx.fillStyle = UI.ink; ctx.fillRect(x + 2, y - 2, 6, 4);   // the worm: a 4x2 cream body poking out of the side
-      ctx.fillStyle = UI.cream; ctx.fillRect(x + 3, y - 1, 4, 2);
-    }
+    if (a.kind === 0) { drawFood(ctx, 'apple', x, y, APPLE_S); return; }
+    drawFood(ctx, 'apple', x, y, APPLE_S, ORCHARD.wormy);
+    ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.arc(x + 2, y - 1, 2.5, 0, TAU); ctx.fill();        // the bite hole
+    ctx.beginPath(); ctx.arc(x + 2, y - 3, 2.6, 0, TAU); ctx.fill();                                // the grub, inked...
+    ctx.beginPath(); ctx.arc(x + 4.5, y - 5.5, 2.6, 0, TAU); ctx.fill();
+    ctx.fillStyle = UI.cream;
+    ctx.beginPath(); ctx.arc(x + 2, y - 3, 1.6, 0, TAU); ctx.fill();                                // ...then its two beads
+    ctx.beginPath(); ctx.arc(x + 4.5, y - 5.5, 1.6, 0, TAU); ctx.fill();
   }
 
-  /** Three flat discs, no outline: the one soft mark in the scene, gone in 20 frames. */
+  /**
+   * A missed apple's mark: one inked splat, flat on the grass, stepping down a size every 5 frames until it is gone.
+   * Nothing in this scene fades — ART_STYLE section 5 keeps soft marks for steam and smoke, and 0.2 wants a line
+   * round every object — so it is stepped, not alpha-blended. It is deliberately a wide, flat ellipse and never a
+   * disc: a round red disc lying on the grass is an apple, and the player would go for it. It draws after the seats
+   * because it lands in front of the front lane.
+   */
   drawSplat(ctx, sp) {
     if (sp.t >= SPLAT_FRAMES) return;
-    const a = ctx.globalAlpha, k = 1 - sp.t / SPLAT_FRAMES;
-    ctx.globalAlpha = a * 0.85 * k; ctx.fillStyle = sp.hex;
-    ctx.beginPath();
-    ctx.ellipse(sp.x - 5, sp.y + 1, 4, 2, 0, 0, Math.PI * 2);
-    ctx.ellipse(sp.x + 4, sp.y + 2, 4, 2, 0, 0, Math.PI * 2);
-    ctx.ellipse(sp.x, sp.y - 2, 5, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = a;
+    const k = (sp.t / SPLAT_STEP) | 0, rx = SPLAT_RX[k], ry = SPLAT_RY[k];
+    ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx + 1, ry + 1, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = sp.hex; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = foodTones(sp.hex).sh;
+    ctx.beginPath(); ctx.ellipse(sp.x + 1, sp.y + 1, rx - 1, ry - 1, 0, 0, TAU); ctx.fill();
   }
 
   /** ?debug=1: the catch boxes. */

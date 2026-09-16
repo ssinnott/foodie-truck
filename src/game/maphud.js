@@ -73,10 +73,10 @@ export function drawDestArrow(ctx, tx, ty, frame) {
   const pulse = (frame >> 3) & 1 ? 2 : 0;
   pathRR(ctx, px - 10, py - 10, 20, 20, 4); ctx.fillStyle = UI.ink; ctx.fill();
   ctx.save(); ctx.translate(px, py); ctx.rotate(a); ctx.translate(pulse, 0);
-  // a plain triangle, not a barbed chevron: the nose must be the SHARPEST corner (39 deg against the tail's 70) or
+  // a plain triangle, not a barbed chevron: the nose must be the SHARPEST corner (32 deg against the tail's 79), and long enough to read as elongated or
   // the barbs win the silhouette at 12 px and every diagonal bearing reads about 90 deg off
   ctx.fillStyle = SIGNAL.map;
-  ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, -5); ctx.lineTo(-6, 5); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, -4); ctx.lineTo(-6, 4); ctx.closePath(); ctx.fill();
   ctx.restore();
 }
 
