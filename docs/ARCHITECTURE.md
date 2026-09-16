@@ -150,7 +150,9 @@ URL params: `?autotest=1` (test mode: no rAF loop, seeded rng, `window.__game` p
 window.__game = {
   ready, game, input, rng, options, loop, scenes,
   step(n), screen(), screenIds(), summary(), goto(id, params),
-  setInput(slot, actions|mask), clearInput(slot), critterList(), errors: []
+  setInput(slot, actions|mask), clearInput(slot), critterList(), errors: [],
+  // online co-op (net/session.js installNetHooks): drive a room without the lobby screen
+  netHost({ transport }) -> room code, netJoin(code, { transport }), net(), netState(), netSetCritter(i), netReady(on), netBegin(scene)
 }
 ```
 Every uncaught error is pushed to `__game.errors` (and shown in the red box); tests fail on any error.

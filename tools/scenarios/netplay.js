@@ -1,0 +1,194 @@
+// Online co-op scenarios for tools/playtest.js (docs/MULTIPLAYER.md): real headless pages in ONE browser
+// context (BroadcastChannel signalling needs it), real WebRTC data channels over loopback, one lockstep match.
+// The lobby screen does not exist yet, so the room is driven through the window.__game net hooks
+// (net/session.js installNetHooks) exactly as that screen will drive the session.
+//
+//   netplay - two pages: host key -> join -> picks -> ready -> a match on the map, 120+ frames with no desync,
+//             a key held on the GUEST moving seat 1 identically on both machines, and the host's session
+//             ending cleanly when the guest's page closes.
+//   netquad - four pages, every guest refusing direct guest-guest links (?netrelay=1) so their traffic rides
+//             the host's relay; the same checks, then guests leaving one by one: the survivors retire each
+//             seat on ONE agreed frame and stay identical, and the last player left is handed the end.
+import { withPeers, assert } from '../playtest.js';
+
+const ROOM_CODE = /^[23456789BCDFGHJKMNPQRSTVWXYZ]{6}$/;
+const TIMEOUT = 30000;
+
+const netState = (p) => p.evaluate(() => window.__game.netState());
+const dotsOf = (p) => p.evaluate(() => (window.__game.summary().top || {}).dots || []);
+const dot = (dots, slot) => (dots.find((d) => d[0] === slot) || [slot, null, null]);
+const open = (pages) => pages.filter((p) => !p.isClosed());
+/** Wait for every open page to satisfy a predicate on its netState. */
+const waitAll = (pages, fn, arg = null) => Promise.all(open(pages).map((p) => p.waitForFunction(`(${fn.toString()})(window.__game.netState(), ${JSON.stringify(arg)})`, null, { timeout: TIMEOUT })));
+/** Wait until every open page's lockstep frame is past `f`. */
+const waitFrames = (pages, f) => waitAll(pages, (n, want) => !!n && n.frame > want, f);
+
+/**
+ * Run one wait, and if it times out say WHICH one and what every page thought was happening: a room has a
+ * lot of ways to be stuck and a bare "waitForFunction timed out" names none of them.
+ */
+async function step(label, pages, fn) {
+  try { return await fn(); } catch (e) {
+    const seen = await Promise.all(open(pages).map((p) => p.evaluate(() => {
+      const s = window.__game.netState(), n = window.__game.net();
+      return s && {
+        state: s.state, slot: s.slot, seated: s.party.length, frame: s.frame, waiting: s.waiting, missing: s.missing,
+        dropped: s.dropped, reason: s.reason || s.error, ready: s.party.map((m) => m.ready), rttReady: s.rttReady,
+        links: n ? [...n.links.values()].map((l) => `${l.isHost ? 'host' : 'peer'}:${l.open ? 'open' : 'forming'}:${l.peer && l.peer.pc ? l.peer.pc.connectionState : '?'}`) : [],
+        errors: window.__game.errors.slice(0, 2),
+      };
+    }).catch(() => null)));
+    throw new Error(`${label}: ${String(e.message).split('\n')[0]} | pages: ${JSON.stringify(seen)}`);
+  }
+}
+
+/** Host on pages[0], join from the rest, and wait until everyone is seated in the lobby. Returns the code. */
+async function fillRoom(pages) {
+  const code = await pages[0].evaluate(() => window.__game.netHost({ transport: 'broadcast' }));
+  assert(ROOM_CODE.test(code), `hosting mints a six-character host key (${code})`);
+  for (const p of pages.slice(1)) await p.evaluate((c) => window.__game.netJoin(c, { transport: 'broadcast' }), code);
+  await step(`${pages.length} peers seated in the lobby`, pages, () => waitAll(pages, (n, want) => !!n && n.state === 'lobby' && n.party.length === want, pages.length));
+  return code;
+}
+
+/** Everybody picks a critter and readies up; the host auto-starts once the latency measurement is in. */
+async function readyAll(pages, seats) {
+  const cast = await pages[0].evaluate(() => window.__game.critterList().length);
+  const picks = await Promise.all(pages.map((p, i) => p.evaluate((c) => window.__game.netSetCritter(c), cast > 1 ? i % cast : 0)));
+  assert(picks.every(Boolean), `every peer's critter pick is accepted (cast of ${cast})`);
+  if (cast > 1) {
+    const clash = await pages[0].evaluate((c) => window.__game.netSetCritter(c), 1 % cast);
+    assert(clash === false, 'a critter another seat holds is refused');
+  } else {
+    assert(picks[1] === true, 'with a cast smaller than the party, seats may share a critter');
+  }
+  const ok = await Promise.all(pages.map((p) => p.evaluate(() => window.__game.netReady(true))));
+  assert(ok.every(Boolean), 'every peer registered its ready flag');
+  await step('everyone reaches the match', pages, () => waitAll(pages, (n) => !!n && n.state === 'playing'));
+  const states = await Promise.all(pages.map((p) => p.evaluate(() => ({ screen: window.__game.screen(), party: (window.__game.summary().run || { party: [] }).party.length, dots: ((window.__game.summary().top || {}).dots || []).length }))));
+  assert(states.every((s) => s.screen === 'map'), `the START opens the map on every machine (${states.map((s) => s.screen).join()})`);
+  assert(states.every((s) => s.party === seats && s.dots === seats), `every machine built a run with ${seats} seats (${states.map((s) => s.party).join()})`);
+}
+
+/** Start the real gated loop everywhere and let the match run past `frames`; check the lockstep invariants. */
+async function runMatch(pages, frames) {
+  for (const p of pages) await p.evaluate(() => window.__game.loop.start(true));
+  await step(`${frames} lockstep frames`, pages, () => waitFrames(pages, frames));
+  return checkLockstep(pages, `after ${frames} frames`);
+}
+
+async function checkLockstep(pages, when) {
+  const states = await Promise.all(open(pages).map(netState));
+  assert(states.every((s) => !s.desync), `no checksum desync ${when} (${JSON.stringify(states.map((s) => s.desync))})`);
+  const frames = states.map((s) => s.frame);
+  const spread = Math.max(...frames) - Math.min(...frames);
+  assert(spread <= states[0].delay + 2, `peers stay in lockstep ${when} (frames ${frames.join()}, delay ${states[0].delay})`);
+  assert(states[0].delay >= 2, `a sane input delay was negotiated (${states[0].delay} frames)`);
+  return states;
+}
+
+/**
+ * Hold ArrowRight on `page` (whose seat is `slot`) for ~40 lockstep frames. Everyone plays on P1's keys, so
+ * that press is that seat's input on EVERY machine; the seat's dot must move right by the same amount on all.
+ */
+async function pressRight(pages, page, slot, label) {
+  const before = await Promise.all(pages.map(dotsOf));
+  const f0 = (await netState(pages[0])).frame;
+  await page.bringToFront();
+  await page.keyboard.down('ArrowRight');
+  await step('40 frames with the key held', pages, () => waitFrames([pages[0]], f0 + 40));
+  await page.keyboard.up('ArrowRight');
+  // The release reaches every machine `delay` frames later; wait it out so the dots are at rest again.
+  const f1 = (await netState(pages[0])).frame;
+  await step('the release lands everywhere', pages, () => waitFrames(pages, f1 + 12));
+  const after = await Promise.all(pages.map(dotsOf));
+  const moved = after.map((d, i) => dot(d, slot)[1] - dot(before[i], slot)[1]);
+  assert(moved.every((m) => m >= 40), `${label}: the held key moved seat ${slot}'s dot right on every machine (${moved.join()} px)`);
+  assert(new Set(moved).size === 1, `${label}: ...by the SAME amount everywhere (${moved.join()})`);
+  const still = after.every((d, i) => d.filter((x) => x[0] !== slot).every((x) => { const b = dot(before[i], x[0]); return b[1] === x[1] && b[2] === x[2]; }));
+  assert(still, `${label}: nobody else's dot moved`);
+}
+
+export const SCENARIOS = {
+  async netplay(server) {
+    const params = ['transport=broadcast&skipTo=title', 'transport=broadcast&skipTo=title'];
+    await withPeers(server, params, async (pages, apis) => {
+      const [host, guest] = pages;
+      const code = await fillRoom(pages);
+      const [hs, gs] = await Promise.all(pages.map(netState));
+      assert(hs.slot === 0 && gs.slot === 1, `the host owns seat 0 and the guest seat 1 (got ${hs.slot}/${gs.slot})`);
+      assert(hs.room === code && gs.room === code, 'both peers agree on the host key');
+      assert(hs.party[1].direct && gs.party[0].direct, 'the pair holds a direct link');
+      assert(hs.party.every((m) => !m.ready), 'nobody is ready yet');
+      await readyAll(pages, 2);
+      await runMatch(pages, 120);
+      await pressRight(pages, guest, 1, 'netplay');
+      await apis[0].shot('30-netplay-host');
+      await apis[1].shot('31-netplay-guest');
+
+      // Closing the guest must end the host's session cleanly: two players is nobody left to stay in step with.
+      const f = (await netState(host)).frame;
+      await guest.close();
+      await step('the host notices the guest has gone', pages, () => waitAll([host], (n) => !!n && n.state === 'ended'));
+      const end = await netState(host);
+      assert(end.state === 'ended' && end.players === 2, `the host's session ended cleanly with 2 players (${end.reason})`);
+      assert(f > 120, `the match had run ${f} lockstep frames before the disconnect`);
+      // ...and the loop comes off the gate: the survivor keeps playing on their own keys.
+      const g0 = await host.evaluate(() => window.__game.game.frame);
+      await host.waitForFunction((g) => window.__game.game.frame > g + 10, g0, { timeout: TIMEOUT });
+      const solo = await host.evaluate(() => ({ screen: window.__game.screen(), errs: window.__game.errors.length }));
+      assert(solo.screen === 'map' && solo.errs === 0, 'the host keeps playing on the map with no errors');
+    });
+  },
+
+  async netquad(server) {
+    const guest = 'transport=broadcast&skipTo=title&netrelay=1';
+    await withPeers(server, ['transport=broadcast&skipTo=title', guest, guest, guest], async (pages, apis) => {
+      await fillRoom(pages);
+      const seated = await Promise.all(pages.map(netState));
+      // Three guests race for the room, so seats go in the order the host hears them. Index by seat from here on.
+      assert(seated.map((s) => s.slot).slice().sort().join() === '0,1,2,3', `the four peers take one seat each (${seated.map((s) => s.slot).join()})`);
+      assert(seated[0].slot === 0 && seated.every((s) => s.players === 4), 'the host keeps seat 0 and everyone knows the party is four strong');
+      const roster = JSON.stringify(seated[0].party.map((m) => [m.slot, m.critter]));
+      assert(seated.every((s) => JSON.stringify(s.party.map((m) => [m.slot, m.critter])) === roster), 'all four peers hold the same roster');
+      // ?netrelay=1: every guest links to the host and to nobody else, so guest-guest traffic has to be relayed.
+      assert(seated.slice(1).every((s) => s.party[0].direct), 'every guest holds a direct link to the host');
+      assert(seated.slice(1).every((s) => s.party.filter((m) => !m.local && m.slot !== 0).every((m) => !m.direct)), '...and none to the other guests');
+      assert(seated[0].party.slice(1).every((m) => m.direct), 'the host holds a direct link to every guest');
+
+      await readyAll(pages, 4);
+      await runMatch(pages, 120);
+      const last = seated.map((s, i) => [s.slot, i]).sort((a, b) => b[0] - a[0])[0][1];   // the highest seat: a relayed guest
+      await pressRight(pages, pages[last], seated[last].slot, 'netquad');
+      await apis[0].shot('32-netquad-host');
+
+      // One guest leaves: the host names a frame, everybody retires that seat on it, and the other three play on.
+      const gone = seated[last].slot;
+      await pages[last].close();
+      const rest = open(pages);
+      await step('the survivors retire the seat that left', rest, () => waitAll(rest, (n, s) => !!n && n.dropped.includes(s), gone));
+      const after = await Promise.all(rest.map(netState));
+      assert(after.every((s) => s.state === 'playing'), `losing one of four does NOT end the match (${after.map((s) => s.state).join()})`);
+      const dropFrames = await Promise.all(rest.map((p) => p.evaluate((s) => window.__game.net().dropFrameOf(s), gone)));
+      assert(new Set(dropFrames).size === 1 && dropFrames[0] > 0, `every survivor retires the seat on the SAME frame (${dropFrames.join()})`);
+      const f0 = Math.max(...after.map((s) => s.frame));
+      await step('120 more frames with three left', rest, () => waitFrames(rest, f0 + 120));
+      await checkLockstep(rest, 'after the drop');
+      const dots = await Promise.all(rest.map(dotsOf));
+      assert(dots.every((d) => JSON.stringify(d) === JSON.stringify(dots[0])), `the three that remain hold identical dots (${JSON.stringify(dots[0])})`);
+      await pressRight(rest, rest[1], (await netState(rest[1])).slot, 'netquad after the drop');
+
+      // Down to two, then to one: the last player left is handed the end of the session.
+      const next = rest[rest.length - 1], nextSlot = (await netState(next)).slot;
+      await next.close();
+      const pair = open(pages);
+      await step('the pair retires the second seat that left', pair, () => waitAll(pair, (n, s) => !!n && n.dropped.includes(s), nextSlot));
+      assert((await netState(pair[0])).state === 'playing', 'a party of four down to two is still a match');
+      await pair[1].close();
+      await step('the last player left ends the session', [pages[0]], () => waitAll([pages[0]], (n) => !!n && n.state === 'ended'));
+      const alone = await netState(pages[0]);
+      const errs = await pages[0].evaluate(() => window.__game.errors.length);
+      assert(alone.state === 'ended' && alone.players === 4 && errs === 0, `the last player left is handed the end (${alone.reason}), with no errors`);
+    });
+  },
+};

@@ -2,7 +2,7 @@
 // signalling rendezvous: CONNECT, SUBSCRIBE, PUBLISH (QoS 0), PINGREQ, DISCONNECT.
 //
 // This is pure encode/decode with no I/O so it can be unit tested in Node (tools/nettest.js).
-// The socket wiring lives in net/signal-mqtt.js.
+// The socket wiring lives in net/signal.js (mqttSignal).
 //
 // A WebSocket message does NOT align with an MQTT packet: one frame may carry several packets,
 // or half of one. `createParser()` handles that; never parse a frame in isolation.
