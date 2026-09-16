@@ -91,10 +91,15 @@ Part hooks `(ctx, rig, pose, info)` in local spaces (see `docs/ART_STYLE.md` sec
 
 ### `content/critters/common.js` — the critter rig
 `critterBuild(spec)` assembles a build with animal hooks (head with muzzle + ears, critter face, belly + apron,
-shorts, paws, tail); `makeCritterAnims(over)` gives the shared table: `idle walk run carry carryWalk reach catch cheer
-sad eat chop stir bump hop wave sit`. `content/critters/items.js` `ITEMS.<name>` are held items: `rig.weapon =
-ITEMS.basket` (`rig.basketFill`, `rig.heldIcon`). Every cast file exports `{ id, name, fullName, role, species, build,
-anims, colour }` and is listed in `content/critters/index.js` `CRITTERS` (order = cast index).
+shorts, paws, tail); `critterRig(def, slot)` builds it with the seat's player colour as the apron;
+`makeCritterAnims(over)` gives the shared table: `idle walk run carry carryWalk reach catch cheer sad eat chop stir
+bump hop wave sit`. Ear kinds: `round point small long droop dome none`; tails `stub puff bushy ring thin none`.
+Accessories are part factories: `toque(bandHex)` (`chefHat` = `toque(null)`), `bandana(hex)`, `scarf(hex)`,
+`scarfTail(hex)`, `cap(hex)`; helpers `hatY(rig)`, `muzzleGeom(r, size)`, `DOME`, `PLUM_STRAP` place things on the
+skull. `content/critters/items.js` `ITEMS.<name>` are held items — `basket` (`rig.basketFill`, `rig.basketIcon`),
+`rod`, `spoon`, `knife`, `food` (`rig.heldIcon`, `rig.heldHex`), `plate`, `horn` — set as `rig.weapon`. Every cast
+file exports `{ id, name, fullName, role, species, colour, bio, build, anims }` and is listed in
+`content/critters/index.js` `CRITTERS` (order = cast index); `content/critters/customers.js` holds the NPC diners.
 
 ### `art/layers.js`
 Offscreen pre-render: `makeLayer(w, h, paint(g, w, h, rnd), seed)`, `blitTiled`, `blitAt`, `blitWorld(ctx, L, camX,

@@ -51,7 +51,7 @@ function main() {
     for (const d of CRITTERS) {
       const rig = makeRig(d), anim = new AnimPlayer(d.anims);
       const cells = [];
-      for (const p of picks) { anim.play(p, { restart: true }); anim.tick(); cells.push({ rig, pose: anim.pose, copy: true, label: p }); }
+      for (const p of picks) { anim.play(p, { restart: true }); anim.tick(); cells.push({ rig, pose: JSON.parse(JSON.stringify(anim.pose)), copy: true, label: p }); }
       stage.push({ label: d.name, cells: cells.map((c) => ({ ...c, pose: JSON.parse(JSON.stringify(c.pose)) })) });
     }
     rows = stage;

@@ -69,10 +69,12 @@ in §12. **Canonical reference rig: Barley** (`content/critters/barley.js`).
 | | species | role | h / headR | silhouette cue | fur `skin` (L) | markings `hair` | light `belly` | legs `secondary` | `shorts` | signature |
 |---|---|---|---|---|---|---|---|---|---|---|
 | **Barley** | Suffolk sheep | the hungry one — EAT / CARRY | 64 / 15 | widest body, scalloped wool cap, dark face, drooping ears, brass bell | `#F1E4C8` (.90) | face `#3F3A48` | muzzle `#8C7A86` | `#3F3A48` | `#3F3A48` | bell on a plum strap; eye whites always on (dark face) |
-| **Sorrel** | field mouse | the chef — CHOP / MIX | 46 / 11 | smallest body under the tallest toque, big round ears, thin rose tail | `#E2DDEA` (.88) | `#7A6A8C` | `#D9A2AE` (rose) | `#E2DDEA` | `#4A3F6B` | white toque with a 4 px blackberry band; paring knife |
-| **Chicory** | brown hare | the driver — DRIVE / HONK | 56 / 13 | 16 px upright ears with dark tips, flat cap + goggles, cream scarf | `#6B5241` (.34) | `#3A2B22` | `#EBD9B4` | `#6B5241` | `#B99A6A` | goggles slide onto the eyes on `hurt`; bulb horn |
-| **Cress** | pond frog | the forager — GATHER / CAST | 50 / 13 | wide head with two eye domes on top, long legs and big feet, straw sunhat | `#3F7D3B` (.39) | `#2A5A2A` | `#CFE3A6` | `#3F7D3B` | `#2F5F7A` | straw hat with a plum band; dark-willow basket on the hip |
+| **Sorrel** | field mouse | the chef — CHOP / MIX | 48 / 11 | smallest body under the tallest toque, big round ears, thin rose tail | `#E2DDEA` (.88) | `#7A6A8C` | `#D9A2AE` (rose) | `#E2DDEA` | `#4A3F6B` | white toque with a 4 px blackberry band; paring knife |
+| **Chicory** | brown hare | the driver — DRIVE / HONK | 56 / 13 | 16 px upright ears with dark tips, flat cap + goggles, cream scarf | `#6B5241` (.34) | `#3A2B22` | `#EBD9B4` | `#6B5241` | `#8C6E48` | goggles slide onto the eyes on `hurt`; bulb horn |
+| **Cress** | pond frog | the forager — GATHER / CAST | 57 / 13 | wide head with two eye domes on top, long legs and big feet, straw sunhat | `#3F7D3B` (.39) | `#2A5A2A` | `#CFE3A6` | `#3F7D3B` | `#2F5F7A` | straw hat with a plum band; dark-willow basket on the hip |
 
+Heights are the shipped rig's (`tools/art-check.js` holds the cast to a 46–68 px band): the two small critters
+grew a couple of pixels in the torso so the apron — the player's own colour — is not swallowed by the head.
 Two light furs and two dark ones, so the four aprons (the player colour, L .54–.64) clear every fur by value: wool
 .29+, mouse .27+, hare .37+, frog .28+. Sheep and mouse are both pale and are told apart by silhouette (wool
 scallops + dark face vs toque + ears + tail); the cast sheet at 0.5× is the check. Aprons: `primary` is set **per
