@@ -22,16 +22,18 @@ function owlMarkings(ctx, rig, pose, inf) {
   ctx.beginPath(); ctx.ellipse(R(r * 0.45), R(-r * 0.25), R(r * 0.42), R(r * 0.5), 0, 0, TAU); ctx.fill();
   ctx.beginPath(); ctx.ellipse(R(-r * 0.25), R(-r * 0.25), R(r * 0.42), R(r * 0.5), 0, 0, TAU); ctx.fill();
   ctx.restore();
+  // the beak: one gold wedge at the muzzle tip, big enough to carry the species on its own at bust size
   const g = muzzleGeom(r, rig.build.muzzle);
-  celPoly(ctx, rig, [g.mx + g.rx - 5, g.my - 4, g.mx + g.rx + 3, g.my - 1, g.mx + g.rx - 5, g.my + 2], BEAK, 0.4, 0);
+  celPoly(ctx, rig, [g.mx - 1, g.my - 5, g.mx + g.rx + 5, g.my, g.mx - 1, g.my + 5], BEAK, 0.4, 0);
 }
 export const owl = {
   id: 'owl', name: 'MRS TAWNY', fullName: 'Mrs Tawny Hoot', role: 'THE REGULAR', species: 'owl', colour: OWL_FUR,
   build: critterBuild({
     palette: { skin: OWL_FUR, hair: OWL_DARK, belly: OWL_CREAM, secondary: OWL_FUR, shorts: OWL_WAISTCOAT, accent: BEAK, dark: '#2A1F1A' },
     proportions: { headR: 13, torsoW: 24, torsoH: 16, hip: 18, handR: 4.5, footL: 8 },
-    ears: 'point', earTip: true, earPos: { near: { x: 0.5, y: -0.72 }, far: { x: -0.42, y: -0.7 } },
-    face: { eyeY: -1 }, muzzle: 0.7, nose: false, markings: owlMarkings, tail: 'stub',
+    // the tufts sit close together ON the crown (an owl), not out at the sides where they read as a dog's ears
+    ears: 'point', earTip: true, earR: 0.34, earPos: { near: { x: 0.26, y: -0.94 }, far: { x: -0.1, y: -0.92 } },
+    face: { eyeY: -1, whitesAlways: true }, muzzle: 0.6, nose: false, markings: owlMarkings, tail: 'stub',
   }),
   anims: makeCritterAnims(),
 };
@@ -44,13 +46,13 @@ export const otter = {
     palette: { skin: OTTER_FUR, hair: OTTER_DARK, belly: OTTER_CREAM, secondary: OTTER_FUR, shorts: OTTER_SHORTS, accent: OTTER_CREAM, dark: '#2A1F1A' },
     proportions: { headR: 12, torsoW: 22, torsoH: 18, hip: 18, handR: 4.5, footL: 9 },
     ears: 'small', earPos: { near: { x: 0.55, y: -0.7 }, far: { x: -0.5, y: -0.66 } },
-    muzzle: 1.1, tail: 'thin', tailHex: OTTER_FUR,   // whiskers omitted: nothing under 2 px
+    muzzle: 1.1, tail: 'thin', tailHex: OTTER_DARK,   // whiskers omitted: nothing under 2 px
   }),
   anims: makeCritterAnims(),
 };
 
 // ---------------------------------------------------------------- the goat
-const GOAT_FUR = '#D8CFC0', GOAT_DARK = '#8A7F70', GOAT_CREAM = '#F1E9DC', GOAT_SHORTS = '#6B4E3A', HORN = '#B8A48A';
+const GOAT_FUR = '#C0B5A2', GOAT_DARK = '#6E6354', GOAT_CREAM = '#F1E9DC', GOAT_SHORTS = '#6B4E3A', HORN = '#9C8A70';
 /** The beard: one small inked polygon of dark fur hanging under the chin (head space, after the muzzle). */
 function goatBeard(ctx, rig, pose, inf) {
   const r = inf.r, g = muzzleGeom(r, rig.build.muzzle), x = g.mx - 2, y = g.my + g.ry - 1;

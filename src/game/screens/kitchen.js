@@ -31,7 +31,7 @@ import { INGREDIENTS } from '../../content/recipes.js';
 import { AnimPlayer } from '../animation.js';
 import { drawTicket, drawOrderTicket, drawNamePlate, drawHint, drawStamp, ROW } from '../ui.js';
 import { drawText } from '../../engine/text.js';
-import { kitchenLayer, ROWS, HATCH, STATION_X, PROP_DX, AT_RANGE, X_MIN, X_MAX } from '../../art/backgrounds/kitchen.js';
+import { kitchenLayer, ROWS, HATCH, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.js';
 import {
   paintStations, drawStationGlow, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
   drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, PLATE, BELL, POT, OVEN,
@@ -57,11 +57,8 @@ const SEGS = [CHOP_HITS, 4, 4, 4, 1];
 const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18 };
 const HINTS = { chop: 'CHOP: TAP ON THE BEAT', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD, LET GO IN THE RED', oven: 'OVEN: LOAD, THEN TAKE OUT IN THE GREEN', plate: 'PLATE: RING THE BELL' };
 const PERFECT = 'PERFECT!', DONE = 'DONE', BURNT = 'BURNT!', NOM = 'NOM', ORDER_UP = 'ORDER UP!', RING = 'RING!';
-const CARD_X = 384, CARD_Y = 12, CARD_W = 108, TICKET_X = 8, TICKET_Y = 12, TICKET_W = 112;
+const CARD_X = RECIPE.x, CARD_Y = RECIPE.y, CARD_W = RECIPE.w;
 const CARD_TEXT = { size: 1, color: UI.ink, shadow: false }, CARD_OPTS = { title: 'RECIPE' };
-
-/** A 4x6 wooden peg clipping a ticket to the rail, drawn over the paper. */
-function peg(ctx, x, y) { ctx.fillStyle = UI.ink; ctx.fillRect(x - 1, y - 5, 6, 8); ctx.fillStyle = UI.wood; ctx.fillRect(x, y - 4, 4, 6); }
 
 export class KitchenScreen extends Screen {
   constructor(game) { super(game, 'kitchen'); this.seats = []; this.fields = []; }
@@ -93,7 +90,7 @@ export class KitchenScreen extends Screen {
     // the customer leaning into the hatch
     const cust = getCustomer(order.customer);
     this.custRig = critterRig(cust, -1); this.custPlayer = new AnimPlayer(cust.anims); this.custPlayer.play('idle');
-    this.custPose = idlePoseOf(cust); this.custOpts = { facing: -1, margin: 26 };
+    this.custPose = idlePoseOf(cust); this.custOpts = { facing: -1, margin: 8 };
     // one seat per party member: rig, player, standing spot spread along the counter
     this.seats.length = 0;
     for (let i = 0; i < run.party.length; i++) {
@@ -177,7 +174,7 @@ export class KitchenScreen extends Screen {
           const d = st.t - CHOP_BEAT;
           if (d >= -CHOP_WINDOW && d <= CHOP_WINDOW) {
             st.count++; this.tak = 6; s.facing = 1; s.actT = CHOP_ANIM; this.playAnim(s, 'chop', true);
-            ringAt(STATION_X[CHOP] + PROP_DX, ROWS.counterTop - 8, 3, 12, UI.cream, 2, 10, false, true);
+            ringAt(PROP_X[CHOP], ROWS.counterTop - 8, 3, 12, UI.cream, 2, 10, false, true);
             if (st.count >= CHOP_HITS) this.completeStep(st.miss === 0 ? 2 : 1, s);
           } else { st.miss++; this.wobbleT = 8; }
         }
@@ -189,7 +186,7 @@ export class KitchenScreen extends Screen {
       case STOVE:
         if (held) {
           st.phase = 1; st.t++; s.facing = 1; s.actT = 2;
-          if (st.t >= STOVE_FRAMES) { this.stoveBurnt = 1; this.smoke(STATION_X[STOVE] + PROP_DX, POT.y); this.completeStep(0, s); }
+          if (st.t >= STOVE_FRAMES) { this.stoveBurnt = 1; this.smoke(PROP_X[STOVE], POT.y); this.completeStep(0, s); }
         } else if (st.phase === 1) {
           st.phase = 0;
           const k = st.t / STOVE_FRAMES;
@@ -201,7 +198,7 @@ export class KitchenScreen extends Screen {
         else {
           st.t--;
           if (pressed) { s.actT = ACT_FRAMES; s.facing = 1; this.playAnim(s, 'reach', true); this.completeStep(st.t <= OVEN_WINDOW ? 2 : 1, s); }
-          else if (st.t <= 0) { this.ovenBurnt = 1; this.smoke(STATION_X[OVEN_S] + PROP_DX, OVEN.winY); this.completeStep(0, null); }
+          else if (st.t <= 0) { this.ovenBurnt = 1; this.smoke(PROP_X[OVEN_S], OVEN.winY); this.completeStep(0, null); }
         }
         break;
       default:   // PLATE
@@ -214,7 +211,7 @@ export class KitchenScreen extends Screen {
   completeStep(score, s) {
     const idx = this.stepIdx, station = this.steps[idx];
     this.scores[idx] = score; this.total += score;
-    const px = STATION_X[station] + PROP_DX, py = ROWS.counterTop - 36;
+    const px = PROP_X[station], py = ROWS.counterTop - 40;
     if (score === 2) { floatText(px, py, PERFECT, UI.cream, 1, true); burstSparkle(px, py + 10, 5, UI.cream, true); }
     else if (score === 1) floatText(px, py, DONE, UI.cream, 1, true);
     else floatText(px, py, BURNT, SIGNAL.hot, 1, true);
@@ -267,7 +264,7 @@ export class KitchenScreen extends Screen {
     const f = this.frame, st = this.st, station = this.currentStation();
     blitAt(ctx, this.layer, 0, 0);
     // the customer leans into the hatch, clipped to the opening so the shelf stays in front of them
-    drawBust(ctx, this.custRig, this.custPlayer.pose, this.custPose, HATCH.x + 4, HATCH.y + 2, HATCH.w - 8, HATCH.shelfY - HATCH.y - 2, 2, this.custOpts);
+    drawBust(ctx, this.custRig, this.custPlayer.pose, this.custPose, HATCH.x + 6, HATCH.y + 4, 104, HATCH.shelfY - HATCH.y - 4, 1.7, this.custOpts);
     if (station >= 0 && !this.served) drawStationGlow(ctx, station, f);
     this.drawStations(ctx, f, st, station);
     particles.draw(ctx, null, 'back');
@@ -319,16 +316,16 @@ export class KitchenScreen extends Screen {
   }
 
   drawWidget(ctx, st, station) {
-    if (station === CHOP) drawChopBar(ctx, st.t, st.count, CHOP_HITS);
+    if (station === CHOP) drawChopBar(ctx, st.t, CHOP_SWEEP, st.count, CHOP_HITS);
     else if (station === MIX) drawDial(ctx, st.t / MIX_FRAMES, st.phase === 0 && st.t > 0);
-    else if (station === STOVE) drawStoveBar(ctx, st.t / STOVE_FRAMES);
+    else if (station === STOVE) drawStoveBar(ctx, st.t / STOVE_FRAMES, STOVE_BAND);
     else if (station === OVEN_S) drawOvenTimer(ctx, st.phase === 1 ? 1 - st.t / OVEN_FRAMES : 0, OVEN_WINDOW / OVEN_FRAMES);
     else if (station === PLATE_S) drawPlatePrompt(ctx, RING);
   }
 
   drawHud(ctx, f) {
     const run = this.game.run;
-    drawOrderTicket(ctx, run, TICKET_X, TICKET_Y, TICKET_W, drawFood, this.ticketOpts);
+    drawOrderTicket(ctx, run, TICKET.x, TICKET.y, TICKET.w, drawFood, this.ticketOpts);
     // the recipe card: one row per step, the owner's 6x6 slot ring at the left, an ink tick when done, '>' on the current
     const n = this.steps.length, h = 16 + ROW * n + 6;
     const top = drawTicket(ctx, CARD_X, CARD_Y, CARD_W, h, CARD_OPTS);
@@ -339,7 +336,6 @@ export class KitchenScreen extends Screen {
       if (this.scores[i] >= 0) { ctx.fillStyle = this.scores[i] === 0 ? SIGNAL.hot : UI.ink; ctx.fillRect(CARD_X + CARD_W - 16, ry + 3, 2, 3); ctx.fillRect(CARD_X + CARD_W - 14, ry + 1, 2, 5); ctx.fillRect(CARD_X + CARD_W - 12, ry - 1, 2, 3); }
       else if (i === this.stepIdx && !this.served) drawText(ctx, '>', CARD_X + 18 + ((f >> 4) & 1), ry, CARD_TEXT);
     }
-    peg(ctx, TICKET_X + 20, TICKET_Y); peg(ctx, TICKET_X + TICKET_W - 24, TICKET_Y); peg(ctx, CARD_X + 20, CARD_Y); peg(ctx, CARD_X + CARD_W - 24, CARD_Y);
     drawHint(ctx, this.hint);
     if (this.served && this.serveT >= STAMP_AT) drawStamp(ctx, ORDER_UP, VIEW_W / 2, 110, (this.serveT - STAMP_AT) / 24);
   }
