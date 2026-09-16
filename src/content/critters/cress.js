@@ -16,7 +16,9 @@ const WILLOW = '#6B4E3A', WILLOW_LINE = '#C9B58E';
  */
 const sunhat = { attach: 'head', draw(ctx, rig) {
   const r = rig.p.headR, y = R(-r * 1.28), bw = R(r * 1.25), cw = R(r * 0.7), ch = R(r * 0.42);
-  ctx.beginPath(); ctx.ellipse(0, y - ch - 1, cw, ch + 2, 0, Math.PI, 0); ctx.closePath();
+  // the crown's flat bottom closes INSIDE the band (y - 2), not at y - ch - 1: two pixels of wall used to show
+  // between crown and band and the hat read as two stacked objects
+  ctx.beginPath(); ctx.ellipse(0, y - 2, cw, ch + 4, 0, Math.PI, 0); ctx.closePath();
   celPath(ctx, rig, STRAW, 0, y - ch, cw, 0.36, 0.3);
   band(ctx, rig, -cw - 1, y - 4, cw * 2 + 2, 4, PLUM_STRAP);
   band(ctx, rig, -bw, y - 1, bw * 2, 4, STRAW, 2);
@@ -40,6 +42,13 @@ export const build = critterBuild({
 });
 
 export const anims = makeCritterAnims({
+  // the frog is the only rig whose legs are longer than its arms: on the shared REST the paw parked in the foot
+  // row and the paw + both feet read as three identical green discs. The elbow rides ~10 deg higher here, which
+  // puts the paw at hip height and leaves the two feet alone at the bottom of the silhouette.
+  idle: { loop: true, frames: [
+    F(26, { armR: [40, 6], armL: [-30, 8], torso: 2, root: [0, 0] }),
+    F(26, { armR: [44, 8], armL: [-26, 10], torso: 4, root: [0, 1], head: 2 }),
+  ] },
   // long legs: a higher step and a lower crouch than the shared walk
   walk: { loop: true, frames: [
     F(7, { legR: [34, 8], legL: [-28, 26], armR: [-18, 10], armL: [20, 18], torso: 6, root: [0, 0] }),
@@ -50,9 +59,14 @@ export const anims = makeCritterAnims({
   // the signature: a rod whip. Wind-up with the rod back over the shoulder, a snap forward with a smear, a hold, a return.
   // weapon rot is tuned so the rod ends level and forward (hand 150 - rot 60 = 90): a rod at 120 crossed the eye domes.
   cast: { loop: false, frames: [
-    F(8, { armR: [-120, -30], armL: [30, 40], torso: -10, head: -6, weapon: -60, root: [-2, 1], legR: [10, 6], legL: [-14, 12], face: 'grit' }, { ease: 'in' }),
-    F(4, { armR: [108, 30], armL: [40, 50], torso: 14, head: 4, weapon: 70, root: [2, 1], legR: [20, 4], legL: [-20, 20], squash: 1.04, face: 'shout' }, { ease: 'overshoot', smear: { from: -160, to: 40, a: 0.4 } }),
-    F(10, { armR: [100, 36], armL: [40, 50], torso: 10, head: 0, weapon: 62, root: [2, 1], legR: [20, 4], legL: [-20, 20], face: 'happy' }),
+    // Wind-up: the paw drops BEHIND the hip and the rod stands up over the shoulder on weapon rot, drawn in the
+    // back layer (weaponBack) so neither the rod nor the paw crosses the hat brim or the eye domes. Up at
+    // [-120, -30] the paw sat on the skull and the rod lay across the brim for the whole 8 frames.
+    F(8, { armR: [-45, -25], armL: [30, 40], torso: -10, head: -6, weapon: 80, weaponBack: 1, root: [-2, 1], legR: [10, 6], legL: [-14, 12], face: 'grit' }, { ease: 'in' }),
+    // the snap: the arm comes through level and the rod finishes just above the horizontal (hand 102 - rot 4),
+    // which keeps the paw in front of the chin instead of on the muzzle the deep torso lean brings down to meet it
+    F(4, { armR: [88, 0], armL: [40, 50], torso: 14, head: 4, weapon: 4, root: [2, 1], legR: [20, 4], legL: [-20, 20], squash: 1.04, face: 'shout' }, { ease: 'overshoot', smear: { from: -40, to: 45, a: 0.4 } }),
+    F(10, { armR: [84, 6], armL: [40, 50], torso: 10, head: 0, weapon: 6, root: [2, 1], legR: [20, 4], legL: [-20, 20], face: 'happy' }),
     F(10, { armR: [60, 40], armL: [10, 30], torso: 2, head: 0, weapon: 60, root: [0, 0], face: 'happy' }, { ease: 'inout' }),
   ] },
 });

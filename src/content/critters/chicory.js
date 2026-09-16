@@ -22,12 +22,27 @@ const goggles = { attach: 'head', draw(ctx, rig, pose) {
   const y = hurt ? R(-r * 0.42) + (fo.eyeY || 0) + 3 : hatY(rig) - 5;
   const nx = R(r * 0.32) + 3, fx = R(-r * 0.36) + 3;
   if (!rig.override) { ctx.fillStyle = rig.col(PEAT); ctx.fillRect(fx, y - 1, nx - fx, 2); }   // the bridge, 2 px
+  if (hurt) {
+    // Dropped onto the eye row the lenses are RINGS, not discs: head accessories draw after the face (rig.js), so
+    // a filled lens painted out the whites, the pupils and the sad brows - and `sad` holds that face forever.
+    // A 2 px peat annulus with the ink on its outer edge only: 1 px of ink on the inner edge as well would close
+    // the 5 px hole the eye has to read through, and the hole's edge is this object's own, not a boundary with
+    // another one (ART_STYLE 0.2).
+    for (let i = 0; i < 2; i++) {
+      const gx = i ? nx : fx;
+      ctx.beginPath(); ctx.arc(gx, y, 4.5, 0, TAU); ctx.arc(gx, y, 2.5, 0, TAU, true);
+      ctx.fillStyle = rig.col(PEAT); ctx.fill();
+      ctx.beginPath(); ctx.arc(gx, y, 4.5, 0, TAU);
+      ctx.lineWidth = 1; ctx.strokeStyle = rig.col(rig.outline); ctx.stroke();
+    }
+    return;
+  }
   celBall(ctx, rig, fx, y, 4, PEAT, false);
   celBall(ctx, rig, nx, y, 4, PEAT, false);
   if (rig.override) return;
+  // parked: a 2 px glint, not a filled disc. Two pale discs above the real eyes read as a second pair of eyes.
   ctx.fillStyle = rig.col(LENS);
-  ctx.beginPath(); ctx.arc(fx, y, 2, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.arc(nx, y, 2, 0, TAU); ctx.fill();
+  ctx.fillRect(fx - 2, y - 2, 2, 2); ctx.fillRect(nx - 2, y - 2, 2, 2);
 } };
 
 export const build = critterBuild({
@@ -50,7 +65,7 @@ export const anims = makeCritterAnims({
   // the signature: a two-key pop on the bulb horn, squashed on the squeeze
   honk: { loop: false, frames: [
     F(4, { armR: [60, 60], armL: [-10, 14], torso: -4, head: -6, weapon: 80, root: [0, -1], stretch: 1.04, face: 'happy' }, { ease: 'in' }),
-    F(8, { armR: [70, 70], armL: [-8, 14], torso: 4, head: 6, weapon: 80, root: [0, 2], squash: 1.12, face: 'shout' }, { ease: 'out' }),
+    F(8, { armR: [72, 44], armL: [-8, 14], torso: 4, head: 6, weapon: 80, root: [0, 2], squash: 1.12, face: 'shout' }, { ease: 'out' }),
   ] },
 });
 

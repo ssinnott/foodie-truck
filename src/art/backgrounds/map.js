@@ -21,7 +21,7 @@ export const MAP = Object.freeze({
   river: '#6F9FB0', deep: '#4E7A8C', hedge: '#4F6B3A', canopy: '#6E8A48', wall: '#F1E4C8', wallShade: '#C9B58E',
   roof: '#A65A48', roofShade: '#7A4034', plum: PLUM.shadow, skyTop: '#FBE3C4', skyLow: '#F4C9A0', hillFar: '#8E8A78',
   hillNear: '#B4A48C', wood: '#9A6234', woodDark: '#5E3A1B', trunk: '#6B4E3A', rose: '#C96B7A', mustard: '#E2B44A',
-  board: '#55665A', boardShade: '#465549', churn: '#B8C4C9', slate: '#2F4B3C', window: '#D9C9A8', cobble: '#C9B58E',
+  board: '#55665A', boardShade: '#465549', brass: '#B8873A', churn: '#B8C4C9', slate: '#2F4B3C', window: '#D9C9A8', cobble: '#C9B58E',
 });
 
 export const CHUNK_W = VIEW_W, CHUNK_H = VIEW_H, CHUNKS_X = WORLD_W / VIEW_W, CHUNKS_Y = WORLD_H / VIEW_H;
@@ -102,15 +102,35 @@ export const SPOTS = Object.freeze({
 });
 /**
  * Signpost base points (world): beside each door, off the lane, and a few rows above the door line so a truck parked
- * right on the door y-sorts in front of its sign instead of under it.
+ * right on the door y-sorts in front of its sign instead of under it. Home and the pond sit further out than the rest
+ * because lanes fan out from both doors - every entry clears SIGN_CLEAR of lane, which scenarios/map.js asserts.
  */
 export const SIGN_AT = Object.freeze({
-  home: { x: HOME.x + 30, y: HOME.y - 18 }, orchard: { x: ORCHARD.x + 30, y: ORCHARD.y - 18 }, pond: { x: POND.x + 42, y: POND.y + 4 },
-  coop: { x: COOP.x + 52, y: COOP.y - 18 }, dairy: { x: DAIRY.x - 30, y: DAIRY.y - 18 }, mill: { x: MILL.x - 30, y: MILL.y - 18 },
+  home: { x: HOME.x + 76, y: HOME.y - 4 }, orchard: { x: ORCHARD.x + 30, y: ORCHARD.y - 18 }, pond: { x: POND.x + 56, y: POND.y - 28 },
+  coop: { x: COOP.x + 52, y: COOP.y - 18 }, dairy: { x: DAIRY.x - 52, y: DAIRY.y - 18 }, mill: { x: MILL.x - 40, y: MILL.y - 18 },
   hive: { x: HIVE.x - 30, y: HIVE.y - 18 }, garden: { x: MARKET.x, y: MARKET.y - 28 },
 });
+/** Every signpost clears this much lane: LANE_HALF plus half a truck, so nothing is driven through (scenarios/map.js). */
+export const SIGN_CLEAR = LANE_HALF + 8;
 /** Where a fresh run's truck parks: in the chalk bay beside home's door, close enough to count as "at home". */
 export const PARK_AT = Object.freeze({ x: HOME.x + 30, y: HOME.y + 26 });
+
+/**
+ * The four tall landmarks are painted into the ground chunks, so nothing y-sorts them against the truck: without a
+ * test the token drives inside the mill tower and the sails cross it. Fields stay drivable (GDD section 4); walls do
+ * not. Flat [x0, y0, x1, y1] world rects, a little wider than the walls so the 40 px token stays clear of the brick.
+ */
+const WALLS = [
+  HOME.x - 130, HOME.y - 88, HOME.x - 38, HOME.y - 14,      // the cottage at home
+  COOP.x - 38, COOP.y - 110, COOP.x + 38, COOP.y - 56,      // the coop hut (its run and door stay open)
+  DAIRY.x - 42, DAIRY.y - 84, DAIRY.x + 42, DAIRY.y - 14,   // the dairy barn
+  MILL.x - 30, MILL.y - 82, MILL.x + 30, MILL.y - 6,        // the mill tower
+];
+/** True where a wall stands: the truck stops against it (comparisons only, so the sim stays deterministic). */
+export function wallBlocked(px, py) {
+  for (let i = 0; i < WALLS.length; i += 4) if (px > WALLS[i] && px < WALLS[i + 2] && py > WALLS[i + 1] && py < WALLS[i + 3]) return true;
+  return false;
+}
 
 /** Meadow shade blobs and the tree scatter come from module seeds, so every chunk agrees on where they fall. */
 const SHADE = (() => { const r = makeRng(SEED0 + 18), out = []; for (let i = 0; i < 44; i++) out.push([r.int(0, WORLD_W), r.int(HORIZON_H + 40, WORLD_H), r.int(40, 120), r.int(18, 48)]); return out; })();
@@ -191,7 +211,7 @@ function paintLandmarks(g) {
   g.fillStyle = MAP.window; g.fillRect(HOME.x - 38, HOME.y - 44, 8, 10);
   g.fillStyle = MAP.lane; pathRR(g, HOME.x + 16, HOME.y + 12, 48, 30, 4); g.fill();
   g.strokeStyle = MAP.wall; g.lineWidth = 2; pathRR(g, HOME.x + 19, HOME.y + 15, 42, 24, 3); g.stroke();
-  boxOutlined(g, HOME.x - 62, HOME.y + 8, 3, 24, MAP.woodDark); boxOutlined(g, HOME.x - 64, HOME.y + 2, 7, 7, MAP.mustard);
+  boxOutlined(g, HOME.x - 62, HOME.y + 8, 3, 24, MAP.woodDark); boxOutlined(g, HOME.x - 64, HOME.y + 2, 7, 7, MAP.brass);
   // orchard: five lollipops with red apples
   for (let i = 0; i < 5; i++) {
     const bx = ORCHARD.x - 72 + i * 36, by = ORCHARD.y - 46 - (i & 1) * 12;

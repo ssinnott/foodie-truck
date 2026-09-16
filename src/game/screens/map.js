@@ -21,9 +21,9 @@ import { AnimPlayer } from '../animation.js';
 import { WORLD_W, WORLD_H, PLACES } from '../../content/places.js';
 import { drawTruck } from '../../art/truck.js';
 import {
-  CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, SPOTS, SIGN_AT, PARK_AT,
+  CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, RIVER_BLOCK, SPOTS, SIGN_AT, PARK_AT,
   ROADSIDE_TREES, GLINTS, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, riverBlocked,
-  drawSails, drawHen, drawBee, drawPhoneRing, MAP,
+  wallBlocked, drawSails, drawHen, drawBee, drawPhoneRing, MAP,
 } from '../../art/backgrounds/map.js';
 import { drawTicketHud, drawSeatPlates, drawWheel, drawDestArrow, drawHonk, drawSignPlate, drawMapHint } from '../maphud.js';
 
@@ -43,6 +43,11 @@ const CLOUDS = [[200, 260], [900, 700], [1500, 420]];
 /** The phone rings once per order: remembered per run object so a revisit stays quiet until run.served changes. */
 let rungRun = null, rungServed = -1;
 
+/** Rough relative luminance of a #rrggbb fur, used once in enter() to seat the crew by value. */
+function lum(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+  return 0.2126 * r * r + 0.7152 * g * g + 0.0722 * b * b;
+}
 function placeIndex(id) { for (let i = 0; i < PLACES.length; i++) if (PLACES[i].id === id) return i; return -1; }
 /** The heading whose unit vector is most aligned with (vx, vy): a dot-product argmax, so no atan2 in the sim. */
 function bestHeading(vx, vy) {
@@ -68,12 +73,29 @@ export class MapScreen extends Screen {
       const def = getCritter(p.critter), rig = critterRig(def, p.slot), player = new AnimPlayer(def.anims);
       player.play('idle');
       const plateText = `P${p.slot + 1} ${def.name}`;
-      this.seats.push({ slot: p.slot, critter: p.critter, rig, player, plateText, plateW: measureText(plateText, 1) + 8 });
+      this.seats.push({ slot: p.slot, critter: p.critter, rig, player, plateText, plateW: measureText(plateText, 1) + 8, isDriver: false });
     }
-    // the driver sits in the cab: the hare when seated, else seat 0
+    // the driver sits in the cab: the hare when seated, else seat 0. Whoever it is carries the x1.5 steering weight
+    // (GDD section 4), so the critter visibly driving and the weighted sum can never disagree.
     const di = Math.max(0, this.seats.findIndex((s) => s.critter === DRIVER));
+    this.seats[di].isDriver = true;
     this.heads.push({ rig: this.seats[di].rig, pose: this.seats[di].player.pose });
-    for (let i = 0; i < this.seats.length; i++) if (i !== di) this.heads.push({ rig: this.seats[i].rig, pose: this.seats[i].player.pose });
+    // the hatch holds three 7 px heads shoulder to shoulder, so two pale furs must not end up neighbours
+    // (ART_STYLE section 0.1). With three aboard the fur furthest from the other two takes the middle slot;
+    // with two or fewer there is nothing to collide. Deterministic: a fixed function of the party.
+    const rest = [];
+    for (let i = 0; i < this.seats.length; i++) if (i !== di) rest.push(this.seats[i]);
+    if (rest.length === 3) {
+      let mid = 0, bd = -1;
+      for (let m = 0; m < 3; m++) {
+        const lm = lum(rest[m].rig.palette.skin);
+        let d = 2;
+        for (let k = 0; k < 3; k++) if (k !== m) { const e = Math.abs(lum(rest[k].rig.palette.skin) - lm); if (e < d) d = e; }
+        if (d > bd) { bd = d; mid = m; }
+      }
+      rest.splice(1, 0, rest.splice(mid, 1)[0]);
+    }
+    for (const s of rest) this.heads.push({ rig: s.rig, pose: s.player.pose });
     // where the order wants us: the landmark of the first missing ingredient, or home when everything is aboard
     const miss = run.missing();
     this.destId = miss.length ? run.placeFor(miss[0].id) : 'home';
@@ -92,6 +114,11 @@ export class MapScreen extends Screen {
     this.devDrive = this.game.options.debug && this.game.options.autotest ? 120 : 0;
     this.cam = { x: 0, y: 0, fx: truck.x - VIEW_W / 2, fy: truck.y - VIEW_H / 2 };
     this.snapCamera(true);
+    // paint the chunks this first frame will blit while the fade is still over us: a chunk repaints the whole
+    // authored world, so meeting four of them on frame one is a visible hitch
+    for (let r = Math.floor(this.cam.y / CHUNK_H); r <= Math.min(CHUNKS_Y - 1, Math.floor((this.cam.y + VIEW_H - 1) / CHUNK_H)); r++) {
+      for (let c = Math.floor(this.cam.x / CHUNK_W); c <= Math.min(CHUNKS_X - 1, Math.floor((this.cam.x + VIEW_W - 1) / CHUNK_W)); c++) chunkLayer(r * CHUNKS_X + c);
+    }
   }
   snapCamera(hard) {
     const c = this.cam, tx = this.truck.x - VIEW_W / 2, ty = this.truck.y - VIEW_H / 2;
@@ -111,7 +138,7 @@ export class MapScreen extends Screen {
     for (const s of this.seats) {
       const ax = inp.axisX(s.slot), ay = inp.axisY(s.slot);
       if (ax !== 0 || ay !== 0) mask |= 1 << s.slot;
-      const w = s.critter === DRIVER ? DRIVER_WEIGHT : 1;
+      const w = s.isDriver ? DRIVER_WEIGHT : 1;
       vx += ax * w; vy += ay * w;
     }
     if (this.devDrive > 0) { this.devDrive--; vx += 1; mask |= 1; }
@@ -135,9 +162,14 @@ export class MapScreen extends Screen {
       nx = nx < DRIVE_MIN_X ? DRIVE_MIN_X : nx > DRIVE_MAX_X ? DRIVE_MAX_X : nx;
       ny = ny < DRIVE_MIN_Y ? DRIVE_MIN_Y : ny > DRIVE_MAX_Y ? DRIVE_MAX_Y : ny;
       if (riverBlocked(nx, ny)) {
+        // the splash belongs in the water in front of the nose, not under the truck: RIVER_BLOCK keeps the token a
+        // half-length short of the bank, so a ring at the centre lands on grass and the cream word on the cream hatch
         this.speed = 0; this.blocked = true;
-        if (this.splashCd === 0) { ringAt(nx, ny, 4, 18, MAP.skyTop, 2, 16, true); floatText(nx, ny - 14, 'SPLASH', MAP.skyTop); this.splashCd = 30; }
-      } else { truck.x = nx; truck.y = ny; }
+        if (this.splashCd === 0) {
+          ringAt(nx + COS[truck.heading] * RIVER_BLOCK, ny + SIN[truck.heading] * RIVER_BLOCK, 4, 18, MAP.skyTop, 2, 16, true);
+          floatText(nx, ny - 40, 'SPLASH', MAP.skyTop); this.splashCd = 30;
+        }
+      } else if (wallBlocked(nx, ny)) { this.speed = 0; this.blocked = true; } else { truck.x = nx; truck.y = ny; }
       this.wheelAcc += this.speed; this.wheelStep = Math.floor(this.wheelAcc / 5) & 3;
       if (!onLane && (this.frame % 6) === 0) particles.spawn('dust', truck.x - COS[truck.heading] * 12, truck.y, DUST);
     }

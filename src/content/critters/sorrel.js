@@ -31,15 +31,17 @@ export const anims = makeCritterAnims({
   ] },
   // idle: the biggest head share of the cast, so the head does the breathing
   idle: { loop: true, frames: [
-    F(26, { armR: [18, 12], armL: [-14, 12], torso: 2, head: -2, root: [0, 0] }),
-    F(26, { armR: [22, 14], armL: [-10, 16], torso: 3, head: 3, root: [0, 1] }),
+    F(26, { armR: [40, 8], armL: [-28, 10], torso: 2, head: -2, root: [0, 0] }),
+    F(26, { armR: [44, 10], armL: [-24, 12], torso: 3, head: 3, root: [0, 1] }),
   ] },
-  // the chef's chop: 'grit' on the wind-up, then eyes shut (the focus face) through the cut, and a smile after
+  // the chef's chop: 'grit' on the wind-up, then eyes shut (the focus face) through the cut, and a smile after.
+  // Same rule as the shared chop (ART_STYLE 0.7): the near paw winds up FORWARD with the blade stood up on the
+  // item rotation. The mouse's head is a third of her height, so the hit sits lower than the shared [56, 24] too.
   chop: { loop: false, frames: [
-    F(5, { armR: [-110, -40], ...KNIFE, torso: -6, head: -4, weapon: -30, face: 'grit' }, { ease: 'in' }),
-    F(3, { armR: [75, 30], ...KNIFE, torso: 14, head: 6, weapon: 20, root: [1, 1], face: 'closed' }, { ease: 'overshoot', smear: { from: -100, to: 60, a: 0.45 } }),
-    F(4, { armR: [80, 34], ...KNIFE, torso: 16, head: 8, weapon: 20, root: [1, 2], squash: 1.04, face: 'closed' }),
-    F(8, { armR: [20, 20], ...KNIFE, torso: 2, head: 0, weapon: 0, face: 'happy' }, { ease: 'inout' }),
+    F(5, { armR: [128, -40], ...KNIFE, torso: -6, head: -4, weapon: -30, face: 'grit' }, { ease: 'in' }),
+    F(3, { armR: [52, 22], ...KNIFE, torso: 14, head: 6, weapon: 20, root: [1, 1], face: 'closed' }, { ease: 'overshoot', smear: { from: -30, to: 55, a: 0.45 } }),
+    F(4, { armR: [56, 26], ...KNIFE, torso: 16, head: 8, weapon: 20, root: [1, 2], squash: 1.04, face: 'closed' }),
+    F(8, { armR: [24, 18], ...KNIFE, torso: 2, head: 0, weapon: 0, face: 'happy' }, { ease: 'inout' }),
   ] },
 });
 

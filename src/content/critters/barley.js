@@ -52,8 +52,9 @@ function strap(ctx, rig, pose, inf) {
 const bell = { attach: 'torso', layer: 'front', draw(ctx, rig) {
   const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2);
   const ch = getChain(rig, 'bell', 1, { joint: 'torso', rest: [0, 1], stiffness: 0.16, damping: 0.66, gain: 3, maxAng: 40 });
-  ctx.save(); ctx.translate(R(hw * 0.3), -H + 4); ctx.rotate(rad(ch.ang[0]));
-  band(ctx, rig, -1, 0, 2, 3, PLUM_STRAP);                       // the loop the bell hangs from
+  // hung on the strap line, off the bib's centre column: dead centre the bell cut the player's apron in half
+  ctx.save(); ctx.translate(R(hw * 0.7), -H + 4); ctx.rotate(rad(ch.ang[0]));
+  band(ctx, rig, -2, 0, 4, 4, PLUM_STRAP);                       // the loop, 4 px: an inked band any thinner is all ink
   pathRR(ctx, -4, 3, 7, 6, 3);
   celPath(ctx, rig, BRASS, -1, 6, 4, 0.4, 0);
   if (!rig.override) { ctx.fillStyle = rig.col(rig.outline); ctx.fillRect(-2, 7, 2, 2); }   // the clapper slit
@@ -63,7 +64,8 @@ const bell = { attach: 'torso', layer: 'front', draw(ctx, rig) {
 export const build = critterBuild({
   palette: { skin: WOOL, hair: FACE, belly: MUZZLE, secondary: FACE, shorts: FACE, accent: BRASS, dark: HOOF },
   proportions: { headR: 15, torsoW: 28, torsoH: 20, hip: 22, handR: 5, footL: 9, armR: 4, legR: 4 },
-  ears: 'droop', earSlot: 'hair', earPos: { near: { x: -0.5, y: -0.45 }, far: { x: -0.62, y: -0.3 } },
+  // the flaps hang beside the jaw, where the wool cap stops, not behind the skull: from -0.5r back they never cleared the head
+  ears: 'droop', earSlot: 'hair', earPos: { near: { x: -0.25, y: -0.15 }, far: { x: -0.5, y: -0.05 } },
   face: { whitesAlways: true },   // the whites stay on through blinks and smiles: ink arcs vanish on the dark face
   muzzle: 0.95, markings: darkFace, tail: 'stub', boots: HOOF,
   chest: strap,

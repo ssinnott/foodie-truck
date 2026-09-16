@@ -66,8 +66,10 @@ function drawEar(ctx, rig, kind, x, y, r, fur, light, tip, isFar, ang, earR) {
       ctx.restore();
     }
   } else if (kind === 'droop') {
-    // a sheep's ear: a short flap hanging back and down from under the wool; only the part past the skull shows
-    const L = R(r * 0.62), w = R(r * 0.2);
+    // A sheep's ear: a flap hanging back and down from under the wool. At 0.62r from behind the skull only two
+    // pixels of it cleared the head and the near ear read as a shadow; at 0.85r, hung beside the jaw, both flaps
+    // clear the silhouette (ART_STYLE section 1 counts the drooping ears as one of Barley's four cues).
+    const L = R(r * 0.85), w = R(r * 0.2);
     celCapsule(ctx, rig, 0, 0, -L, R(L * 0.9), w, fur, 0);
     if (!rig.override) { ctx.fillStyle = rig.col(light); ctx.fillRect(-L - 1, R(L * 0.9) - 1, 3, 3); }   // one inner-ear mark at the tip
   }
@@ -88,8 +90,10 @@ function drawEars(ctx, rig, r, kind, spec) {
     const ch = getChain(rig, 'ears', 1, { joint: 'head', rest: [-1, 0.9], stiffness: 0.16, damping: 0.7, gain: 2.2, maxAng: 28 });
     a0 = ch.ang[0]; a1 = ch.ang[0] * 0.8;
   }
-  drawEar(ctx, rig, kind, R(r * pf.x), R(r * pf.y), r, far[slot], far.belly, tip, true, a1 + (kind === 'long' ? -18 : 0), earR);
-  drawEar(ctx, rig, kind, R(r * pn.x), R(r * pn.y), r, pal[slot], pal.belly, tip, false, a0 + (kind === 'long' ? 12 : 0), earR);
+  const splayF = kind === 'long' ? -18 : kind === 'droop' ? 14 : 0;
+  const splayN = kind === 'long' ? 12 : kind === 'droop' ? -10 : 0;
+  drawEar(ctx, rig, kind, R(r * pf.x), R(r * pf.y), r, far[slot], far.belly, tip, true, a1 + splayF, earR);
+  drawEar(ctx, rig, kind, R(r * pn.x), R(r * pn.y), r, pal[slot], pal.belly, tip, false, a0 + splayN, earR);
 }
 
 // ---------------------------------------------------------------- head (head space, faces +x)
@@ -120,8 +124,11 @@ export function makeHead(spec) {
     ctx.fillStyle = lt.sh; ctx.fillRect(g.mx - g.rx, g.my + R(g.ry * 0.4), g.rx * 2, g.ry);
     ctx.restore();
     if (spec.markings) spec.markings(ctx, rig, pose, inf);
+    // markings hooks call muzzleGeom themselves (barley's dark face, the customers' beaks) and it hands out ONE
+    // shared object, so `g` may have been overwritten: read the geometry again before placing the nose on the tip.
+    const g2 = muzzleGeom(r, size);
     // nose: one dark rounded mark at the muzzle tip, 5x4 (above the 2 px floor, below "a separate object")
-    if (nose) { ctx.fillStyle = rig.col(pal.dark); pathRR(ctx, g.mx + g.rx - 5, g.my - 4, 5, 4, 2); ctx.fill(); }
+    if (nose) { ctx.fillStyle = rig.col(pal.dark); pathRR(ctx, g2.mx + g2.rx - 5, g2.my - 4, 5, 4, 2); ctx.fill(); }
     if (ears === 'dome') {
       celBall(ctx, rig, R(r * DOME.farX), R(r * DOME.y), R(r * DOME.r), pal.belly, false);
       celBall(ctx, rig, R(r * DOME.nearX), R(r * DOME.y), R(r * DOME.r), pal.belly, false);
@@ -239,7 +246,9 @@ export function makeTorso(spec) {
     if (apron) {
       // The apron is the player spot (ART_STYLE section 4), so the bib runs from just under the collar down
       // beneath the hip block: on a 20 px torso that is ~11 px of player colour showing, straps included.
-      const aw = R(W * 0.64), ax = R(-aw / 2) + 2, ay = -H + 5, ah = H;
+      // the bib sits a couple of px toward the FAR side (the near arm hangs over the near half at rest), so the
+      // seat colour keeps one unbroken block instead of a sliver each side of the forearm
+      const aw = R(W * 0.64), ax = R(-aw / 2) - 1, ay = -H + 5, ah = H;
       band(ctx, rig, ax + 2, -H + 1, 4, 7, pal.primary);            // straps first (under the bib), 4 px inked bands
       band(ctx, rig, ax + aw - 6, -H + 1, 4, 7, pal.primary);
       pathRR(ctx, ax, ay, aw, ah, 3);
@@ -272,7 +281,9 @@ export function pawFoot(ctx, rig, pose, inf) {
   pathRR(ctx, R(-L * 0.4), -H, R(L * 1.05), R(H * 1.5), R(H * 0.7));
   celPath(ctx, rig, fur, R(L * 0.12), R(-H * 0.25), R(L * 0.55), 0.35, 0);
   if (rig.override) return;
-  ctx.fillStyle = tones(rig, fur).sh; ctx.fillRect(R(L * 0.5), -1, 2, 2); ctx.fillRect(R(L * 0.2), -1, 2, 2);   // two toes
+  // toes in `hair`, not the fur's own shadow tone: on Cress's #3F7D3B the shadow band was the same green and the
+  // 11 px foot read as a plain disc. inf.pal so the far foot's toes come from the far palette.
+  ctx.fillStyle = rig.col(inf.pal.hair); ctx.fillRect(R(L * 0.52), -2, 2, 3); ctx.fillRect(R(L * 0.22), -2, 2, 3);   // two toes
 }
 /** Clog / boot in `dark` with a light sole band, for the critter who wears shoes. */
 export function makeBoot(hex) {
@@ -338,12 +349,16 @@ export function bandana(hex) {
     celPoly(ctx, rig, [-R(r * 0.9), -R(r * 0.5), -R(r * 1.35), -R(r * 0.3), -R(r * 1.25), -R(r * 0.7)], hex, 0.35, 0);
   } };
 }
+/** The knot's three points, refilled per draw: a hook allocates nothing (ART_STYLE section 9). */
+const KNOT = [0, 0, 0, 0, 0, 0];
 /** Neckerchief: a knotted triangle at the collar (torso space). Pair with scarfTail for the streaming end. */
 export function scarf(hex) {
   return { attach: 'torso', draw(ctx, rig) {
     const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2);
     // a small knot: at hw*1.2 wide it covered the top third of the apron, the player spot
-    celPoly(ctx, rig, [-R(hw * 0.3), -H + 2, R(hw * 0.6), -H + 2, R(hw * 0.2), -H + 8], hex, 0.35, 0);
+    // the knot ties at the FAR shoulder: over the near one it sat on the top third of the apron, the player spot
+    KNOT[0] = -R(hw * 0.6); KNOT[1] = -H + 2; KNOT[2] = R(hw * 0.25); KNOT[3] = -H + 2; KNOT[4] = -R(hw * 0.1); KNOT[5] = -H + 8;
+    celPoly(ctx, rig, KNOT, hex, 0.35, 0);
   } };
 }
 /** The scarf's loose end: two capsule segments streaming back from the nape on a chain (torso space, back layer). */
@@ -408,7 +423,9 @@ export function critterRig(def, slot = -1) {
 // ---------------------------------------------------------------- the base animation set
 /** Keyframe shorthand: F(dur, spec, extra) -> { dur, pose: P(spec), ...extra }. */
 export const F = (dur, spec, extra) => ({ dur, pose: P(spec), ...(extra || {}) });
-const REST = { armR: [18, 12], armL: [-14, 12] };
+// The near forearm used to lie across the middle of the apron and split the player's colour into two slivers;
+// swung out to 30 it clears the bib's centre column and the whole block of seat colour reads at 1x.
+const REST = { armR: [40, 8], armL: [-28, 10] };
 // both paws forward at shoulder height so the basket (8 px of handle below the paw) hangs in front of the belly,
 // not the chin: at [78, 70] the paws sat 4 px ABOVE the shoulder and the basket covered the muzzle
 const CARRY = { armR: [60, 50], armL: [56, 54], weapon: 90 };
@@ -420,7 +437,7 @@ export function makeCritterAnims(over = {}) {
   const anims = {
     idle: { loop: true, frames: [
       F(26, { ...REST, torso: 2, root: [0, 0] }),
-      F(26, { armR: [22, 14], armL: [-10, 16], torso: 4, root: [0, 1], head: 2 }),
+      F(26, { armR: [44, 10], armL: [-24, 12], torso: 4, root: [0, 1], head: 2 }),
     ] },
     walk: { loop: true, frames: [
       F(7, { legR: [26, 6], legL: [-22, 18], armR: [-18, 10], armL: [20, 18], torso: 5, root: [0, 0] }),
@@ -444,44 +461,54 @@ export function makeCritterAnims(over = {}) {
       F(7, { ...CARRY, legR: [-22, 18], legL: [26, 6], torso: 6 }),
       F(7, { ...CARRY, legR: [-2, 4], legL: [4, 28], torso: 6, root: [0, 1], squash: 1.03 }),
     ] },
-    // Short arms: anything raised must go up FORWARD (angles 120-150) so the near paw lands in front of the
-    // muzzle, not on the eyes; the far arm may go up backward (it draws behind the head).
+    // Short arms on a big head: the shoulder sits at chin height, so a near arm raised at 140 folds the paw back
+    // ONTO the muzzle. Everything raised goes up forward with the elbow OPEN (upper 110-130, lower +10..+25), which
+    // carries the paw past the muzzle tip and leaves the whole face - eyes, brows, mouth - showing. The far arm may
+    // still go up backward: it draws behind the head. Measured on all four heads, worst case Barley's headR 15.
     reach: { loop: true, frames: [
-      F(20, { armR: [140, 30], armL: [-150, -10], torso: -4, head: -8, root: [0, 0], stretch: 1.02 }),
-      F(20, { armR: [146, 28], armL: [-156, -12], torso: -6, head: -10, root: [0, -1], stretch: 1.04 }),
+      F(20, { armR: [112, 20], armL: [-150, -10], torso: -4, head: -8, root: [0, 0], stretch: 1.02 }),
+      F(20, { armR: [118, 16], armL: [-156, -12], torso: -6, head: -10, root: [0, -1], stretch: 1.04 }),
     ] },
     catch: { loop: true, frames: [
       F(20, { armR: [72, 48], armL: [66, 52], weapon: 90, torso: -4, head: -10, root: [0, 0] }),
       F(20, { armR: [76, 50], armL: [70, 54], weapon: 90, torso: -6, head: -12, root: [0, -1] }),
     ] },
+    // the success beat of the whole game: the smile is the content, so the paw stays clear of the muzzle
     cheer: { loop: true, frames: [
-      F(10, { armR: [130, 20], armL: [-140, -20], torso: -4, head: -6, root: [0, 2], squash: 1.06, face: 'happy' }),
-      F(14, { armR: [140, 10], armL: [-155, -10], torso: -6, head: -10, root: [0, -10], legR: [20, -30], legL: [-10, -20], stretch: 1.06, face: 'happy' }),
-      F(8, { armR: [132, 18], armL: [-145, -20], torso: -4, head: -6, root: [0, 1], squash: 1.08, face: 'happy' }),
+      F(10, { armR: [110, 22], armL: [-140, -20], torso: -4, head: -6, root: [0, 2], squash: 1.06, face: 'happy' }),
+      F(14, { armR: [118, 18], armL: [-155, -10], torso: -6, head: -10, root: [0, -10], legR: [20, -30], legL: [-10, -20], stretch: 1.06, face: 'happy' }),
+      F(8, { armR: [112, 20], armL: [-145, -20], torso: -4, head: -6, root: [0, 1], squash: 1.08, face: 'happy' }),
     ] },
     sad: { loop: true, frames: [
       F(30, { armR: [8, 4], armL: [-6, 4], torso: 12, head: 22, root: [0, 2], face: 'hurt' }),
       F(30, { armR: [10, 4], armL: [-4, 4], torso: 14, head: 24, root: [0, 3], face: 'hurt' }),
     ] },
+    // eat: the food comes to the mouth, the PAW stops at the muzzle tip. Folded back at [118, 118] the paw sat on
+    // the muzzle and hid the open mouth the beat is about; held forward the item reads and the chew still lands.
     eat: { loop: false, frames: [
       F(8, { armR: [70, 60], armL: [-10, 14], torso: -2, head: 4, weapon: 60, face: 'shout' }, { ease: 'in' }),
-      F(6, { armR: [118, 118], armL: [-10, 14], torso: -4, head: 8, weapon: 30, face: 'shout' }, { ease: 'overshoot' }),
-      F(10, { armR: [116, 116], armL: [-8, 14], torso: -2, head: 4, weapon: 30, face: 'closed' }),
-      F(10, { armR: [118, 118], armL: [-8, 14], torso: -4, head: 8, weapon: 30, face: 'closed' }),
+      F(6, { armR: [92, 42], armL: [-10, 14], torso: -4, head: 8, weapon: 30, face: 'shout' }, { ease: 'overshoot' }),
+      F(10, { armR: [86, 38], armL: [-8, 14], torso: -2, head: 4, weapon: 30, face: 'closed' }),
+      F(10, { armR: [92, 42], armL: [-8, 14], torso: -4, head: 8, weapon: 30, face: 'closed' }),
       F(8, { armR: [60, 40], armL: [-10, 14], torso: 0, head: 0, weapon: 60, face: 'happy' }, { ease: 'out' }),
     ] },
     chop: { loop: false, frames: [
-      F(6, { armR: [-110, -40], armL: [60, 70], torso: -6, head: -4, weapon: -30, face: 'grit' }, { ease: 'in' }),
+      // The wind-up goes up FORWARD, not back over the shoulder (ART_STYLE 0.7): at [-110, -40] the near paw swung
+      // through the face and parked on the far eye, and the next key's smear sector swept the muzzle with it. From
+      // [130, -40] the forearm is level, the paw is clear in front of the chin and the blade stands up on weapon rot.
+      F(6, { armR: [130, -40], armL: [60, 70], torso: -6, head: -4, weapon: -30, face: 'grit' }, { ease: 'in' }),
       // the hit lands at [56, 24]: on a chibi the shoulder is at chin height, so a horizontal forearm would put the paw across the muzzle
-      F(3, { armR: [56, 24], armL: [60, 70], torso: 14, head: 6, weapon: 20, root: [1, 1], face: 'grit' }, { ease: 'overshoot', smear: { from: -100, to: 60, a: 0.4 } }),
+      F(3, { armR: [56, 24], armL: [60, 70], torso: 14, head: 6, weapon: 20, root: [1, 1], face: 'grit' }, { ease: 'overshoot', smear: { from: -30, to: 55, a: 0.4 } }),
       F(4, { armR: [60, 28], armL: [60, 70], torso: 16, head: 8, weapon: 20, root: [1, 2], squash: 1.04, face: 'grit' }),
       F(8, { armR: [20, 20], armL: [60, 70], torso: 2, head: 0, weapon: 0 }, { ease: 'inout' }),
     ] },
+    // stir: the circle is traced in front of the CHEST, over the pot. Up at [110, 30] the paw and the spoon
+    // circled through the muzzle instead, on every head in the cast.
     stir: { loop: true, frames: [
-      F(7, { armR: [90, 40], armL: [40, 60], torso: 6, weapon: 100, head: 6 }, { ease: 'inout' }),
-      F(7, { armR: [110, 30], armL: [40, 60], torso: 8, weapon: 130, head: 6 }, { ease: 'inout' }),
-      F(7, { armR: [100, 70], armL: [40, 60], torso: 6, weapon: 150, head: 6 }, { ease: 'inout' }),
-      F(7, { armR: [75, 70], armL: [40, 60], torso: 4, weapon: 120, head: 6 }, { ease: 'inout' }),
+      F(7, { armR: [66, 36], armL: [40, 60], torso: 6, weapon: 100, head: 6 }, { ease: 'inout' }),
+      F(7, { armR: [84, 26], armL: [40, 60], torso: 8, weapon: 130, head: 6 }, { ease: 'inout' }),
+      F(7, { armR: [64, 50], armL: [40, 60], torso: 6, weapon: 150, head: 6 }, { ease: 'inout' }),
+      F(7, { armR: [52, 56], armL: [40, 60], torso: 4, weapon: 120, head: 6 }, { ease: 'inout' }),
     ] },
     bump: { loop: false, frames: [
       F(5, { armR: [-50, -30], armL: [-60, -20], torso: -22, head: -20, root: [-4, 1], legR: [16, 0], legL: [-10, 8], face: 'hurt', squash: 1.08 }, { ease: 'out' }),
@@ -495,8 +522,8 @@ export function makeCritterAnims(over = {}) {
       F(6, { ...REST, torso: 2 }, { ease: 'out' }),
     ] },
     wave: { loop: true, frames: [
-      F(12, { armR: [135, 40], armL: [-10, 14], torso: -2, head: -4, face: 'happy' }, { ease: 'inout' }),
-      F(12, { armR: [150, -10], armL: [-10, 14], torso: -2, head: -6, face: 'happy' }, { ease: 'inout' }),
+      F(12, { armR: [104, 26], armL: [-10, 14], torso: -2, head: -4, face: 'happy' }, { ease: 'inout' }),
+      F(12, { armR: [112, 20], armL: [-10, 14], torso: -2, head: -6, face: 'happy' }, { ease: 'inout' }),
     ] },
     sit: { loop: true, frames: [
       F(30, { armR: [40, 40], armL: [30, 40], legR: [80, 0], legL: [70, 4], torso: -4, root: [0, 8], face: 'closed' }),

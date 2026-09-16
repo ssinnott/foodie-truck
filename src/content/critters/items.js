@@ -12,6 +12,8 @@ const WOOD = '#C48A52', WOOD_DARK = '#8B5A2B', ROD = '#9A6234';
 const STEEL = '#9FB0B8';
 /** Baskets are dark willow with cream weave lines: wicker (#C9A05C) measured 0.03 against P2's marmalade apron. */
 const WILLOW = '#6B4E3A', WILLOW_LINE = '#C9B58E';
+/** The horn's two point lists, module constants: a draw hook allocates nothing (ART_STYLE section 9). */
+const HORN_BELL = [9, -3, 15, -5, 15, 5, 9, 3], HORN_BULB = [-7, -4, 1, -4, 1, 4, -7, 4];
 
 /**
  * Rotate the context so +y points down in root space (the item hangs from the paw), then draw. rig.light is the
@@ -63,9 +65,9 @@ export const ITEMS = {
   /** Bulb horn for the driver's HONK: a brass bell forward along the paw, a plum rubber bulb behind it. */
   horn: { attach: 'handR', length: 12, draw(ctx, rig) {
     celCapsule(ctx, rig, 2, 0, 9, 0, 2, '#E2B44A', 0);
-    celPoly(ctx, rig, [9, -3, 15, -5, 15, 5, 9, 3], '#E2B44A', 0.4, 0);
+    celPoly(ctx, rig, HORN_BELL, '#E2B44A', 0.4, 0);
     ctx.beginPath(); ctx.arc(-3, 0, 4, 0, Math.PI * 2);
-    celPoly(ctx, rig, [-7, -4, 1, -4, 1, 4, -7, 4], '#5A3A46', 0.4, 0);
+    celPoly(ctx, rig, HORN_BULB, '#5A3A46', 0.4, 0);
   } },
   /** A tray / plate held flat in front. */
   plate: { attach: 'handR', length: 14, draw(ctx, rig) {
