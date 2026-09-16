@@ -93,10 +93,31 @@ function paintWall(g, w, h, rnd) {
   }
 }
 
+/** One flat step of the window's light on the floor: a quad, top edge x0t..x1t, bottom edge x0b..x1b. */
+function pool(g, fill, yTop, yBot, x0t, x1t, x0b, x1b) {
+  g.fillStyle = fill;
+  g.beginPath(); g.moveTo(x0t, yTop); g.lineTo(x1t, yTop); g.lineTo(x1b, yBot); g.lineTo(x0b, yBot); g.closePath(); g.fill();
+}
+
 function paintFloor(g, w, h, rnd) {
   g.fillStyle = COOP.floor; g.fillRect(0, 0, w, h);
   g.fillStyle = COOP.floorBack; g.fillRect(0, 0, w, ROWS.backStrip - ROWS.floor);
   g.fillStyle = INK; g.fillRect(0, 0, w, 2);
+  // The window's daylight reaches the floor. The wall already carries the shaft down to the shelf; the floor
+  // continues it in two flat steps (no gradient, no line, same as the wall) so the game's one cool slab has warm
+  // light lying across it instead of being 640x150 of nothing. The `floor` hex itself is untouched - the judges set
+  // it at #48526A for the sheep's wool and the dark hooves (ART_STYLE section 1 "Coop").
+  const bs = ROWS.backStrip - ROWS.floor;
+  pool(g, mix(COOP.floor, COOP.straw, 0.24), bs, h, 352, 528, 228, 468);
+  pool(g, mix(COOP.floor, COOP.straw, 0.40), bs, h, 392, 500, 284, 436);
+  // Trodden earth: warm scuffs a shade off the wood, and chaff ground into the surface. Both are 1 px marks well
+  // under the eggs' cream in value and nowhere near it in hue, so the lane keeps a clean read of the feet and the
+  // floor eggs (ART_PRINCIPLES 26) while the earth stops being one flat colour.
+  const scuff = mix(COOP.floor, COOP.wood, 0.34), chaff = mix(COOP.straw, COOP.floor, 0.42);
+  g.fillStyle = scuff;
+  for (let i = 0; i < 70; i++) g.fillRect(R(rnd() * w), bs + 2 + R(rnd() * (h - bs - 4)), 5 + R(rnd() * 9), 1);
+  g.fillStyle = chaff;
+  for (let i = 0; i < 46; i++) g.fillRect(R(rnd() * w), bs + 2 + R(rnd() * (h - bs - 4)), 3, 1);
   // straw scatter: 2x1 cream (a few in the nest straw tone), never below laneTop. The WALK LANE is not the old
   // laneTop..laneBot strip: the seats' feet clamp runs from y 262 to the bottom of the band and the floor eggs land
   // in it, so every row from laneTop down is lane and stays bare (ART_STYLE section 7) - cream specks down there read
@@ -111,6 +132,36 @@ function paintFloor(g, w, h, rnd) {
   for (let i = 0; i < 14; i++) {
     const x = R(rnd() * w), y = 14 + R(rnd() * 30);
     g.fillStyle = COOP.straw; g.fillRect(x, y, 4, 2); g.fillRect(x + 2, y - 1, 2, 1);
+    g.fillStyle = COOP.strawLight; g.fillRect(x + 1, y, 2, 1);
+  }
+  // The floor's two warm objects, both parked in the back band above the seats' feet clamp (y 262), so nothing solid
+  // stands in the walk lane: a wooden feed trough heaped with grain on the left, a bound straw bale on the right.
+  const dark = mix(COOP.wood, PLUM.deep, 0.5), rim = mix(COOP.wood, COOP.straw, 0.3);
+  const grain = mix(COOP.straw, COOP.wood, 0.28), floorSh = mix(COOP.floor, PLUM.deep, 0.3);
+  g.fillStyle = floorSh;                                                             // contact shadow
+  g.beginPath(); g.ellipse(72, 46, 46, 4, 0, 0, TAU); g.fill();
+  boxOutlined(g, 36, 38, 7, 7, dark, INK, 1); boxOutlined(g, 101, 38, 7, 7, dark, INK, 1);   // the trough's two legs
+  boxShaded(g, 30, 26, 84, 14, COOP.wood, dark, INK, 1, 0.45);                       // the trough body
+  boxOutlined(g, 26, 21, 92, 6, rim, INK, 1);                                        // its rim
+  g.fillStyle = grain;                                                               // the grain heaped over the rim
+  for (let k = 0; k < 4; k++) { g.beginPath(); g.ellipse(42 + k * 18, 23, 11, 4, 0, 0, TAU); g.fill(); }
+  g.fillStyle = mix(grain, PLUM.shadow, 0.3); g.fillRect(32, 24, 78, 2);
+  g.fillStyle = COOP.straw;
+  for (let k = 0; k < 6; k++) g.fillRect(34 + R(rnd() * 72), 19 + R(rnd() * 4), 2, 1);
+  // the bale: a face, a lighter top so it is a block and not a poster, straw striations, two twine bands
+  const face = mix(COOP.straw, COOP.wood, 0.18), lit = mix(COOP.straw, COOP.strawLight, 0.55);
+  g.fillStyle = floorSh; g.beginPath(); g.ellipse(570, 41, 36, 4, 0, 0, TAU); g.fill();
+  boxOutlined(g, 536, 14, 68, 26, face, INK, 1);
+  g.fillStyle = lit; g.fillRect(537, 15, 66, 5);
+  g.fillStyle = mix(face, PLUM.shadow, 0.35); g.fillRect(536, 33, 68, 7);
+  g.fillStyle = mix(face, PLUM.shadow, 0.28);
+  for (let k = 0; k < 9; k++) g.fillRect(538 + R(rnd() * 40), 22 + R(rnd() * 15), 8 + R(rnd() * 14), 1);
+  g.fillStyle = COOP.strawLight;
+  for (let k = 0; k < 8; k++) g.fillRect(538 + R(rnd() * 56), 21 + R(rnd() * 14), 4, 1);
+  g.fillStyle = dark; g.fillRect(552, 14, 3, 26); g.fillRect(584, 14, 3, 26);        // the twine bands
+  for (let k = 0; k < 9; k++) {                                                      // straw shed round its foot
+    const x = 528 + R(rnd() * 84), y = 41 + R(rnd() * 8);
+    g.fillStyle = COOP.straw; g.fillRect(x, y, 4, 1);
     g.fillStyle = COOP.strawLight; g.fillRect(x + 1, y, 2, 1);
   }
 }

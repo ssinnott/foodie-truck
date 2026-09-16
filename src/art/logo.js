@@ -19,8 +19,9 @@ const SEED = 160;
 
 /**
  * The lane's muted constants: eight, and not one of them saturated. The scene's ONE signal colour is the ripe
- * red of the logo's apple (SIGNAL.orchard = UI.red, the panel's ruling that the apple is red, never lime); the
- * gold on the sign is the truck's own mustard, not the map's lantern gold, so no signal colour is used as decor.
+ * red of the apple - on the sign and in the crate, both meaning "the food this truck is about" (SIGNAL.orchard =
+ * UI.red, the panel's ruling that the apple is red, never lime); the gold on the sign and the carrot is the
+ * truck's own mustard, not the map's lantern gold, so no other signal colour is used as decor.
  */
 export const TITLE = Object.freeze({
   skyTop: '#F9D7B0', skyLow: '#F4C9A0', ridge: PLUM.shadow,
@@ -99,6 +100,35 @@ export function titleLayer() {
 /** Blit the lane at the origin. */
 export function drawLane(ctx) { blitAt(ctx, titleLayer(), 0, 0); }
 
+// ---------------------------------------------------------------- the empty seat
+
+/**
+ * The dashed critter-shaped hole above an empty lobby stool: head and shoulders at the same size the seated
+ * busts draw at, in paper-dark 2 px dashes on the hedge. An OPEN tag on a stick said "vacant" in words; this
+ * says "a PLAYER goes here" in one look, which is what the lobby's four stools have to promise.
+ *
+ * Painted once (setLineDash in a per-frame draw would be a per-frame array), blitted per empty seat.
+ */
+export const GHOST_W = 72, GHOST_H = 80;
+const GHOST_DASH = [5, 4];
+
+function paintGhost(g) {
+  g.strokeStyle = UI.paperDark; g.lineWidth = 2; g.lineJoin = 'round';
+  g.setLineDash(GHOST_DASH);
+  g.beginPath(); g.arc(36, 23, 18, 0, TAU); g.stroke();
+  g.beginPath();
+  g.moveTo(24, 46); g.lineTo(14, 78); g.lineTo(58, 78); g.lineTo(48, 46);
+  g.stroke();
+  g.setLineDash([]);
+}
+
+let ghostLayer = null;
+/** Blit the empty-seat ghost with its shoulders resting at (cx, bottomY). */
+export function drawGhostSeat(ctx, cx, bottomY) {
+  if (!ghostLayer) ghostLayer = makeLayer(GHOST_W, GHOST_H, paintGhost, SEED + 4);
+  blitAt(ctx, ghostLayer, cx - GHOST_W / 2, bottomY - GHOST_H);
+}
+
 // ---------------------------------------------------------------- the card porthole
 
 /**
@@ -128,14 +158,81 @@ export function drawPorthole(ctx, cx, cy) {
   blitAt(ctx, portLayer, cx - (PORT_R + PORT_PAD), cy - (PORT_R + PORT_PAD));
 }
 
+// ---------------------------------------------------------------- the produce crate
+
+/**
+ * The crate of produce parked on the verge: the title's FOOD, standing where the truck was loaded. Painted once
+ * and blitted, like every other prop on these screens. Origin is its bottom centre.
+ */
+export const CRATE_W = 52, CRATE_H = 40;
+const CRATE_BOX = { x: 4, y: 14, w: 44, h: 25 };
+
+function paintCrate(g) {
+  const b = CRATE_BOX;
+  // the box: one inked path, a lit top edge, one slat seam and a shadowed foot board - all clear of the 2 px floor
+  pathRR(g, b.x, b.y, b.w, b.h, 2);
+  g.strokeStyle = INK; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
+  g.fillStyle = UI.wood; g.fill();
+  g.save(); pathRR(g, b.x, b.y, b.w, b.h, 2); g.clip();
+  g.fillStyle = UI.woodLight; g.fillRect(b.x, b.y + 1, b.w, 3);
+  g.fillStyle = UI.woodDark; g.fillRect(b.x, b.y + 11, b.w, 3);
+  g.fillStyle = UI.woodDark; g.fillRect(b.x, b.y + b.h - 6, b.w, 6);
+  g.restore();
+  // the heap: two apples and a carrot breaking the rim, so the crate reads as full rather than as a box
+  drawFood(g, 'apple', b.x + 13, b.y - 1, 8, UI.red);
+  drawFood(g, 'carrot', b.x + 34, b.y - 3, 8, TRUCK.mustard);
+  drawFood(g, 'apple', b.x + 25, b.y + 3, 7, UI.red);
+}
+
+let crateLayer = null;
+/** Stand the crate with its foot at (cx, baseY). */
+export function drawCrate(ctx, cx, baseY) {
+  if (!crateLayer) crateLayer = makeLayer(CRATE_W, CRATE_H, paintCrate, SEED + 3);
+  blitAt(ctx, crateLayer, cx - CRATE_W / 2, baseY - CRATE_H);
+}
+
+/**
+ * The chopping block the chef works over on the title. Same recipe as the crate - one inked box, a lit top edge,
+ * one seam, a shadowed foot - two thirds its size, because a critter chopping thin air is a critter waving a
+ * knife at the next critter along. The apple half on the board is the scene's one signal colour, and it sits on
+ * the FAR side of the top so the blade comes down beside it rather than through it. Origin: bottom centre.
+ */
+export const BLOCK_W = 28, BLOCK_H = 22;
+const BLOCK_BOX = { x: 3, y: 6, w: 22, h: 16 };
+
+function paintBlock(g) {
+  const b = BLOCK_BOX;
+  pathRR(g, b.x, b.y, b.w, b.h, 2);
+  g.strokeStyle = INK; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
+  g.fillStyle = UI.wood; g.fill();
+  g.save(); pathRR(g, b.x, b.y, b.w, b.h, 2); g.clip();
+  g.fillStyle = UI.woodLight; g.fillRect(b.x, b.y + 1, b.w, 4);      // the board's lit top face
+  g.fillStyle = UI.woodDark; g.fillRect(b.x, b.y + b.h - 5, b.w, 5); // the foot falls into the lane's shadow
+  g.restore();
+  drawFood(g, 'apple', b.x + 17, b.y - 1, 7, UI.red);
+}
+
+let blockLayer = null;
+/** Stand the chopping block with its foot at (cx, baseY). */
+export function drawBlock(ctx, cx, baseY) {
+  if (!blockLayer) blockLayer = makeLayer(BLOCK_W, BLOCK_H, paintBlock, SEED + 5);
+  blitAt(ctx, blockLayer, R(cx - BLOCK_W / 2), baseY - BLOCK_H);
+}
+
 // ---------------------------------------------------------------- the logo
 
 /** The hanging board: 300x92, two rows of size-5 carved letters. */
 export const LOGO_W = 300, LOGO_H = 92;
 /** How far the board hangs below the point it swings about. */
 const ROPE = 14;
-/** Letters at size 5 advance 30 px; the two fruit that stand in for FOODIE's Os are 20 px wide and advance 26. */
-const LETTER_ADV = 30, FRUIT = 26, FRUIT_ADV = 30;
+/** Plum drop shadow around the board, so the logo lifts off the sky and stays the strongest thing on the title. */
+const PAD = 5, BOARD_SHADOW = 'rgba(47,35,56,0.40)';
+/**
+ * The garnish: a fried egg and an apple, 26 px across, flanking TRUCK in the gaps either side of the word. The
+ * first pass stood them in for FOODIE's two Os and the name read as "F..DIE" at 1x - the one thing the title has
+ * to say. Food belongs ON the sign, never INSIDE the words (docs/ART_STYLE.md section 0.6).
+ */
+const FRUIT = 26, GARNISH_X = 42;
 const ROW1_Y = 8, ROW2_Y = 48;
 
 /**
@@ -163,8 +260,14 @@ function friedEgg(g, cx, cy, s) {
   g.fillStyle = TRUCK.lamp; g.fillRect(R(cx - s * 0.16), R(cy - s * 0.16), 3, 3);
 }
 
-/** The board itself, painted once: wood, its highlight cap and shadow band, then FOODIE / TRUCK carved into it. */
+/**
+ * The board itself, painted once: a plum cast shadow, the wood with its highlight cap and shadow band, then
+ * FOODIE / TRUCK carved into it with the egg and the apple flanking the second row.
+ */
 function paintBoard(g) {
+  g.fillStyle = BOARD_SHADOW;
+  pathRR(g, PAD + 3, PAD + 5, LOGO_W - 2, LOGO_H - 2, 4); g.fill();
+  g.translate(PAD, PAD);
   pathRR(g, 1, 1, LOGO_W - 2, LOGO_H - 2, 4);
   g.strokeStyle = INK; g.lineWidth = 4; g.lineJoin = 'round'; g.stroke();
   g.fillStyle = UI.wood; g.fill();
@@ -174,25 +277,20 @@ function paintBoard(g) {
   // two plank seams, wide enough to clear the 2 px floor
   g.fillStyle = UI.woodDark; g.fillRect(3, 44, LOGO_W - 6, 2);
   g.restore();
-  // FOODIE, with a fried egg and a red apple where the two Os belong
-  const dieW = measureText('DIE', 5);
-  const rowW = LETTER_ADV + FRUIT_ADV * 2 + dieW;
-  let x = R(LOGO_W / 2 - rowW / 2);
-  carve(g, 'F', x, ROW1_Y);
-  x += LETTER_ADV;
-  friedEgg(g, x + FRUIT / 2, ROW1_Y + 18, FRUIT);
-  x += FRUIT_ADV;
-  drawFood(g, 'apple', x + FRUIT / 2, ROW1_Y + 18, FRUIT / 2, UI.red);
-  x += FRUIT_ADV;
-  carve(g, 'DIE', x, ROW1_Y);
+  // the two words, whole, in the middle of the board: this is the one thing the screen has to say in one look
+  carve(g, 'FOODIE', R(LOGO_W / 2 - measureText('FOODIE', 5) / 2), ROW1_Y);
   carve(g, 'TRUCK', R(LOGO_W / 2 - measureText('TRUCK', 5) / 2), ROW2_Y);
+  // the garnish: a fried egg and a ripe apple in the gaps either side of TRUCK, so the sign says FOOD as well
+  const gy = ROW2_Y + 18;
+  friedEgg(g, GARNISH_X, gy, FRUIT);
+  drawFood(g, 'apple', LOGO_W - GARNISH_X, gy, FRUIT / 2, UI.red);
   // two 3x3 ink nail dots at the top corners, where the ropes meet the board
   g.fillStyle = INK; g.fillRect(R(LOGO_W * 0.15), 5, 3, 3); g.fillRect(R(LOGO_W * 0.85) - 3, 5, 3, 3);
 }
 
 let boardLayer = null;
 function board() {
-  if (!boardLayer) boardLayer = makeLayer(LOGO_W, LOGO_H, paintBoard, SEED + 1);
+  if (!boardLayer) boardLayer = makeLayer(LOGO_W + PAD * 2, LOGO_H + PAD * 2, paintBoard, SEED + 1);
   return boardLayer;
 }
 
@@ -208,7 +306,7 @@ export function drawLogoSign(ctx, cx, top, swing) {
   ctx.fillStyle = UI.woodDark;
   ctx.fillRect(-R(LOGO_W * 0.35) - 1, 0, 2, ROPE + 2);
   ctx.fillRect(R(LOGO_W * 0.35) - 1, 0, 2, ROPE + 2);
-  ctx.drawImage(L.canvas, -R(LOGO_W / 2), ROPE);
+  ctx.drawImage(L.canvas, -R(LOGO_W / 2) - PAD, ROPE - PAD);
   ctx.restore();
 }
 

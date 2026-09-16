@@ -28,9 +28,11 @@ import { AnimPlayer } from '../animation.js';
 import { createNetSession } from '../../net/session.js';
 import { drawTicket, drawSlate, drawMenuRows, drawStamp, drawNamePlate, drawHint, drawDim, ROW } from '../ui.js';
 import { confirmPressed, cancelPressed, navY } from '../menuinput.js';
-import { drawLane, TRUCK_Y } from '../../art/logo.js';
+import { drawLane, drawGhostSeat, TRUCK_Y } from '../../art/logo.js';
 
-const R = Math.round;
+const R = Math.round, TAU = Math.PI * 2;
+/** The cushion's one shadow band: warm ink at low alpha, so it works under all four seat colours. */
+const CUSHION_SHADE = 'rgba(42,31,26,0.32)';
 /** A host key is six characters; a typed one is allowed a little slack in case the alphabet ever grows. */
 const MAX_CODE = 8;
 
@@ -49,31 +51,40 @@ function codeChar(code) {
  * ART_STYLE section 1: at 4x it is wider than the half of the screen the stools do not use - recorded as a
  * deviation.
  */
-const TRUCK_X = 552, TRUCK_OPTS = { scale: 2, facing: 1, wheel: 0 };
-const RAIL_Y = 26, RAIL_X0 = 16, RAIL_X1 = 470;
-/** The table ticket: 400x72, the code at size 4 spaced 2 on the first rule, the invite link on the second. */
-const TICKET = { x: 66, y: 30, w: 400, h: 72 };
-const CODE_Y = TICKET.y + 20, LINK_Y = TICKET.y + 54, LINK_RULE_Y = TICKET.y + 51;
-const CODE_SIZE = 4, CODE_SPACING = 2, CODE_ADV = (5 + CODE_SPACING) * CODE_SIZE;
+const TRUCK_X = 548, TRUCK_OPTS = { scale: 2, facing: 1, wheel: 0 };
+/** The rail the ticket is pegged to runs the whole picture, and the ticket hangs from the MIDDLE of it. */
+const RAIL_Y = 24, RAIL_X0 = 18, RAIL_X1 = 622;
+/**
+ * The table ticket: 424x86, CENTRED, with the host key at size 5 on the first rule and the invite link small on
+ * the second. The key is the one thing this screen exists to hand over, so it is the biggest thing drawn on it -
+ * bigger than the banner, which used to out-shout it from the hedge below.
+ */
+const TICKET = { x: 108, y: 26, w: 424, h: 86 };
+const CODE_Y = TICKET.y + 24, LINK_Y = TICKET.y + 70, LINK_RULE_Y = TICKET.y + 67;
+const CODE_SIZE = 5, CODE_SPACING = 2, CODE_ADV = (5 + CODE_SPACING) * CODE_SIZE;
 /** A code glyph flips in over 6 frames, one after another (the panel's graft). */
 const FLIP_FRAMES = 6;
 /** Longest link that fits the ticket at size 1. */
 const LINK_MAX = 62;
 /** The four stools, their busts and the status column under each: the row sits LEFT of the parked truck. */
-const SEAT_X = [62, 177, 292, 407];
-const BUST_Y = 138, BUST_W = 92, BUST_H = 96, BUST_SCALE = 1.4;
-const STOOL_Y = 226, PLATE_Y = 274, NAME_Y = 288, STATE_Y = 302;
-const TAG_Y = 196;
+const SEAT_X = [76, 190, 304, 418];
+const BUST_Y = 132, BUST_W = 92, BUST_H = 96, BUST_SCALE = 1.4;
+const STOOL_Y = 226, PLATE_Y = 270, NAME_Y = 284, STATE_Y = 300;
 /**
- * The READY stamp slams onto a paper docket on the critter's SHOULDER line - high enough that the apron (the
- * seat's own colour) still reads under it, and the docket is sized from the stamp rather than a slab of paper.
+ * The READY stamp slams onto a paper docket at the FOOT of the seat's column, where its own status word was.
+ *
+ * It used to be pinned across the critter's chest, and with four seats taken the four dockets were four pale
+ * slabs in a row that erased the crew: a seated bust has ~50 px of head and ~25 px of apron in 90 px, and a
+ * 28 px docket cannot sit anywhere on it without covering the face or the apron - the apron being the seat's
+ * own colour, the one thing the lobby has to show (ART_STYLE section 4). The column reads plate / critter /
+ * stamp, so the beat lands where the eye already looks for the answer.
  */
-const STAMP_Y = BUST_Y + 58;
-const STATUS_Y = 322, STATUS_W = 330;
-const BANNER_Y = 114;
+const STAMP_Y = 306;
+const STATUS_Y = 326, STATUS_W = 330;
+const BANNER_Y = 118;
 /** The role menu, and the slate it stands on when no session exists yet. */
 const ROLE_ROWS = ['HOST A TABLE', 'JOIN A TABLE'];
-const ROLE_SLATE = { x: 150, y: 132, w: 250, h: 92 };
+const ROLE_SLATE = { x: 195, y: 132, w: 250, h: 92 };
 /** Captions built once: draw() never joins a string. */
 const SEAT_YOU = ['P1 (YOU)', 'P2 (YOU)', 'P3 (YOU)', 'P4 (YOU)'];
 const SEAT_LABEL = ['P1', 'P2', 'P3', 'P4'];
@@ -81,7 +92,7 @@ const WAIT_TEXT = ['WAITING FOR PLAYER 2', 'WAITING FOR PLAYER 2 .', 'WAITING FO
 const READY_TEXT = 'READY', CHOOSING_TEXT = 'CHOOSING', OPEN_TEXT = 'OPEN', EMPTY_TEXT = '- - -';
 const STARTING_TEXT = 'STARTING!';
 /** The docket under the stamp is sized from the stamp, and pinned at the SAME tilt, so the ink never bursts out of the paper. */
-const DOCKET_W = measureText(READY_TEXT, 2) + 24, DOCKET_H = 28, DOCKET_TILT = -0.14;
+const DOCKET_W = measureText(READY_TEXT, 2) + 18, DOCKET_H = 22, DOCKET_TILT = -0.12;
 const STAMP_FRAMES = 24;
 /**
  * Beetroot stamp ink from the truck's own body rather than a copied hex. Beetroot over UI.red is a deliberate
@@ -312,51 +323,67 @@ export class LobbyScreen extends Screen {
     ctx.fillStyle = UI.wood; ctx.fillRect(R(TICKET.x + TICKET.w / 2) - 2, RAIL_Y, 4, 10);
   }
 
-  /** One stool with its cushion, post and foot; the bust behind it belongs to whoever is sitting there. */
+  /**
+   * One stool: a ROUND padded cushion, a wooden seat edge under it, one post, and a foot ring in the seat's
+   * colour. Two things it is deliberately NOT:
+   *   * two stacked slabs - that read as a bench, and a critter behind a bench is a critter behind a counter;
+   *   * a cushion in the seat's colour - the sitter's apron IS that colour (ART_STYLE section 4), so blue on
+   *     blue welded Barley to his seat and you could not see where he ended. The colour moved to the foot
+   *     ring, which touches nothing but the lane.
+   */
   drawStool(ctx, cx, colour) {
-    // One ink pass under the whole stool, then the cushion, the seat, its shadow band, the post and the foot.
+    // one ink pass under the whole stool: the cushion disc, the post, the foot
     ctx.fillStyle = UI.ink;
-    ctx.fillRect(cx - 21, STOOL_Y - 8, 42, 20);
-    ctx.fillRect(cx - 5, STOOL_Y + 12, 10, 22);
-    ctx.fillRect(cx - 15, STOOL_Y + 32, 30, 8);
-    ctx.fillStyle = colour || UI.paperDark;
-    ctx.fillRect(cx - 20, STOOL_Y - 7, 40, 8);
-    ctx.fillStyle = UI.wood; ctx.fillRect(cx - 20, STOOL_Y + 1, 40, 10);
-    ctx.fillStyle = UI.woodDark; ctx.fillRect(cx - 20, STOOL_Y + 8, 40, 3);
-    ctx.fillStyle = UI.wood; ctx.fillRect(cx - 4, STOOL_Y + 13, 8, 20); ctx.fillRect(cx - 14, STOOL_Y + 33, 28, 6);
-    ctx.fillStyle = UI.woodDark; ctx.fillRect(cx - 14, STOOL_Y + 36, 28, 3);
+    ctx.beginPath(); ctx.ellipse(cx, STOOL_Y, 25, 10, 0, 0, TAU); ctx.fill();
+    ctx.fillRect(cx - 6, STOOL_Y + 4, 12, 30);
+    ctx.beginPath(); ctx.ellipse(cx, STOOL_Y + 34, 17, 8, 0, 0, TAU); ctx.fill();
+    // the cushion: paper-dark, one shadow band in its lower third, a cream sheen toward the top-left light
+    ctx.beginPath(); ctx.ellipse(cx, STOOL_Y - 1, 24, 9, 0, 0, TAU); ctx.fillStyle = UI.paperDark; ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx, STOOL_Y - 1, 24, 9, 0, 0, TAU); ctx.clip();
+    ctx.fillStyle = CUSHION_SHADE; ctx.fillRect(cx - 24, STOOL_Y + 3, 48, 7);
+    ctx.fillStyle = UI.cream; ctx.fillRect(cx - 14, STOOL_Y - 8, 14, 3);
+    ctx.restore();
+    // the wooden seat edge, the post, and the foot ring - the seat's own colour when somebody owns it
+    ctx.fillStyle = UI.wood; ctx.fillRect(cx - 21, STOOL_Y + 7, 42, 5);
+    ctx.fillStyle = UI.woodDark; ctx.fillRect(cx - 21, STOOL_Y + 10, 42, 2);
+    ctx.fillStyle = UI.wood; ctx.fillRect(cx - 5, STOOL_Y + 11, 10, 22);
+    ctx.fillStyle = UI.woodDark; ctx.fillRect(cx + 1, STOOL_Y + 11, 4, 22);
+    ctx.beginPath(); ctx.ellipse(cx, STOOL_Y + 33, 16, 7, 0, 0, TAU); ctx.fillStyle = colour || UI.wood; ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx, STOOL_Y + 33, 16, 7, 0, 0, TAU); ctx.clip();
+    ctx.fillStyle = CUSHION_SHADE; ctx.fillRect(cx - 16, STOOL_Y + 35, 32, 6);
+    ctx.restore();
   }
 
   drawSeats(ctx) {
     for (let i = 0; i < SEAT_X.length; i++) {
       const cx = SEAT_X[i], m = this.party[i];
-      drawShadow(ctx, cx, STOOL_Y + 36, 46, 0.35);
+      drawShadow(ctx, cx, STOOL_Y + 36, 40, 0.32);
       if (m) {
         const c = this.crit[((m.critter % this.crit.length) + this.crit.length) % this.crit.length];
         drawBust(ctx, c.rigs[i], c.player.pose, c.anchor, cx - BUST_W / 2, BUST_Y, BUST_W, BUST_H, BUST_SCALE, this.bustOpts);
         this.drawStool(ctx, cx, PLAYER_COLORS[i]);
         drawNamePlate(ctx, i, m.local ? SEAT_YOU[i] : SEAT_LABEL[i], cx, PLATE_Y);
         drawTextOutlined(ctx, c.def.name, cx, NAME_Y, { size: 1, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
-        drawTextOutlined(ctx, m.ready ? READY_TEXT : CHOOSING_TEXT, cx, STATE_Y, { size: 1, color: m.ready ? UI.cream : UI.paperDark, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
         if (m.ready) {
-          // beetroot ink on dark fur is no read at all, so the stamp lands on a paper docket pinned to the critter
+          // beetroot ink on the lane is no read at all, so the stamp lands on its own paper docket
           ctx.save();
           ctx.translate(cx, STAMP_Y); ctx.rotate(DOCKET_TILT);
           ctx.fillStyle = UI.ink; ctx.fillRect(-R(DOCKET_W / 2), -R(DOCKET_H / 2), DOCKET_W, DOCKET_H);
           ctx.fillStyle = UI.paper; ctx.fillRect(-R(DOCKET_W / 2) + 1, -R(DOCKET_H / 2) + 1, DOCKET_W - 2, DOCKET_H - 2);
           ctx.restore();
           drawStamp(ctx, READY_TEXT, cx, STAMP_Y, Math.min(1, this.readyT[i] / STAMP_FRAMES), STAMP_OPTS);
+        } else {
+          drawTextOutlined(ctx, CHOOSING_TEXT, cx, STATE_Y, { size: 1, color: UI.paperDark, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
         }
       } else {
+        // The seat this player would fill: a dashed critter-shaped hole on the stool, and OPEN in the same column
+        // the taken seats write a name in. The OPEN tag used to hang on a stick across that hole, so the hole read
+        // as a speech bubble; every seat now says plate / who / state down one column, filled or not.
+        drawGhostSeat(ctx, cx, STOOL_Y - 2);
         this.drawStool(ctx, cx, null);
-        // an OPEN paper tag hanging where a head would be
-        ctx.fillStyle = UI.ink; ctx.fillRect(cx - 1, TAG_Y + 15, 2, STOOL_Y - 7 - TAG_Y - 15);
-        ctx.fillStyle = UI.ink; ctx.fillRect(cx - 20, TAG_Y - 1, 40, 17);
-        ctx.fillStyle = UI.paper; ctx.fillRect(cx - 19, TAG_Y, 38, 15);
-        ctx.fillStyle = UI.paperDark; ctx.fillRect(cx - 19, TAG_Y + 11, 38, 4);
-        drawText(ctx, OPEN_TEXT, cx, TAG_Y + 4, { size: 1, color: UI.ink, align: 'center', shadow: false });
         drawNamePlate(ctx, -1, SEAT_LABEL[i], cx, PLATE_Y);
-        drawTextOutlined(ctx, EMPTY_TEXT, cx, NAME_Y, { size: 1, color: UI.paperDark, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
+        drawTextOutlined(ctx, OPEN_TEXT, cx, NAME_Y, { size: 1, color: UI.paper, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
+        drawTextOutlined(ctx, EMPTY_TEXT, cx, STATE_Y, { size: 1, color: UI.paperDark, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
       }
     }
   }
@@ -371,8 +398,8 @@ export class LobbyScreen extends Screen {
 
   draw(ctx) {
     drawLane(ctx);
-    drawDim(ctx, 0.62);
-    drawShadow(ctx, TRUCK_X, TRUCK_Y, 150, 0.35);
+    drawDim(ctx, 0.52);
+    drawShadow(ctx, TRUCK_X, TRUCK_Y, 118, 0.28);
     drawTruck(ctx, TRUCK_X, TRUCK_Y, TRUCK_OPTS);
     const phase = this.phase;
     if (phase === 'role') {
@@ -382,6 +409,9 @@ export class LobbyScreen extends Screen {
       return;
     }
     if (phase === 'code') {
+      // the empty table the guest is typing their way into: four open stools, so the screen they stare at while
+      // typing six characters is the room they are joining rather than a ticket on an empty verge
+      this.drawSeats(ctx);
       this.drawTable(ctx, this.codeChars, true);
       drawTextOutlined(ctx, 'JOIN A TABLE', TICKET.x + TICKET.w / 2, BANNER_Y, { size: 2, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
       drawHint(ctx, this.codeHint);
@@ -398,7 +428,9 @@ export class LobbyScreen extends Screen {
     this.drawSeats(ctx);
     this.drawStatusLine(ctx);
     if (phase === 'connecting') {
-      drawTextOutlined(ctx, WAIT_TEXT[(this.frame >> 4) % WAIT_TEXT.length], TICKET.x + TICKET.w / 2, BANNER_Y, { size: 2, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
+      // a STATUS, on a paper strip, at size 1: as a size-2 outlined headline it was the loudest thing on the
+      // screen and the host key - the one thing anybody has to read here - came second
+      drawHint(ctx, WAIT_TEXT[(this.frame >> 4) % WAIT_TEXT.length], BANNER_Y);
     } else if (this.allReady || phase === 'starting') {
       // The 'starting' PHASE is never drawn - the session resets us to the map in the same call that flips its
       // state - so the GDD's STARTING! beat is keyed off the ROSTER being all-ready instead. That window is real:

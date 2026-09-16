@@ -32,6 +32,13 @@ export const SCENARIOS = {
       await api.press(0, { alt: true }, 2, 2);
       assert((await api.summary()).top.honk === true, 'ALT honks: the HONK! stamp is up');
 
+      // the north junction: the only place the camera clamps high enough to show the dusk-peach horizon strip and the
+      // plum tree-line that close the top of the world (docs/ART_STYLE.md section 1 "Map"). Written out so the art
+      // pass can read the far edge of the plane, not just the meadow around home.
+      await teleport(page, 760, 140, 0);
+      await api.step(90);
+      await api.shot('map-horizon');
+
       // the river is not drivable: drive at it beside a bridge and stay on the west bank
       const b = BRIDGES[1];
       await teleport(page, b.x - 60, b.y + 40, 0);

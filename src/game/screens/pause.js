@@ -5,12 +5,40 @@
 // It opens ON the RESUME row, so the same `start` that opened it (or `cancel`) closes it again without anybody
 // having to aim. Online the overlay is refused by the scene that would push it (a paused peer stalls the room),
 // which is why nothing in here touches game.net.
+import { VIEW_W, VIEW_H } from '../../constants.js';
+import { makeLayer, blitAt } from '../../art/layers.js';
 import { Screen } from '../game.js';
-import { drawSlate, drawMenuRows, drawHint, drawDim } from '../ui.js';
+import { drawSlate, drawMenuRows, drawHint } from '../ui.js';
 import { confirmPressed, cancelPressed, navY } from '../menuinput.js';
 
 const ROWS = ['RESUME', 'QUIT TO TITLE'];
-const SLATE = { x: 210, y: 126, w: 220, h: 78 };
+/**
+ * The plate sits ABOVE the middle of the picture, not on it, and is only as big as its two rows. Every scene
+ * keeps its subject in the middle band - the camera pins the truck to the centre of the map, the crew stand at
+ * the kitchen counter, the mini-games put the cast on the floor line - so a centred plate covers the one thing
+ * the player paused to look at. Rows 90..156 are sky, plum wall or canopy in all five scenes, and they clear
+ * the map HUD's order ticket and name plates in both top corners.
+ */
+const SLATE = { x: 226, y: 90, w: 188, h: 66 };
+/**
+ * The veil: a PLUM VIGNETTE rather than a flat wash. A single 55 % dark rect over the whole frame knocks the
+ * scene back to mud, which is hiding the game, not dimming it (docs/ART_STYLE.md section 1: plum shadows, never
+ * black ones). This is thin in the middle, where the game is, and thickens toward the rim, where the plate and
+ * the hint live. Pre-rendered once and blitted: a gradient per frame is banned (ART_PRINCIPLES 6).
+ */
+const VEIL_CX = 320, VEIL_CY = 190, VEIL_R = 384;
+const VEIL_IN = 'rgba(47,35,56,0.24)', VEIL_MID = 'rgba(47,35,56,0.40)', VEIL_OUT = 'rgba(47,35,56,0.66)';
+
+function paintVeil(g, w, h) {
+  const grad = g.createRadialGradient(VEIL_CX, VEIL_CY, 0, VEIL_CX, VEIL_CY, VEIL_R);
+  grad.addColorStop(0, VEIL_IN);
+  grad.addColorStop(0.45, VEIL_MID);
+  grad.addColorStop(1, VEIL_OUT);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+}
+
+let veilLayer = null;
 
 export class PauseScreen extends Screen {
   constructor(game) { super(game, 'pause'); this.transparent = true; this.sel = 0; }
@@ -43,9 +71,11 @@ export class PauseScreen extends Screen {
   }
 
   draw(ctx) {
-    drawDim(ctx);
+    // seed 168 out of the front-of-house block (art/logo.js owns 160..169); the veil draws no rng at all
+    if (!veilLayer) veilLayer = makeLayer(VIEW_W, VIEW_H, paintVeil, 168);
+    blitAt(ctx, veilLayer, 0, 0);
     drawSlate(ctx, SLATE.x, SLATE.y, SLATE.w, SLATE.h, { title: 'PAUSED' });
-    drawMenuRows(ctx, ROWS, SLATE.x, SLATE.y + 42, SLATE.w, this.sel, this.frame, 16);
+    drawMenuRows(ctx, ROWS, SLATE.x, SLATE.y + 38, SLATE.w, this.sel, this.frame, 16);
     drawHint(ctx, this.hint);
   }
 

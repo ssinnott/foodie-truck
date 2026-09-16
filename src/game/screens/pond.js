@@ -2,7 +2,7 @@
 // fixed spots on the jetty, one float column each, and casts. Per seat a small state machine:
 //   idle -> cast (the rod whip; the float arcs out on the parabola table and lands) -> wait (a seeded 90..240 frames)
 //   -> nibble (the telegraph: the rod tip dips twice over 30 frames, the float with it) -> bite (the float drops
-//   5 px, its band lights mint and a mint ring opens: the 18-frame window) -> hooked (the trout arcs into the
+//   5 px, its waterline lights mint and a mint ring opens: the 18-frame window) -> hooked (the trout arcs into the
 //   bucket) | missed (early: PLOP, late: GONE) -> idle after 40.
 // The seats, the clock, the name plates and the end sign are game/minigame.js, the same furniture the orchard and
 // the coop stand on, so the three mini-games wear one HUD; only the rod, the float, the trout and the bucket are
@@ -21,7 +21,7 @@ import { ITEMS } from '../../content/critters/items.js';
 import { INGREDIENTS } from '../../content/recipes.js';
 import { drawHint } from '../ui.js';
 import { drawFood } from '../../art/food.js';
-import { POND, ROWS, SEAT_X, FLOAT_X, SURFACE_Y, GLINTS, pondLayers } from '../../art/backgrounds/pond.js';
+import { POND, ROWS, SEAT_X, SEAT_PITCH, FLOAT_DX, FLOAT_Y, GLINTS, SUN_GLINTS, pondLayers } from '../../art/backgrounds/pond.js';
 import { PARA_N, PARA_T, PARA_H, BOB, NIBBLE, POND_ANIMS_CAST, CAST_LAUNCH, drawLine, drawFloat, drawTrout, drawBucket } from '../../art/fishing.js';
 import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
@@ -37,20 +37,26 @@ const FISH_ARC = 20, FALLBACK_TARGET = 3;
 const LAUNCH_DX = 40, LAUNCH_Y = ROWS.feet - 40;
 /** The bucket's left edge sits this far in front of the feet; the fish arcs to its rim. */
 const BUCKET_DX = 20, BUCKET_TOP = 12;
-/** The dangling float hangs this far under the rod tip, and never below this row: it is tackle, not a sinker. */
-const DANGLE_DY = 14, DANGLE_MAX = SURFACE_Y - 10;
+/**
+ * Where a seat's float rests between casts. Round 1 dangled it 14 px under the rod tip, which parked it in mid-air
+ * over the bank turf with the line hidden along the rod's own shaft: the panel read four bobbers glued to the
+ * backdrop. It now sits ON the water just clear of the deck's bottom edge, so the line is a long visible stroke
+ * from the tip to it and the float is cream on blue instead of cream on green. `REST_STEP` drops the odd seats a
+ * little deeper so the four never line up into a row.
+ */
+const REST_Y = ROWS.surface + 2, REST_STEP = 4;
 /** A miss reels in: the float sits on the water for REEL_AT frames, then travels to the tip over REEL_N. */
 const REEL_AT = 15, REEL_N = 6;
 /** The bucket's rim squashes for this many frames when a trout drops in, 3 % per frame left. */
 const LAND_FRAMES = 4, LAND_K = 0.03;
 /**
- * The catch arc's lift, as a fraction of the cast's. The trout has to cross the whole crew to reach a bucket at its
- * owner's feet, so there is no height at which it misses everybody: over the heads it would have to clear Chicory's
- * 16 px ears and would hit the plate row, and at head height it lands on a muzzle. Low is the only clean answer —
- * 0.6 peaks at about y 212, across the aprons and the buckets, with every face left alone. It draws after the
- * plates, so being low costs it nothing.
+ * The catch arc's lift, as a fraction of the cast's. Round 1 had the floats pooled in the right two thirds while the
+ * crew stood in the left third, so every trout flew the width of the party and the arc had to be flattened to 0.6 to
+ * duck under four muzzles. Now each float sits FLOAT_DX px right of its own seat, so the trout only ever crosses its
+ * owner's own patch of water: a full 0.8 arc peaks around y 236, well under the chins (about y 190) and clear of
+ * every other seat. Director note 8 / round-1 known issue: the fish no longer flies across the crew's faces.
  */
-const CATCH_LIFT = 0.6;
+const CATCH_LIFT = 0.8;
 /** The contact ellipse: narrow, and 2 px below the feet, so it lands on the planks and never in the water. */
 const SHADOW_W = 24;
 const TITLE = 'MILLPOND', SIGN_PREFIX = 'FISH: ';
@@ -85,17 +91,24 @@ export class PondScreen extends Screen {
     this.countStr = '0/' + this.target;
     this.hint = `CAST / HOOK: ${game.input.keyText(0, 'action')}`;
     this.seats = makeSeats(game, () => ROWS.feet);
+    const shift = R((SEAT_X.length - this.seats.length) * SEAT_PITCH / 2);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.rig.weapon = ITEMS.rod;
       // every seat casts with the pond's own whip, authored for a rod and ending on the rodWait pose
       s.player.setOverlay(POND_ANIMS_CAST);
-      s.x = SEAT_X[i % SEAT_X.length];
-      s.tx = FLOAT_X[i % FLOAT_X.length];
+      // SEAT_X is the four-seat layout; a smaller party keeps the same pitch and slides to the middle of the bank
+      s.x = SEAT_X[i % SEAT_X.length] + shift;
+      s.tx = s.x + FLOAT_DX;
+      s.sy = FLOAT_Y[i % FLOAT_Y.length];
       s.state = IDLE; s.t = 0; s.count = 0; s.early = false; s.landT = 0;
       s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y;
+      s.restY = REST_Y + (i & 1) * REST_STEP;
       s.tip = { x: 0, y: 0 };
       seatAnim(s, 'rodIdle', true);
+      // the crew is four people waiting, not one pose printed four times: each seat starts its breath a beat later
+      // (deterministic, pose only — nothing in summary() or the checksum reads the anim clock)
+      for (let k = i * 13; k > 0; k--) s.player.tick();
     }
     this.sum.length = 3 + this.seats.length * 5;
   }
@@ -133,10 +146,10 @@ export class PondScreen extends Screen {
         if (i >= 0 && i < PARA_N) {
           const lx = s.x + LAUNCH_DX;
           s.fx = R(lx + (s.tx - lx) * PARA_T[i]);
-          s.fy = R(LAUNCH_Y + (SURFACE_Y - LAUNCH_Y) * PARA_T[i]) - PARA_H[i];
+          s.fy = R(LAUNCH_Y + (s.sy - LAUNCH_Y) * PARA_T[i]) - PARA_H[i];
         }
         if (i >= PARA_N - 1) {
-          s.fx = s.tx; s.fy = SURFACE_Y;
+          s.fx = s.tx; s.fy = s.sy;
           ringAt(s.fx, s.fy, 3, 9, UI.cream, 2, 12, true, true); burstDrops(s.fx, s.fy, 2, true);
           s.state = WAIT; s.t = rng.int(WAIT_MIN, WAIT_MAX); seatAnim(s, 'rodWait', true);
         }
@@ -203,6 +216,10 @@ export class PondScreen extends Screen {
     // the water's twinkle: 2x1 cream glints, index-hashed so a quarter of them are lit on any frame
     ctx.globalAlpha = 0.6; ctx.fillStyle = POND.glint;
     for (let i = 0; i < GLINTS.length; i++) if (((f + i * 7) >> 4) & 1) ctx.fillRect(GLINTS[i][0], GLINTS[i][1], 2, 1);
+    // inside the sun's reflection column the water is actually catching the light, so it twinkles brighter and on
+    // a faster beat than the ambient glints: the one thing that moves on 640 px of water
+    ctx.globalAlpha = 0.9;
+    for (let i = 0; i < SUN_GLINTS.length; i++) { const g = SUN_GLINTS[i]; if (((f + i * 5) >> 3) & 1) ctx.fillRect(g[0], g[1], g[2], 2); }
     ctx.globalAlpha = 1;
     particles.draw(ctx, null, 'back');
     // shadows first, on the planks (never in the water), then the sorted pass: every seat stands on the same deck,
@@ -245,13 +262,18 @@ export class PondScreen extends Screen {
       return;
     }
     if (s.player.name === 'pull') { drawLine(ctx, tx, ty, tx, ty + 8); return; }
-    if (st === IDLE || (st === CAST && s.t < CAST_LAUNCH)) { this.drawDangle(ctx, tx, ty, s.slot); return; }
+    // The dangle. Through the whip it reels IN to the tip (round-1 known issue: on the wind-up key the rod swings
+    // back over the shoulder and a float hanging a slack 14 px under that tip ended up on the neighbour's muzzle).
+    // Seats are now a full SEAT_PITCH apart, and the line tightens to nothing by CAST_LAUNCH, so nothing hangs
+    // anywhere near another critter at any frame of the cast.
+    if (st === IDLE) { this.drawDangle(ctx, s, tx, ty, 1, f); return; }
+    if (st === CAST && s.t < CAST_LAUNCH) { this.drawDangle(ctx, s, tx, ty, 1 - s.t / CAST_LAUNCH, f); return; }
     if (st === MISSED && k >= REEL_AT) {
       // reeled in over REEL_N frames, not teleported: the float travels from the water to the dangle
-      const home = Math.min(ty + DANGLE_DY, DANGLE_MAX);
+      const home = s.restY;
       const e = k >= REEL_AT + REEL_N ? 1 : (k - REEL_AT) / REEL_N;
       const fx = R(s.fx + (tx - s.fx) * e), fy = R(s.fy + (home - s.fy) * e);
-      drawLine(ctx, tx, ty, fx, fy - 6); drawFloat(ctx, fx, fy, s.slot, false);
+      drawLine(ctx, tx, ty, fx, fy - 5); drawFloat(ctx, fx, fy, s.slot, false);
       return;
     }
     let dy = 0;
@@ -259,15 +281,19 @@ export class PondScreen extends Screen {
     else if (st === NIBBLE_S) dy = NIBBLE[NIBBLE_FRAMES - s.t];
     else if (st === BITE) dy = 5;
     else if (st === MISSED && s.early) dy = -4;   // the early pop; a late miss leaves the float sitting there, fishless
-    drawLine(ctx, tx, ty, s.fx, s.fy + dy - 4);
+    drawLine(ctx, tx, ty, s.fx, s.fy + dy - 5);
     drawFloat(ctx, s.fx, s.fy + dy, s.slot, true, st === BITE);
   }
 
-  /** The float hanging under the rod tip: no slot tag up here, and never below the waterline. */
-  drawDangle(ctx, tx, ty, slot) {
-    const fy = Math.min(ty + DANGLE_DY, DANGLE_MAX);
-    drawLine(ctx, tx, ty, tx, fy - 6);
-    drawFloat(ctx, tx, fy, slot, false);
+  /**
+   * The float at rest, sitting on the water below the rod tip with the line running the whole way down to it: no
+   * slot tag down here (the cap carries the colour), and `k` reels it back up to the tip through the cast's wind-up.
+   */
+  drawDangle(ctx, s, tx, ty, k, f) {
+    // once it is down on the water it rides the same bob as a cast float, each seat on its own phase
+    const fy = R(ty + (s.restY - ty) * k) + (k === 1 ? BOB[((f + s.slot * 9) >> 1) & 31] : 0);
+    drawLine(ctx, tx, ty, tx, fy - 5);
+    drawFloat(ctx, tx, fy, s.slot, false);
   }
 
   /** The hooked trout: float to the bucket's rim on the cast parabola, nose first toward the bucket it is flying to. */

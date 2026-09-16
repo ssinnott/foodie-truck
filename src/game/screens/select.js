@@ -27,11 +27,17 @@ const CARD_Y = 52;
  * upright ears and Sorrel's toque are the species cues (docs/ART_STYLE.md section 0), so the rig has to clear the
  * circle's CHORD, not its tangent - hence the margin under the aperture's top and the calmer scale.
  */
-const PORT_CY = 58, BUST_SCALE = 1.55, BUST_MARGIN = 10;
+const PORT_CY = 58, BUST_SCALE = 1.28, BUST_MARGIN = 4;
 /** Text rows in card space. */
-const NAME_Y = 104, ROLE_Y = 124, RULE_Y = 136, STAT_Y = 146, STAT_PITCH = 14;
+const NAME_Y = 104, ROLE_Y = 124, RULE_Y = 136, STAT_Y = 148, STAT_PITCH = 15;
 /** Five pips per stat, 6 px each at a 9 px pitch: 42 px of bar, right-aligned in the card. */
 const PIP_X = 82, PIP_N = 5, PIP_W = 6, PIP_PITCH = 9;
+/**
+ * The index-card furniture that makes these four read as RECIPE CARDS rather than stat blocks: a torn top edge
+ * (the same 2x2 ink notches every 6 px as the paper ticket in game/ui.js), a beetroot margin rule down the left
+ * and a ruled line under every written row. Beetroot is the truck's own body tone, not the orchard's apple red.
+ */
+const MARGIN_X = 7, TEXT_X = 13, NOTCH_PITCH = 6;
 const STAT_LABELS = ['SPEED', 'KITCHEN', 'FORAGE'];
 /**
  * Role flavour as five-pip bars (docs/GDD.md section 2: roles are flavour and small differences, never gates).
@@ -46,6 +52,12 @@ const SLOT_TEXT = ['1', '2', '3', '4'];
 const PICKS_TEXT = ['P1 PICKS', 'P2 PICKS', 'P3 PICKS', 'P4 PICKS'];
 /** The stamp's arrival, and how long the crew hold their READY before the fade. */
 const STAMP_FRAMES = 24, START_HOLD = 30;
+/**
+ * Where the stamp lands, in card space: the band between the NAME and the first ruled row, so it crosses the
+ * role line and the rule and nothing else. It used to land on the name row - a stamped card then told you
+ * neither who was picked nor what the stamp said - and across the pip rows its ink broke up over the pips.
+ */
+const STAMP_ROW = 142;
 /**
  * Beetroot stamp ink, taken from the truck's own body rather than copied as a hex - a palette change to the truck
  * now reaches the stamps. Beetroot over UI.red is a deliberate deviation from ART_STYLE section 4: the apple red
@@ -151,7 +163,7 @@ export class SelectScreen extends Screen {
 
   card(ctx, i) {
     const c = this.cards[i], x = cardX(i, this.cards.length), y = CARD_Y, slot = this.pickerOf(i);
-    // paper, one ink line, and a header band in the picking seat's colour
+    // paper, one ink line, a torn top edge, and a header band in the picking seat's colour
     ctx.fillStyle = 'rgba(47,35,56,0.35)'; pathRR(ctx, x + 3, y + 4, CARD_W, CARD_H, 3); ctx.fill();
     pathRR(ctx, x, y, CARD_W, CARD_H, 3);
     ctx.strokeStyle = UI.ink; ctx.lineWidth = 2; ctx.stroke();
@@ -159,6 +171,15 @@ export class SelectScreen extends Screen {
     ctx.fillStyle = slot >= 0 ? PLAYER_COLORS[slot] : UI.paperDark;
     ctx.fillRect(x + 1, y + 1, CARD_W - 2, 14);
     ctx.fillStyle = UI.ink; ctx.fillRect(x + 1, y + 15, CARD_W - 2, 1);
+    ctx.fillStyle = UI.ink;
+    for (let nx = x + 4; nx < x + CARD_W - 3; nx += NOTCH_PITCH) ctx.fillRect(nx, y, 2, 2);
+    // the seat's colour runs the whole card edge, not just the header: from across the room a card is P1's or nobody's
+    if (slot >= 0) {
+      ctx.fillStyle = PLAYER_COLORS[slot];
+      ctx.fillRect(x + 1, y + 16, 2, CARD_H - 18);
+      ctx.fillRect(x + CARD_W - 3, y + 16, 2, CARD_H - 18);
+      ctx.fillRect(x + 1, y + CARD_H - 3, CARD_W - 2, 2);
+    }
     drawText(ctx, slot >= 0 ? PICKS_TEXT[slot] : c.def.species, x + CARD_W / 2, y + 5, { size: 1, color: UI.ink, align: 'center', shadow: false });
     // the plum doily porthole: the pale furs never sit on paper (docs/ART_STYLE.md section 1, the risk note).
     // The ring never changes, so it is one blit of a layer painted in art/logo.js; only the bust is live.
@@ -171,9 +192,12 @@ export class SelectScreen extends Screen {
     drawTextOutlined(ctx, c.def.name, cx, y + NAME_Y, { size: 2, color: UI.ink, outline: UI.paperDark, thickness: 1, align: 'center', shadow: false });
     drawText(ctx, c.def.role, cx, y + ROLE_Y, { size: 1, color: UI.wood, align: 'center', shadow: false });
     ctx.fillStyle = UI.paperLine; ctx.fillRect(x + 8, y + RULE_Y, CARD_W - 16, 1);
+    // the margin rule and the ruled lines the rows are written on
+    ctx.fillStyle = TRUCK.bodyHi; ctx.fillRect(x + MARGIN_X, y + 18, 2, CARD_H - 24);
     for (let k = 0; k < STAT_LABELS.length; k++) {
       const ry = y + STAT_Y + k * STAT_PITCH;
-      drawText(ctx, STAT_LABELS[k], x + 10, ry, { size: 1, color: UI.ink, shadow: false });
+      ctx.fillStyle = UI.paperLine; ctx.fillRect(x + TEXT_X - 1, ry + 9, CARD_W - TEXT_X - 8, 1);
+      drawText(ctx, STAT_LABELS[k], x + TEXT_X, ry, { size: 1, color: UI.ink, shadow: false });
       for (let p = 0; p < PIP_N; p++) {
         const px = x + PIP_X + p * PIP_PITCH;
         // filled pips are solid wood, empty ones are hollow paper: a squint counts them without reading them
@@ -193,11 +217,11 @@ export class SelectScreen extends Screen {
     for (const seat of this.seats) {
       if (!seat.on || !seat.ready) continue;
       const x = cardX(seat.card, this.cards.length) + CARD_W / 2;
-      drawStamp(ctx, 'READY', x, CARD_Y + PORT_CY + 46, Math.min(1, seat.t / STAMP_FRAMES), STAMP_OPTS);
+      drawStamp(ctx, 'READY', x, CARD_Y + STAMP_ROW, Math.min(1, seat.t / STAMP_FRAMES), STAMP_OPTS);
     }
-    if (!this.game.input.joined(1)) {
-      drawTextOutlined(ctx, this.joinHint, VIEW_W / 2, JOIN_Y, { size: 1, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
-    }
+    // the drop-in prompt goes on a paper strip like every other hint in the kit: outlined cream on the dimmed
+    // lane was the one line on this screen you had to hunt for, and it is the line that invites a second player
+    if (!this.game.input.joined(1)) drawHint(ctx, this.joinHint, JOIN_Y);
     const lead = this.cards[this.seats[0].card];
     drawTicket(ctx, BIO.x, BIO.y, BIO.w, BIO.h, { rules: false, header: false });
     drawText(ctx, lead.def.bio || lead.def.fullName, BIO.x + BIO.w / 2, BIO.y + 11, { size: 1, color: UI.ink, align: 'center', shadow: false });

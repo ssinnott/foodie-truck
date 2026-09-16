@@ -12,12 +12,14 @@ export const INK = UI.ink;
 export const LINE = '#5E4A3A';
 export const TROUT = Object.freeze({ body: '#B8C4C9', back: '#7FA9B8', gill: '#D9A2AE' });
 /**
- * The float: cream body, a neutral dark-willow band and the seat's colour on the cap and the tag (ART_STYLE
- * section 1 "Pond"). The band used to be SIGNAL.pond, which spent the scene's one saturated colour on a mark that
- * is on screen at all times — ART_STYLE section 4 binds mint to ONE meaning, the bite. It is now lit mint only
- * while that seat's bite window is open, so the only thing wearing mint is the thing asking to be pressed.
+ * The float: a plain cream body with the seat's colour on the cap and the tag (ART_STYLE section 1 "Pond":
+ * "floats white with a slot-colour cap"). Round 2: the body used to carry a 3 px dark-willow band which, under the
+ * 2 px ink, left the 6x8 capsule as two cream slivers around a brown middle — the panel read the whole float as a
+ * second tiny willow basket. The body is now bare cream and the only band it ever wears is the mint one, lit while
+ * that seat's bite window is open, so the only thing wearing the scene's signal colour is the thing asking to be
+ * pressed (ART_STYLE section 4 binds mint to ONE meaning).
  */
-export const FLOAT = Object.freeze({ body: '#FFF6E0', band: '#5E3A1B', bite: SIGNAL.pond });
+export const FLOAT = Object.freeze({ body: '#F1E4C8', bite: SIGNAL.pond });
 export const BUCKET = Object.freeze({ willow: '#6B4E3A', tip: '#B8C4C9' });
 
 // ---------------------------------------------------------------- tables
@@ -119,20 +121,22 @@ export function drawLine(ctx, x0, y0, x1, y1) {
 }
 
 /**
- * The float, centred on (x, y): a 6x8 cream capsule with a 3 px band, a 4x4 top cap in the seat colour and the 8x5
- * slot tag 6 px above it (the judges' graft). `tag` is off while the float dangles under the rod tip — up there the
- * tag would land ABOVE the tip with the shaft between it and the float it labels, reading as a card stapled to the
- * rod; the seat's colour is already on the cap, the bucket band and the name plate. `bite` lights the band mint.
+ * The float, centred on (x, y): an 8x10 cream capsule under its own 2 px ink — the lightest mark on the pond — with
+ * a 6x5 slot cap floating a clear 2 px above it and, when `tag` is on, the 8x5 slot tag above that (the judges'
+ * graft). Round 2: the cap used to butt straight onto the capsule, so ink met ink and the pair read as one 6x11
+ * blob; the 2 px of daylight between them is what makes the seat's colour read as a tag of its own at 1x.
+ * `tag` is off while the float dangles under the rod tip — up there the tag would land ABOVE the tip with the shaft
+ * between it and the float it labels, reading as a card stapled to the rod. `bite` lights the waterline mint.
  */
 export function drawFloat(ctx, x, y, slot, tag = true, bite = false) {
   const col = PLAYER_COLORS[slot] || UI.paperDark;
-  pathRR(ctx, x - 3, y - 4, 6, 8, 3); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = FLOAT.body; ctx.fill();
-  ctx.fillStyle = bite ? FLOAT.bite : FLOAT.band; ctx.fillRect(x - 3, y - 1, 6, 3);
-  ctx.fillStyle = INK; ctx.fillRect(x - 3, y - 8, 6, 6);
-  ctx.fillStyle = col; ctx.fillRect(x - 2, y - 7, 4, 4);
+  pathRR(ctx, x - 4, y - 4, 8, 10, 4); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = FLOAT.body; ctx.fill();
+  if (bite) { ctx.save(); pathRR(ctx, x - 4, y - 4, 8, 10, 4); ctx.clip(); ctx.fillStyle = FLOAT.bite; ctx.fillRect(x - 4, y + 1, 8, 5); ctx.restore(); }
+  ctx.fillStyle = INK; ctx.fillRect(x - 4, y - 14, 8, 7);
+  ctx.fillStyle = col; ctx.fillRect(x - 3, y - 13, 6, 5);
   if (!tag) return;
-  ctx.fillStyle = INK; ctx.fillRect(x - 5, y - 20, 10, 7);
-  ctx.fillStyle = col; ctx.fillRect(x - 4, y - 19, 8, 5);
+  ctx.fillStyle = INK; ctx.fillRect(x - 5, y - 24, 10, 7);
+  ctx.fillStyle = col; ctx.fillRect(x - 4, y - 23, 8, 5);
 }
 
 /** The trout: a 24x12 inked body facing `facing`, a darker back inside the same ink, a rose gill dot, an ink eye. */

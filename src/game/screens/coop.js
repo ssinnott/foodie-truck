@@ -16,9 +16,9 @@ import { Screen } from '../game.js';
 import { rng } from '../../engine/rng.js';
 import { dhypot } from '../../engine/trig.js';
 import { particles } from '../../engine/particles.js';
-import { blitAt } from '../../art/layers.js';
+import { blitAt, INK } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt, burstDust } from '../../art/fx.js';
-import { drawFood, foodTones } from '../../art/food.js';
+import { foodTones } from '../../art/food.js';
 import { drawRig, jointScreen } from '../../art/rig.js';
 import { pathEllipse } from '../../art/shapes.js';
 import { F } from '../../content/critters/common.js';
@@ -58,10 +58,23 @@ const ARC_X0 = 10, ARC_VX = 3.5;
 /** The rooster's toss: the seat's root pops up and lands over 12 frames (draw-only offset). */
 const POP = [3, 6, 8, 9, 9, 8, 6, 4, 2, 1, 0, 0];
 const PLUS_ONE = '+1', MINUS_ONE = '-1', BWAK = 'BWAK', SQUAWK = 'BWAAK!', TITLE = 'CLUCKET COOP', SIGN_PREFIX = 'EGGS: ';
-const EGG_HEX = INGREDIENTS.egg.hex, YOLK = HEN.beak, SHELL = '#F7EAD0';
-/** drawFood's egg is base + one big shade ellipse and no highlight, so at rest it read as a grey pebble with a cream
- *  rim; a resting egg gets the 2 px cap the other big food glyphs get, inside the shape's own ink (ART_STYLE 0.5). */
-const EGG_HI = foodTones(EGG_HEX).hi;
+const YOLK = HEN.beak, SHELL = INGREDIENTS.egg.hex;
+/**
+ * The shell is painted here and NOT by drawFood. That glyph's generic ramp cools every base it shades (blue gets the
+ * biggest lift), and its shade ellipse covers nearly the whole oval, so the cream egg came out #A3A1AA - a cool
+ * neutral, blue-leaning, at the same luminance as the #C9A05C nest straw it lies in. The one object the scene exists
+ * for read as a grey pebble and the gold sparkle did all the work (the judges' finding; ART_STYLE 1 "every colour is
+ * a paper-warm mid-chroma tone" and section 12 "nest straw darker than eggs"). Here the shell keeps its cream base
+ * with a PLUM shadow over its lower-right half and the 2 px cap the other big food glyphs get
+ * (ART_STYLE 0.5), so it is lighter AND warmer than the straw, and the floor stays the scene's only cool thing.
+ */
+const EGG_SH = '#8C7A86', EGG_HI = foodTones(SHELL).hi;
+/**
+ * The eggs already in a basket go through items.js -> drawFood, which this screen cannot repaint. Handing that ramp a
+ * shell a step warmer than the ingredient hex lands its shade warm-neutral instead of blue, so the pile in the basket
+ * belongs to the same egg as the one in the nest.
+ */
+const BASKET_EGG = '#F7E4BC';
 /** The sort tiebreak: seats by slot (0..3), then eggs, then birds, so a stack at one y always draws the same way. */
 const TIE_EGG = 4, TIE_HEN = 8, TIE_ROOSTER = 9;
 
@@ -85,7 +98,32 @@ const COOP_ANIMS = Object.freeze({
   ] },
 });
 
-function clockIcon(ctx, x, y) { drawFood(ctx, 'egg', x, y, 5, EGG_HEX); }
+/** The coop's egg glyph: inked oval, cream shell, one plum shadow crescent, one 2 px cap. `s` is the half-height. */
+function eggGlyph(ctx, x, y, s) {
+  ctx.beginPath(); ctx.ellipse(x, y, s * 0.7, s, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = SHELL; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = EGG_SH;
+  ctx.beginPath(); ctx.ellipse(x + s * 0.72, y + s * 0.66, s * 0.95, s, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = EGG_HI; ctx.fillRect(R(x - s * 0.5), R(y - s * 0.6), 2, 2);
+}
+
+function clockIcon(ctx, x, y) { eggGlyph(ctx, x, y, 5); }
+
+/**
+ * An egg in flight - popped out of a basket or hopping into one - crosses the critters' own bodies, and a cream shell
+ * over Barley's cream wool was a 1 px ink line on its own value: for the first frames of a pop the loss could only be
+ * read from the float text. An airborne shell gets a second ink line (2 px of warm ink, the weight the backdrop gives
+ * a big block) on top of the glyph's own, so the shell itself carries the beat. Darkening the shell instead was tried
+ * and lost the egg: the scene's one bright warm object cannot also be the dark one.
+ */
+function airEgg(ctx, x, y) {
+  ctx.beginPath(); ctx.ellipse(x, y, EGG_S * 0.7 + 1, EGG_S + 1, 0, 0, Math.PI * 2);
+  ctx.fillStyle = INK; ctx.fill();
+  eggGlyph(ctx, x, y, EGG_S);
+}
 
 export class CoopScreen extends Screen {
   constructor(game) { super(game, 'coop'); }
@@ -100,7 +138,7 @@ export class CoopScreen extends Screen {
     for (let i = 0; i < n; i++) {
       const s = this.seats[i];
       s.x = R(VIEW_W / 2 + (i - (n - 1) / 2) * 110);
-      s.rig.basketIcon = 'egg'; s.rig.basketHex = EGG_HEX;
+      s.rig.basketIcon = 'egg'; s.rig.basketHex = BASKET_EGG;
       s.reachT = 0; s.safeT = 0; s.popT = 0;
       s.basketPt = { x: s.x, y: s.y - 20 };
       s.player.setOverlay(COOP_ANIMS);
@@ -288,11 +326,13 @@ export class CoopScreen extends Screen {
       s.count--; this.setTotal(this.total - 1);
       const c = this.cracks[this.crackCursor]; this.crackCursor = (this.crackCursor + 1) % this.cracks.length;
       c.t = 0; c.x = s.x + dir * k * 6; c.y = s.y + 2 + k * 3; c.dir = dir;
-      // the mirror of the pluck's ring and +1, thrown from where the shell actually leaves (the arc's first key) and
-      // out along its flight, so neither mark sits on the critter's own wool: a loss used to be the scene's quietest beat
+      // the mirror of the pluck's ring and +1: the ring marks where the shell actually leaves (the arc's first key)
+      // and the shell flies out of it, so the number is thrown the OTHER way, up over the shoulder. Both used to be
+      // launched along the flight path, and the text - drawn in the front particle pass, over everything - rode on
+      // top of the shell for the four frames the loss is read from. It rides high, too, clear of the hen's BWAK.
       const mx = s.x + dir * ARC_X0;
       ringAt(mx, s.y - ARC[0], 3, 11, UI.cream, 2, 12, false, true);
-      floatText(mx + dir * 18, s.y - ARC[0] - 14 - k * 8, MINUS_ONE, s.colour, 1, true);
+      floatText(s.x - dir * 15, s.y - 50 - k * 8, MINUS_ONE, s.colour, 1, true);
     }
     this.bumps++;
   }
@@ -382,16 +422,27 @@ export class CoopScreen extends Screen {
    */
   drawNestCue(ctx, e, i, f) {
     const x = R(e.x);
-    ctx.globalAlpha = 0.45; ctx.strokeStyle = SIGNAL.coop; ctx.lineWidth = 2;
+    // the ring: an ink line under the gold one, so the mark holds on the cool earth and under a critter's feet
+    ctx.globalAlpha = 0.5; ctx.strokeStyle = INK; ctx.lineWidth = 3;
+    pathEllipse(ctx, x, Y_MIN, 10, 4); ctx.stroke();
+    ctx.globalAlpha = 0.85; ctx.strokeStyle = SIGNAL.coop; ctx.lineWidth = 2;
     pathEllipse(ctx, x, Y_MIN, 10, 4); ctx.stroke(); ctx.globalAlpha = 1;
-    if (((f + i * 7) >> 3) & 1) { ctx.fillStyle = SIGNAL.coop; ctx.fillRect(x - 1, Y_MIN - 9, 2, 6); ctx.fillRect(x - 3, Y_MIN - 7, 6, 2); }
+    // and an inked arrow standing in it, pointing up at the box that holds the egg: the whole hint that the back row
+    // is reachable at all. It is on for as long as the egg is (a blinking arrow was half a hint), and the egg's own
+    // sparkle above it does the blinking, which is what joins the two.
+    const y = Y_MIN - 3;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 13); ctx.lineTo(x + 6, y - 6); ctx.lineTo(x + 2, y - 6); ctx.lineTo(x + 2, y);
+    ctx.lineTo(x - 2, y); ctx.lineTo(x - 2, y - 6); ctx.lineTo(x - 6, y - 6); ctx.closePath();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.fillStyle = SIGNAL.coop; ctx.fill();
+    if (((f + i * 7) >> 3) & 1) { ctx.fillStyle = UI.cream; ctx.fillRect(x - 2, y - 10, 2, 2); }
   }
 
   /** An egg at rest, with the fresh-egg sparkle blinking above it on an index hash. */
   drawEgg(ctx, e, i, f) {
     const x = R(e.x), y = R(e.y);
-    drawFood(ctx, 'egg', x, y, EGG_S, EGG_HEX);
-    ctx.fillStyle = EGG_HI; ctx.fillRect(x - 2, y - 3, 2, 2);
+    eggGlyph(ctx, x, y, EGG_S);
     if (((f + i * 7) >> 3) & 1) { ctx.fillStyle = SIGNAL.coop; ctx.fillRect(x + 3, y - 10, 2, 6); ctx.fillRect(x + 1, y - 8, 6, 2); }
   }
 
@@ -400,7 +451,7 @@ export class CoopScreen extends Screen {
     if (h.t >= HOP_FRAMES) return;
     const s = this.seats[h.seat], k = h.t / HOP_FRAMES;
     const tx = s.basketPt.x, ty = s.basketPt.y + 10;
-    drawFood(ctx, 'egg', R(h.x0 + (tx - h.x0) * k), R(h.y0 + (ty - h.y0) * k - Math.sin(k * Math.PI) * 12), EGG_S, EGG_HEX);
+    airEgg(ctx, R(h.x0 + (tx - h.x0) * k), R(h.y0 + (ty - h.y0) * k - Math.sin(k * Math.PI) * 12));
   }
 
   /** The popped egg in the air: out of the basket on the 12-entry arc, away from what bumped the seat, its shadow racing along the floor under it (the read that survives a cream shell crossing cream wool). */
@@ -408,7 +459,7 @@ export class CoopScreen extends Screen {
     if (c.t >= ARC_N) return;
     const x = R(c.x + c.dir * (ARC_X0 + c.t * ARC_VX));
     drawShadow(ctx, x, c.y, 9, 0.3, ARC[c.t]);
-    drawFood(ctx, 'egg', x, R(c.y - ARC[c.t]), EGG_S, EGG_HEX);
+    airEgg(ctx, x, R(c.y - ARC[c.t]));
   }
 
   /** Where it lands: three cream discs and a 3x3 yolk, no outline (the one soft mark), fading over 30 frames. */

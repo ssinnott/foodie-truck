@@ -43,17 +43,23 @@ function woolCap(ctx, rig, pose, inf) {
   celPath(ctx, rig, rig.palette.skin, R(-r * 0.25), R(-r * 0.75), r, 0.3, 0.32);
 }
 
-/** The bell strap: a 4 px plum band across the collar, drawn with the torso so the chin can overlap it. */
+/**
+ * The bell strap: a 4 px plum band across the collar, drawn with the torso so the chin can overlap it. It runs from
+ * the FAR shoulder to the centre line only: the full-width band used to lie across both of the apron's straps and
+ * paint the player's colour plum for four of its seven pixels.
+ */
 function strap(ctx, rig, pose, inf) {
   const H = inf.h, hw = R(inf.w / 2);
-  band(ctx, rig, -R(hw * 0.55), -H + 1, R(hw * 1.2), 4, PLUM_STRAP);
+  band(ctx, rig, -R(hw * 0.68), -H + 1, R(hw * 0.75), 4, PLUM_STRAP);
 }
 /** The brass bell (front torso accessory): a 7x6 ball hanging below the collar on a one-segment chain. */
 const bell = { attach: 'torso', layer: 'front', draw(ctx, rig) {
   const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2);
   const ch = getChain(rig, 'bell', 1, { joint: 'torso', rest: [0, 1], stiffness: 0.16, damping: 0.66, gain: 3, maxAng: 40 });
-  // hung on the strap line, off the bib's centre column: dead centre the bell cut the player's apron in half
-  ctx.save(); ctx.translate(R(hw * 0.7), -H + 4); ctx.rotate(rad(ch.ang[0]));
+  // hung from the FAR end of the strap. On the near side it sat exactly where the near arm now hangs (the arm
+  // roots moved out to the shoulder) and the bell read as a brass lump on a forearm; dead centre it cut the
+  // player's apron in half. Off to the far shoulder it hangs clear of both, and the bib's block stays whole.
+  ctx.save(); ctx.translate(-R(hw * 0.5), -H + 3); ctx.rotate(rad(ch.ang[0]));
   band(ctx, rig, -2, 0, 4, 4, PLUM_STRAP);                       // the loop, 4 px: an inked band any thinner is all ink
   pathRR(ctx, -4, 3, 7, 6, 3);
   celPath(ctx, rig, BRASS, -1, 6, 4, 0.4, 0);
@@ -63,7 +69,8 @@ const bell = { attach: 'torso', layer: 'front', draw(ctx, rig) {
 
 export const build = critterBuild({
   palette: { skin: WOOL, hair: FACE, belly: MUZZLE, secondary: FACE, shorts: FACE, accent: BRASS, dark: HOOF },
-  proportions: { headR: 15, torsoW: 28, torsoH: 20, hip: 22, handR: 5, footL: 9, armR: 4, legR: 4 },
+  // shoulderX 9 = 0.33 torsoW: the widest body in the cast carries the widest apron, so its arms root furthest out
+  proportions: { headR: 15, torsoW: 28, torsoH: 20, hip: 22, handR: 5, footL: 9, armR: 4, legR: 4, shoulderX: 9 },
   // the flaps hang beside the jaw, where the wool cap stops, not behind the skull: from -0.5r back they never cleared the head
   ears: 'droop', earSlot: 'hair', earPos: { near: { x: -0.25, y: -0.15 }, far: { x: -0.5, y: -0.05 } },
   face: { whitesAlways: true },   // the whites stay on through blinks and smiles: ink arcs vanish on the dark face
@@ -76,10 +83,10 @@ export const build = critterBuild({
 export const anims = makeCritterAnims({
   // the heaviest bob in the cast: a sheep walks like a sack of wool
   walk: { loop: true, frames: [
-    F(7, { legR: [26, 6], legL: [-22, 18], armR: [-18, 10], armL: [20, 18], torso: 5, root: [0, 0] }),
-    F(7, { legR: [4, 28], legL: [-2, 4], armR: [0, 12], armL: [2, 12], torso: 6, root: [0, 2], squash: 1.05 }),
-    F(7, { legR: [-22, 18], legL: [26, 6], armR: [20, 18], armL: [-18, 10], torso: 5, root: [0, 0] }),
-    F(7, { legR: [-2, 4], legL: [4, 28], armR: [2, 12], armL: [0, 12], torso: 6, root: [0, 2], squash: 1.05 }),
+    F(7, { legR: [26, 6], legL: [-22, 18], armR: [-8, 10], armL: [10, 16], torso: 5, root: [0, 0] }),
+    F(7, { legR: [4, 28], legL: [-2, 4], armR: [10, 12], armL: [-4, 12], torso: 6, root: [0, 2], squash: 1.05 }),
+    F(7, { legR: [-22, 18], legL: [26, 6], armR: [26, 14], armL: [-26, 10], torso: 5, root: [0, 0] }),
+    F(7, { legR: [-2, 4], legL: [4, 28], armR: [10, 12], armL: [-4, 12], torso: 6, root: [0, 2], squash: 1.05 }),
   ] },
   // the signature: creeping up on the ingredients, leaning back with the eyes shut as if that made him invisible
   sneak: { loop: true, frames: [

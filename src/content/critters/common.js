@@ -7,7 +7,9 @@
 // and add accessories (hat, bandana, scarf). Every hook obeys the readability rules: one 1 px outline per
 // OBJECT (an ear is an object, a muzzle patch is a colour change inside the head's own ink), two tones on
 // narrow parts, colours through rig.col() so the hit flash still works, nothing under 2 px, no allocation.
-import { celPath, celBall, celRect, celCapsule, celTaper, celPoly, tones, pathRR, pathCap, band, wantSh } from '../../art/shading.js';
+import { celPath, celBall, celRect, celCapsule, celTaper, celPoly, tones, makeTones, pathRR, pathCap, band, wantSh } from '../../art/shading.js';
+import { hexToRgb, rgbToHex } from '../../art/palettes.js';
+import { pathTaperedCapsule } from '../../art/shapes.js';
 import { getChain } from '../../art/secondary.js';
 import { P, FACE } from '../../art/poses.js';
 import { brow } from '../../art/rigParts.js';
@@ -20,10 +22,17 @@ const TAU = Math.PI * 2;
 /** Every critter's outline: warm near-black (docs/ART_STYLE.md section 3). */
 export const INK = '#2A1F1A';
 
-/** Reference proportions: about 2.3 heads tall, 56 px standing at scale 1. */
+/**
+ * Reference proportions: about 2.3 heads tall, 56 px standing at scale 1.
+ *
+ * `shoulderX` is 0.25 torsoW, not the humanoid rig's 2 px: the apron IS the player spot (docs/ART_STYLE.md
+ * section 4) and an arm rooted near the centre line hangs straight down the middle of the bib whatever angle it is
+ * given. Rooted out at the shoulder the same near-vertical arm falls down the torso's OUTER edge and the seat
+ * colour keeps one unbroken block. Each cast member sets its own (0.33 torsoW) in its proportions.
+ */
 export const CHIBI = Object.freeze({
   headR: 12, neck: 1, torsoW: 24, torsoH: 18, hip: 20, upperArm: 8, lowerArm: 7, handR: 4.5,
-  upperLeg: 6, lowerLeg: 6, footL: 9, footH: 5, armR: 3.5, legR: 4, bulge: 0.15, shoulderX: 3, hipX: 4, neckR: 4,
+  upperLeg: 6, lowerLeg: 6, footL: 9, footH: 5, armR: 3.5, legR: 4, bulge: 0.15, shoulderX: 6, hipX: 4, neckR: 4,
 });
 
 /**
@@ -108,6 +117,9 @@ export const DOME = Object.freeze({ nearX: 0.44, farX: -0.34, y: -0.86, r: 0.4 }
 /** Animal head: ears, then skull + muzzle as ONE inked contour, a lighter muzzle patch inside it, markings, nose. */
 export function makeHead(spec) {
   const ears = spec.ears || 'round', size = spec.muzzle != null ? spec.muzzle : 1, nose = spec.nose !== false;
+  // `muzzleHex` colours the patch on its own, for a species whose light fur is needed elsewhere at full brightness
+  // (Cress: `belly` is the two eye domes, which must stay the whites, so the mouth patch takes a darker green).
+  const muzzleHex = spec.muzzleHex || null;
   return function head(ctx, rig, pose, inf) {
     const r = inf.r, pal = rig.palette;
     drawEars(ctx, rig, r, ears, spec);
@@ -119,7 +131,7 @@ export function makeHead(spec) {
     if (rig.override) return;
     // muzzle: a colour change inside the head's own ink, so no line of its own (ART_STYLE 0.2)
     ctx.save(); ctx.beginPath(); ctx.ellipse(g.mx, g.my, g.rx, g.ry, 0, 0, TAU); ctx.clip();
-    const lt = tones(rig, pal.belly);
+    const lt = tones(rig, muzzleHex || pal.belly);
     ctx.fillStyle = lt.base; ctx.fillRect(g.mx - g.rx, g.my - g.ry, g.rx * 2, g.ry * 2);
     ctx.fillStyle = lt.sh; ctx.fillRect(g.mx - g.rx, g.my + R(g.ry * 0.4), g.rx * 2, g.ry);
     ctx.restore();
@@ -162,7 +174,7 @@ export function cheekMarking(ctx, rig, pose, inf) {
 // ---------------------------------------------------------------- face (head space)
 /**
  * Critter face: two big whites with 3x3 pupils, 2 px brows, a mouth on the muzzle. Driven by pose.face (FACE):
- * neutral | happy (arc eyes, smile) | hurt (sad brows, frown) | shout (open mouth) | dazed (x eyes) | closed (blink)
+ * neutral | happy (lifted brows, smile) | hurt (sad brows, frown) | shout (open mouth) | dazed (x eyes) | closed (blink)
  * | angry / grit (brows down). Pupils are 3 px so the 2 px floor never eats them; whites are 6x5 at headR 12.
  */
 export function critterFace(ctx, rig, pose, inf) {
@@ -175,17 +187,17 @@ export function critterFace(ctx, rig, pose, inf) {
   const happy = face === FACE.happy, closed = face === FACE.closed, hurt = face === FACE.hurt, dazed = face === FACE.dazed;
   const angry = face === FACE.angry || face === FACE.grit, shout = face === FACE.shout;
   // whitesAlways (a dark face): an ink arc or blink on dark fur is invisible, so the whites stay under them
-  if (fo.whitesAlways && !dome && (dazed || happy || closed)) { ctx.fillStyle = white; ctx.fillRect(ex, ey, ew, eh); ctx.fillRect(fx, ey, ew, eh); }
+  if (fo.whitesAlways && !dome && (dazed || closed)) { ctx.fillStyle = white; ctx.fillRect(ex, ey, ew, eh); ctx.fillRect(fx, ey, ew, eh); }
   ctx.fillStyle = ink;
   if (dazed) {
     for (const x of [ex, fx]) for (let i = 0; i < 4; i++) { ctx.fillRect(x + i, ey + i, 2, 2); ctx.fillRect(x + 4 - i, ey + i, 2, 2); }
-  } else if (happy || closed) {
-    // an arc read as a happy eye: a 2 px curve with its ends lower than its middle; a blink is a flat bar
-    for (const x of [ex, fx]) {
-      if (happy) { ctx.fillRect(x, ey + 3, 2, 2); ctx.fillRect(x + 1, ey + 2, ew - 2, 2); ctx.fillRect(x + ew - 2, ey + 3, 2, 2); }
-      else ctx.fillRect(x, ey + 3, ew, 2);
-    }
+  } else if (closed) {
+    for (const x of [ex, fx]) ctx.fillRect(x, ey + 3, ew, 2);   // a blink is a flat 2 px bar
   } else {
+    // `happy` keeps the WHITES AND THE PUPILS and smiles with the mouth and the brows. It used to shut both eyes
+    // into ink arcs, and happy is now the cast's RESTING face (makeCritterAnims idle / carry), so arcs would have
+    // taken the gaze - the one feature §0 says a viewer must pick out at a squint - off the cast on every screen,
+    // and left 3 px pupils only on the effort keys. The closed-eye beam belongs to the blink (`closed`).
     if (!dome) { ctx.fillStyle = white; ctx.fillRect(ex, ey, ew, eh); ctx.fillRect(fx, ey, ew, eh); }
     ctx.fillStyle = pupil;
     const py = ey + 1, px = 2;   // pupils sit forward (toward facing) in the white
@@ -199,7 +211,8 @@ export function critterFace(ctx, rig, pose, inf) {
   if (dome && !angry && !hurt) { drawCritterMouth(ctx, rig, r, face, ink); return; }
   if (angry) { brow(ctx, ex - 1, by - 2, ex + ew, by + 1, 2); brow(ctx, fx - 1, by, fx + ew, by - 2, 2); }
   else if (hurt) { brow(ctx, ex - 1, by + 1, ex + ew, by - 2, 2); brow(ctx, fx - 1, by - 2, fx + ew, by + 1, 2); }
-  else { ctx.fillRect(ex - 1, by, ew + 1, 2); ctx.fillRect(fx - 1, by, ew + 1, 2); }
+  // happy lifts both brows one pixel clear of the whites: the smile reads from the top of the head as well as the mouth
+  else { const hy = happy ? by - 1 : by; ctx.fillRect(ex - 1, hy, ew + 1, 2); ctx.fillRect(fx - 1, hy, ew + 1, 2); }
   drawCritterMouth(ctx, rig, r, face, ink);
 }
 /** The mouth, on the muzzle under the nose. */
@@ -244,16 +257,17 @@ export function makeTorso(spec) {
       ctx.restore();
     }
     if (apron) {
-      // The apron is the player spot (ART_STYLE section 4), so the bib runs from just under the collar down
-      // beneath the hip block: on a 20 px torso that is ~11 px of player colour showing, straps included.
-      // the bib sits a couple of px toward the FAR side (the near arm hangs over the near half at rest), so the
-      // seat colour keeps one unbroken block instead of a sliver each side of the forearm
-      const aw = R(W * 0.64), ax = R(-aw / 2) - 1, ay = -H + 5, ah = H;
-      band(ctx, rig, ax + 2, -H + 1, 4, 7, pal.primary);            // straps first (under the bib), 4 px inked bands
-      band(ctx, rig, ax + aw - 6, -H + 1, 4, 7, pal.primary);
+      // THE APRON IS THE PLAYER SPOT (ART_STYLE section 4): it has to be the biggest single mark on the body at 1x,
+      // so the bib is as wide as the silhouette can carry (0.80 W is the egg's own half-width at the bib's top row,
+      // 0.8 H up) and runs from just under the collar to under the hip block. It is centred, not nudged aside: with
+      // the shoulders out at 0.33 W (CHIBI.shoulderX) both arms now hang down the torso's outer edges instead of
+      // across the bib, so the seat colour reads as ONE block rather than a sliver either side of a forearm.
+      const aw = R(W * 0.8), ax = -R(aw / 2), ay = R(-H * 0.8), ah = 4 - ay;
+      band(ctx, rig, ax + 2, -H + 1, 4, ay + H + 3, pal.primary);   // straps first (under the bib), 4 px inked bands
+      band(ctx, rig, ax + aw - 6, -H + 1, 4, ay + H + 3, pal.primary);
       pathRR(ctx, ax, ay, aw, ah, 3);
       celPath(ctx, rig, pal.primary, ax + aw / 2, ay + ah / 2, R(Math.max(aw, ah) / 2), 0.36, 0.25);
-      if (!rig.override) { ctx.fillStyle = tones(rig, pal.primary).sh; ctx.fillRect(ax + 3, -9, aw - 6, 2); } // one pocket seam, 2 px
+      if (!rig.override) { ctx.fillStyle = tones(rig, pal.primary).sh; ctx.fillRect(ax + 3, R(-H * 0.42), aw - 6, 2); } // one pocket seam, 2 px
     }
     if (spec.chest) spec.chest(ctx, rig, pose, inf);
   };
@@ -261,8 +275,9 @@ export function makeTorso(spec) {
 /** Short trousers: a rounded block over the leg roots, so the near leg emerges from inside it rather than sitting on it. */
 export function makeHips(spec) {
   return function hips(ctx, rig, pose, inf) {
-    // the block scales with the torso (6..10 px) so a 14 px mouse torso is not half shorts
-    const hip = inf.w, hw = R(hip / 2), h = Math.max(6, Math.min(10, R(rig.p.torsoH * 0.5)));
+    // the block scales with the torso (6..8 px) so a 16 px mouse torso is not half shorts — and every pixel the
+    // shorts give back is a pixel of the apron above them, which is the player's own colour (ART_STYLE section 4)
+    const hip = inf.w, hw = R(hip / 2), h = Math.max(6, Math.min(8, R(rig.p.torsoH * 0.45)));
     celRect(ctx, rig, -hw, -R(h / 2), hip, h, 4, rig.palette.shorts || rig.palette.secondary, 0.4, 0.2);
   };
 }
@@ -316,7 +331,16 @@ export function makeTail(kind, hex = null) {
         for (let x = -6; x > -21; x -= 6) ctx.fillRect(x - 3, -6, 3, 12);   // rings: 3 px markings inside the tail's ink
         ctx.restore();
       }
-    } else if (kind === 'thin') { celCapsule(ctx, rig, 0, 0, -18, -10, 2.5, fur, 0); }
+    } else if (kind === 'thin') {
+      // A mouse's tail, not a plank: THREE tapered links appended into ONE path (stroked once, filled once, so the
+      // curve carries a single outline and no seam is inked across it), 4 px at the root down to 2 px at the tip,
+      // sweeping back and up. The flat 5 px capsule it replaces read as a baguette held at 45 degrees.
+      ctx.beginPath();
+      pathTaperedCapsule(ctx, 0, 0, -6, -2, 2.4, 1.9, true);
+      pathTaperedCapsule(ctx, -6, -2, -11, -6, 1.9, 1.4, true);
+      pathTaperedCapsule(ctx, -11, -6, -15, -13, 1.4, 1, true);
+      celPath(ctx, rig, fur, -8, -5, 2.4, 0.36, 0);
+    }
     ctx.restore();
   } };
 }
@@ -361,17 +385,26 @@ export function scarf(hex) {
     celPoly(ctx, rig, KNOT, hex, 0.35, 0);
   } };
 }
-/** The scarf's loose end: two capsule segments streaming back from the nape on a chain (torso space, back layer). */
+/**
+ * The scarf's loose end: two links streaming back from the nape on a chain (torso space, back layer), appended into
+ * ONE tapered path. Two equal 5 px capsules at 45 degrees read as a bone lying against the fur — the cream stick the
+ * art director called a far arm — so the end now tapers 6 px to 2 px, is a third shorter, and rests further back.
+ */
 export function scarfTail(hex) {
   return { attach: 'torso', layer: 'back', draw(ctx, rig) {
-    const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2), L = R(hw * 0.55);
-    const ch = getChain(rig, 'scarf', 2, { joint: 'torso', rest: [-0.7, 0.7], stiffness: 0.14, damping: 0.7, gain: 2.6, maxAng: 45 });
+    const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2), L = R(hw * 0.45);
+    const ch = getChain(rig, 'scarf', 2, { joint: 'torso', rest: [-1, 0.45], stiffness: 0.14, damping: 0.7, gain: 2.6, maxAng: 45 });
     ctx.save(); ctx.translate(-R(hw * 0.6), -H + 4);
+    let px = 0, py = 0, a = 0, r = 3;
+    ctx.beginPath();
     for (let i = 0; i < 2; i++) {
-      ctx.rotate(rad(ch.ang[i]));
-      celCapsule(ctx, rig, 0, 0, -L, L, 2.5, hex, 0);
-      ctx.translate(-L, L);
+      a += rad(ch.ang[i]);
+      const c = Math.cos(a), s = Math.sin(a), nr = r - 0.9;
+      const nx = px + -L * c - L * s, ny = py + -L * s + L * c;
+      pathTaperedCapsule(ctx, px, py, nx, ny, r, nr, true);
+      px = nx; py = ny; r = nr;
     }
+    celPath(ctx, rig, hex, R(-L * 0.6), R(L * 0.6), 3, 0.36, 0);
     ctx.restore();
   } };
 }
@@ -401,6 +434,12 @@ export function critterBuild(spec) {
     proportions: { ...CHIBI, ...(spec.proportions || {}) },
     // storybook paint is matte: a softer ramp than the sibling's arcade 1.22 / 0.66 (docs/ART_STYLE.md section 3)
     ramp: { hi: 1.16, sh: 0.72, ...(spec.ramp || {}) },
+    // Far limbs read as a limb BEHIND the body, never as a pale stick lying on it. The humanoid rig's 0.62 / 0.25
+    // left the far arm of a pale fur a cream tube and of a dark fur a light stripe; 0.52 / 0.42 lands every far
+    // limb BELOW its own near fur's shadow tone and pulls most of the chroma out, so it recedes instead of reading
+    // as a bone (docs/ART_STYLE.md section 0.4). Never darkened twice: the hooks colour from info.pal.
+    farShade: spec.farShade != null ? spec.farShade : 0.52,
+    farDesat: spec.farDesat != null ? spec.farDesat : 0.42,
     palette, outline: INK, earTip: !!spec.earTip,
     face: { eyeY: -2, big: true, brow: palette.hair, mouthY: 0, ...(spec.face || {}) },
     muzzle: spec.muzzle != null ? spec.muzzle : 1,
@@ -411,39 +450,94 @@ export function critterBuild(spec) {
 }
 
 /**
+ * The cel ramp's cool drift, made PROPORTIONAL to the colour's own chroma instead of absolute. The shared
+ * `toneOf` (art/shading.js, not this owner's file) shades a shadow band as `b * (f + 0.12) + 8`: an absolute blue
+ * lift that swamps the hue of anything whose blue channel is already high. Barley's wool #F1E4C8 came back
+ * #AEABB0 (chroma 4) — a cream sheep in a grey helmet — and the same neutral landed on every cream scarf, muzzle
+ * and paw pad in the cast. Drifting the blue by `0.12 * f * chroma` keeps the fur's own hue in its shadow
+ * (#F1E4C8 -> #AEAB94, chroma 26) and leaves a saturated colour's band exactly where it was.
+ */
+function warmShade(hex, f) {
+  const [r, g, b] = hexToRgb(hex);
+  const c = Math.max(r, g, b) - Math.min(r, g, b);
+  return rgbToHex(r * f, g * (f + 0.03), b * f + 0.12 * f * c);
+}
+/**
+ * A rig's tone cache (art/shading.js `tones` reads and fills it) with every shadow band re-warmed on the first
+ * use of a colour: the highlight and rim tones are the shared ramp's, untouched. One ramp per colour per rig,
+ * allocated on first use exactly as before, so a draw hook still allocates nothing.
+ */
+class CritterTones extends Map {
+  /** @param {{hi:number,sh:number,rim:number}} ramp */
+  constructor(ramp) { super(); this.ramp = ramp; }
+  /** @param {string} hex */
+  get(hex) {
+    let t = super.get(hex);
+    if (t || typeof hex !== 'string' || hex[0] !== '#') return t;
+    t = makeTones(hex, this.ramp);
+    t.sh = warmShade(hex, this.ramp.sh);
+    t.deep = warmShade(hex, this.ramp.sh * 0.78);
+    super.set(hex, t);
+    return t;
+  }
+}
+/**
  * A rig for a cast member in a given seat: the apron (and its straps) in that seat's player colour, or the
  * off-duty apron for slot -1 (gallery, customers, the title's idle crew). Tones are cached per rig per colour, so
  * build this ONCE when the seat is assigned (in enter()), never in draw().
  */
 export function critterRig(def, slot = -1) {
   const apron = slot >= 0 && slot < PLAYER_COLORS.length ? PLAYER_COLORS[slot] : OFF_DUTY_APRON;
-  return buildRig({ ...def.build, palette: { ...def.build.palette, primary: apron } });
+  const rig = buildRig({ ...def.build, palette: { ...def.build.palette, primary: apron } });
+  rig.tones = new CritterTones(rig.ramp);
+  // `farShade` (art/palettes.js, not this owner's file) ends on a flat `+ 6` of blue, which is most of what is
+  // left of a far limb's chroma once it has been darkened and pulled toward grey: it turned Barley's far paw
+  // (#7B7774) and Chicory's far paw pad (#77716C) into the same neutral ball. Taking the flat lift back off
+  // keeps the documented "darker and greyer" far palette (0.52 / 0.42) while each critter's far side still
+  // carries its own hue (docs/ART_STYLE.md section 0.4).
+  for (const k of Object.keys(rig.paletteFar)) {
+    const v = rig.paletteFar[k];
+    if (typeof v === 'string' && v[0] === '#') { const [r, g, b] = hexToRgb(v); rig.paletteFar[k] = rgbToHex(r, g, b - 6); }
+  }
+  return rig;
 }
 
 // ---------------------------------------------------------------- the base animation set
 /** Keyframe shorthand: F(dur, spec, extra) -> { dur, pose: P(spec), ...extra }. */
 export const F = (dur, spec, extra) => ({ dur, pose: P(spec), ...(extra || {}) });
-// The near forearm used to lie across the middle of the apron and split the player's colour into two slivers;
-// swung out to 30 it clears the bib's centre column and the whole block of seat colour reads at 1x.
-const REST = { armR: [40, 8], armL: [-28, 10] };
-// both paws forward at shoulder height so the basket (8 px of handle below the paw) hangs in front of the belly,
-// not the chin: at [78, 70] the paws sat 4 px ABOVE the shoulder and the basket covered the muzzle
-const CARRY = { armR: [60, 50], armL: [56, 54], weapon: 90 };
+// REST: both arms HANG, near vertical, with a soft elbow, down the outside of the torso. At [40, 8] the near arm
+// lay across the belly as a horizontal bar and split the apron - the player's own colour - into two slivers; the
+// arm root itself is now out at the shoulder (CHIBI.shoulderX), so 14 degrees of upper and 12 of elbow is all it
+// takes to carry the whole limb past the bib's edge. The far arm hangs back behind the torso: only its paw shows,
+// past the hip, which is where a far paw belongs (docs/ART_STYLE.md sections 0.4, 0.7).
+const REST = { armR: [14, 12], armL: [-18, 8] };
+// CARRY: the near paw holds the basket out BESIDE the hip, clear of the torso silhouette, and the off paw hangs at
+// the far side. Both paws forward (the old [56, 54]) laid two forearms across the chest and the basket over the
+// belly, and between them the seat colour had nowhere left to show. The near arm's angles are untouched: the
+// orchard builds its catch box from exactly these numbers (game/screens/orchard.js CATCH_POSE / WALK_POSE).
+const CARRY = { armR: [60, 50], armL: [-18, 8], weapon: 90 };
 /**
  * Every critter's animation table (docs/ART_STYLE.md section 5). Screens play these by name:
  * idle walk run carry carryWalk reach catch cheer sad eat chop stir bump hop wave sit
  */
 export function makeCritterAnims(over = {}) {
   const anims = {
+    // RESTING IS WARM: both breath keys carry `happy`, so the default face of a cozy game is a soft smile and
+    // `neutral` becomes the face of concentration (the effort, damage and blink keys set their own face and are
+    // unchanged). `face` is STEPPED, not lerped (art/poses.js), so a smile on one key only would flip the mouth
+    // every 26 frames; it goes on both.
     idle: { loop: true, frames: [
-      F(26, { ...REST, torso: 2, root: [0, 0] }),
-      F(26, { armR: [44, 10], armL: [-24, 12], torso: 4, root: [0, 1], head: 2 }),
+      F(26, { ...REST, torso: 2, root: [0, 0], face: 'happy' }),
+      F(26, { armR: [17, 13], armL: [-15, 10], torso: 4, root: [0, 1], head: 2, face: 'happy' }),
     ] },
+    // The arm swing is biased OUTWARD (near arm -8..26 about a +9 centre, far arm -26..10): a walk whose arms swing
+    // through zero puts a limb straight down the middle of the apron on every pass key, which is the same bar
+    // across the player's colour that REST used to draw.
     walk: { loop: true, frames: [
-      F(7, { legR: [26, 6], legL: [-22, 18], armR: [-18, 10], armL: [20, 18], torso: 5, root: [0, 0] }),
-      F(7, { legR: [4, 28], legL: [-2, 4], armR: [0, 12], armL: [2, 12], torso: 5, root: [0, 1], squash: 1.03 }),
-      F(7, { legR: [-22, 18], legL: [26, 6], armR: [20, 18], armL: [-18, 10], torso: 5, root: [0, 0] }),
-      F(7, { legR: [-2, 4], legL: [4, 28], armR: [2, 12], armL: [0, 12], torso: 5, root: [0, 1], squash: 1.03 }),
+      F(7, { legR: [26, 6], legL: [-22, 18], armR: [-8, 10], armL: [10, 16], torso: 5, root: [0, 0] }),
+      F(7, { legR: [4, 28], legL: [-2, 4], armR: [10, 12], armL: [-4, 12], torso: 5, root: [0, 1], squash: 1.03 }),
+      F(7, { legR: [-22, 18], legL: [26, 6], armR: [26, 14], armL: [-26, 10], torso: 5, root: [0, 0] }),
+      F(7, { legR: [-2, 4], legL: [4, 28], armR: [10, 12], armL: [-4, 12], torso: 5, root: [0, 1], squash: 1.03 }),
     ] },
     run: { loop: true, frames: [
       F(5, { legR: [50, 20], legL: [-40, 55], armR: [-40, 50], armL: [40, 55], torso: 16, root: [0, -2], head: -4 }),
@@ -452,8 +546,8 @@ export function makeCritterAnims(over = {}) {
       F(5, { legR: [-10, 10], legL: [10, 40], armR: [0, 40], armL: [0, 40], torso: 16, root: [0, 1], squash: 1.04 }),
     ] },
     carry: { loop: true, frames: [
-      F(26, { ...CARRY, torso: 2 }),
-      F(26, { ...CARRY, torso: 4, root: [0, 1], head: 2 }),
+      F(26, { ...CARRY, torso: 2, face: 'happy' }),
+      F(26, { ...CARRY, torso: 4, root: [0, 1], head: 2, face: 'happy' }),
     ] },
     carryWalk: { loop: true, frames: [
       F(7, { ...CARRY, legR: [26, 6], legL: [-22, 18], torso: 6 }),
@@ -469,9 +563,11 @@ export function makeCritterAnims(over = {}) {
       F(20, { armR: [112, 20], armL: [-150, -10], torso: -4, head: -8, root: [0, 0], stretch: 1.02 }),
       F(20, { armR: [118, 16], armL: [-156, -12], torso: -6, head: -10, root: [0, -1], stretch: 1.04 }),
     ] },
+    // catch: the basket goes up and OUT to meet the apple; the off paw stays down at the far side so the apron is
+    // never behind two forearms. Frame 0's near arm and torso are the orchard's CATCH_POSE and must not move.
     catch: { loop: true, frames: [
-      F(20, { armR: [72, 48], armL: [66, 52], weapon: 90, torso: -4, head: -10, root: [0, 0] }),
-      F(20, { armR: [76, 50], armL: [70, 54], weapon: 90, torso: -6, head: -12, root: [0, -1] }),
+      F(20, { armR: [72, 48], armL: [-18, 8], weapon: 90, torso: -4, head: -10, root: [0, 0] }),
+      F(20, { armR: [76, 50], armL: [-15, 10], weapon: 90, torso: -6, head: -12, root: [0, -1] }),
     ] },
     // the success beat of the whole game: the smile is the content, so the paw stays clear of the muzzle
     cheer: { loop: true, frames: [

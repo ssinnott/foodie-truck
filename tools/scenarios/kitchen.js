@@ -6,12 +6,15 @@
 //             hold on the bowl, a press to load the oven and one inside its last 40 frames, and the bell. The screen
 //             must reach results with the stars it scored, then the map with run.served 1 on confirm. A second pass
 //             runs the FISH CAKES order (chop, mix, stove, plate) for the stove's hot band and writes
-//             tools/screens/kitchen-stove.png with the pot lit mid-hold.
+//             tools/screens/kitchen-stove.png with the pot lit mid-hold. The four timing tags are shot as they come
+//             up (kitchen-chop / -mix / -oven / -plate / -stove): each carries its owner's colour across its head.
 //   kitchenPause - `start` from a seat pushes the pause overlay, `cancel` pops it and the kitchen underneath is
 //             exactly as it was left (step, scores, owners, seat positions); online the push is refused.
 //   kitchenGag - Barley's eat gag hands him an apple and TAKES IT BACK: the rig's held item is cleared with the
 //             state, at a spot where no station suggests one. Writes tools/screens/kitchen-gag.png.
-//   results - opens straight onto results and returns to the map on action, with the order banked.
+//   results - opens straight onto results and returns to the map on action, with the order banked; and the party
+//             is IN the room, one rig per seat facing the hatch, every one of them cheering on a stagger once the
+//             stars have landed. Writes tools/screens/results-crew.png.
 import { withPage, assert } from '../playtest.js';
 
 /** The standing spots (art/backgrounds/kitchen.js STATION_X); the scenario walks by summary, not by geometry. */
@@ -80,6 +83,7 @@ export const SCENARIOS = {
       s = await api.summary();
       assert(s.top.t === 90 && s.top.owners[1] === 0, `90 frames held fill half the dial (${s.top.t}) and P1 owns the step`);
       assert(s.top.seats[0][3] === 'stir', `the mixer stirs (${s.top.seats[0][3]})`);
+      await api.shot('kitchen-mix');
       await api.release(0);
       await api.step(20);
       s = await api.summary();
@@ -99,6 +103,7 @@ export const SCENARIOS = {
       await api.step(270);
       s = await api.summary();
       assert(s.top.t <= 40 && s.top.t > 0, `the timer is inside its last 40 frames (${s.top.t})`);
+      await api.shot('kitchen-oven');
       await api.press(0, { action: true }, 1, 0);
       s = await api.summary();
       assert(s.top.step === 3 && s.top.scores[2] === 2, `taking the tray out in the window is PERFECT (step ${s.top.step}, score ${s.top.scores[2]})`);
@@ -106,6 +111,7 @@ export const SCENARIOS = {
       // PLATE: ring the bell at the hatch
       s = await walkTo(api, 4);
       assert(s.top.seats[0][2] === 4, `seat 0 is at the hatch (station ${s.top.seats[0][2]})`);
+      await api.shot('kitchen-plate');
       await api.press(0, { action: true }, 1, 0);
       s = await api.summary();
       assert(s.top.served === true && s.top.total === 6 && s.top.stars === 2, `the bell serves the dish: total ${s.top.total}/8 -> ${s.top.stars} stars`);
@@ -229,10 +235,26 @@ export const SCENARIOS = {
   },
 
   async results(server) {
-    await withPage(server, 'skipTo=results&critters=0,1', async (api) => {
+    await withPage(server, 'skipTo=results&critters=0,1', async (api, page) => {
       await api.step(30);
       const s0 = await api.summary();
       assert(s0.screen === 'results' && s0.top.stars === 2, `results opens on its own with two stars (${s0.screen}, ${s0.top.stars})`);
+
+      // the party has to BE here watching the customer eat: the screen used to be a customer, a stamp and an
+      // empty room (director's note 11). One rig per seat, facing the hatch, and every one of them cheering a
+      // few frames after the last once the stars have landed
+      await api.step(40);
+      const crew = await page.evaluate(() => {
+        const g = window.__game.game, k = g.screens[g.screens.length - 1];
+        return k.crew.map((c) => [c.x, c.opts.facing, c.player.name, c.cheerAt]);
+      });
+      assert(crew.length === 2, `both seats are in the room (${crew.length})`);
+      assert(crew.every((c) => c[1] === 1), `every seat faces the hatch (${crew.map((c) => c[1]).join()})`);
+      assert(crew.every((c) => c[2] === 'cheer'), `every seat is cheering (${crew.map((c) => c[2]).join()})`);
+      assert(crew[1][3] > crew[0][3], `the seats cheer on a stagger (${crew.map((c) => c[3]).join()})`);
+      assert(crew[0][0] < crew[1][0] && crew[1][0] < 300, `they stand along the counter left of the paper (${crew.map((c) => c[0]).join()})`);
+      await api.shot('results-crew');
+
       await api.press(0, { action: true }, 1, 2);
       const s1 = await api.summary();
       assert(s1.screen === 'map' && s1.run.served === 1, `action returns to the map with the order served (on ${s1.screen}, served ${s1.run.served})`);

@@ -10,8 +10,14 @@ const R = Math.round;
 const WOOD = '#C48A52', WOOD_DARK = '#8B5A2B', ROD = '#9A6234';
 /** Blade steel is a mid grey-blue: the old #D8DCE0 vanished on the mouse's #E2DDEA fur (relDiff 0.05); this clears both pale furs by .24. */
 const STEEL = '#9FB0B8';
-/** Baskets are dark willow with cream weave lines: wicker (#C9A05C) measured 0.03 against P2's marmalade apron. */
-const WILLOW = '#6B4E3A', WILLOW_LINE = '#C9B58E';
+/**
+ * Baskets are dark willow: wicker (#C9A05C) measured 0.03 against P2's marmalade apron. The two weave bands are
+ * painted in the SEAT's own colour (`rig.palette.primary` IS `PLAYER_COLORS[slot]`, set by critterRig), not in
+ * cream: at 1x the carried basket is the biggest, highest-contrast mark on a working critter, so cream bands made
+ * the loudest thing about a critter its luggage, while the player colour was a bib two forearms wide. On dark
+ * willow every one of the four hexes clears by value, so the basket is now a second player spot for free.
+ */
+const WILLOW = '#6B4E3A';
 /** The horn's two point lists, module constants: a draw hook allocates nothing (ART_STYLE section 9). */
 const HORN_BELL = [9, -3, 15, -5, 15, 5, 9, 3], HORN_BULB = [-7, -4, 1, -4, 1, 4, -7, 4];
 
@@ -32,10 +38,10 @@ export const ITEMS = {
     upright(ctx, rig, () => {
       ctx.beginPath(); ctx.arc(0, 8, 8, Math.PI, 0);
       ctx.strokeStyle = rig.col(rig.outline); ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.stroke();
-      ctx.strokeStyle = rig.col(WILLOW); ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = rig.col(rig.palette.primary); ctx.lineWidth = 2; ctx.stroke();   // the handle: the one mark a full basket can never hide
       celPoly(ctx, rig, [-11, 8, 11, 8, 9, 22, -9, 22], WILLOW, 0.36, 0.2);
       if (rig.override) return;
-      ctx.fillStyle = rig.col(WILLOW_LINE); ctx.fillRect(-9, 12, 18, 2); ctx.fillRect(-8, 17, 16, 2);   // two weave lines (2 px, cream on willow)
+      ctx.fillStyle = rig.col(rig.palette.primary); ctx.fillRect(-9, 13, 18, 3); ctx.fillRect(-8, 18, 16, 3);   // two weave bands, 3 px, below the fruit line
       const fill = rig.basketFill || 0;
       if (fill > 0) { const n = Math.min(4, Math.ceil(fill * 4)); for (let i = 0; i < n; i++) drawFood(ctx, rig.basketIcon || 'apple', -6 + (i % 3) * 6 + (i > 2 ? 3 : 0), 10 - (i > 2 ? 3 : 0), 3.5, rig.basketHex); }
     });

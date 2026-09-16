@@ -33,6 +33,12 @@ export const ORCHARD = Object.freeze({
 
 /** Row bands (screen y). */
 export const SKY_H = 120, GRASS_Y = 220, FENCE_Y = 340;
+/**
+ * Inside the plum wood: its top edge, the value-step line where the dark tree mass gives way to the far orchard
+ * floor, and the far fence's top rail. The mid trees' canopies hang down to about row 142, so the rows a player
+ * actually sees of this band are 142..220 and every mark in here is aimed at that window.
+ */
+const WOOD_Y = SKY_H + 2, HAZE_Y = 166, FENCE_FAR_Y = 188;
 /** The clean band: no tuft or windfall lands here, so four lanes of feet (292..316) and their shadows stand on plain grass. */
 export const BAND_TOP = 284, BAND_BOT = 322;
 /** Layers are painted this much wider than the screen on each side so a parallax blit never shows an edge. */
@@ -57,7 +63,32 @@ function crowns(g, list, fill, cap, shade) {
   }
 }
 
-/** Far: the sky gradient, two hill tiers, and the plum wood the trunks stand against. */
+/**
+ * A cottage on the far side of the wood, standing on the haze floor: a dark plum roof with a chimney over a pale
+ * wall and one dark window. No ink - at this depth every backdrop object is a silhouette in two plum steps, and a
+ * 1 px line on a 30 px house would be the busiest mark on the plane the name plates sit on.
+ */
+function cottage(g, x, y, flip) {
+  const roof = mix(ORCHARD.plum, PLUM.deep, 0.5), wall = mix(ORCHARD.plum, ORCHARD.hill, 0.45);
+  // chimney, door and window, mirrored inside the 32 px footprint so the two cottages are not one stamp twice
+  const chim = flip ? x + 5 : x + 22, door = flip ? x + 15 : x + 12, win = flip ? x + 7 : x + 21;
+  g.fillStyle = wall; g.fillRect(x + 4, y - 12, 24, 12);
+  g.fillStyle = roof;
+  g.beginPath(); g.moveTo(x, y - 10); g.lineTo(x + 16, y - 23); g.lineTo(x + 32, y - 10); g.closePath(); g.fill();
+  g.fillRect(chim, y - 25, 5, 9);
+  g.fillRect(door, y - 9, 5, 6); g.fillRect(win, y - 8, 4, 4);
+}
+
+/**
+ * Far: the sky gradient, two hill tiers, and the plum wood the trunks stand against.
+ *
+ * The wood used to be one flat plum rectangle a hundred rows deep - the right colour, the right idea and nothing in
+ * it. It is now the same mass in two value steps with a silhouette on the join: dark wood down to HAZE_Y, a distant
+ * tree-line whose crowns and trunks dip out of it, then the far orchard floor one step lighter (L .33 against the
+ * wood's .22 - a 33 % step, and still 66 % below Barley's wool, which is what keeps the two pale critters reading).
+ * Standing on that floor are two cottages and a post-and-rail fence, the same fence the near layer carries four
+ * depth lanes closer. Everything here is flat silhouette in the plum ladder: no ink, no third tone.
+ */
 function paintFar(g, w, h, rnd) {
   vGradient(g, 0, 0, w, SKY_H, [[0, ORCHARD.skyTop], [1, ORCHARD.skyLow]]);
   const farHill = mix(ORCHARD.hill, ORCHARD.skyLow, 0.5);
@@ -67,13 +98,26 @@ function paintFar(g, w, h, rnd) {
   g.fillStyle = ORCHARD.hill;
   for (let x = -20; x < w + 40; x += 90) { g.beginPath(); g.ellipse(x + rnd() * 24, 116, 70, 16 + rnd() * 6, 0, 0, TAU); g.fill(); }
   g.fillRect(0, 114, w, SKY_H - 114);
-  // the plum tree-line: bumps along the sky's foot, then solid wood down to the grass (the plane behind every head)
+  // the plum tree-line's top edge: leaf clumps small enough to read as foliage in the gaps between the mid trees
   g.fillStyle = ORCHARD.plum;
-  for (let x = -10; x < w + 20; x += 22) { const r = 10 + rnd() * 8; g.beginPath(); g.arc(x, SKY_H + 2, r, 0, TAU); g.fill(); }
-  g.fillRect(0, SKY_H + 2, w, h - SKY_H - 2);
-  // a lighter row of distant canopies inside the wood so it has depth without a second outline
-  g.fillStyle = mix(ORCHARD.plum, ORCHARD.canopy, 0.35);
-  for (let x = 0; x < w + 30; x += 46) { const r = 16 + rnd() * 10; g.beginPath(); g.arc(x + rnd() * 12, 150 + rnd() * 20, r, 0, TAU); g.fill(); }
+  for (let x = -12; x < w + 24; x += 13) { const r = 5 + rnd() * 9; g.beginPath(); g.arc(x, WOOD_Y + 4, r, 0, TAU); g.fill(); }
+  g.fillRect(0, WOOD_Y + 2, w, h - WOOD_Y - 2);
+  // the one value step inside the band: the far orchard floor, warmer and lighter as it goes back into the haze
+  g.fillStyle = mix(ORCHARD.plum, ORCHARD.hill, 0.26);
+  g.fillRect(0, HAZE_Y, w, h - HAZE_Y);
+  // ...and the silhouette that makes the join a shape rather than a ruled line: distant crowns on short trunks
+  g.fillStyle = ORCHARD.plum;
+  for (let x = -10; x < w + 20; x += 25) {
+    const cx = R(x + rnd() * 8), r = 8 + R(rnd() * 8), cy = HAZE_Y - R(r * 0.3) + R(rnd() * 5);
+    g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
+    g.fillRect(cx - 1, cy + r - 3, 3, 5 + R(rnd() * 6));
+  }
+  cottage(g, 92, FENCE_FAR_Y - 2, false);
+  cottage(g, 534, FENCE_FAR_Y - 4, true);
+  // the far fence: two rails and posts, dark on the lighter floor, well above the rows the name plates land on
+  g.fillStyle = mix(ORCHARD.plum, PLUM.deep, 0.5);
+  g.fillRect(0, FENCE_FAR_Y, w, 2); g.fillRect(0, FENCE_FAR_Y + 6, w, 2);
+  for (let x = 6; x < w; x += 29) g.fillRect(x, FENCE_FAR_Y - 3, 3, 14);
 }
 
 /** Mid: the lollipop trees. Trunks first (behind), then every canopy as one mass that overlaps into its neighbours. */
@@ -90,8 +134,8 @@ function paintMid(g, w, h, rnd) {
     g.fillStyle = ORCHARD.trunk; g.fillRect(tx - tw / 2 - 3, GRASS_Y - 6, tw + 6, 8);
     g.fillStyle = trunkShade; g.fillRect(tx + 1, GRASS_Y - 6, tw / 2 + 2, 8);
     // canopy: four or five blobs, big enough that the row closes into one mass. Measured coverage across the visible
-    // width is 18 % at row 40, 58 % at row 50 and 78 % at row 60, so the screen spawns its apples at row 56 (see
-    // APPLE_Y0) - that is where "the apple drops out of the leaves" is actually true.
+    // width is 18 % at row 40, 58 % at row 50 and 78 % at row 60, so the screen hangs its apples at row 66 (see
+    // APPLE_Y0) - that is where an apple is inside the leaves rather than balanced on the rim of them.
     const cy = 84 + R(rnd() * 12), n = 4 + (rnd() < 0.5 ? 1 : 0);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + rnd() * 0.8, d = 20 + rnd() * 10;
@@ -107,7 +151,7 @@ function paintMid(g, w, h, rnd) {
  * OUTSIDE that band.
  *
  * The band is the fix for the one pale-on-pale in the scene: Cress is a green frog (`#3F7D3B`) standing on green
- * grass (`#5E7A3E`) — 0.04 apart by value, 28 deg apart by hue, which fails both clauses of ART_STYLE 0.1. Both
+ * grass (`#5E7A3E`) - 0.04 apart by value, 28 deg apart by hue, which fails both clauses of ART_STYLE 0.1. Both
  * hexes are pinned by ART_STYLE section 1, so the separation has to come from the layer: the rows the cast walks are
  * trodden flat and a step toward the plum shadow, which lifts every seat off the floor by 0.28 and gives the
  * scatter-free band a reason to be there. It stays at L .31 so Barley's and Chicory's dark feet still read on it.

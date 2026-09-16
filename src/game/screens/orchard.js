@@ -28,12 +28,22 @@ const LANE_Y0 = 316, LANE_GAP = 8;
 /**
  * Apples: a fixed pool, spawned every 30..60 frames, falling 1.4..2.4 px/frame with a 3 px sway.
  *
- * Row 56 is where an apple can honestly be said to drop out of the leaves: the canopy covers 58 % of the width at
- * row 50 and 78 % at row 60 (18 % at row 40, which is why it used to pop out of open sky), and it is the first row
- * clear of the clock ticket's bottom edge at ~47 — the ticket draws after the apples, so anything seeded above that
- * spends its first frames invisible behind paper.
+ * Row 66 is where an apple can honestly be said to hang IN the leaves: the canopy covers 58 % of the width at row
+ * 50 and 78 % at row 60 (18 % at row 40, which is why it used to pop out of open sky), and the crowns' top edges
+ * run 46..62, so row 56 — where the apples used to be seeded — put half of them on the rim with their stalks in
+ * open sky. Ten rows lower the apple sits on green with its stalk inside the mass, and it is still well clear of
+ * the clock ticket's bottom edge at ~47 (the ticket draws after the apples).
  */
-const MAX_APPLES = 12, SPAWN_MIN = 30, SPAWN_MAX = 60, APPLE_Y0 = 56, VY_MIN = 1.4, VY_MAX = 2.4, SWAY = 3, SWAY_RATE = 0.06;
+const MAX_APPLES = 12, SPAWN_MIN = 30, SPAWN_MAX = 60, APPLE_Y0 = 66, VY_MIN = 1.4, VY_MAX = 2.4, SWAY = 3, SWAY_RATE = 0.06;
+/**
+ * ...but an apple that BEGINS at row 56 materialises out of blank leaves: the canopy is a smooth green mass and the
+ * only red in the frame is fruit already falling through open air, so the scene never says "apple orchard" and its
+ * best beat - the apple letting go - has no before-state to let go from. Every apple now hangs on its branch at the
+ * spawn point for HANG frames first, on a 2 px ink stalk that runs up into the leaves, and shivers 1 px on alternate
+ * frames for the last SHIVER before it drops. The signal red stays an emitter (ART_STYLE section 4): it is the same
+ * apple the player is about to chase, held one beat earlier, not a red fleck painted into the backdrop.
+ */
+const HANG_FRAMES = 22, SHIVER_FRAMES = 6, HANG_STEM = 6;
 /** Drawn at s 5 (a 10 px apple); one in eight is wormy. */
 const APPLE_S = 5, WORMY_IN = 8;
 /** Where a missed apple lands: in front of the front lane, outside the clean band, above the fence. */
@@ -111,7 +121,7 @@ export class OrchardScreen extends Screen {
       seatAnim(s, 'catch');
     }
     this.apples = [];
-    for (let i = 0; i < MAX_APPLES; i++) this.apples.push({ active: false, x: 0, x0: 0, y: 0, vy: 0, kind: 0, t: 0 });
+    for (let i = 0; i < MAX_APPLES; i++) this.apples.push({ active: false, x: 0, x0: 0, y: 0, vy: 0, kind: 0, t: 0, hang: 0 });
     this.splats = [];
     for (let i = 0; i < MAX_SPLATS; i++) this.splats.push({ t: SPLAT_FRAMES, x: 0, y: 0, hex: SIGNAL.orchard });
     this.splatCursor = 0;
@@ -174,12 +184,15 @@ export class OrchardScreen extends Screen {
         if (a.active) continue;
         a.active = true; a.x0 = rng.int(X_MIN + 8, X_MAX - 8); a.x = a.x0; a.y = APPLE_Y0;
         a.vy = rng.range(VY_MIN, VY_MAX); a.kind = rng.int(1, WORMY_IN) === 1 ? 1 : 0; a.t = rng.int(0, 100);
+        a.hang = HANG_FRAMES;
         break;
       }
     }
     for (let i = 0; i < this.apples.length; i++) {
       const a = this.apples[i];
       if (!a.active) continue;
+      // on the branch: no fall, no catch test, and a.t held at its seeded sway phase until the apple lets go
+      if (a.hang > 0) { a.hang--; a.x = a.x0 + (a.hang < SHIVER_FRAMES && (a.hang & 1) ? 1 : 0); continue; }
       a.t++; a.y += a.vy; a.x = a.x0 + dsin(a.t * SWAY_RATE) * SWAY;
       const bottom = a.y + APPLE_S;
       let caught = false;
@@ -257,7 +270,20 @@ export class OrchardScreen extends Screen {
   drawApple(ctx, a) {
     if (!a.active) return;
     const x = R(a.x), y = R(a.y);
-    if (a.kind === 0) { drawFood(ctx, 'apple', x, y, APPLE_S); return; }
+    // the branch it is still holding on to: a 2 px ink stalk (the 2 px floor, ART_STYLE 0.8) from the apple's own
+    // stem up into the leaves, so a hanging apple reads as fruit ON the tree and not fruit stuck in mid-air
+    if (a.hang > 0) { ctx.fillStyle = UI.ink; ctx.fillRect(x - 1, y - APPLE_S - HANG_STEM, 2, HANG_STEM + 2); }
+    if (a.kind === 0) {
+      drawFood(ctx, 'apple', x, y, APPLE_S);
+      // The one highlight (ART_STYLE 0.5 allows exactly one): art/food.js only caps a ball at r >= 6 and the falling
+      // apple is r 4.6, so a 10 px red ball crossing the canopy carried no light at all - red #D9463B against the
+      // canopy #4F6B3A is 0.17 apart by value, under the 0.25 the ladder asks for, and at 1x it sank into the leaves.
+      // A 3 px cream pip on the lit top-left clears every plane the apple falls across (canopy, plum wood, haze
+      // floor, grass) by value alone, and it doubles as the ripe/wormy tell: a ripe apple is shiny, the bruised one
+      // stays dull.
+      ctx.fillStyle = UI.cream; ctx.fillRect(x - 3, y - 3, 3, 3);
+      return;
+    }
     drawFood(ctx, 'apple', x, y, APPLE_S, ORCHARD.wormy);
     ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.arc(x + 2, y - 1, 2.5, 0, TAU); ctx.fill();        // the bite hole
     ctx.beginPath(); ctx.arc(x + 2, y - 3, 2.6, 0, TAU); ctx.fill();                                // the grub, inked...

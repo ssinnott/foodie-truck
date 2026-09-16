@@ -32,7 +32,7 @@ export const SCENARIOS = {
       await api.step(9);
       await api.shot('pond-cast');
       const w = await untilState(api, 'wait', 60);
-      assert(seat0(w).state === 'wait' && seat0(w).fx === 340 && seat0(w).fy === 243, `the float lands in P1's column (${seat0(w).fx}, ${seat0(w).fy}) and waits ${seat0(w).t} frames`);
+      assert(seat0(w).state === 'wait' && seat0(w).fx === 170 && seat0(w).fy === 278, `the float lands in P1's own water 80 px right of its seat (${seat0(w).fx}, ${seat0(w).fy}) and waits ${seat0(w).t} frames`);
       assert(seat0(w).t >= 90 && seat0(w).t <= 240, `the wait is seeded inside 90..240 (${seat0(w).t} left after landing)`);
       assert(w.top.seats.slice(1).every((x) => x.state === 'idle'), 'the other seats did not cast');
 
@@ -63,8 +63,20 @@ export const SCENARIOS = {
       await api.step(8);
       await api.shot('pond-miss');
 
+      // the whole crew out at once: four floats, four columns, four depths, spread across the full 640 (note 8)
+      await api.step(40);
+      for (let i = 0; i < 4; i++) await api.press(i, { action: true }, 1, 0);
+      let all = await api.summary();
+      for (let i = 0; i < 60 && !all.top.seats.every((x) => x.state === 'wait'); i++) { await api.step(1); all = await api.summary(); }
+      assert(all.top.seats.every((x) => x.state === 'wait'), `all four seats are fishing (${all.top.seats.map((x) => x.state).join()})`);
+      const cols = all.top.seats.map((x) => x.fx);
+      assert(cols.every((x, i) => i === 0 || x - cols[i - 1] === 130), `the four columns are one seat pitch apart (${cols.join()})`);
+      await api.step(20);
+      await api.shot('pond-columns');
+
       // the clock runs out: the FISH sign drops, the catch is gathered, and the pond hands back to the map
       const errsBefore = (await api.errors()).length;
+      await api.step(20);
       await page.evaluate(() => { window.__game.game.screen.clock.timer = 1; });
       await api.step(2);
       const e = await api.summary();

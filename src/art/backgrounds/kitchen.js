@@ -13,12 +13,18 @@
 //
 // The wall's furniture is laid out around ONE rule: at these proportions the counter top is at the cast's head
 // height, so nothing a critter needs to read may sit in the band their heads and name plates occupy. Everything
-// hung on the WALL lives above row 156. The props that STAND on the counter (the pot at 164, the bowl at 178, the
-// ingredient on the board at ~180) cannot, so the two are kept apart instead: every prop stands PROP_DX px to the
-// right of its cook's spot, clear of a seven-letter name plate, and the screen clamps the plate's top row to 160
-// (kitchen.js PLATE_Y_MAX) so a short crown can never drop it onto the pot's rim.
+// hung on the WALL lives above row 156 - the knife rack and the window sill end by 100, the station signs take
+// 104..121 and the timing widgets 122..146. The props that STAND on the counter (the round board's handle at 156,
+// the kettle at 163, the pot at 164, the bowl's rim at 173, the ingredient on the board at ~177, the mixing
+// spoon at 146) cannot, so the two are kept apart instead: every prop stands PROP_DX px to the right of its
+// cook's spot, clear of a seven-letter name plate, and the screen clamps the plate's top row to 160
+// (kitchen.js PLATE_Y_MAX) so a short crown can never drop it onto the pot's rim. Each station's own silhouette
+// carries 26..34 px above the counter (round board, spoon, pot, kettle) so a cook standing at it cannot hide
+// what it is, and the sign over it letters the name for the squint that still misses.
 import { makeLayer, boxOutlined, boxShaded, INK, VIEW_W, VIEW_H } from '../layers.js';
 import { PLUM, UI } from '../../constants.js';
+import { STATIONS } from '../../content/places.js';
+import { drawText } from '../../engine/text.js';
 
 const R = Math.round;
 
@@ -43,13 +49,20 @@ export const ROWS = Object.freeze({
 /** The serving hatch: an opening in the wall at the right, and the plating shelf across its foot. */
 export const HATCH = Object.freeze({ x: 500, y: 90, w: 140, h: 140, shelfY: 230, shelfH: 14 });
 /** Where the customer's bust leans in: the RIGHT half of the opening, so the cook plating at the shelf's left
- *  half is never drawn on top of them (the review's fused-critters defect). Both screens draw the bust here. */
-export const BUST = Object.freeze({ x: 548, y: 94, w: 92, h: 136 });
+ *  half is never drawn on top of them (the review's fused-critters defect). Both screens draw the bust here.
+ *  `scale` is the CAST'S OWN 1x kitchen draw scale (ART_STYLE section 2 "Draw scales"): the customer used to be
+ *  blown up to 1.7x, which put two sizes of the same face kit - whites 6x5, pupils 3x3, fixed by ART_STYLE
+ *  section 0.6 - in one flat side-on shot, so it read as a zoom artifact rather than a bigger animal. Species
+ *  proportions (the owl's headR 13 against Barley's 15) carry the size difference now. `margin` then stands the
+ *  customer on the strip of lane seen through the opening: their silhouette's top row is y + margin. */
+export const BUST = Object.freeze({ x: 548, y: 94, w: 92, h: 136, scale: 1, margin: 86 });
 /** The window onto the lane, high on the wall so the cast's name plates never collide with it. */
 export const WINDOW = Object.freeze({ x: 150, y: 44, w: 90, h: 50 });
-/** The order ticket and the recipe card hang from the rail at its two ends (the screen draws them). */
+/** The order ticket is PINNED flush under the rail at its left end, full width, with its perforated top: it is the
+ *  screen's one big paper. The recipe card is the smaller checklist and HANGS below the rail on two visible pegs at
+ *  the other end, narrower and un-perforated, so the two papers never read as a symmetric pair of UI slabs. */
 export const TICKET = Object.freeze({ x: 8, y: 12, w: 112 });
-export const RECIPE = Object.freeze({ x: 384, y: 12, w: 108 });
+export const RECIPE = Object.freeze({ x: 396, y: 26, w: 92 });
 /** Where each station's critter stands (feet centre) for STATIONS chop / mix / stove / oven / plate, left to right. */
 export const STATION_X = Object.freeze([80, 190, 300, 410, 490]);
 /** How far right of its standing spot each station's prop sits: far enough that the cook's head never hides it,
@@ -61,12 +74,17 @@ export const PROP_X = Object.freeze(STATION_X.map((x, i) => x + PROP_DX[i]));
 export const AT_RANGE = 24;
 /** The walk lane's ends: half a body in from the edges. */
 export const X_MIN = 30, X_MAX = 606;
-/** The paper progress tag over each station: 20x8, and the timing widget's card under it. The plate's pair hangs
- *  above the hatch instead, which is an opening, not wall. */
-export const TAG_W = 20, TAG_H = 8;
-/** Both hang over their own station's prop; the plate's pair hangs over the hatch, which is an opening, not wall. */
-export const TAG_POS = Object.freeze(PROP_X.map((x, i) => [x - R(TAG_W / 2), i === 4 ? 36 : 108]));
-export const WIDGET_POS = Object.freeze(PROP_X.map((x, i) => [x - 24, i === 4 ? 52 : 120]));
+/** The hand-lettered paper sign over each station - 36x15, wide enough for the station's NAME in ink at size 1, so
+ *  a five-letter word reads at 1x over a critter's head. The owner's colour is a 4 px band across its head (the
+ *  judge panel's per-station progress tag: the band's length is the step's progress), never a wash over the word. */
+export const TAG_W = 36, TAG_H = 15;
+/** The sign hangs over its own station's prop, the timing widget's card under it; the plate's pair hangs in the
+ *  hatch opening instead, which is not wall. Rows 104..146 is the wall's clear band: under the knife rack, the
+ *  window sill and the pans, and above the props that stand on the counter (156..200). */
+export const TAG_POS = Object.freeze(PROP_X.map((x, i) => [x - R(TAG_W / 2), i === 4 ? 30 : 104]));
+export const WIDGET_POS = Object.freeze(PROP_X.map((x, i) => [x - 24, i === 4 ? 50 : 122]));
+/** The station names as the signs letter them (content/places.js owns the strings). */
+export const TAG_NAME = Object.freeze(STATIONS.map((s) => s.name));
 
 /** The panelled wall, a seam every 16 px, and its foot where the counter meets it. */
 function paintWall(g, w) {
@@ -82,7 +100,13 @@ function paintRail(g, w) {
   g.fillStyle = KITCHEN.brass; g.fillRect(0, ROWS.rail + 2, w, 2);
   g.fillStyle = KITCHEN.brassSh; g.fillRect(0, ROWS.rail + 4, w, 1);
   for (let x = 40; x < w; x += 80) { g.fillStyle = INK; g.fillRect(x, ROWS.rail - 4, 3, 5); }   // brackets to the ceiling
-  for (const x of [TICKET.x + 20, TICKET.x + TICKET.w - 24, RECIPE.x + 20, RECIPE.x + RECIPE.w - 24]) boxOutlined(g, x, ROWS.rail + 4, 4, 6, KITCHEN.wood);
+  // the order ticket is pinned flush to the rail (its pegs sit under it); the recipe card hangs below on two
+  // 2 px ink strings off its own pegs, which is the whole reason the two papers do not read as one UI band
+  for (const x of [TICKET.x + 20, TICKET.x + TICKET.w - 24]) boxOutlined(g, x, ROWS.rail + 4, 4, 6, KITCHEN.wood);
+  for (const x of [RECIPE.x + 18, RECIPE.x + RECIPE.w - 22]) {
+    boxOutlined(g, x, ROWS.rail + 4, 4, 6, KITCHEN.wood);
+    g.fillStyle = INK; g.fillRect(x + 1, ROWS.rail + 10, 2, RECIPE.y - ROWS.rail - 10);
+  }
 }
 
 /** A view of the lane outside: dusk sky, a plum tree-line, the hedge, a strip of lane. Shared by window and hatch. */
@@ -141,6 +165,12 @@ function paintHatch(g, rnd) {
   const H = HATCH;
   g.fillStyle = INK; g.fillRect(H.x - 2, H.y - 2, H.w + 2, H.h + 4);
   paintOutside(g, H.x, H.y, H.w, H.h, rnd, 52);
+  // the truck's own awning hangs over this hatch (ART_STYLE section 1 "The truck"), so its shade falls across the
+  // opening - heaviest on the sky band at the top. Without it the 140x140 of near-white lane sky was the lightest
+  // mass in a room whose whole job is to make the station being cooked at the brightest thing in it
+  g.globalAlpha = 0.34; g.fillStyle = PLUM.deep; g.fillRect(H.x, H.y, H.w, 42);
+  g.globalAlpha = 0.16; g.fillRect(H.x, H.y + 42, H.w, H.h - 42);
+  g.globalAlpha = 1;
   // the whole band from the shelf down to the floor is the counter's own front FIRST, so no pixel of the page
   // shows through at the screen edge, and the shelf then spans the full opening on top of it
   g.fillStyle = KITCHEN.counterFront; g.fillRect(H.x, H.shelfY, VIEW_W - H.x, ROWS.floor - H.shelfY);
@@ -199,12 +229,18 @@ function paintCrate(g) {
   g.fillStyle = '#C9B58E'; g.fillRect(x + 32, y + 2, 18, 4);
 }
 
-/** The blank paper progress tags on the wall over every station; the screen colours their segments per frame. */
+/**
+ * The hand-lettered station signs on the wall: a paper card on a 2 px string carrying the station's NAME in ink,
+ * one over each station. Painted into the layer because the lettering never changes; the screen adds the owner's
+ * colour band and (for the step being worked) a brighter repaint on top, per frame.
+ */
 function paintTags(g) {
   for (let i = 0; i < TAG_POS.length; i++) {
     const x = TAG_POS[i][0], y = TAG_POS[i][1];
-    g.fillStyle = INK; g.fillRect(x + R(TAG_W / 2) - 1, y - 5, 2, 5);   // the string it hangs by
+    g.fillStyle = INK; g.fillRect(x + R(TAG_W / 2) - 1, y - 6, 2, 6);   // the string it hangs by
     boxOutlined(g, x, y, TAG_W, TAG_H, UI.paperDark);
+    g.fillStyle = UI.paperLine; g.fillRect(x + 1, y + 1, TAG_W - 2, 4); // the head band's empty trough
+    drawText(g, TAG_NAME[i], x + R(TAG_W / 2), y + 6, { size: 1, color: UI.ink, align: 'center', shadow: false });
   }
 }
 

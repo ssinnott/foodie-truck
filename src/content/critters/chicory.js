@@ -47,7 +47,7 @@ const goggles = { attach: 'head', draw(ctx, rig, pose) {
 
 export const build = critterBuild({
   palette: { skin: FUR, hair: PEAT, belly: CREAM, secondary: FUR, shorts: SHORTS, accent: TWEED, dark: PEAT },
-  proportions: { headR: 13, torsoW: 24, torsoH: 16, hip: 20, handR: 4.5, footL: 11 },
+  proportions: { headR: 13, torsoW: 24, torsoH: 16, hip: 20, handR: 4.5, footL: 11, shoulderX: 8 },
   ears: 'long', earTip: true,
   face: { eyeY: 1 },    // the eyes sit a pixel low so the cap has a hairline to rest on
   muzzle: 1.1, tail: 'puff',
@@ -57,10 +57,10 @@ export const build = critterBuild({
 export const anims = makeCritterAnims({
   // a lope: a deep bob with a stretch on the pass keys; the ears trail on their chain a beat behind
   walk: { loop: true, frames: [
-    F(7, { legR: [30, 4], legL: [-26, 22], armR: [-20, 10], armL: [22, 18], torso: 6, head: -2, root: [0, -1], stretch: 1.03 }),
-    F(7, { legR: [6, 30], legL: [-2, 4], armR: [0, 12], armL: [2, 12], torso: 6, head: 2, root: [0, 2], squash: 1.04 }),
-    F(7, { legR: [-26, 22], legL: [30, 4], armR: [22, 18], armL: [-20, 10], torso: 6, head: -2, root: [0, -1], stretch: 1.03 }),
-    F(7, { legR: [-2, 4], legL: [6, 30], armR: [2, 12], armL: [0, 12], torso: 6, head: 2, root: [0, 2], squash: 1.04 }),
+    F(7, { legR: [30, 4], legL: [-26, 22], armR: [-10, 10], armL: [12, 16], torso: 6, head: -2, root: [0, -1], stretch: 1.03 }),
+    F(7, { legR: [6, 30], legL: [-2, 4], armR: [10, 12], armL: [-4, 12], torso: 6, head: 2, root: [0, 2], squash: 1.04 }),
+    F(7, { legR: [-26, 22], legL: [30, 4], armR: [28, 14], armL: [-28, 10], torso: 6, head: -2, root: [0, -1], stretch: 1.03 }),
+    F(7, { legR: [-2, 4], legL: [6, 30], armR: [10, 12], armL: [-4, 12], torso: 6, head: 2, root: [0, 2], squash: 1.04 }),
   ] },
   // the signature: a two-key pop on the bulb horn, squashed on the squeeze
   honk: { loop: false, frames: [

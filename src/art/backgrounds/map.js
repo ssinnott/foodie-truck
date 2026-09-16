@@ -15,10 +15,18 @@ import { pathRR } from '../shading.js';
 
 const R = Math.round, TAU = Math.PI * 2;
 
-/** The map's muted constants (docs/ART_STYLE.md section 1). The one saturated colour on the map is SIGNAL.map. */
+/**
+ * The map's muted constants (docs/ART_STYLE.md section 1). The one saturated colour on the map is SIGNAL.map.
+ *
+ * HEDGEROW DUSK, not noon: the greens are a saturation step below the first pass's (meadow .28 -> .20 chroma,
+ * hedge .30 -> .20, and both a few degrees warmer) so the lane at L .62 stays the brightest thing on the plane and
+ * the meadow stops out-shouting the wheat and the cottages. Every shadow on the ground - the cloud-shade blobs, the
+ * canopy's far side, the contact shadows under the trees and the buildings - is mixed toward PLUM.deep, so the low
+ * warm light is carried by plum shadows rather than by a blue cast. `groundShade` is the one shadow colour.
+ */
 export const MAP = Object.freeze({
-  meadow: '#8FA05A', shade: '#728A4C', wheat: '#D9B15E', furrow: '#B8933F', lane: '#C9AE78', laneEdge: '#B99A6A',
-  river: '#6F9FB0', deep: '#4E7A8C', hedge: '#4F6B3A', canopy: '#6E8A48', wall: '#F1E4C8', wallShade: '#C9B58E',
+  meadow: '#8C9663', shade: '#657058', wheat: '#D9B15E', furrow: '#B8933F', lane: '#C9AE78', laneEdge: '#B99A6A',
+  river: '#6F9FB0', deep: '#4E7A8C', hedge: '#566241', canopy: '#728252', wall: '#F1E4C8', wallShade: '#C9B58E',
   roof: '#A65A48', roofShade: '#7A4034', plum: PLUM.shadow, skyTop: '#FBE3C4', skyLow: '#F4C9A0', hillFar: '#8E8A78',
   hillNear: '#B4A48C', wood: '#9A6234', woodDark: '#5E3A1B', trunk: '#6B4E3A', rose: '#C96B7A', mustard: '#E2B44A',
   board: '#55665A', boardShade: '#465549', brass: '#B8873A', churn: '#B8C4C9', slate: '#2F4B3C', window: '#D9C9A8', cobble: '#C9B58E',
@@ -172,23 +180,44 @@ function strokePoly(g, poly, color, w) {
   g.beginPath(); g.moveTo(poly[0], poly[1]); for (let i = 2; i < poly.length; i += 2) g.lineTo(poly[i], poly[i + 1]); g.stroke();
 }
 function ellipse(g, cx, cy, rx, ry, color) { g.fillStyle = color; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, TAU); g.fill(); }
-/** Lollipop tree: 4 px trunk, a shaded canopy disc; base at (bx, by). */
+/**
+ * The plum contact shadow every standing thing on the plane casts, in the same colour and proportions as the
+ * y-sorted pass's `drawShadow` (fx.js: PLUM.deep at 0.35, w/2 by w*0.22) so a baked tree and a roadside tree sit on
+ * the ground the same way. `w` is the caster's width; the ellipse leans a couple of pixels down-light (top-left sun).
+ */
+function groundShade(g, cx, by, w, k = 0.22, lean = 2) { ellipse(g, R(cx + lean), R(by), w * 0.5, w * k, 'rgba(47,35,56,0.35)'); }
+/**
+ * Lollipop tree: 4 px trunk, a shaded canopy disc; base at (bx, by).
+ *
+ * The crown carries the SAME warm ink as the stall, the signposts and the cottage. `discShaded` lays its ink disc
+ * under the fill, but on a circle the fill's antialiasing eats that ring from the inside while the ground eats it
+ * from the outside, and the crowns came out of the first pass with no printed line at all (a judge's histogram of a
+ * tree found zero #2A1F1A). One stroked ring over the fill puts a solid printed line of INK back on the boundary,
+ * at the weight the cottage wall and the orchard's canopies carry (a 1 px ring stroked at r + 0.5 measured #2D221B:
+ * thinner and greyer than every other line in the same frame, which is the fault being fixed).
+ */
 function lollipop(g, bx, by, r) {
+  const cy = by - 12 - r + 3;
   boxOutlined(g, bx - 2, by - 12, 4, 12, MAP.trunk);
-  discShaded(g, bx, by - 12 - r + 3, r, MAP.hedge, '#3F5730');
-  g.fillStyle = MAP.canopy; g.beginPath(); g.arc(bx - R(r * 0.3), by - 12 - r + 3 - R(r * 0.3), R(r * 0.42), 0, TAU); g.fill();
+  discShaded(g, bx, cy, r, MAP.hedge, '#4A4F3E');
+  g.strokeStyle = INK; g.lineWidth = 2; g.beginPath(); g.arc(bx, cy, r, 0, TAU); g.stroke();
+  g.fillStyle = MAP.canopy; g.beginPath(); g.arc(bx - R(r * 0.3), cy - R(r * 0.3), R(r * 0.42), 0, TAU); g.fill();
 }
 /** Front-on building with a visible roof: walls, a trapezoid roof, door, one window. (x, y) = wall bottom-left. */
 function building(g, x, y, w, h, wall, wallShade, roof, roofShade, o) {
   const rh = R(h * 0.5);
   boxShaded(g, x, y - h, w, h, wall, wallShade, INK, 1, 0.3);
-  polyOutlined(g, [x - 3, y - h, x + w + 3, y - h, x + w - 6, y - h - rh, x + 6, y - h - rh], roof, INK, 1);
+  // 2 px of ink on the roof block (1 px on the props below it): the rake is a diagonal, and at 1 px the stroke's
+  // antialiasing left the slope a soft blend while every straight edge in the same frame printed a hard line.
+  polyOutlined(g, [x - 3, y - h, x + w + 3, y - h, x + w - 6, y - h - rh, x + 6, y - h - rh], roof, INK, 2);
   g.save(); g.beginPath(); g.moveTo(x - 3, y - h); g.lineTo(x + w + 3, y - h); g.lineTo(x + w - 6, y - h - rh); g.lineTo(x + 6, y - h - rh); g.closePath(); g.clip();
   g.fillStyle = roofShade; g.fillRect(x - 3, y - h - R(rh * 0.35), w + 6, R(rh * 0.35)); g.restore();
   if (o && o.chimney) boxOutlined(g, x + 6, y - h - rh - 8, 6, 12, wall);
   if (o && o.round) { g.fillStyle = INK; g.beginPath(); g.arc(x + w / 2, y - h - R(rh * 0.5), 7, 0, TAU); g.fill(); g.fillStyle = MAP.window; g.beginPath(); g.arc(x + w / 2, y - h - R(rh * 0.5), 6, 0, TAU); g.fill(); }
+  // the door is warm wood over a dark lower band, not the dark wood itself: at #5E3A1B its own ink line was
+  // invisible and the door read as a hole rather than as an inked plank object on the wall
   const dw = o && o.doorW ? o.doorW : 10;
-  boxOutlined(g, x + R(w * 0.6), y - 15, dw, 15, MAP.woodDark);
+  boxShaded(g, x + R(w * 0.6), y - 15, dw, 15, MAP.wood, MAP.woodDark, INK, 1, 0.3);
   boxOutlined(g, x + 8, y - h + 8, 9, 9, MAP.window);
   g.fillStyle = MAP.skyTop; g.fillRect(x + 8, y - h + 8, 3, 9);
 }
@@ -206,11 +235,14 @@ function skep(g, cx, by) {
 
 function paintLandmarks(g) {
   // home: the yard - cottage on the lane's north side, phone box, lamp post, the chalk-outlined parking bay
+  groundShade(g, HOME.x - 84, HOME.y - 16, 94, 0.1, 4);
   building(g, HOME.x - 120, HOME.y - 16, 72, 48, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, { chimney: true });
   boxOutlined(g, HOME.x - 40, HOME.y - 50, 12, 24, MAP.wall); g.fillStyle = MAP.plum; g.fillRect(HOME.x - 40, HOME.y - 50, 12, 4);
   g.fillStyle = MAP.window; g.fillRect(HOME.x - 38, HOME.y - 44, 8, 10);
   g.fillStyle = MAP.lane; pathRR(g, HOME.x + 16, HOME.y + 12, 48, 30, 4); g.fill();
-  g.strokeStyle = MAP.wall; g.lineWidth = 2; pathRR(g, HOME.x + 19, HOME.y + 15, 42, 24, 3); g.stroke();
+  // the parking bay's chalk line is DASHED: a solid cream rounded rect on the grass read as a HUD card lying in the
+  // world, which is the one thing the map's corners are being cleared of. 7 px marks keep it over the 2 px floor.
+  g.strokeStyle = MAP.wall; g.lineWidth = 2; g.setLineDash([7, 5]); pathRR(g, HOME.x + 19, HOME.y + 15, 42, 24, 3); g.stroke(); g.setLineDash([]);
   boxOutlined(g, HOME.x - 62, HOME.y + 8, 3, 24, MAP.woodDark); boxOutlined(g, HOME.x - 64, HOME.y + 2, 7, 7, MAP.brass);
   // orchard: five lollipops with red apples
   for (let i = 0; i < 5; i++) {
@@ -228,17 +260,20 @@ function paintLandmarks(g) {
   // coop: a grey-green hut with a ramp down to a fenced dirt run
   building(g, COOP.x - 28, COOP.y - 58, 56, 34, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, { doorW: 8 });
   g.fillStyle = MAP.laneEdge; pathRR(g, COOP.x - 40, COOP.y - 56, 80, 32, 4); g.fill();
+  groundShade(g, COOP.x, COOP.y - 52, 72, 0.1, 4);
   polyOutlined(g, [COOP.x + 6, COOP.y - 58, COOP.x + 14, COOP.y - 58, COOP.x + 20, COOP.y - 48, COOP.x + 12, COOP.y - 48], MAP.wood, INK, 1);
   g.fillStyle = MAP.woodDark;
   for (let px = COOP.x - 40; px <= COOP.x + 38; px += 8) { g.fillRect(px, COOP.y - 62, 2, 8); g.fillRect(px, COOP.y - 32, 2, 8); }
   for (let py = COOP.y - 60; py <= COOP.y - 30; py += 8) { g.fillRect(COOP.x - 40, py, 2, 6); g.fillRect(COOP.x + 38, py, 2, 6); }
   g.fillRect(COOP.x - 40, COOP.y - 58, 80, 2); g.fillRect(COOP.x - 40, COOP.y - 28, 80, 2);
   // dairy: a cream barn with a round hayloft window, a churn by the door, a cow in the field
+  groundShade(g, DAIRY.x, DAIRY.y - 16, 86, 0.1, 4);
   building(g, DAIRY.x - 32, DAIRY.y - 16, 64, 44, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, { round: true, doorW: 14 });
   boxShaded(g, DAIRY.x + 40, DAIRY.y - 30, 8, 12, MAP.churn, '#8E9AA0'); g.fillStyle = INK; g.fillRect(DAIRY.x + 39, DAIRY.y - 27, 10, 2);
   boxOutlined(g, DAIRY.x - 72, DAIRY.y - 44, 14, 8, MAP.wall); g.fillStyle = '#3F3A48'; g.fillRect(DAIRY.x - 66, DAIRY.y - 43, 5, 4);
   boxOutlined(g, DAIRY.x - 60, DAIRY.y - 48, 6, 6, MAP.wall); g.fillStyle = INK; g.fillRect(DAIRY.x - 70, DAIRY.y - 36, 2, 3); g.fillRect(DAIRY.x - 62, DAIRY.y - 36, 2, 3);
   // mill: a tapered cream tower with a plum cap (the sails are a sprite)
+  groundShade(g, MILL.x, MILL.y - 8, 56, 0.12, 4);
   polyOutlined(g, [MILL.x - 20, MILL.y - 8, MILL.x + 20, MILL.y - 8, MILL.x + 14, MILL.y - 72, MILL.x - 14, MILL.y - 72], MAP.wall, INK, 1);
   g.save(); g.beginPath(); g.moveTo(MILL.x - 20, MILL.y - 8); g.lineTo(MILL.x + 20, MILL.y - 8); g.lineTo(MILL.x + 14, MILL.y - 72); g.lineTo(MILL.x - 14, MILL.y - 72); g.closePath(); g.clip();
   g.fillStyle = MAP.wallShade; g.fillRect(MILL.x + 6, MILL.y - 72, 14, 64); g.restore();
@@ -272,6 +307,10 @@ function paintChunk(g, i, rnd) {
   g.save(); g.translate(-cx, -cy);
   g.fillStyle = MAP.meadow; g.fillRect(cx, cy, CHUNK_W, CHUNK_H);
   for (const b of SHADE) ellipse(g, b[0], b[1], b[2], b[3], MAP.shade);
+  // the dusk wash, in WORLD coordinates so every chunk agrees and no seam shows: the peach of the horizon spills a
+  // little way down the meadow, and PLUM.deep gathers in the far south. Painted on the bare ground only - the wheat,
+  // the lanes and the water go on top of it, so the lane at L .62 stays the brightest path on the plane.
+  vGradient(g, cx, HORIZON_H, CHUNK_W, WORLD_H - HORIZON_H, [[0, 'rgba(244,201,160,0.24)'], [0.45, 'rgba(244,201,160,0)'], [1, 'rgba(47,35,56,0.20)']]);
   for (const f of WHEAT) {
     pathRR(g, f[0], f[1], f[2], f[3], 6); g.fillStyle = MAP.wheat; g.fill();
     g.save(); g.clip(); g.fillStyle = MAP.furrow; for (let y = f[1] + 5; y < f[1] + f[3]; y += 8) g.fillRect(f[0], y, f[2], 2); g.restore();
@@ -288,6 +327,9 @@ function paintChunk(g, i, rnd) {
     g.fillRect(b.x - BRIDGE_HALF_W, b.y - BRIDGE_HALF_H - 2, BRIDGE_HALF_W * 2, 2); g.fillRect(b.x - BRIDGE_HALF_W, b.y + BRIDGE_HALF_H, BRIDGE_HALF_W * 2, 2);
   }
   paintLandmarks(g);
+  // baked trees: all the plum contact shadows first, then all the canopies, so no shadow lands on a neighbour's
+  // crown. Widths match the roadside sprites' `shadow` (18 + size*4) so the two kinds of tree sit on the same ground.
+  for (const t of TREES.baked) if (t[0] > cx - 40 && t[0] < cx + CHUNK_W + 40 && t[1] > cy - 10 && t[1] < cy + CHUNK_H + 60) groundShade(g, t[0], t[1], 18 + t[2] * 4);
   for (const t of TREES.baked) if (t[0] > cx - 40 && t[0] < cx + CHUNK_W + 40 && t[1] > cy - 10 && t[1] < cy + CHUNK_H + 60) lollipop(g, t[0], t[1], 10 + t[2] * 2);
   // scatter, from this chunk's own seed: flowers and tufts only in the fields, never on a lane, the water or a yard
   for (let n = 0; n < 220; n++) {

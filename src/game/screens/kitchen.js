@@ -34,8 +34,8 @@ import { drawTicket, drawOrderTicket, drawNamePlate, drawHint, drawStamp, ROW } 
 import { drawText } from '../../engine/text.js';
 import { kitchenLayer, ROWS, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.js';
 import {
-  paintStations, drawStationGlow, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
-  drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, PLATE, BELL, POT, OVEN,
+  paintStations, drawStationFocus, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
+  drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, drawKettleSteam, PLATE, BELL, POT, OVEN,
 } from '../../art/kitchenProps.js';
 
 const R = Math.round;
@@ -50,6 +50,9 @@ const STOVE_FRAMES = 150, STOVE_BAND = 0.8;
 const OVEN_FRAMES = 300, OVEN_WINDOW = 40;
 /** After the bell: one component lands on the plate every DROP_FRAMES, the stamp slams, then results. */
 const SERVE_FRAMES = 96, DROP_FRAMES = 12, STAMP_AT = 40;
+/** The ORDER UP! stamp's resting row: the wall's clear band between the station signs (104..121) and the props
+ *  that stand on the counter (156..200). At its old row 110 it printed straight across the MIX and STOVE signs. */
+const STAMP_Y = 140;
 /** The reach beat's hold, the eat gag's length, the chop anim's length. */
 const ACT_FRAMES = 20, EAT_FRAMES = 42, CHOP_ANIM = 21, GAG_CHANCE = 1 / 6;
 /** Segments on each station's paper tag. */
@@ -62,7 +65,9 @@ const PLATE_Y_MAX = 160;
 const HINTS = { chop: 'CHOP: TAP ON THE BEAT', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD, LET GO PAST THE MARK', oven: 'OVEN: LOAD, THEN TAKE OUT IN THE GREEN', plate: 'PLATE: RING THE BELL' };
 const PERFECT = 'PERFECT!', DONE = 'DONE', BURNT = 'BURNT!', NOM = 'NOM', ORDER_UP = 'ORDER UP!', RING = 'RING!';
 const CARD_X = RECIPE.x, CARD_Y = RECIPE.y, CARD_W = RECIPE.w;
-const CARD_TEXT = { size: 1, color: UI.ink, shadow: false }, CARD_OPTS = { title: 'RECIPE' };
+// the recipe card is the SMALLER paper: it hangs below the rail on two strings and carries no perforated top, so
+// it never reads as the order ticket's twin at the other end of the same rail (the two papers used to match)
+const CARD_TEXT = { size: 1, color: UI.ink, shadow: false }, CARD_OPTS = { title: 'RECIPE', perforated: false };
 
 export class KitchenScreen extends Screen {
   constructor(game) { super(game, 'kitchen'); this.seats = []; this.fields = []; }
@@ -94,7 +99,7 @@ export class KitchenScreen extends Screen {
     // the customer leaning into the hatch
     const cust = getCustomer(order.customer);
     this.custRig = critterRig(cust, -1); this.custPlayer = new AnimPlayer(cust.anims); this.custPlayer.play('idle');
-    this.custPose = idlePoseOf(cust); this.custOpts = { facing: -1, margin: 8 };
+    this.custPose = idlePoseOf(cust); this.custOpts = { facing: -1, margin: BUST.margin };
     // one seat per party member: rig, player, standing spot spread along the counter
     this.seats.length = 0;
     for (let i = 0; i < run.party.length; i++) {
@@ -274,9 +279,10 @@ export class KitchenScreen extends Screen {
     const f = this.frame, st = this.st, station = this.currentStation();
     blitAt(ctx, this.layer, 0, 0);
     // the customer leans into the RIGHT half of the hatch, clipped to the opening so the shelf stays in front of
-    // them and the cook plating at the shelf's left half is never drawn through them
-    drawBust(ctx, this.custRig, this.custPlayer.pose, this.custPose, BUST.x, BUST.y, BUST.w, BUST.h, 1.7, this.custOpts);
-    if (station >= 0 && !this.served) drawStationGlow(ctx, station, f);
+    // them and the cook plating at the shelf's left half is never drawn through them, AT THE CAST'S OWN 1x draw
+    // scale (BUST.scale): one flat side-on shot may hold exactly one size of the face kit
+    drawBust(ctx, this.custRig, this.custPlayer.pose, this.custPose, BUST.x, BUST.y, BUST.w, BUST.h, BUST.scale, this.custOpts);
+    if (station >= 0 && !this.served) drawStationFocus(ctx, station, f);
     this.drawStations(ctx, f, st, station);
     particles.draw(ctx, null, 'back');
     // shadows, then the sorted pass: one feet line, so seat order is the tiebreak (seat 0 in front)
@@ -314,6 +320,18 @@ export class KitchenScreen extends Screen {
     const plated = this.served ? Math.min(this.icons.length, Math.floor(this.serveT / DROP_FRAMES) + 1) : 0;
     drawPlate(ctx, PLATE.x + 13, PLATE.y, this.icons, this.hexes, plated, plated > 0 && this.serveT % DROP_FRAMES < 3 ? 1.25 : 1);
     drawBellRing(ctx, this.ringT);
+    drawKettleSteam(ctx, f);   // the room's pilot light: one plume that never stops, whatever the party is doing
+  }
+
+  /**
+   * Whose colour the live timing tag wears: the seat that has claimed the step, or - before anyone has - the seat
+   * standing at its station, so the card the player must act on carries a player colour from the first frame.
+   */
+  liveSlot(station) {
+    const o = this.stepIdx < this.owners.length ? this.owners[this.stepIdx] : -1;
+    if (o >= 0) return o;
+    for (let i = 0; i < this.seats.length; i++) if (this.seats[i].station === station) return this.seats[i].slot;
+    return -1;
   }
 
   /** How many of a step's tag segments are lit: all when done, its progress while current, none before. */
@@ -330,11 +348,12 @@ export class KitchenScreen extends Screen {
   }
 
   drawWidget(ctx, st, station) {
-    if (station === CHOP) drawChopBar(ctx, st.t, CHOP_SWEEP, st.count, CHOP_HITS);
-    else if (station === MIX) drawDial(ctx, st.t / MIX_FRAMES, st.phase === 0 && st.t > 0);
-    else if (station === STOVE) drawStoveBar(ctx, st.t / STOVE_FRAMES, STOVE_BAND);
-    else if (station === OVEN_S) drawOvenTimer(ctx, st.phase === 1 ? 1 - st.t / OVEN_FRAMES : 0, OVEN_WINDOW / OVEN_FRAMES);
-    else if (station === PLATE_S) drawPlatePrompt(ctx, RING);
+    const slot = this.liveSlot(station);
+    if (station === CHOP) drawChopBar(ctx, st.t, CHOP_SWEEP, st.count, CHOP_HITS, slot);
+    else if (station === MIX) drawDial(ctx, st.t / MIX_FRAMES, st.phase === 0 && st.t > 0, slot);
+    else if (station === STOVE) drawStoveBar(ctx, st.t / STOVE_FRAMES, STOVE_BAND, slot);
+    else if (station === OVEN_S) drawOvenTimer(ctx, st.phase === 1 ? 1 - st.t / OVEN_FRAMES : 0, OVEN_WINDOW / OVEN_FRAMES, slot);
+    else if (station === PLATE_S) drawPlatePrompt(ctx, RING, slot);
   }
 
   drawHud(ctx, f) {
@@ -351,7 +370,7 @@ export class KitchenScreen extends Screen {
       else if (i === this.stepIdx && !this.served) drawText(ctx, '>', CARD_X + 18 + ((f >> 4) & 1), ry, CARD_TEXT);
     }
     drawHint(ctx, this.hint);
-    if (this.served && this.serveT >= STAMP_AT) drawStamp(ctx, ORDER_UP, VIEW_W / 2, 110, (this.serveT - STAMP_AT) / 24);
+    if (this.served && this.serveT >= STAMP_AT) drawStamp(ctx, ORDER_UP, VIEW_W / 2, STAMP_Y, (this.serveT - STAMP_AT) / 24);
   }
 
   summary() {

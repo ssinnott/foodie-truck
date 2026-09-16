@@ -7,6 +7,12 @@ import { critterBuild, makeCritterAnims, F, PLUM_STRAP } from './common.js';
 
 const R = Math.round;
 const SKIN = '#3F7D3B', MOSS = '#2A5A2A', CREAM = '#CFE3A6', WATER = '#2F5F7A', STRAW = '#E2B44A', DEEP = '#23412A';
+/**
+ * The mouth patch, darker than `belly`. `belly` has to stay the pale cream of the two eye DOMES (they are this
+ * frog's whites), but painted at that value across a 1.2 muzzle it was a bandage slapped over the lower face. The
+ * patch is now 0.9 of the muzzle and a step down in value, and the ink mouth line still reads on it.
+ */
+const MOUTH_PATCH = '#A8C47E';
 /** Baskets are dark willow with cream weave lines (docs/ART_STYLE.md section 1), never wicker. */
 const WILLOW = '#6B4E3A', WILLOW_LINE = '#C9B58E';
 
@@ -36,25 +42,25 @@ const hipBasket = { attach: 'hip', layer: 'back', draw(ctx, rig) {
 export const build = critterBuild({
   palette: { skin: SKIN, hair: MOSS, belly: CREAM, secondary: SKIN, shorts: WATER, accent: STRAW, dark: DEEP },
   // long legs and big feet; the torso is 16 (not the table's squat 12) because a 13 px head hid a 12 px torso's apron
-  proportions: { headR: 13, torsoW: 26, torsoH: 16, hip: 20, handR: 4.5, upperLeg: 7, lowerLeg: 6, footL: 11, legR: 4 },
-  ears: 'dome', face: { domeEyes: true, wideMouth: true }, muzzle: 1.2, nose: false, tail: 'none',
+  proportions: { headR: 13, torsoW: 26, torsoH: 16, hip: 20, handR: 4.5, upperLeg: 7, lowerLeg: 6, footL: 11, legR: 4, shoulderX: 8 },
+  ears: 'dome', face: { domeEyes: true, wideMouth: true }, muzzle: 0.9, muzzleHex: MOUTH_PATCH, nose: false, tail: 'none',
   accessories: [hipBasket, sunhat],
 });
 
 export const anims = makeCritterAnims({
   // the frog is the only rig whose legs are longer than its arms: on the shared REST the paw parked in the foot
-  // row and the paw + both feet read as three identical green discs. The elbow rides ~10 deg higher here, which
-  // puts the paw at hip height and leaves the two feet alone at the bottom of the silhouette.
+  // row and the paw + both feet read as three identical green discs. A couple of degrees more swing than the
+  // shared rest puts the paw past the big near foot and leaves the two feet alone at the bottom of the silhouette.
   idle: { loop: true, frames: [
-    F(26, { armR: [40, 6], armL: [-30, 8], torso: 2, root: [0, 0] }),
-    F(26, { armR: [44, 8], armL: [-26, 10], torso: 4, root: [0, 1], head: 2 }),
+    F(26, { armR: [18, 10], armL: [-20, 6], torso: 2, root: [0, 0], face: 'happy' }),
+    F(26, { armR: [21, 11], armL: [-17, 8], torso: 4, root: [0, 1], head: 2, face: 'happy' }),
   ] },
   // long legs: a higher step and a lower crouch than the shared walk
   walk: { loop: true, frames: [
-    F(7, { legR: [34, 8], legL: [-28, 26], armR: [-18, 10], armL: [20, 18], torso: 6, root: [0, 0] }),
-    F(7, { legR: [6, 34], legL: [-2, 6], armR: [0, 12], armL: [2, 12], torso: 6, root: [0, 2], squash: 1.04 }),
-    F(7, { legR: [-28, 26], legL: [34, 8], armR: [20, 18], armL: [-18, 10], torso: 6, root: [0, 0] }),
-    F(7, { legR: [-2, 6], legL: [6, 34], armR: [2, 12], armL: [0, 12], torso: 6, root: [0, 2], squash: 1.04 }),
+    F(7, { legR: [34, 8], legL: [-28, 26], armR: [-6, 10], armL: [12, 16], torso: 6, root: [0, 0] }),
+    F(7, { legR: [6, 34], legL: [-2, 6], armR: [12, 12], armL: [-4, 12], torso: 6, root: [0, 2], squash: 1.04 }),
+    F(7, { legR: [-28, 26], legL: [34, 8], armR: [28, 14], armL: [-26, 10], torso: 6, root: [0, 0] }),
+    F(7, { legR: [-2, 6], legL: [6, 34], armR: [12, 12], armL: [-4, 12], torso: 6, root: [0, 2], squash: 1.04 }),
   ] },
   // the signature: a rod whip. Wind-up with the rod back over the shoulder, a snap forward with a smear, a hold, a return.
   // weapon rot is tuned so the rod ends level and forward (hand 150 - rot 60 = 90): a rod at 120 crossed the eye domes.

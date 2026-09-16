@@ -79,6 +79,15 @@ export const SCENARIOS = {
       assert(last.screen === 'gallery' && last.top.anim === seen[0], `the gallery wrapped back to ${seen[0]} and is still up (${last.screen}/${last.top.anim})`);
       await api.shot('40-cast-gallery');
 
+      // The carry key, with the basket in every paw: the basket's two weave bands are the SEAT's colour
+      // (content/critters/items.js), so the loudest mark on a working critter is the player's own and not its
+      // luggage (docs/ART_STYLE.md section 4). One committed frame of it, beside the idle sheet.
+      let hops = 0;
+      while ((await api.summary()).top.anim !== 'carry' && hops++ < 32) { await api.press(0, { right: true }); await api.step(2); }
+      assert((await api.summary()).top.anim === 'carry', `the gallery can be walked to the carry key (${(await api.summary()).top.anim})`);
+      await api.step(20);
+      await api.shot('41-cast-carry');
+
       // Every authored key, including the ones no screen plays yet.
       const drawn = await drawEveryKey(page, SIGNATURE);
       assert(drawn.cells > 200, `every keyframe of every critter drew (${drawn.cells} cells)`);

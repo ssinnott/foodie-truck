@@ -1,10 +1,10 @@
 // The map's HUD (docs/GDD.md section 4, docs/ART_STYLE.md section 12): the order ticket top-left, one name plate per
 // seat top-right, the 28x28 steering-wheel widget bottom-left whose four slot-colour ticks light straight from each
-// seat's stick, the off-screen destination chevron on an ink plate, the HONK! stamp and the wooden sign plate an
+// seat's stick, the off-screen destination arrow pinned to the view edge, the HONK! stamp and the wooden sign plate an
 // arrival drops in, and the one hint line. Screen space, integer coordinates, nothing allocated per frame: every
 // string is built by the map screen in enter().
 import { VIEW_W, VIEW_H, UI, PLAYER_COLORS, SIGNAL } from '../constants.js';
-import { drawOrderTicket, drawNamePlate, drawStamp, drawSign, drawHint } from './ui.js';
+import { drawOrderTicket, drawNamePlate, drawStamp, drawSign, drawHint, drawTicket } from './ui.js';
 import { drawFood } from '../art/food.js';
 import { INGREDIENTS } from '../content/recipes.js';
 import { pathRR } from '../art/shading.js';
@@ -22,12 +22,22 @@ export const WHEEL_X = 8, WHEEL_Y = VIEW_H - 8 - 12 - 30, WHEEL_SIZE = 30;
 /** The order ticket, top-left. */
 export function drawTicketHud(ctx, run) { drawOrderTicket(ctx, run, 8, 8, 120, drawFood, TICKET_OPTS); }
 
-/** One name plate per seat, stacked top-right. `seats` = [{ slot, plateText, plateW }]. */
+/**
+ * The crew strip, top-right: the seats' name plates on ONE paper card of the order ticket's own recipe, not four
+ * loose colour chips floating on the world. The first pass stacked bare plates straight on the plane, and over the
+ * market they read as part of the stalls; the card gives them a home, and its drop shadow says which layer they are
+ * on. `seats` = [{ slot, plateText, plateW }]; the card is sized to the widest plate so it never clips a name.
+ */
+export const PLATE_PITCH = 14;
+/** Card geometry for a party of `n`, so the destination chevron can steer around exactly what is drawn. */
+export function crewCardW(seats) { let w = 0; for (let i = 0; i < seats.length; i++) if (seats[i].plateW > w) w = seats[i].plateW; return w + 14; }
+export function crewCardH(n) { return 8 + (n - 1) * PLATE_PITCH + 11; }
 export function drawSeatPlates(ctx, seats) {
-  for (let i = 0; i < seats.length; i++) {
-    const s = seats[i];
-    drawNamePlate(ctx, s.slot, s.plateText, VIEW_W - 9 - s.plateW / 2, 9 + i * 14);
-  }
+  const n = seats.length;
+  if (!n) return;
+  const w = crewCardW(seats), h = crewCardH(n), x = VIEW_W - 8 - w, y = 5;
+  drawTicket(ctx, x, y, w, h, { header: false, rules: false, perforated: false });
+  for (let i = 0; i < n; i++) drawNamePlate(ctx, seats[i].slot, seats[i].plateText, x + w / 2, y + 4 + i * PLATE_PITCH);
 }
 
 /**
@@ -37,6 +47,10 @@ export function drawSeatPlates(ctx, seats) {
  */
 export function drawWheel(ctx, pushMask, turn) {
   const x = WHEEL_X, y = WHEEL_Y, cx = x + 15, cy = y + 15;
+  // a 2 px paper bezel and a drop shadow under it, so the dark plate reads as a HUD widget lying on the world and
+  // not as an ink-coloured hole cut in the meadow (the ticket and the crew card sit on the same paper)
+  ctx.fillStyle = 'rgba(47,35,56,0.35)'; pathRR(ctx, x - 1, y, WHEEL_SIZE + 4, WHEEL_SIZE + 4, 7); ctx.fill();
+  pathRR(ctx, x - 2, y - 2, WHEEL_SIZE + 4, WHEEL_SIZE + 4, 7); ctx.fillStyle = UI.paper; ctx.fill();
   pathRR(ctx, x, y, WHEEL_SIZE, WHEEL_SIZE, 5); ctx.fillStyle = UI.ink; ctx.fill();
   ctx.fillStyle = UI.wood; ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = UI.woodDark; ctx.beginPath(); ctx.arc(cx + 1, cy + 1, 9, 0, Math.PI * 2); ctx.fill();
@@ -54,29 +68,43 @@ export function drawWheel(ctx, pushMask, turn) {
   ctx.fillStyle = (pushMask & 8) ? PLAYER_COLORS[3] : UI.paperLine; ctx.fillRect(x + 1, cy - 2, 3, 5);
 }
 
+/** The arrow rides this far inside the view edge, and slides ALONG that edge past each HUD corner's keep-out. */
+const ARROW_INSET = 14, TICKET_R = 152, TICKET_B = 100, CREW_L = VIEW_W - 104, CREW_B = 76, WHEEL_R = 46;
+const WHEEL_T = VIEW_H - 58, HINT_L = 200, HINT_R = 440;
+
 /**
- * The destination chevron: when the target (screen coords) is off the view, a lantern-gold arrow on an ink plate at
- * the view edge points at it and pulses 2 px along its bearing. Math.atan2 is fine here: this is draw(), not sim.
+ * The destination arrow: when the target (screen coords) is off the view, a BARE lantern-gold arrow with the map's
+ * own 1 px ink outline is pinned to the view edge, points at it and pulses 2 px along its bearing. It used to ride a
+ * 20x20 ink plate that the HUD clamps pushed inward onto the meadow, where a block of ink four times darker than any
+ * shadow on the plane read as a hole punched in the field rather than as a sign. The plate is gone and the clamps now
+ * slide the arrow along the edge it is pinned to, so it can never sit on a tree.
+ * Math.atan2 is fine here: this is draw(), not sim.
  */
 export function drawDestArrow(ctx, tx, ty, frame) {
   if (tx >= 4 && tx <= VIEW_W - 4 && ty >= 4 && ty <= VIEW_H - 4) return;
   const cx = VIEW_W / 2, cy = VIEW_H / 2, dx = tx - cx, dy = ty - cy, a = Math.atan2(dy, dx);
-  // clamp the arrow's plate to a rect inset from the view edge, along the ray from the centre
-  const hx = cx - 20, hy = cy - 20;
-  const k = Math.min(hx / Math.max(1e-6, Math.abs(dx)), hy / Math.max(1e-6, Math.abs(dy)));
+  // the ray from the centre, clamped to a rect inset from the view edge; `pinX` is true on the left / right edge
+  const kx = (cx - ARROW_INSET) / Math.max(1e-6, Math.abs(dx)), ky = (cy - ARROW_INSET) / Math.max(1e-6, Math.abs(dy));
+  const pinX = kx <= ky, k = pinX ? kx : ky;
   let px = R(cx + dx * k), py = R(cy + dy * k);
-  // keep the plate off the ticket (top-left), the name plates (top-right), the wheel (bottom-left) and the hint
-  if (px < 150 && py < 104) py = 104;
-  if (px > VIEW_W - 150 && py < 72) py = 72;
-  if (px < 52 && py > VIEW_H - 64) px = 52;
-  if (py > VIEW_H - 26) py = VIEW_H - 26;
+  if (pinX) {
+    // left edge: under the order ticket and above the wheel. Right edge: under the crew card.
+    if (px < cx) { if (py < TICKET_B) py = TICKET_B; if (py > WHEEL_T) py = WHEEL_T; }
+    else if (py < CREW_B) py = CREW_B;
+  } else if (py < cy) {
+    if (px < TICKET_R) px = TICKET_R;             // top edge: past the ticket, short of the crew card
+    if (px > CREW_L) px = CREW_L;
+  } else {
+    if (px < WHEEL_R) px = WHEEL_R;               // bottom edge: past the wheel, either side of the hint strip
+    else if (px > HINT_L && px < HINT_R) px = px < (HINT_L + HINT_R) / 2 ? HINT_L : HINT_R;
+  }
   const pulse = (frame >> 3) & 1 ? 2 : 0;
-  pathRR(ctx, px - 10, py - 10, 20, 20, 4); ctx.fillStyle = UI.ink; ctx.fill();
   ctx.save(); ctx.translate(px, py); ctx.rotate(a); ctx.translate(pulse, 0);
   // a plain triangle, not a barbed chevron: the nose must be the SHARPEST corner (32 deg against the tail's 79), and long enough to read as elongated or
   // the barbs win the silhouette at 12 px and every diagonal bearing reads about 90 deg off
-  ctx.fillStyle = SIGNAL.map;
-  ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, -4); ctx.lineTo(-6, 4); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-7, -6); ctx.lineTo(-7, 6); ctx.closePath();
+  ctx.strokeStyle = UI.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.fillStyle = SIGNAL.map; ctx.fill();
   ctx.restore();
 }
 

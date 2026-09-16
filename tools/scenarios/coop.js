@@ -3,7 +3,8 @@
 //
 //   coop - four seats in the coop: seat 0 is driven to the nearest egg (polling summary() for its reach point and
 //          holding the stick toward it), presses action and has one egg in its basket; then seat 0 is walked into
-//          the nearest hen so a bump is caught on camera (tools/screens/coop-bump.png, when one lands); then the
+//          the nearest hen so a bump is caught on camera with the popped shell still in the air
+//          (tools/screens/coop-bump.png, when one lands); then the
 //          clock is forced to its last frames: the EGGS sign drops, is held, and the screen returns to the map with
 //          the order's egg line updated by the party's total. Also writes tools/screens/coop-pluck.png and, from a
 //          forced charge down seat 0's lane, tools/screens/coop-charge.png.
@@ -69,8 +70,10 @@ export const SCENARIOS = {
       for (let i = 0; i < 250 && !bumpShot && b.screen === 'coop' && b.top.phase === 0; i++) {
         const me = b.top.seats[0], hen = nearest(b.top.hens, me[1], me[2]);
         await api.hold(0, toward(hen[0] - me[1], hen[1] - me[2]));
-        await api.step(3);
+        await api.step(2);
         const s = await api.summary();
+        // shoot four frames into the 12-frame arc, where the shell is clear of the critter's own body: coop-bump.png
+        // is the shot the popped shell's readability is judged from, and the old 3-frame poll landed it late
         if (s.screen === 'coop' && s.top.seats[0][3] < b.top.seats[0][3]) { bumpShot = true; await api.release(0); await api.step(3); await api.shot('coop-bump'); }
         b = s;
       }

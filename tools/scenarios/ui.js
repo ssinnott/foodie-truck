@@ -4,7 +4,8 @@
 //   ui - the three paths a player takes through the menus:
 //        title -> PLAY -> select -> READY -> the run starts on the map with the picked critter aboard;
 //        title -> ONLINE -> HOST A TABLE on the broadcast transport -> the lobby mints a host key, reaches its
-//        'connecting' phase and draws the table ticket without a page error;
+//        'connecting' phase and draws the table ticket without a page error (with the art director's shots of
+//        the HOST / JOIN slate and of a stamped recipe card on the way through);
 //        the pause overlay opening and closing over the map (and the screenshot the art director looks at);
 //        a READY that is called off again before the hold runs out, which must NOT start the run;
 //        a full table on the lobby stools (staged roster) showing the GDD's STARTING! beat;
@@ -32,7 +33,9 @@ export const SCENARIOS = {
       assert(s1.top.seats[0].critter === 'sorrel', `right moves the cursor to the next card (${s1.top.seats[0].critter})`);
       await api.press(0, { action: true }, 2, 4);
       assert((await api.summary()).top.seats[0].ready === true, 'action stamps READY on the card');
-      await api.step(90);                                   // the stamp holds, then the fade hands over to the map
+      await api.step(8);
+      await api.shot('select-ready');                       // the beetroot stamp on the picked recipe card
+      await api.step(82);                                   // the stamp holds, then the fade hands over to the map
       const s2 = await api.summary();
       assert(s2.screen === 'map', `a full crew of readies starts the run on the map (now on ${s2.screen})`);
       assert(s2.run && s2.run.party.length === 1 && s2.run.party[0] === 'sorrel', `the run is seated with the picked critter (${JSON.stringify(s2.run && s2.run.party)})`);
@@ -47,6 +50,7 @@ export const SCENARIOS = {
       assert((await api.screen()) === 'lobby', `ONLINE opens the lobby (now on ${await api.screen()})`);
       const l0 = await api.summary();
       assert(l0.top.phase === 'role', `the lobby asks host or join first (phase ${l0.top.phase})`);
+      await api.shot('lobby-role');                         // HOST / JOIN on the slate, before any session exists
       await api.press(0, { action: true }, 2, 4);
       await api.step(30);
       const l1 = await api.summary();
@@ -146,6 +150,7 @@ export const SCENARIOS = {
       await guestApi.step(2);
       const typed = (await guestApi.summary()).top.code;
       assert(typed === code, `every glyph typed lands on the ticket (${typed} vs ${code})`);
+      await guestApi.shot('lobby-code');                    // the guest's ticket with six typed glyphs on it
       await guest.keyboard.press('Backspace');
       await guestApi.step(2);
       assert((await guestApi.summary()).top.code === code.slice(0, -1), 'backspace rubs one out again');
