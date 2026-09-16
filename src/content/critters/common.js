@@ -12,6 +12,8 @@ import { getChain } from '../../art/secondary.js';
 import { P, FACE } from '../../art/poses.js';
 import { brow } from '../../art/rigParts.js';
 import { rad } from '../../engine/math.js';
+import { PLAYER_COLORS, OFF_DUTY_APRON } from '../../constants.js';
+import { buildRig } from '../../art/rig.js';
 
 const R = Math.round;
 const TAU = Math.PI * 2;
@@ -30,7 +32,7 @@ export const CHIBI = Object.freeze({
  *   primary = apron, secondary = shorts, accent = trim / bandana, dark = nose + boots, sleeve = fur (set for you).
  */
 export const DEFAULT_PALETTE = Object.freeze({
-  skin: '#B07A4A', hair: '#6B4326', belly: '#F3E5CF', primary: '#D9463B', secondary: '#5E3A1B', accent: '#F2C14E', metal: '#C8C0B0', dark: '#2A1F1A', glow: '#FFE28A',
+  skin: '#B07A4A', hair: '#6B4326', belly: '#F3E5CF', primary: OFF_DUTY_APRON, secondary: '#5E3A1B', shorts: '#5E3A1B', accent: '#F2C14E', metal: '#C8C0B0', dark: '#2A1F1A', glow: '#FFE28A',
 });
 
 // ---------------------------------------------------------------- ears (head space, behind the skull)
@@ -54,11 +56,15 @@ function drawEar(ctx, rig, kind, x, y, r, fur, light, tip, isFar, ang) {
     const w = R(r * 0.3), h = R(r * 1.5);
     celCapsule(ctx, rig, 0, 0, 0, -h, w, fur, 0);
     if (!rig.override) { ctx.fillStyle = rig.col(light); ctx.beginPath(); ctx.ellipse(0, -R(h * 0.5), R(w * 0.45), R(h * 0.4), 0, 0, TAU); ctx.fill(); }
+  } else if (kind === 'dome') {
+    // a frog's eye dome: a light ball on top of the head; critterFace draws the pupil on it (opts.domeEyes)
+    celBall(ctx, rig, 0, 0, R(r * 0.36), light, false);
   }
   ctx.restore();
 }
 /** Both ears; long ears lag on a two-segment chain so they flop when the head moves. */
 function drawEars(ctx, rig, r, kind, pose) {
+  if (kind === 'none') return;
   const pal = rig.palette, far = rig.paletteFar;
   const tip = rig.build.earTip ? rig.col(pal.hair) : null;
   let a0 = 0, a1 = 0;
@@ -66,8 +72,9 @@ function drawEars(ctx, rig, r, kind, pose) {
     const ch = getChain(rig, 'ears', 2, { joint: 'head', rest: [0, -1], stiffness: 0.18, damping: 0.68, gain: 1.5, maxAng: 32 });
     a0 = ch.ang[0]; a1 = ch.ang[0] * 0.7 + ch.ang[1];
   }
-  drawEar(ctx, rig, kind, R(r * EAR_FAR.x), R(r * EAR_FAR.y), r, far.skin, far.belly, tip, true, a1 + (kind === 'long' ? -18 : 0));
-  drawEar(ctx, rig, kind, R(r * EAR_NEAR.x), R(r * EAR_NEAR.y), r, pal.skin, pal.belly, tip, false, a0 + (kind === 'long' ? 12 : 0));
+  const ex = kind === 'dome' ? 0.3 : 1, ey = kind === 'dome' ? -0.72 : 1;   // domes sit closer together on the crown
+  drawEar(ctx, rig, kind, R(r * (kind === 'dome' ? -0.42 : EAR_FAR.x)), R(r * (kind === 'dome' ? ey : EAR_FAR.y)), r, far.skin, far.belly, tip, true, a1 + (kind === 'long' ? -18 : 0));
+  drawEar(ctx, rig, kind, R(r * (kind === 'dome' ? 0.38 * ex / 0.3 * 0.3 : EAR_NEAR.x)), R(r * (kind === 'dome' ? ey : EAR_NEAR.y)), r, pal.skin, pal.belly, tip, false, a0 + (kind === 'long' ? 12 : 0));
 }
 
 // ---------------------------------------------------------------- head (head space, faces +x)
@@ -121,9 +128,11 @@ export function cheekMarking(ctx, rig, pose, inf) {
  * | angry / grit (brows down). Pupils are 3 px so the 2 px floor never eats them; whites are 6x5 at headR 12.
  */
 export function critterFace(ctx, rig, pose, inf) {
-  const r = inf.r, pal = rig.palette, face = pose.face | 0;
+  const r = inf.r, pal = rig.palette, face = pose.face | 0, fo = rig.faceOpts || {};
   const ink = rig.col(rig.outline), white = rig.col('#FFF8EC'), pupil = rig.col('#1E1512');
-  const ew = R(r * 0.5), eh = R(r * 0.42), ey = R(-r * 0.42), ex = R(r * 0.32), fx = R(-r * 0.36);
+  // dome eyes (ears: 'dome'): the whites are the domes on the crown, so the eye row moves up onto them
+  const dome = !!fo.domeEyes;
+  const ew = R(r * 0.5), eh = R(r * 0.42), ey = dome ? R(-r * 0.86) : R(-r * 0.42) + (fo.eyeY || 0), ex = dome ? R(r * 0.2) : R(r * 0.32), fx = dome ? R(-r * 0.6) : R(-r * 0.36);
   const happy = face === FACE.happy, closed = face === FACE.closed, hurt = face === FACE.hurt, dazed = face === FACE.dazed;
   const angry = face === FACE.angry || face === FACE.grit, shout = face === FACE.shout;
   ctx.fillStyle = ink;
@@ -136,20 +145,25 @@ export function critterFace(ctx, rig, pose, inf) {
       else ctx.fillRect(x, ey + 3, ew, 2);
     }
   } else {
-    ctx.fillStyle = white; ctx.fillRect(ex, ey, ew, eh); ctx.fillRect(fx, ey, ew, eh);
+    if (!dome) { ctx.fillStyle = white; ctx.fillRect(ex, ey, ew, eh); ctx.fillRect(fx, ey, ew, eh); }
     ctx.fillStyle = pupil;
     const py = hurt ? ey + 1 : ey + 1, px = 2;   // pupils sit forward (toward facing) in the white
     ctx.fillRect(ex + px, py, 3, 3); ctx.fillRect(fx + px, py, 3, 3);
     if (angry) { ctx.fillStyle = ink; ctx.fillRect(ex, ey, ew, 1); ctx.fillRect(fx, ey, ew, 1); }   // lids pressed down
     ctx.fillStyle = white; ctx.fillRect(ex + px, py, 1, 1); ctx.fillRect(fx + px, py, 1, 1);      // catchlight
   }
-  // brows: one 2 px bar each, 2 px clear of the whites
+  // brows: one 2 px bar each, 2 px clear of the whites (dome eyes carry no brows: the dome IS the brow line)
   ctx.fillStyle = rig.col(pal.hair);
   const by = ey - 4;
+  if (dome && !angry && !hurt) { drawCritterMouth(ctx, rig, r, face, ink); return; }
   if (angry) { brow(ctx, ex - 1, by - 2, ex + ew, by + 1, 2); brow(ctx, fx - 1, by, fx + ew, by - 2, 2); }
   else if (hurt) { brow(ctx, ex - 1, by + 1, ex + ew, by - 2, 2); brow(ctx, fx - 1, by - 2, fx + ew, by + 1, 2); }
   else { ctx.fillRect(ex - 1, by, ew + 1, 2); ctx.fillRect(fx - 1, by, ew + 1, 2); }
-  // mouth, on the muzzle under the nose
+  drawCritterMouth(ctx, rig, r, face, ink);
+}
+/** The mouth, on the muzzle under the nose. */
+function drawCritterMouth(ctx, rig, r, face, ink) {
+  const shout = face === FACE.shout, hurt = face === FACE.hurt, happy = face === FACE.happy, angry = face === FACE.angry || face === FACE.grit;
   const g = muzzleGeom(r, rig.build.muzzle != null ? rig.build.muzzle : 1);
   const mx = g.mx + R(g.rx * 0.2), my = g.my + R(g.ry * 0.45);
   ctx.fillStyle = ink;
@@ -197,7 +211,7 @@ export function makeTorso(spec) {
 export function makeHips(spec) {
   return function hips(ctx, rig, pose, inf) {
     const hip = inf.w, hw = R(hip / 2);
-    celRect(ctx, rig, -hw, -5, hip, 10, 4, rig.palette.secondary, 0.4, 0.2);
+    celRect(ctx, rig, -hw, -5, hip, 10, 4, rig.palette.shorts || rig.palette.secondary, 0.4, 0.2);
   };
 }
 
@@ -229,9 +243,9 @@ export function makeBoot(hex) {
 }
 
 // ---------------------------------------------------------------- tail (hip space, back layer, +x forward)
-export function makeTail(kind) {
+export function makeTail(kind, hex = null) {
   return { attach: 'hip', layer: 'back', draw(ctx, rig, pose) {
-    const pal = rig.palette, fur = pal.skin, hw = R(rig.p.hip / 2);
+    const pal = rig.palette, fur = hex || pal.skin, hw = R(rig.p.hip / 2);
     const ch = getChain(rig, 'tail', 2, { joint: 'torso', rest: [-1, 0.2], stiffness: 0.12, damping: 0.72, gain: 1.8, maxAng: 35 });
     ctx.save(); ctx.translate(-hw + 2, -3); ctx.rotate(rad(ch.ang[0]));
     if (kind === 'stub') celBall(ctx, rig, -3, -1, 4, fur, false);
@@ -293,16 +307,29 @@ export function cap(hex) {
 export function critterBuild(spec) {
   const palette = { ...DEFAULT_PALETTE, ...(spec.palette || {}) };
   palette.sleeve = palette.skin;
+  if (!palette.shorts) palette.shorts = palette.secondary;
   return {
     scale: spec.scale || 1,
     proportions: { ...CHIBI, ...(spec.proportions || {}) },
+    // storybook paint is matte: a softer ramp than the sibling's arcade 1.22 / 0.66 (docs/ART_STYLE.md section 3)
+    ramp: { hi: 1.16, sh: 0.72, ...(spec.ramp || {}) },
     palette, outline: INK, earTip: !!spec.earTip,
     face: { eyeY: -2, big: true, brow: palette.hair, mouthY: 0, ...(spec.face || {}) },
     muzzle: spec.muzzle != null ? spec.muzzle : 1,
     parts: { head: makeHead(spec), face: critterFace, torso: makeTorso(spec), hips: makeHips(spec), hand: pawHand, foot: spec.boots ? makeBoot(spec.boots) : pawFoot, ...(spec.parts || {}) },
-    accessories: [makeTail(spec.tail || 'stub'), ...(spec.accessories || [])],
+    accessories: [makeTail(spec.tail || 'stub', spec.tailHex || null), ...(spec.accessories || [])],
     weapon: null,
   };
+}
+
+/**
+ * A rig for a cast member in a given seat: the apron (and its straps) in that seat's player colour, or the
+ * off-duty apron for slot -1 (gallery, customers, the title's idle crew). Tones are cached per rig per colour, so
+ * build this ONCE when the seat is assigned (in enter()), never in draw().
+ */
+export function critterRig(def, slot = -1) {
+  const apron = slot >= 0 && slot < PLAYER_COLORS.length ? PLAYER_COLORS[slot] : OFF_DUTY_APRON;
+  return buildRig({ ...def.build, palette: { ...def.build.palette, primary: apron } });
 }
 
 // ---------------------------------------------------------------- the base animation set

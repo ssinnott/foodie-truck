@@ -28,8 +28,16 @@ Roles are flavour and small stat differences, never gates: any critter can do an
 | **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks |
 | **The forager** | GATHER / CAST | Fastest in the mini-games; longest fishing cast |
 
-The cast's names, species, palettes and signature accessories are the art direction's and live in
-`docs/ART_STYLE.md` §1 and in `src/content/critters/`. `content/critters/index.js` order is the cast index.
+| Cast index | Name | Species | Role |
+|---|---|---|---|
+| 0 | **Barley** | Suffolk sheep | the hungry one |
+| 1 | **Sorrel** | field mouse | the chef |
+| 2 | **Chicory** | brown hare | the driver |
+| 3 | **Cress** | pond frog | the forager |
+
+Palettes, proportions and signature accessories are the art direction's (`docs/ART_STYLE.md` §1) and live in
+`src/content/critters/`. Customers are NPC critters built with the same rig (an owl, an otter, a goat) in
+`content/critters/customers.js`. Every critter wears an apron in their seat's player colour.
 
 ## 3. The loop
 
@@ -59,8 +67,10 @@ title -> select -> map -> (mini-game -> map)* -> map(home) -> kitchen -> results
   quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it,
   turning at most 1 heading step per 4 frames. Roads are the fast path; fields are drivable but slow and dusty;
   the river is not drivable (bridges are). Arrival = within 40 px of a landmark's door point.
-- **HUD**: the order ticket (customer, dish, `NEED: X` rows with checks), a name plate per seated player, an
-  off-screen destination arrow, one hint line.
+- **HUD**: the order ticket (customer, dish, `NEED: X` rows with checks), the steering-wheel widget with one tick per
+  seat that lights while that seat pushes, the crew's heads in the truck's windows, an off-screen destination arrow on
+  an ink plate, one hint line. `alt` honks: a `HONK!` stamp and a truck squash. The telephone at home rings when a
+  new order arrives.
 
 ## 5. The mini-games
 

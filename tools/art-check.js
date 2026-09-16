@@ -7,6 +7,7 @@
 import { CRITTERS } from '../src/content/critters/index.js';
 import { INK, CHIBI } from '../src/content/critters/common.js';
 import { hexToRgb } from '../src/art/palettes.js';
+import { PLAYER_COLORS, PLAYER_LABELS } from '../src/constants.js';
 
 const notes = process.argv.includes('--notes');
 const findings = [];
@@ -38,11 +39,17 @@ for (const c of CRITTERS) {
   if (!c.build) continue;
   const b = c.build, pal = b.palette || {};
   if (b.outline !== INK) err(S, 'palette/outline', `outline ${b.outline} is not the game ink ${INK}`);
-  for (const k of ['skin', 'hair', 'belly', 'primary', 'secondary', 'accent', 'dark']) if (!pal[k]) err(S, 'palette/slots', `palette.${k} missing`);
+  for (const k of ['skin', 'hair', 'belly', 'primary', 'secondary', 'shorts', 'accent', 'dark']) if (!pal[k]) err(S, 'palette/slots', `palette.${k} missing`);
   if (pal.sleeve && pal.sleeve !== pal.skin) warn(S, 'palette/sleeve', 'sleeve should equal skin: a critter\'s arms are fur (critterBuild sets it)');
-  if (pal.skin && pal.primary && !separated(pal.skin, pal.primary, 0.18)) err(S, 'palette/apron-vs-fur', `apron ${pal.primary} vs fur ${pal.skin}: relDiff ${relDiff(pal.skin, pal.primary).toFixed(2)} < 0.18 and no hue-family change`);
+  // The apron is the PLAYER SPOT (ART_STYLE section 4): primary is set per seat to PLAYER_COLORS[slot], so the fur it
+  // sits on must clear all four hexes BY VALUE ALONE (measured: wool .29+, mouse .27+, hare .37+, frog .28+).
+  const shorts = pal.shorts || pal.secondary;
+  PLAYER_COLORS.forEach((pc, i) => {
+    if (pal.skin && relDiff(pal.skin, pc) < 0.25) err(S, 'palette/player-spot', `${PLAYER_LABELS[i]} apron ${pc} on fur ${pal.skin}: relDiff ${relDiff(pal.skin, pc).toFixed(2)} < 0.25 (value alone must carry the player spot)`);
+    if (shorts && !separated(pc, shorts, 0.18)) err(S, 'palette/apron-vs-shorts', `${PLAYER_LABELS[i]} apron ${pc} vs shorts ${shorts} too close`);
+  });
   if (pal.skin && pal.belly && relDiff(pal.skin, pal.belly) < 0.12) err(S, 'palette/belly-vs-fur', `belly ${pal.belly} vs fur ${pal.skin}: relDiff ${relDiff(pal.skin, pal.belly).toFixed(2)} < 0.12 (the muzzle must read)`);
-  if (pal.primary && pal.secondary && !separated(pal.primary, pal.secondary, 0.18)) err(S, 'palette/apron-vs-shorts', `apron ${pal.primary} vs shorts ${pal.secondary} too close`);
+  if (shorts && pal.secondary && shorts !== pal.secondary && !separated(shorts, pal.secondary, 0.18)) warn(S, 'palette/shorts-vs-legs', `shorts ${shorts} vs legs ${pal.secondary} too close`);
   if (pal.skin && pal.hair && relDiff(pal.skin, pal.hair) < 0.2) warn(S, 'palette/markings-vs-fur', `hair/markings ${pal.hair} vs fur ${pal.skin}: relDiff ${relDiff(pal.skin, pal.hair).toFixed(2)} < 0.20; brows and ear tips will not read`);
   if (pal.dark && lum(pal.dark) > 0.25) warn(S, 'palette/dark', `dark ${pal.dark} is not dark (lum ${lum(pal.dark).toFixed(2)}): the nose needs it`);
   const p = { ...CHIBI, ...(b.proportions || {}) };
@@ -76,7 +83,7 @@ for (let i = 0; i < CRITTERS.length; i++) for (let j = i + 1; j < CRITTERS.lengt
   const S = `${a.id}+${b.id}`;
   if (a.species && a.species === b.species) err(S, 'cast/species', 'two cast members share a species');
   if (hueDelta(pa.skin, pb.skin) < 25 && relDiff(pa.skin, pb.skin) < 0.2) err(S, 'cast/fur', `fur ${pa.skin} vs ${pb.skin}: hue gap ${hueDelta(pa.skin, pb.skin).toFixed(0)} < 25 and relDiff ${relDiff(pa.skin, pb.skin).toFixed(2)} < 0.20`);
-  if (hueDelta(pa.primary, pb.primary) < 30 && relDiff(pa.primary, pb.primary) < 0.2) warn(S, 'cast/apron', `aprons ${pa.primary} vs ${pb.primary} too alike: the apron is the player-colour spot`);
+
 }
 
 const errors = findings.filter((f) => f.sev === 'error'), warns = findings.filter((f) => f.sev === 'warn');

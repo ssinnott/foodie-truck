@@ -49,9 +49,63 @@ mood, the muzzle, the apron or kit and the player's colour, **both** paws, both 
     `facing=-1`) is looked at before a critter is called finished; the cast sheet must tell every critter apart at
     idle in 100 ms on the orchard floor colour.
 
-## 1. The look
+## 1. The look — HEDGEROW DUSK
 
-*(Filled from the art direction chosen by the judge panel; see §12 while this reads TBD.)*
+A children's picture book of an English hedgerow lane, drawn as clean 1 px-inked cel art on warm paper. Every shape
+is a rounded blob; every colour is a paper-warm mid-chroma tone (nothing above ~0.65 saturation except the four
+player colours and each scene's one signal colour); the light is a low warm afternoon from the top-left with
+**plum-brown shadows** (`#4A3038`, `#2F2338`) instead of black ones; the ink is warm near-black `#2A1F1A` so the
+page reads as printed. Warm on the sky and roofs, cool on the ground the cast stands on. The world is six ground
+tones and plum silhouettes; signs are hand-lettered wooden boards on 2 px rope; orders are paper tickets with
+perforated tops; menus are a chalk slate. Cheap on purpose: backdrops are painted once, and the only per-frame
+marks are steam, cloud shadows, water glints, leaves and the critters. Daylight in the orchard and the coop, golden
+hour on the pond and the map's horizon, a dark warm kitchen; no day/night cycle in the prototype.
+
+Chosen by a three-judge panel over an arcade and a toybox proposal (unanimous), with grafts from both recorded
+in §12. **Canonical reference rig: Barley** (`content/critters/barley.js`).
+
+### The cast
+
+| | species | role | h / headR | silhouette cue | fur `skin` (L) | markings `hair` | light `belly` | legs `secondary` | `shorts` | signature |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **Barley** | Suffolk sheep | the hungry one — EAT / CARRY | 64 / 15 | widest body, scalloped wool cap, dark face, drooping ears, brass bell | `#F1E4C8` (.90) | face `#3F3A48` | muzzle `#8C7A86` | `#3F3A48` | `#3F3A48` | bell on a plum strap; eye whites always on (dark face) |
+| **Sorrel** | field mouse | the chef — CHOP / MIX | 46 / 11 | smallest body under the tallest toque, big round ears, thin rose tail | `#E2DDEA` (.88) | `#7A6A8C` | `#D9A2AE` (rose) | `#E2DDEA` | `#4A3F6B` | white toque with a 4 px blackberry band; paring knife |
+| **Chicory** | brown hare | the driver — DRIVE / HONK | 56 / 13 | 16 px upright ears with dark tips, flat cap + goggles, cream scarf | `#6B5241` (.34) | `#3A2B22` | `#EBD9B4` | `#6B5241` | `#B99A6A` | goggles slide onto the eyes on `hurt`; bulb horn |
+| **Cress** | pond frog | the forager — GATHER / CAST | 50 / 13 | wide head with two eye domes on top, long legs and big feet, straw sunhat | `#3F7D3B` (.39) | `#2A5A2A` | `#CFE3A6` | `#3F7D3B` | `#2F5F7A` | straw hat with a plum band; dark-willow basket on the hip |
+
+Two light furs and two dark ones, so the four aprons (the player colour, L .54–.64) clear every fur by value: wool
+.29+, mouse .27+, hare .37+, frog .28+. Sheep and mouse are both pale and are told apart by silhouette (wool
+scallops + dark face vs toque + ears + tail); the cast sheet at 0.5× is the check. Aprons: `primary` is set **per
+seat** to `PLAYER_COLORS[slot]` (`critterRig(def, slot)`); an unseated critter wears the off-duty apron
+`#D8C093`. Straps and the pocket seam are drawn in the apron colour so nothing pale sits on pale fur. Baskets
+are dark willow `#6B4E3A` with cream highlights (wicker collided with P2's marmalade). Feet: Barley hooves and
+Chicory paws are dark, so every floor they stand on is ≥ L .30.
+
+### The truck
+
+A rounded 1950s milk-float: beetroot-plum body `#7E3A56` (shadow `#5A2A40`, cap `#9A5470`), cream roof and
+wheel rims `#F1E4C8`, a mustard/cream striped awning (`#E2B44A` / `#F1E4C8`, stripes as a clipped fill) over the
+side hatch, a chalk board hooked on the hatch, brass headlamp `#E2B44A` with a `#FFD27A` core, ink tyres, a wooden
+FOODIE TRUCK roof sign. One inked body path with the cab bump appended. Sizes: map token 40×24 (master 80×48 at
+0.5×), title/results 160×96 (2×), lobby 320×192. On the map the crew's 12 px heads ride in the windows (driver in
+the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above the cab with a 1.1 squash.
+
+### Scenes in one line each
+
+- **Map**: 3/4 storybook plane, meadow `#8FA05A` / shade `#728A4C`, wheat `#D9B15E`, lanes `#C9AE78` (L .62, no
+  scatter) with a `#B99A6A` edge, river `#6F9FB0` over `#4E7A8C`, hedges `#4F6B3A`, cottage walls `#F1E4C8`, roofs
+  `#A65A48`, plum tree-line `#4A3038`, a dusk-peach horizon strip `#F4C9A0`; signal: lantern gold on the next sign.
+- **Orchard**: daytime warm sky `#FBE3C4`→`#F4C9A0`, canopy `#4F6B3A` with `#6E8A48` caps, grass `#5E7A3E` (L .42),
+  four depth lanes 8 px apart; signal: ripe apple red `#D9463B`.
+- **Pond**: golden-hour sky, a plum tree-line `#4A3038` behind the torsos, bank turf `#6E7A5A`, water `#4E7A8C` with a
+  `#6F9FB0` surface band, jetty `#9A6234`; signal: bite ring mint `#5FD3C0`; floats white with a slot-colour cap and an
+  8×5 slot tag above.
+- **Coop**: grey-green boards `#55665A`, nest straw `#C9A05C` (darker than the eggs), packed-earth floor `#48526A`
+  (cool, L .32), hens rust `#A8623A` and speckled grey; signal: fresh-egg gold sparkle `#F2C14E`; HOT on the rooster's comb.
+- **Kitchen**: plum wall `#4A3038`, slate counter top `#4F5A62` (rows 200–206), steel counter front `#3E4A55`
+  (rows 206–246), floor checker `#4E4450` / `#5A4E5C` (rows 246–340), feet line y 252 so torsos read on the counter
+  front and heads on the wall; a floor-standing oven that breaks the counter line; copper pot `#B87333`; paper and
+  brass are the warm things; signal: HOT `#E23A2E` (burner, boil-over, burnt); a slot-colour tag above each owned station.
 
 ## 2. Proportions
 
@@ -77,20 +131,24 @@ Paws `handR ≥ 0.33·headR` so they read from across the screen. Draw scales: 1
 
 ## 4. Palette slots and the player colour
 
-Critter palette keys (`DEFAULT_PALETTE`): `skin` = fur, `hair` = dark fur / markings / brows, `belly` = light fur
-(muzzle, belly, inner ear, paw pads), `primary` = apron, `secondary` = shorts, `accent` = trim, `dark` = nose and
-boots, `metal` = utensils, `sleeve` = fur (set by `critterBuild`). Per-critter extras are module constants.
+Critter palette keys (`DEFAULT_PALETTE`): `skin` = fur (head, arms, paws), `hair` = dark fur / markings / brows,
+`belly` = light fur (muzzle, belly, inner ear, paw pads), `primary` = apron (**set per seat**), `secondary` = legs
+(fur or leggings), `shorts` = the hip block, `accent` = trim, `dark` = nose and boots, `metal` = utensils, `sleeve`
+= fur (set by `critterBuild`). Per-critter extras are module constants.
 
 **Player colours** are `PLAYER_COLORS` in `constants.js` (P1 `#3F9BFF` sky, P2 `#FF8140` marmalade, P3 `#B08CFF`
 lavender, P4 `#FF63B0` raspberry) and are the one colour set for cursors, name plates, ready stamps, basket
-ribbons, float caps, station tags and the critter's own player spot. *Where that spot sits on the critter is the art
-direction's rule (§1).* Whatever it is, it must clear its neighbours by value alone for all four hexes.
+ribbons, float caps, station tags and the critter's own player spot: **the whole apron** (`primary`), straps and
+pocket included, set by `critterRig(def, slot)`. Every fur must clear all four hexes by value alone
+(`palette/player-spot` in art-check: relDiff ≥ 0.25 for each), and the shorts must clear them by value or hue.
 
-**Scene signal colours** — one saturated colour per scene, bound to one meaning, used only as small emitters and
-banned as decor elsewhere: map `#F2C14E` lantern gold (the next destination), orchard `#D9463B` ripe apple, pond
-`#5FD3C0` bite ring, coop `#F2C14E` fresh-egg sparkle (shared with the map by exemption: same "the thing you want"),
-kitchen `#E23A2E` HOT (also the game-wide reserved heat/danger colour: burner, boil-over, burnt, rooster comb).
-Backdrops are built from 6–8 muted constants each (`ENV` in `palettes.js` is the shared base ladder).
+**Scene signal colours** (`SIGNAL` in `constants.js`) — one saturated colour per scene, bound to one meaning, used
+only as small emitters and banned as decor elsewhere: map `#F2C14E` lantern gold (the next destination), orchard
+`#D9463B` ripe apple (= `UI.red`, the stamp ink too), pond `#5FD3C0` bite ring, coop `#F2C14E` fresh-egg sparkle
+(shared with the map by exemption: both mean "the thing you want"), kitchen `#E23A2E` HOT (also the game-wide
+reserved heat/danger colour: burner, boil-over, burnt, the rooster's comb). "Good timing" on paper UI is
+`UI.green` with an ink outline, never gold on paper (0.17) and never lime. Backdrops are built from 6–8 muted
+constants each, exported by the scene's backdrop module; `ENV` in `palettes.js` is the shared base ladder.
 
 ## 5. Authoring parts, accessories and items
 
@@ -169,8 +227,8 @@ Items covered by `npm run art-check` name their rule; *(eye)* means a human stil
 
 - [ ] Registry: id, name, role, species, build, anims — `registry/*`.
 - [ ] Ink is `INK`; every palette slot present; sleeve = fur — `palette/outline`, `palette/slots`, `palette/sleeve`.
-- [ ] Ladder: apron vs fur, belly vs fur, apron vs shorts, markings vs fur, nose dark — `palette/*`.
-- [ ] Player spot clears its neighbours for all four `PLAYER_COLORS` — *(eye, then a rule once three rigs exist)*.
+- [ ] Ladder: belly vs fur, markings vs fur, shorts vs legs, nose dark — `palette/*`.
+- [ ] Player spot: fur clears all four `PLAYER_COLORS` by value, shorts by value or hue — `palette/player-spot`, `palette/apron-vs-shorts`.
 - [ ] Height 46..68, 1.9..2.8 heads, paws ≥ 0.33 headR — `proportions/*`.
 - [ ] Every shared animation present, loops loop, cycle lengths in band, idle breathes, walk bobs — `anim/*`.
 - [ ] Cast: species unique, furs ≥ 25° hue or ≥ 20 % value apart, aprons apart — `cast/*`.
@@ -180,7 +238,17 @@ Items covered by `npm run art-check` name their rule; *(eye)* means a human stil
 - [ ] Held items hang upright from the paw; the paw closes over the handle — *(eye: `item=` sheets)*.
 - [ ] No `Math.random`, no clock, no per-frame allocation in a hook — *(eye)*; `node tools/check.js` clean.
 
-## 12. Decisions still open
+## 12. Decisions and grafts from the judge panel
 
-- §1 the look and §4 the player-colour spot: chosen by the judge panel over three proposals (storybook / arcade /
-  toybox); recorded here when synthesised.
+Winner: the storybook proposal, 27/25/26 of 30 across a readability, a player and an engineer judge. Grafted from
+the runners-up: the 28×28 **steering-wheel HUD widget** whose slot-colour ticks light straight from each seat's
+input mask (the map's only four-player mechanic made visible); **crew busts in the truck windows**; the **HONK!**
+stamp with a truck squash; a **paper progress tag per station** in the owner's colour and a floor-standing oven;
+an 8×5 **slot tag above each pond float**; the **telephone ringing** at home base when an order arrives; Chicory's
+**goggles sliding onto the eye row** on `hurt` (the one allowed eye-row intrusion); the room-code glyphs **flipping
+in one by one**; a 2 px mid-brown **fishing line** (the 1 px line broke the floor); 4 px minimum on every inked
+band; name-plate y from the tallest head part; a deterministic **repaint-on-demand** path for evicted map chunks.
+Concerns fixed in the spec: the apple is red, not lime; furs polarised to two light / two dark (the hedgehog became
+a frog); lanes darkened to L .62 so cream cottages and the gold glow read; kitchen feet at y 252 with the floor
+lifted to L ≥ .30 for dark hooves; nest straw darker than eggs; wicker replaced by dark willow; the sheep's coop
+floor nudged to `#48526A`.

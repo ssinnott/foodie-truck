@@ -3,7 +3,8 @@
 import { VIEW_W, VIEW_H, UI } from '../../constants.js';
 import { Screen } from '../game.js';
 import { drawText, drawTextOutlined } from '../../engine/text.js';
-import { buildRig, drawRig } from '../../art/rig.js';
+import { drawRig } from '../../art/rig.js';
+import { critterRig } from '../../content/critters/common.js';
 import { AnimPlayer } from '../animation.js';
 import { ITEMS } from '../../content/critters/items.js';
 import { cancelPressed, navX, navY } from '../menuinput.js';
@@ -18,7 +19,7 @@ export class GalleryScreen extends Screen {
   enter(params) {
     super.enter(params);
     this.anim = 0; this.zoom = 2; this.facing = 1;
-    this.slots = (this.game.critters || []).map((c) => ({ def: c, rig: buildRig(c.build), player: new AnimPlayer(c.anims) }));
+    this.slots = (this.game.critters || []).map((c, i) => ({ def: c, rig: critterRig(c, i), player: new AnimPlayer(c.anims) }));
     for (const s of this.slots) s.player.play(ANIMS[this.anim]);
     this.apply();
   }

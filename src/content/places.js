@@ -8,14 +8,14 @@
 export const WORLD_W = 1920, WORLD_H = 1080;
 
 export const PLACES = Object.freeze([
-  { id: 'home', name: 'THE TRUCK STOP', sign: 'HOME', x: 960, y: 600, screen: 'kitchen', accent: '#D9463B' },
-  { id: 'orchard', name: 'BRAMBLE ORCHARD', sign: 'APPLES', x: 420, y: 300, screen: 'orchard', accent: '#D9463B' },
-  { id: 'pond', name: 'STILLWATER POND', sign: 'FISH', x: 1480, y: 760, screen: 'pond', accent: '#4A8FD6' },
-  { id: 'coop', name: 'HENNY\'S COOP', sign: 'EGGS', x: 1500, y: 280, screen: 'coop', accent: '#F2C14E' },
-  { id: 'dairy', name: 'CLOVERFIELD DAIRY', sign: 'MILK', x: 300, y: 820, screen: '', accent: '#FFFFFF' },
-  { id: 'mill', name: 'THE OLD MILL', sign: 'FLOUR', x: 960, y: 200, screen: '', accent: '#EBDCC0' },
-  { id: 'hive', name: 'HUMMING HIVES', sign: 'HONEY', x: 700, y: 900, screen: '', accent: '#F2A83B' },
-  { id: 'garden', name: 'MARKET GARDEN', sign: 'VEG', x: 1250, y: 520, screen: '', accent: '#F08A2E' },
+  { id: 'home', name: 'HOLLOW LANE YARD', sign: 'HOME', x: 960, y: 600, screen: 'kitchen', accent: '#F2C14E' },
+  { id: 'orchard', name: 'PIPPIN ORCHARD', sign: 'APPLES', x: 420, y: 300, screen: 'orchard', accent: '#D9463B' },
+  { id: 'pond', name: 'MILLPOND', sign: 'FISH', x: 1480, y: 760, screen: 'pond', accent: '#5FD3C0' },
+  { id: 'coop', name: 'CLUCKET COOP', sign: 'EGGS', x: 1500, y: 280, screen: 'coop', accent: '#F2C14E' },
+  { id: 'dairy', name: 'BUTTERCUP DAIRY', sign: 'MILK', x: 300, y: 820, screen: '', accent: '#F1E4C8' },
+  { id: 'mill', name: 'WINDLE MILL', sign: 'FLOUR', x: 960, y: 200, screen: '', accent: '#E3C68F' },
+  { id: 'hive', name: 'CLOVER HIVES', sign: 'HONEY', x: 700, y: 900, screen: '', accent: '#E2B44A' },
+  { id: 'garden', name: 'SATURDAY MARKET', sign: 'MARKET', x: 1250, y: 520, screen: '', accent: '#C96B7A' },
 ]);
 
 /** Kitchen stations, left to right along the truck's counter. `verb` is the interaction the station asks for. */

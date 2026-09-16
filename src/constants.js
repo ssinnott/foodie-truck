@@ -31,6 +31,24 @@ export const UI = Object.freeze({
   dim: 'rgba(20,12,8,0.55)', panel: 'rgba(42,31,26,0.88)', shadow: '#000000',
   p1: '#3F9BFF', p2: '#FF8140', p3: '#B08CFF', p4: '#FF63B0',
 });
+/**
+ * Scene signal colours (docs/ART_STYLE.md section 4): ONE saturated colour per scene, bound to one meaning, used only
+ * as small emitters and banned as decor anywhere else. `hot` is reserved game-wide for heat and danger.
+ */
+export const SIGNAL = Object.freeze({
+  map: '#F2C14E',      // lantern gold: the next destination's sign glow, the ticket's NEED arrow
+  orchard: '#D9463B',  // ripe apple (= UI.red)
+  pond: '#5FD3C0',     // the bite ring and the float's stripe
+  coop: '#F2C14E',     // fresh-egg sparkle (shared with the map by exemption: both mean "the thing you want")
+  kitchen: '#E23A2E',  // HOT
+  hot: '#E23A2E',      // burner, boil-over, burnt, the rooster's comb: never anywhere else
+  good: '#5FA652',     // "good timing" fills on paper UI, always ink-outlined (= UI.green)
+});
+/** The apron a critter wears when no seat owns it (gallery, customers, the title's idle crew). */
+export const OFF_DUTY_APRON = '#D8C093';
+/** Plum shadow tones the whole world uses instead of black (docs/ART_STYLE.md section 1). */
+export const PLUM = Object.freeze({ shadow: '#4A3038', deep: '#2F2338' });
+
 /** Per-slot colour, indexed by player slot 0..3. */
 export const PLAYER_COLORS = Object.freeze([UI.p1, UI.p2, UI.p3, UI.p4]);
 /** Player slot names as the game says them. */

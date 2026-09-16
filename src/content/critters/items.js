@@ -8,6 +8,8 @@ import { drawFood } from '../../art/food.js';
 
 const R = Math.round;
 const WOOD = '#C48A52', WOOD_DARK = '#8B5A2B', STEEL = '#D8DCE0', ROD = '#9A6234';
+/** Baskets are dark willow with cream weave lines: wicker (#C9A05C) measured 0.03 against P2's marmalade apron. */
+const WILLOW = '#6B4E3A', WILLOW_LINE = '#C9B58E';
 
 /** Rotate the context so +y points down in root space (the item hangs from the paw), then draw. */
 function upright(ctx, rig, fn) {
@@ -19,13 +21,12 @@ export const ITEMS = {
   /** Wicker basket hanging from the paw; `rig.basketFill` (0..1) draws apples piling up inside it. */
   basket: { attach: 'handR', length: 14, draw(ctx, rig) {
     upright(ctx, rig, () => {
-      const t = tones(rig, WOOD);
       ctx.beginPath(); ctx.arc(0, 8, 8, Math.PI, 0);
       ctx.strokeStyle = rig.col(rig.outline); ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.stroke();
-      ctx.strokeStyle = rig.col(WOOD_DARK); ctx.lineWidth = 2; ctx.stroke();
-      celPoly(ctx, rig, [-11, 8, 11, 8, 9, 22, -9, 22], WOOD, 0.36, 0.2);
+      ctx.strokeStyle = rig.col(WILLOW); ctx.lineWidth = 2; ctx.stroke();
+      celPoly(ctx, rig, [-11, 8, 11, 8, 9, 22, -9, 22], WILLOW, 0.36, 0.2);
       if (rig.override) return;
-      ctx.fillStyle = t.sh; ctx.fillRect(-9, 12, 18, 2); ctx.fillRect(-8, 17, 16, 2);   // two weave lines (2 px)
+      ctx.fillStyle = rig.col(WILLOW_LINE); ctx.fillRect(-9, 12, 18, 2); ctx.fillRect(-8, 17, 16, 2);   // two weave lines (2 px, cream on willow)
       const fill = rig.basketFill || 0;
       if (fill > 0) { const n = Math.min(4, Math.ceil(fill * 4)); for (let i = 0; i < n; i++) drawFood(ctx, rig.basketIcon || 'apple', -6 + (i % 3) * 6 + (i > 2 ? 3 : 0), 10 - (i > 2 ? 3 : 0), 3.5, rig.basketHex); }
     });
