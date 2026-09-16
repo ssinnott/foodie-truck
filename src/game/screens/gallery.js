@@ -10,9 +10,12 @@ import { ITEMS } from '../../content/critters/items.js';
 import { cancelPressed, navX, navY } from '../menuinput.js';
 import { drawSign, drawHint, drawNamePlate } from '../ui.js';
 
-const ANIMS = ['idle', 'walk', 'run', 'carry', 'carryWalk', 'reach', 'catch', 'cheer', 'sad', 'eat', 'chop', 'stir', 'bump', 'hop', 'wave', 'sit'];
+const ANIMS = ['idle', 'walk', 'run', 'carry', 'carryWalk', 'reach', 'catch', 'cheer', 'sad', 'eat', 'chop', 'stir',
+  'bump', 'hop', 'wave', 'sit', 'sneak', 'honk', 'cast'];
+/** The last three are signature keys only one critter authors; everyone else falls back to idle (animation.js play). */
+const SIGNATURE = 3;
 /** Which held item a pose is authored around, so the gallery shows the pair. */
-const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: 'food', chop: 'knife', stir: 'spoon' };
+const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: 'food', chop: 'knife', stir: 'spoon', honk: 'horn', cast: 'rod' };
 const FLOOR_Y = 250;
 /** Each critter hangs on its own card, so no fur ever sits on a plane of its own value. */
 const CARD_TOP_PAD = 10;
@@ -36,7 +39,12 @@ export class GalleryScreen extends Screen {
   }
   apply() {
     const name = ANIMS[this.anim], item = ITEM_FOR[name] || null;
-    for (const s of this.slots) { s.player.play(name, { restart: true }); s.rig.weapon = item ? ITEMS[item] : null; s.rig.basketFill = 0.6; }
+    for (const s of this.slots) {
+      const owns = !!(s.def.anims && s.def.anims[name]);
+      s.player.play(name, { restart: true });                       // falls back to idle where a critter has no key
+      s.rig.weapon = item && owns ? ITEMS[item] : null;             // ...and then it should not be holding the prop
+      s.rig.basketFill = 0.6;
+    }
   }
   update() {
     super.update();
@@ -79,7 +87,8 @@ export class GalleryScreen extends Screen {
       if (s.def.role) drawTextOutlined(ctx, s.def.role, x, FLOOR_Y + 26, { size: 1, color: UI.cream, outline: UI.woodDark, align: 'center', shadow: false });
     }
     drawSign(ctx, VIEW_W / 2, 6, 120, 24, 'THE CREW', { size: 2 });
-    drawText(ctx, `< ${ANIMS[this.anim].toUpperCase()} >   ZOOM ${this.zoom}X   X: FLIP`, VIEW_W / 2, 46, { size: 1, color: UI.ink, align: 'center', shadow: false });
+    const sig = this.anim >= ANIMS.length - SIGNATURE ? '  (ONE CRITTER ONLY)' : '';
+    drawText(ctx, `< ${ANIMS[this.anim].toUpperCase()} >${sig}   ZOOM ${this.zoom}X   X: FLIP`, VIEW_W / 2, 46, { size: 1, color: UI.ink, align: 'center', shadow: false });
     drawHint(ctx, 'C: BACK');
   }
   summary() { return { anim: ANIMS[this.anim], critters: this.slots.length }; }
