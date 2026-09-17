@@ -13,8 +13,8 @@
 //        landmark the truck has not visited on this run, and its screen opens. What stops `serve()` from handing back
 //        a run that cannot be driven any further.
 import { withPage, assert } from '../playtest.js';
-import { PLACES } from '../../src/content/places.js';
-import { LANES } from '../../src/art/backgrounds/map.js';
+import { PLACES } from '../../src/content/places.ts';
+import { LANES } from '../../src/art/backgrounds/map.ts';
 import { walkTo, chopOnBeat } from './kitchen.js';
 
 // ---------------------------------------------------------------- driving

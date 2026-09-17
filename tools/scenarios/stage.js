@@ -9,7 +9,7 @@
 //   stageClosing - the END: with every stage served the board closes the truck for the night, prints the day's
 //        card and the only thing left to press goes back to the title. Writes tools/screens/stage-closing.png.
 import { withPage, assert } from '../playtest.js';
-import { ORDERS } from '../../src/content/recipes.js';
+import { ORDERS } from '../../src/content/recipes.ts';
 
 export const SCENARIOS = {
   async stage(server) {

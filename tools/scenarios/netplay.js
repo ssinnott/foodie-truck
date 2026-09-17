@@ -21,7 +21,7 @@
 //             whose checksumFields() misses a field its update() moves - a reader cannot prove that, and the
 //             room is where it bites. The first six mini-games shipped without it.
 import { withPeers, assert } from '../playtest.js';
-import { SCENES } from '../../src/game/run.js';
+import { SCENES } from '../../src/game/run.ts';
 
 const ROOM_CODE = /^[23456789BCDFGHJKMNPQRSTVWXYZ]{6}$/;
 const TIMEOUT = 30000;

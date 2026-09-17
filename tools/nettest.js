@@ -1,12 +1,12 @@
 // Pure-Node tests for the netcode that needs no browser: the wire format round-trips, the input mask layout,
 // the lockstep scheduler with 2-4 simulated peers under packet loss and reordering, the desync canary, the
 // roster rules and the session's lobby logic. Runs in CI before the build.
-import { ACTIONS, packMask, unpackMask, input } from '../src/engine/input.js';
-import { encodeInput, encodeChecksum, encodeStart, encodeDrop, encodeRelay, encodePing, encodeJson, decodeMessage, MSG, PROTOCOL_VERSION } from '../src/net/protocol.js';
+import { ACTIONS, packMask, unpackMask, input } from '../src/engine/input.ts';
+import { encodeInput, encodeChecksum, encodeStart, encodeDrop, encodeRelay, encodePing, encodeJson, decodeMessage, MSG, PROTOCOL_VERSION } from '../src/net/protocol.ts';
 import { createLockstep } from '../src/lib/net/lockstep.ts';
-import { runChecksum } from '../src/net/checksum.js';
-import { makeMember, packSeats, freeSlot, uniquePicks, critterTaken, firstFreeCritter, picksDistinct, sortRoster, resetSeats, releaseSeats } from '../src/net/roster.js';
-import { createNetSession, delayForRtt } from '../src/net/session.js';
+import { runChecksum } from '../src/net/checksum.ts';
+import { makeMember, packSeats, freeSlot, uniquePicks, critterTaken, firstFreeCritter, picksDistinct, sortRoster, resetSeats, releaseSeats } from '../src/net/roster.ts';
+import { createNetSession, delayForRtt } from '../src/net/session.ts';
 import { dsin, dcos } from '../src/lib/engine/trig.ts';
 
 let failures = 0, passes = 0;

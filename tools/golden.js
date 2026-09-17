@@ -12,12 +12,12 @@
 import { buildRig, drawRig, computeJoints, DEFAULT_PROPORTIONS } from '../src/lib/art/rig.ts';
 import { AnimPlayer } from '../src/lib/art/animation.ts';
 import { makePose } from '../src/lib/art/poses.ts';
-import { CRITTERS } from '../src/content/critters/index.js';
-import { owl, otter, goat } from '../src/content/critters/customers.js';
+import { CRITTERS } from '../src/content/critters/index.ts';
+import { owl, otter, goat } from '../src/content/critters/customers.ts';
 import * as math from '../src/lib/engine/math.ts';
 import * as trig from '../src/lib/engine/trig.ts';
 import { makeRng } from '../src/lib/engine/rng.ts';
-import * as pal from '../src/art/palettes.js';
+import * as pal from '../src/art/palettes.ts';
 import { makeTones } from '../src/lib/art/shading.ts';
 import fs from 'node:fs';
 import path from 'node:path';

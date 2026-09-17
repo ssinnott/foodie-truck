@@ -2,6 +2,7 @@
 // Usage: node tools/server.js [port]   (default 8080)
 import http from 'node:http';
 import fs from 'node:fs';
+import { transformSync } from 'esbuild';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,6 +11,8 @@ const PORT = Number(process.argv[2] || process.env.PORT || 8080);
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  // Served transformed, never raw: see transformTs below.
+  '.ts': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
@@ -17,6 +20,24 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.md': 'text/plain; charset=utf-8',
 };
+
+/**
+ * Strip the types out of one module and hand back JavaScript.
+ *
+ * Import specifiers are left exactly as written, so the JS returned here still says
+ * `from './game/run.ts'`. The browser requests THAT path, it lands back in this server, and it is
+ * transformed the same way -- the served module graph closes on itself. That is what keeps
+ * edit-and-reload working with no watcher and no output directory between saving a file and
+ * reloading the page. transformSync is sub-millisecond per file.
+ */
+function transformTs(source, file) {
+  const { code } = transformSync(source.toString('utf8'), {
+    loader: 'ts', format: 'esm', target: 'es2022',
+    sourcefile: path.relative(ROOT, file),
+    sourcemap: 'inline',   // the browser debugger shows the .ts source, with no extra request
+  });
+  return Buffer.from(code, 'utf8');
+}
 
 export function createServer() {
   return http.createServer((req, res) => {
