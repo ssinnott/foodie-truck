@@ -421,6 +421,19 @@ export type FullPose = Pose & { readonly __full: true };
 /** What drawRig accepts: a partial pose, resolved against DEFAULT_POSE, or one markFull() has already stamped. */
 export type DrawPose = FullPose | (PartialPose & { readonly __full?: undefined });
 
+/**
+ * Is this pose already complete, so `drawRig` can use it directly instead of copying it into the
+ * scratch pose?
+ *
+ * Written as a type predicate rather than an inline `pose.__full` test on purpose. Narrowing a
+ * union through an OPTIONAL discriminant only works when `strictNullChecks` is on, and this library
+ * is consumed by two games that are mid-migration and still compile with `strict: false`. A
+ * predicate narrows identically under both, so the library typechecks in its consumers' configs
+ * rather than only in its own. (Found exactly this way: rig.ts was clean under the library's strict
+ * config and reported four errors under Foodie Truck's.)
+ */
+export function isFullPose(pose: DrawPose): pose is FullPose { return pose.__full === true; }
+
 /** The per-draw options of drawRig (`o`). */
 export interface DrawRigOpts {
   /** Screen x of the feet. */
@@ -883,7 +896,7 @@ function stepChains(rig: Rig, pose: Pose): void {
  *   secondary: false / still: true skip the secondary-motion step (chains are only stepped for AnimPlayer poses anyway)
  */
 export function drawRig(ctx: CanvasRenderingContext2D, rig: Rig, pose: DrawPose | null | undefined, o: DrawRigOpts): void {
-  const P = pose && pose.__full ? pose : copyPose(pose, SCRATCH_POSE, true);
+  const P: Pose = pose && isFullPose(pose) ? pose : copyPose(pose, SCRATCH_POSE, true);
   const facing = o.facing || 1, sc = (o.scale || 1) * rig.scale;
   // The draw scale has to be known BEFORE the joints are computed: they snap on the device grid it defines, and
   // the outline is authored in device pixels, so its stroke width is divided by the scale ctx.scale() will apply.
@@ -898,7 +911,7 @@ export function drawRig(ctx: CanvasRenderingContext2D, rig: Rig, pose: DrawPose 
   rig.facing = facing;
   rig.light.x = LIGHT_X; rig.light.y = LIGHT_Y;
   rig.tick++; rig.chainFrame = rig.tick;
-  if (pose && pose.__full && o.secondary !== false && !o.still) stepChains(rig, P);
+  if (pose && isFullPose(pose) && o.secondary !== false && !o.still) stepChains(rig, P);
   const useOff = o.flash || o.tint;
   ctx.save();
   if (o.alpha != null && o.alpha < 1) ctx.globalAlpha *= o.alpha;
