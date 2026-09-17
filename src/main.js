@@ -138,6 +138,18 @@ function boot() {
     },
     setInput(p, actions) { input.setVirtual(p, actions); },
     clearInput(p) { input.clearVirtual(p); },
+    /**
+     * Test hook: stand fake gamepads in for navigator.getGamepads(). `specs` is one compact entry per pad -
+     * `{ down: [0, 14], axes: [x, y] }`, or null for an empty port - and null clears the whole lot again.
+     */
+    setPads(specs) {
+      if (!specs) { input.setPadVirtual(null); return; }
+      input.setPadVirtual(specs.map((g) => (g ? {
+        buttons: Array.from({ length: 17 }, (_, i) => { const on = !!(g.down && g.down.indexOf(i) >= 0); return { pressed: on, value: on ? 1 : 0 }; }),
+        axes: g.axes || [0, 0],
+      } : null)));
+    },
+    padOf(p) { return input.padOf(p); },
     critterList() { return CRITTERS.map((c) => ({ id: c.id, name: c.name })); },
     errors: hooks.errors,
     ready: true,

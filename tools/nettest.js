@@ -6,6 +6,7 @@ import { encodeInput, encodeChecksum, encodeStart, encodeDrop, encodeRelay, enco
 import { createLockstep } from '../src/net/lockstep.js';
 import { runChecksum } from '../src/net/checksum.js';
 import { makeMember, packSeats, freeSlot, uniquePicks, critterTaken, firstFreeCritter, picksDistinct, sortRoster, resetSeats, releaseSeats } from '../src/net/roster.js';
+import { LOCAL_PLAYERS, MAX_PLAYERS } from '../src/constants.js';
 import { createNetSession, delayForRtt } from '../src/net/session.js';
 import { dsin, dcos } from '../src/engine/trig.js';
 
@@ -149,6 +150,80 @@ releaseSeats(input, { players: 2, keep: 0, freeze: true }); input.update();
 assert(input.mask(0) === 1 && input.mask(1) === 0 && !input.joined(1), "an ended session freezes the other seat at neutral and un-joins it, keeping the survivor's own");
 releaseSeats(input); input.update();
 assert(input.mask(0) === 0, 'leaving hands every seat back to the real devices');
+
+// ---- gamepads: four pads on the couch (engine/input.js claimPads / pollRaw) ----
+/** A fake navigator.getGamepads() entry: `down` is a list of standard button indices held this step. */
+const fakePad = (down = [], axes = [0, 0]) => ({ buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: down.includes(i), value: down.includes(i) ? 1 : 0 })), axes });
+const NO_PAD = null;
+/** Back to a bare couch: no pads, no claims, nobody joined but P1, and no keyboard device stuck on a seat. */
+function couchReset(padList = []) {
+  input.setPadVirtual(padList);
+  input.setPadClaims(true);
+  for (let s = 0; s < MAX_PLAYERS; s++) input.clearVirtual(s);
+  input.resetClaims();
+  input.update();
+}
+
+assert(LOCAL_PLAYERS === 4, 'the couch seats four');
+
+// one pad, nobody on the keys: it takes P1's seat and drives it
+couchReset([fakePad([0])]);
+assert(input.padOf(0) === 0 && input.device(0) === 'gamepad' && input.held(0, 'action'), 'a lone pad sits down in seat 1 and its A is ACTION');
+
+// four pads, pressing one at a time: dense seats, lowest first, one pad each
+couchReset([fakePad(), fakePad(), fakePad(), fakePad()]);
+input.setPadVirtual([fakePad([9]), fakePad(), fakePad(), fakePad()]); input.update();
+assert(input.padOf(0) === 0 && !input.joined(1), 'the first pad to press takes the lowest seat and nobody else is seated');
+input.setPadVirtual([fakePad(), fakePad([0]), fakePad(), fakePad()]); input.update();
+input.setPadVirtual([fakePad(), fakePad(), fakePad([0]), fakePad()]); input.update();
+input.setPadVirtual([fakePad(), fakePad(), fakePad(), fakePad([0])]); input.update();
+assert([0, 1, 2, 3].every((s) => input.padOf(s) === s), 'four pads take the four seats in the order they pressed');
+assert([0, 1, 2, 3].every((s) => input.joined(s)), 'and every one of the four seats is joined');
+
+// each seat now reads ONLY its own pad: seat 3 pressing must not move seat 1
+input.setPadVirtual([fakePad(), fakePad(), fakePad([14]), fakePad([15])]); input.update();
+assert(input.axisX(2) === -1 && input.axisX(3) === 1 && input.axisX(0) === 0 && input.axisX(1) === 0, 'a claimed pad drives its own seat and no other');
+assert(input.mask(0) === 0, "seat 1 stops reading the loose pads once they are somebody's");
+
+// a fifth pad has nowhere to sit: the couch is four, so it claims nothing and drives nobody
+input.setPadVirtual([fakePad(), fakePad(), fakePad(), fakePad(), fakePad([0])]); input.update();
+assert(input.padOf(0) === 0 && input.mask(0) === 0, 'a fifth pad finds no free seat and is read by nobody');
+
+// the left stick is the d-pad, past the dead zone only
+couchReset([fakePad([], [0.3, -0.3])]);
+assert(input.mask(0) === 0 && input.padOf(0) === -1, 'a pad resting inside the dead zone claims no seat and presses nothing');
+input.setPadVirtual([fakePad([], [0.9, -0.9])]); input.update();
+assert(input.held(0, 'right') && input.held(0, 'up') && !input.held(0, 'left'), 'past the dead zone the left stick is the d-pad');
+
+// a keyboard seat is not taken out from under its player while a seat is free
+couchReset([]);
+input.setVirtual(0, 0); input.update(); input.clearVirtual(0);   // nothing; seat 0 device is still 'none'
+input.setPadVirtual([fakePad([0])]); input.update();
+assert(input.padOf(0) === 0, 'with nobody on the keys the pad is P1');
+couchReset([fakePad([0])]);
+assert(input.padOf(0) === 0, 'and claims again from a clean couch');
+
+// pollRaw: the wire sees every pad, claimed or not
+couchReset([fakePad(), fakePad()]);
+input.setPadVirtual([fakePad([0]), fakePad()]); input.update();         // pad 0 claims seat 0
+input.setPadVirtual([fakePad(), fakePad([1])]); input.update();         // pad 1 claims seat 1
+assert(input.padOf(1) === 1 && input.mask(0) === 0, 'the second pad is seat 2 and seat 1 is quiet');
+input.setPadVirtual([fakePad(), fakePad([0])]);
+assert((input.pollRaw(0) & packMask({ action: true })) !== 0, "pollRaw sees a pad claimed by another couch seat - online there is one human here and every pad is theirs");
+
+// online: claiming is off, so no pad sits in a seat that belongs to another machine
+couchReset([fakePad(), fakePad()]);
+input.setPadClaims(false);
+input.resetClaims();
+input.setPadVirtual([fakePad([0]), fakePad([0])]); input.update();
+assert(input.padOf(0) === -1 && input.padOf(1) === -1 && !input.joined(1), 'with claiming off no pad takes a seat');
+assert(input.held(0, 'action') && (input.pollRaw(0) & packMask({ action: true })) !== 0, 'and both pads still drive the local seat');
+// a seat a net session is injecting is never claimable, even with claiming back on
+input.setPadClaims(true);
+input.setVirtual(0, 0); input.setVirtual(1, 0); input.update();
+assert(input.padOf(0) === -1 && input.padOf(1) === -1, 'a virtual seat is not free for a pad');
+couchReset([]);
+input.setPadVirtual(null);
 
 // ---- net/session.js: the lobby rules, on a party seated by hand (start() needs a browser) ----
 const stubInput = { setVirtual() {}, clearVirtual() {}, consume() {}, setJoined() {}, resetClaims() {}, pollRaw: () => 0, playerCount: 4 };

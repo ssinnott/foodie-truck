@@ -12,7 +12,8 @@ import { SCENARIOS as hive } from './hive.js';
 import { SCENARIOS as garden } from './garden.js';
 import { SCENARIOS as kitchen } from './kitchen.js';
 import { SCENARIOS as ui } from './ui.js';
+import { SCENARIOS as pads } from './pads.js';
 import { SCENARIOS as stage } from './stage.js';
 import { SCENARIOS as playthrough } from './playthrough.js';
 
-export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...kitchen, ...ui, ...stage, ...playthrough };
+export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...kitchen, ...ui, ...pads, ...stage, ...playthrough };

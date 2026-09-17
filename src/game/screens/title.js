@@ -86,7 +86,9 @@ export class TitleScreen extends Screen {
 
   enter(params) {
     super.enter(params);
-    // Back at the front door: forget which pad claimed which couch seat and let P2 drop in again from scratch.
+    // Back at the front door: forget which pad claimed which couch seat, and let the couch fill again from
+    // scratch - four seats, pads welcome (an online lobby we have just walked out of had claiming switched off).
+    this.game.input.setPadClaims(true);
     this.game.input.resetClaims();
     this.sel = 0;
     this.crew = CRITTERS.map((def, i) => {

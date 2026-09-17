@@ -2,17 +2,24 @@
 // section 3). Eight actions, so a player's whole input for one frame is one byte; packMask / unpackMask are
 // the only place the bit layout lives, and net/protocol.js sends exactly that mask.
 //
-// Couch play: P1 on arrows/WASD + Z X C, P2 on T F G H + V B N (the same block shifted three columns right,
-// exactly as the sibling game does it). Online, everyone is on the first block on their own keyboard, and
-// net/session.js reads the local device through pollRaw() while injecting the peers' delayed masks with
-// setVirtual() - so update() computes edges from whatever mask the seat actually holds.
+// Couch play seats FOUR (LOCAL_PLAYERS). The keyboard reaches the first two: P1 on arrows/WASD + Z X C, P2 on
+// T F G H + V B N (the same block shifted three columns right, exactly as the sibling game does it). Seats 3 and
+// 4 have no keys - there is no third nine-key block left on a keyboard worth playing on - so they are GAMEPAD
+// seats, and a pad claims the lowest seat no keyboard is already driving on its first press. Four pads fill the
+// truck; a pad and the two key blocks fill it just as well.
+//
+// Online, everyone is on the first block on their own keyboard, and net/session.js reads the local device through
+// pollRaw() while injecting the peers' delayed masks with setVirtual() - so update() computes edges from whatever
+// mask the seat actually holds. Pad CLAIMS are a couch-only idea and are switched off for the whole of an online
+// session (setPadClaims), because every seat but one belongs to somebody on another machine: online, every pad in
+// the room drives the local seat through pollRaw() whether it is claimed or not.
 import { INPUT_BUFFER, MAX_PLAYERS, LOCAL_PLAYERS } from '../constants.js';
 
 /** All per-player actions, in bit order (bit i of a mask is ACTIONS[i]). Frozen: changing it is a wire break. */
 export const ACTIONS = Object.freeze(['left', 'right', 'up', 'down', 'action', 'alt', 'cancel', 'start']);
 const BIT = {}; ACTIONS.forEach((a, i) => { BIT[a] = 1 << i; });
 
-/** Default keyboard bindings per couch slot (KeyboardEvent.code). */
+/** Default keyboard bindings per couch slot (KeyboardEvent.code). Two entries: seats 2 and 3 are pad-only. */
 export const KEYBOARD = [
   { left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'],
     action: ['KeyZ', 'Space'], alt: ['KeyX', 'ShiftLeft'], cancel: ['KeyC', 'Escape', 'Backspace'], start: ['Enter'] },
@@ -22,6 +29,8 @@ export const KEYBOARD = [
 const KEY_LABELS = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Space: 'SPACE', Enter: 'ENTER', Escape: 'ESC', Backspace: 'BKSP', ShiftLeft: 'SHIFT', Digit5: '5' };
 /** Standard gamepad mapping: A action, B cancel, X alt, Start start, d-pad 12-15, left stick axes 0/1. */
 const PAD = { action: [0], cancel: [1], alt: [2], start: [9], up: [12], down: [13], left: [14], right: [15] };
+/** Face-button names for the hint lines a pad seat reads (keyText would hand a pad-only seat P1's keys). */
+const PAD_LABELS = { action: 'A', alt: 'X', cancel: 'B', start: 'START', left: '←', right: '→', up: '↑', down: '↓' };
 const STICK_DEAD = 0.45;
 
 const NEVER = 1e9;
@@ -36,6 +45,8 @@ let typedStep = [];
 let anyKeyPending = false, anyKeyThisStep = false;
 let boundCodes = null;
 let virtualPads = null;
+/** Couch-only: while this is off no pad takes a seat, and every pad falls through to slot 0 / pollRaw. */
+let padClaims = true;
 
 /** Pack an action map ({ left: true, action: true }) into a mask. */
 export function packMask(a) { let m = 0; for (let i = 0; i < ACTIONS.length; i++) if (a && a[ACTIONS[i]]) m |= 1 << i; return m & 0xff; }
@@ -82,22 +93,42 @@ function padMask(gp) {
   if (ay < -STICK_DEAD) m |= BIT.up; else if (ay > STICK_DEAD) m |= BIT.down;
   return m;
 }
+/** Is pad `i` already sitting in a seat? */
+function padBound(i) { for (const p of players) if (p.pad === i) return true; return false; }
 /** Mask of every pad not bound to a slot (slot 0 reads them all when nobody has claimed them). */
 function unboundPadsMask() {
   let m = 0;
   const list = pads();
-  for (let i = 0; i < list.length; i++) { if (!list[i]) continue; let bound = false; for (const p of players) if (p.pad === i) bound = true; if (!bound) m |= padMask(list[i]); }
+  for (let i = 0; i < list.length; i++) { if (!list[i] || padBound(i)) continue; m |= padMask(list[i]); }
   return m;
 }
-/** A pad whose button went down claims the lowest free couch seat. */
+/** Mask of EVERY pad, claimed or not: what the local human is holding, which is what netplay sends. */
+function allPadsMask() {
+  let m = 0;
+  const list = pads();
+  for (let i = 0; i < list.length; i++) if (list[i]) m |= padMask(list[i]);
+  return m;
+}
+/**
+ * Can a pad take couch seat `s`? Not one a keyboard block is already driving - the pad player would be sharing a
+ * critter with the person next to them while a seat stood empty - and not one a net session is injecting.
+ */
+function seatFreeForPad(s) {
+  const pl = players[s];
+  return pl.pad < 0 && pl.virtual < 0 && pl.device !== 'keyboard';
+}
+/**
+ * A pad whose button went down claims the LOWEST free couch seat. Lowest, not first-found: a run's party is a
+ * dense array whose index is the input slot (game/run.js startRun), so a hole at seat 1 would hand seat 2's pad
+ * somebody else's critter.
+ */
 function claimPads() {
+  if (!padClaims) return;
   const list = pads();
   for (let i = 0; i < list.length; i++) {
-    const gp = list[i]; if (!gp) continue;
-    let bound = false; for (const p of players) if (p.pad === i) bound = true;
-    if (bound) continue;
+    const gp = list[i]; if (!gp || padBound(i)) continue;
     if (!padMask(gp)) continue;
-    for (let s = 0; s < LOCAL_PLAYERS; s++) if (players[s].pad < 0 && (s === 0 ? players[s].device !== 'keyboard' : true)) { players[s].pad = i; players[s].joined = true; players[s].joinNow = true; break; }
+    for (let s = 0; s < LOCAL_PLAYERS; s++) if (seatFreeForPad(s)) { players[s].pad = i; players[s].joined = true; players[s].joinNow = true; break; }
   }
 }
 
@@ -162,18 +193,29 @@ export const input = {
   /** Test / netplay hook: hold a seat's input at `mask` (a number or an action map) until cleared. */
   setVirtual(p, mask) { players[p].virtual = mask == null ? -1 : (typeof mask === 'number' ? mask & 0xff : packMask(mask)); },
   clearVirtual(p) { players[p].virtual = -1; },
-  /** Netplay: the local devices of a slot as a mask, without touching the edge state machine. */
+  /**
+   * Netplay: the local devices of a slot as a mask, without touching the edge state machine. EVERY pad counts,
+   * claimed or not - online there is one human at this keyboard and whatever they picked up is theirs, and a
+   * claim left over from the couch must not quietly stop their pad reaching the wire.
+   */
   pollRaw(p = 0) {
     if (!boundCodes) rebuildBoundCodes();
-    const map = KEYBOARD[p]; const list = pads(); const pl = players[p];
-    return ((map ? keyMask(map) : 0) | (pl.pad >= 0 ? padMask(list[pl.pad]) : 0) | unboundPadsMask()) & 0xff;
+    const map = KEYBOARD[p];
+    return ((map ? keyMask(map) : 0) | allPadsMask()) & 0xff;
   },
   /** Couch seats: joined flags and the drop-in edge. */
   joined(p) { return players[p].joined; },
   joinPressed(p) { return players[p].joinNow; },
   setJoined(p, on) { players[p].joined = !!on; if (!on) { players[p].pad = -1; } },
-  /** Reset pad claims (title screen). */
+  /** Reset pad claims (title screen, and the match boundary in net/roster.js). */
   resetClaims() { for (const p of players) p.pad = -1; for (let s = 1; s < players.length; s++) players[s].joined = false; },
+  /**
+   * Couch on/off. Claiming seats is a couch-only idea: online, seats 1..3 belong to other machines, so the lobby
+   * switches this off and every pad in the room drives the local seat through pollRaw() instead.
+   */
+  setPadClaims(on) { padClaims = !!on; },
+  /** Which pad drives a seat, or -1 for none (hints, tests). */
+  padOf(p) { return players[p].pad; },
   /** Last device that produced input for the seat ('keyboard' | 'gamepad' | 'virtual' | 'none'). */
   device(p) { return players[p].device; },
   idleFrames(p) { return players[p].idleFrames; },
@@ -181,6 +223,11 @@ export const input = {
   setPadVirtual(list) { virtualPads = list; },
   /** Key label for hints ('Z', '←', 'ENTER'). */
   keyText(p, a) { const map = KEYBOARD[p] || KEYBOARD[0]; const c = (map[a] || [])[0] || ''; return KEY_LABELS[c] || c.replace(/^Key|^Digit/, ''); },
+  /**
+   * The face button an action sits on ('A', 'B', 'START'). A screen builds BOTH lines in enter() and picks one in
+   * draw() by device(p): seats 2 and 3 have no keyboard block, so keyText would hand them somebody else's keys.
+   */
+  padText(a) { return PAD_LABELS[a] || a.toUpperCase(); },
   get playerCount() { return players.length; },
   get localPlayers() { return LOCAL_PLAYERS; },
 };

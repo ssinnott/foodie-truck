@@ -2,11 +2,11 @@
 // JOINED seat, a beetroot READY stamp when a seat locks in, and the run starts the moment every joined seat
 // has stamped - on the order board (game/screens/stage.js), where the party picks the customer and the dish.
 //
-// Seats are read ONLY by slot through engine/input.js, so a couch P2 dropping in mid-screen is the same code
-// path as P1. Everything the screen simulates is two numbers per seat (which card, ready or not), which is what
-// `checksumFields` reports. The rigs are built ONCE in enter() - one per card per possible seat, so a cursor
+// Seats are read ONLY by slot through engine/input.js, so a couch P2 dropping in mid-screen - on the keys or on a
+// pad, seats 3 and 4 being pad-only - is the same code path as P1. Everything the screen simulates is two numbers
+// per seat (which card, ready or not), which is what `checksumFields` reports. The rigs are built ONCE in enter() - one per card per possible seat, so a cursor
 // moving to a card changes which pre-built rig is drawn rather than building one in draw().
-import { VIEW_W, UI, PLAYER_COLORS, MAX_PLAYERS } from '../../constants.js';
+import { VIEW_W, UI, PLAYER_COLORS, MAX_PLAYERS, LOCAL_PLAYERS } from '../../constants.js';
 import { Screen } from '../game.js';
 import { drawText, drawTextOutlined, measureText } from '../../engine/text.js';
 import { pathRR } from '../../art/shading.js';
@@ -88,12 +88,19 @@ export class SelectScreen extends Screen {
     this.seats = [];
     for (let s = 0; s < MAX_PLAYERS; s++) this.seats.push({ slot: s, on: inp.joined(s), card: s % this.cards.length, ready: false, t: 0 });
     this.starting = -1; this.started = false;
-    this.joinHint = `P2: PRESS ${inp.keyText(1, 'action')} TO JOIN`;
+    // Two drop-in prompts, both built here: while the P2 keys are free the hint names them AND the pads, and once
+    // somebody is on them the pads are all that is left to invite (seats 3 and 4 have no keyboard block).
+    this.joinHintKeys = `P2: PRESS ${inp.keyText(1, 'action')}    GAMEPAD: PRESS ${inp.padText('action')} TO JOIN`;
+    this.joinHintPads = `GAMEPAD: PRESS ${inp.padText('action')} TO JOIN`;
+    // P1's own hint line in P1's own buttons - a lead seat on a pad is told A and B, not Z and C. BOTH are built
+    // here and draw() picks one: the string is never joined in a draw (docs/ARCHITECTURE.md section 8), and the
+    // device is never read in update(), which is where reading it would be a desync (docs/MULTIPLAYER.md).
     this.hint = `${inp.keyText(0, 'action')}: READY    ${inp.keyText(0, 'cancel')}: BACK`;
+    this.hintPad = `${inp.padText('action')}: READY    ${inp.padText('cancel')}: BACK`;
     this.bustOpts = { margin: BUST_MARGIN, facing: 1 };
   }
 
-  /** Seats that are actually in the room (P1 always; P2 after a drop-in; 2 and 3 are online seats). */
+  /** Seats that are actually in the room (P1 always; the other three after a keyboard or pad drop-in). */
   joinedCount() { let n = 0; for (const s of this.seats) if (s.on) n++; return n; }
 
   /** Somebody is here and every seat that is here has stamped. A plain loop: update() allocates nothing. */
@@ -107,8 +114,15 @@ export class SelectScreen extends Screen {
     super.update();
     const inp = this.game.input;
     for (const seat of this.seats) {
-      // a couch drop-in: engine/input.js joins the seat on its first key, and the cursor appears on its own card
-      if (!seat.on && inp.joined(seat.slot)) { seat.on = true; seat.card = seat.slot % this.cards.length; }
+      // A couch drop-in: engine/input.js joins the seat on its first key or button, and the cursor appears on its
+      // own card. The press that SAT THEM DOWN is then eaten - held and buffered - because it is the same press,
+      // on the same step, that would otherwise stamp READY on a card they have not looked at yet. Three of the
+      // four seats arrive this way, so a join that locks the pick is a party stuck on its default cast.
+      if (!seat.on && inp.joined(seat.slot)) {
+        seat.on = true; seat.card = seat.slot % this.cards.length;
+        inp.consume(seat.slot, 'action');
+        continue;
+      }
       if (!seat.on) continue;
       if (seat.ready) seat.t++;
       if (this.started) continue;
@@ -221,11 +235,11 @@ export class SelectScreen extends Screen {
     }
     // the drop-in prompt goes on a paper strip like every other hint in the kit: outlined cream on the dimmed
     // lane was the one line on this screen you had to hunt for, and it is the line that invites a second player
-    if (!this.game.input.joined(1)) drawHint(ctx, this.joinHint, JOIN_Y);
+    if (this.joinedCount() < LOCAL_PLAYERS) drawHint(ctx, this.game.input.joined(1) ? this.joinHintPads : this.joinHintKeys, JOIN_Y);
     const lead = this.cards[this.seats[0].card];
     drawTicket(ctx, BIO.x, BIO.y, BIO.w, BIO.h, { rules: false, header: false });
     drawText(ctx, lead.def.bio || lead.def.fullName, BIO.x + BIO.w / 2, BIO.y + 11, { size: 1, color: UI.ink, align: 'center', shadow: false });
-    drawHint(ctx, this.hint);
+    drawHint(ctx, this.game.input.device(0) === 'gamepad' ? this.hintPad : this.hint);
   }
 
   summary() {

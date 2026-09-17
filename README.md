@@ -34,13 +34,20 @@ npm install
 npm run dev        # http://localhost:8080
 ```
 
-| Action | P1 | P2 (couch) | Gamepad |
+**Four players on one couch.** The keyboard seats two, and a gamepad takes the lowest seat nobody is already on
+the keys for the moment it is pressed — so four pads fill the truck, or two pads either side of the keyboard pair.
+Pick up a controller on the title screen and press A.
+
+| Action | P1 keys | P2 keys | Any seat, on a gamepad |
 |---|---|---|---|
 | Move | Arrows / W A S D | T F G H | D-pad / left stick |
 | ACTION (confirm, catch, cast, chop) | Z or Space | V | A |
 | ALT (honk, bite, flip) | X | B | X |
 | CANCEL (back) | C or Esc | N | B |
 | START (pause, ready) | Enter | 5 | Start |
+
+P3 and P4 are gamepad seats — there is no third nine-key block left on a keyboard worth playing on — and a seat on
+a pad reads its own buttons in the hint lines.
 
 Any screen can be opened directly for a look: `index.html?debug=1&skipTo=orchard&critters=0,1,2,3&seed=7`. The title's
 CREW row opens the gallery, a contact sheet of every critter and animation.

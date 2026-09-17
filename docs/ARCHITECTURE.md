@@ -73,12 +73,24 @@ gating render — lockstep returns false while waiting for a peer's input.
 
 ### `engine/input.js`
 `ACTIONS = ['left','right','up','down','action','alt','cancel','start']`, bit i of a mask. Four seats (`MAX_PLAYERS`),
-couch play fills two (`LOCAL_PLAYERS`): P1 arrows/WASD + Z X C Enter, P2 T F G H + V B N 5; a gamepad claims the
-lowest free couch seat on its first press. API: `update()` once per step; `held(p,a)`, `pressed(p,a)`,
-`buffered(p,a,window)`, `consume(p,a)`, `axisX(p)`, `axisY(p)`, `mask(p)`, `anyPressed(a)` → slot or −1,
-`typedCodes()` (text entry), `setVirtual(p, mask|actions)` / `clearVirtual(p)` (netplay + tests), `pollRaw(p)` (the local
-devices as a mask, no edge state — netplay samples this to send), `joined(p)`, `joinPressed(p)`, `setJoined`,
-`resetClaims`, `keyText(p,a)`. `packMask` / `unpackMask` own the bit layout; `net/protocol.js` sends the mask as is.
+and couch play fills all four (`LOCAL_PLAYERS`): P1 arrows/WASD + Z X C Enter, P2 T F G H + V B N 5, and seats 3
+and 4 pad-only. A gamepad claims the LOWEST couch seat that is free — not bound to another pad, not being driven by
+a keyboard block, not virtual — on its first press. Lowest, because a run's party is a dense array indexed by input
+slot (`game/run.js` startRun), so a hole would hand a seat somebody else's critter. Standard mapping: A/B/X →
+action/cancel/alt, Start, d-pad 12–15, left stick on axes 0/1 past a 0.45 dead zone.
+
+Claims are COUCH-ONLY. `setPadClaims(false)` turns them off for the whole of an online session (`screens/lobby.js`
+on the way in, back on for the couch on the way out), because seats 1–3 belong to other machines; online, every pad
+in the room reaches the local seat through `pollRaw()`, which reads every pad whether or not it is claimed.
+
+API: `update()` once per step; `held(p,a)`, `pressed(p,a)`, `buffered(p,a,window)`, `consume(p,a)`, `axisX(p)`,
+`axisY(p)`, `mask(p)`, `anyPressed(a)` → slot or −1, `typedCodes()` (text entry), `setVirtual(p, mask|actions)` /
+`clearVirtual(p)` (netplay + tests), `pollRaw(p)` (the local devices as a mask, no edge state — netplay samples this
+to send), `joined(p)`, `joinPressed(p)`, `setJoined`, `resetClaims`, `setPadClaims(on)`, `padOf(p)`,
+`device(p)`, `keyText(p,a)`, `padText(a)` (the face button an action sits on, for a hint line a pad seat reads —
+seats 3 and 4 have no keys to name, so a screen builds both lines in `enter()` and picks one in `draw()` by
+`device(p)`; never read the device in `update()`, see docs/MULTIPLAYER.md), `setPadVirtual(list)` (tests).
+`packMask` / `unpackMask` own the bit layout; `net/protocol.js` sends the mask as is.
 
 ### `engine/canvas.js`, `engine/rng.js`, `engine/math.js`, `engine/trig.js`, `engine/text.js` (ported)
 `createCanvas(el)`; `rng.seed/next/range/int/pick/chance/state` + `makeRng(seed)` for cosmetic streams;
@@ -198,6 +210,9 @@ window.__game = {
   ready, game, input, rng, options, loop, scenes,
   step(n), screen(), screenIds(), summary(), goto(id, params),
   setInput(slot, actions|mask), clearInput(slot), critterList(), errors: [],
+  // couch gamepads: stand fake pads in for navigator.getGamepads(), one { down: [buttonIndex], axes: [x, y] }
+  // per port (null for an empty one), null to clear them all again
+  setPads(specs), padOf(slot),
   // online co-op (net/session.js installNetHooks): drive a room without the lobby screen
   netHost({ transport }) -> room code, netJoin(code, { transport }), net(), netState(), netSetCritter(i), netReady(on), netBegin(scene)
 }

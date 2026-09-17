@@ -34,6 +34,10 @@ export function makeApi(page) {
       await page.evaluate((pp) => window.__game.clearInput(pp), p);
       await page.evaluate((k) => window.__game.step(k), release);
     },
+    /** Stand fake gamepads in for the real ones: one { down, axes } per pad, null to clear them all. */
+    pads: (specs) => page.evaluate((g) => window.__game.setPads(g), specs || null),
+    /** Which pad is sitting in a seat, or -1. */
+    padOf: (p) => page.evaluate((pp) => window.__game.padOf(pp), p),
     hold: (p, actions) => page.evaluate(([pp, a]) => window.__game.setInput(pp, a), [p, actions]),
     release: (p) => page.evaluate((pp) => window.__game.clearInput(pp), p),
     errors: () => page.evaluate(() => window.__game.errors.slice()),

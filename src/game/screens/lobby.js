@@ -109,6 +109,10 @@ export class LobbyScreen extends Screen {
   enter(params) {
     super.enter(params);
     const game = this.game;
+    // Online, seats 1..3 are other people's machines, so a pad must not sit down in one: claiming is couch-only
+    // (engine/input.js). Every pad at this keyboard still drives OUR seat, through the session's pollRaw(0).
+    game.input.setPadClaims(false);
+    game.input.resetClaims();
     this.crit = CRITTERS.map((def, i) => {
       const player = new AnimPlayer(def.anims);
       player.play('idle');
@@ -149,6 +153,9 @@ export class LobbyScreen extends Screen {
   exit() {
     // The session outlives this screen (the match is about to start), so only the callback is taken back.
     if (this.net && this.net.onStateChange) this.net.onStateChange(null);
+    // Couch rules come back on the way out. Mid-match this changes nothing: every seat is virtual while the
+    // session is injecting, and engine/input.js never lets a pad claim a seat somebody else is driving.
+    this.game.input.setPadClaims(true);
   }
 
   // ---- the session ----------------------------------------------------------------------------

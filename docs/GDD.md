@@ -153,20 +153,27 @@ The customer's bust at the hatch, the plate sliding out, three chews, a stamp (`
 
 ## 8. Multiplayer
 
-One to four players. Couch: two on one keyboard (P2 joins by pressing any key of the T F G H / V B N block) or
-a gamepad. Online: two to four through a **host key** (a six-character room code) in the lobby, lockstep, one
+One to four players. Couch: **all four seats are local**. The keyboard reaches two of them (P2 joins by pressing
+any key of the T F G H / V B N block) and a gamepad claims the lowest seat no keyboard is already driving, on its
+first button press — so four pads fill the truck, as do two pads either side of the keyboard pair. Seats fill from
+the bottom and stay dense, because a run's party is indexed by input slot. Online: two to four through a **host
+key** (a six-character room code) in the lobby, lockstep, one
 truck, simultaneous mini-games, one critter per station. Everything a screen simulates is driven only by seat input
 and the seeded rng, so all peers agree; see `docs/MULTIPLAYER.md`. Pause is local-only and refused online.
 
 ## 9. Controls
 
-| Action | P1 | P2 (couch) | Gamepad |
+| Action | P1 keys | P2 keys | Any seat, on a gamepad |
 |---|---|---|---|
 | Move | Arrows / W A S D | T F G H | D-pad / left stick |
 | ACTION (confirm, catch, cast, chop) | Z or Space | V | A |
 | ALT (honk, bite, flip) | X | B | X |
 | CANCEL (back) | C or Esc | N | B |
 | START (pause, ready) | Enter | 5 | Start |
+
+P3 and P4 are gamepad seats: there is no third nine-key block left on a keyboard worth playing on. A seat on a pad
+is told its own buttons in the hint lines (`A: READY`, not `Z: READY`). The press that sits a player down never
+also stamps their card — they arrive on a cursor, not on a pick.
 
 ## 10. Screens — what each must do
 
