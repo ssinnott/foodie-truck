@@ -3,9 +3,9 @@
 import { VIEW_W, VIEW_H, UI, PLUM } from '../../constants.js';
 import { Screen } from '../game.js';
 import { drawText, drawTextOutlined } from '../../engine/text.js';
-import { drawRig } from '../../art/rig.js';
+import { drawRig } from '../../lib/art/rig.ts';
 import { critterRig } from '../../content/critters/common.js';
-import { AnimPlayer } from '../animation.js';
+import { AnimPlayer } from '../../lib/art/animation.ts';
 import { ITEMS } from '../../content/critters/items.js';
 import { cancelPressed, navX, navY } from '../menuinput.js';
 import { drawSign, drawHint, drawNamePlate } from '../ui.js';

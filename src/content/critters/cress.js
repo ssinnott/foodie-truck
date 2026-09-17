@@ -2,7 +2,7 @@
 // pupils, a wide mouth and no nose, long legs on big feet, a straw sunhat with a plum band perched above the
 // domes, and a dark-willow basket slung on the far hip in the back layer. The frog is the second dark fur, so the
 // aprons clear it by value (.28+) like the hare's.
-import { celPath, pathRR, band } from '../../art/shading.js';
+import { celPath, pathRR, band } from '../../lib/art/shading.ts';
 import { critterBuild, makeCritterAnims, F, PLUM_STRAP } from './common.js';
 
 const R = Math.round;

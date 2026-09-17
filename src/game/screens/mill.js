@@ -19,13 +19,13 @@
 // window turn on an index step read from `this.frame` in draw() and touch nothing.
 import { UI } from '../../constants.js';
 import { Screen } from '../game.js';
-import { rng, makeRng } from '../../engine/rng.js';
-import { dsin, dcos } from '../../engine/trig.js';
+import { rng, makeRng } from '../../lib/engine/rng.ts';
+import { dsin, dcos } from '../../lib/engine/trig.ts';
 import { particles } from '../../engine/particles.js';
 import { blitAt, VIEW_W } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt } from '../../art/fx.js';
 import { drawFood } from '../../art/food.js';
-import { drawRig } from '../../art/rig.js';
+import { drawRig } from '../../lib/art/rig.ts';
 import { F } from '../../content/critters/common.js';
 import { INGREDIENTS } from '../../content/recipes.js';
 import { MILL, ROWS, CHUTE_X, CHUTE_PITCH, SHAFT, millLayers } from '../../art/backgrounds/mill.js';

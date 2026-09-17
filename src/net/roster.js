@@ -19,7 +19,7 @@
 
 import { NET_PLAYERS } from '../constants.js';
 import { ACTIONS } from '../engine/input.js';
-import { createPeer } from './peer.js';
+import { createPeer } from '../lib/net/peer.ts';
 import { MSG, PROTOCOL_VERSION, encodeJson, encodePing, encodeRelay } from './protocol.js';
 
 /** How long a link may take to form before it is torn down and tried again from scratch. */

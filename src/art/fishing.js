@@ -3,7 +3,7 @@
 // the tables only draw() reads (the float's bob, the nibble dips), and the sprites: the 2 px mid-brown line, the
 // float with its slot cap and tag, the trout, the bucket. Screen space, integer coordinates, no allocation per call.
 import { UI, PLAYER_COLORS, SIGNAL } from '../constants.js';
-import { pathRR } from './shading.js';
+import { pathRR } from '../lib/art/shading.ts';
 import { F } from '../content/critters/common.js';
 
 const R = Math.round, TAU = Math.PI * 2;

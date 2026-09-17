@@ -12,8 +12,8 @@ import { UI, PLUM, SIGNAL } from '../constants.js';
 import { INK } from './layers.js';
 import { mix } from './palettes.js';
 import { drawFood } from './food.js';
-import { celPoly, LIGHT_X, LIGHT_Y } from './shading.js';
-import { pathStar } from './shapes.js';
+import { celPoly, LIGHT_X, LIGHT_Y } from '../lib/art/shading.ts';
+import { pathStar } from '../lib/art/shapes.ts';
 import { INGREDIENTS } from '../content/recipes.js';
 import { F } from '../content/critters/common.js';
 

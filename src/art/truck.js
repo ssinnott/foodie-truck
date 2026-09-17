@@ -11,7 +11,7 @@
 // dark plum so the two pale furs are not pale-on-pale (ART_STYLE section 0.1).
 import { drawHeadPortrait } from './portraits.js';
 import { drawText } from '../engine/text.js';
-import { pathRR } from './shading.js';
+import { pathRR } from '../lib/art/shading.ts';
 
 const INK = '#2A1F1A';
 /** The truck's own colours (ART_STYLE section 1); exported so the title's parked truck and the kitchen agree. */

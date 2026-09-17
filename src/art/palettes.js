@@ -1,51 +1,15 @@
-// Named palettes and colour helpers. Palette shape: { skin, hair, primary, secondary, accent, metal, dark, glow }.
-
-/** Parse '#rgb' / '#rrggbb' to [r,g,b]. */
-export function hexToRgb(hex) {
-  let h = String(hex).replace('#', '');
-  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
-  const n = parseInt(h, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-/** [r,g,b] to '#rrggbb'. */
-export function rgbToHex(r, g, b) {
-  const c = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
-  return '#' + c(r) + c(g) + c(b);
-}
-/** Multiply a colour's brightness (f < 1 darker, > 1 lighter). */
-export function shade(hex, f) { const [r, g, b] = hexToRgb(hex); return rgbToHex(r * f, g * f, b * f); }
-/** Mix two colours by t. */
-export function mix(a, b, t) {
-  const A = hexToRgb(a), B = hexToRgb(b);
-  return rgbToHex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t);
-}
-/** 'rgba(...)' string with alpha. */
-export function rgba(hex, a) { const [r, g, b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; }
-/** Return a new palette with every colour shaded by f (used for far limbs). */
-export function shadePalette(p, f) {
-  const o = {};
-  for (const k of Object.keys(p)) o[k] = typeof p[k] === 'string' && p[k][0] === '#' ? shade(p[k], f) : p[k];
-  return o;
-}
-/**
- * Darken AND desaturate a colour (far-side limbs): brightness x f, then pulled `desat` (0..1) toward its own grey,
- * with a slight cool cast so far parts sit behind the near ones instead of merging with them.
- */
-export function farShade(hex, f, desat = 0.25) {
-  const [r, g, b] = hexToRgb(hex);
-  const L = (r * 0.3 + g * 0.59 + b * 0.11) * f;
-  const rr = r * f, gg = g * f, bb = b * f;
-  return rgbToHex(rr + (L - rr) * desat, gg + (L - gg) * desat, bb + (L - bb) * desat + 6);
-}
-/** Far-limb palette: every colour through farShade (readability pass: far limbs ~35-40 % darker and greyer). */
-export function farPalette(p, f = 0.62, desat = 0.25) {
-  const o = {};
-  for (const k of Object.keys(p)) o[k] = typeof p[k] === 'string' && p[k][0] === '#' ? farShade(p[k], f, desat) : p[k];
-  return o;
-}
+// This game's palette DATA. The colour helpers it used to define alongside them now live in the
+// shared library (src/lib/art/palettes.ts) and are re-exported here, so every existing
+// `from '../art/palettes.js'` import keeps resolving and there is exactly one implementation of
+// hexToRgb, shade, mix, farShade and friends across both games.
+//
+// The split is deliberate: the helpers are engine (identical in both games, byte for byte), the
+// tables below are art direction (Hedgerow Dusk; the sibling game's are a steampunk ladder and
+// share not one hex).
+export * from '../lib/art/palettes.ts';
 
 /**
- * Shared named palettes. `hero` is the default every build is spread over (art/rig.js buildRig), so it is a
+ * Shared named palettes. `hero` is the default every build is spread over (lib/art/rig.ts buildRig), so it is a
  * neutral critter: warm brown fur, a red apron, cream trim. The cast's own palettes live in content/critters.
  * Shape: { skin (fur), hair (dark fur / markings), primary (apron/coat), secondary (trousers/lower body), accent, metal, dark, glow, sleeve }.
  */

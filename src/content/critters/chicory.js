@@ -2,8 +2,8 @@
 // dark tips that lag on a chain, a tweed flat cap with driving goggles pushed up on it, a cream scarf whose loose
 // end streams behind on a chain, long feet and a lope of a walk. The gag from the judge panel: the goggles slide
 // down onto the eye row on every `hurt` key (the one allowed eye-row intrusion, docs/ART_STYLE.md section 12).
-import { celBall } from '../../art/shading.js';
-import { FACE } from '../../art/poses.js';
+import { celBall } from '../../lib/art/shading.ts';
+import { FACE } from '../../lib/art/poses.ts';
 import { critterBuild, makeCritterAnims, cap, scarf, scarfTail, hatY, F } from './common.js';
 
 const R = Math.round;

@@ -4,7 +4,7 @@
 // offsets with a parallax factor, and only cheap things (a windmill, water sparkle, smoke, birds) draw on
 // top per frame. Gradients are allowed HERE, in the pre-render, never in a per-frame draw.
 import { VIEW_W, VIEW_H } from '../constants.js';
-import { makeRng } from '../engine/rng.js';
+import { makeRng } from '../lib/engine/rng.ts';
 
 /** Parallax factors: what fraction of the camera a layer moves by. */
 export const PARALLAX = Object.freeze({ sky: 0, far: 0.2, mid: 0.5, ground: 1, near: 1.2 });

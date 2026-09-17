@@ -12,10 +12,10 @@
 // state, timer, float position and count plus the clock feed the desync canary.
 import { UI, SIGNAL } from '../../constants.js';
 import { Screen } from '../game.js';
-import { rng } from '../../engine/rng.js';
+import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.js';
 import { drawShadow, ringAt, floatText, burstDrops } from '../../art/fx.js';
-import { drawRig, jointScreen } from '../../art/rig.js';
+import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import { blitAt } from '../../art/layers.js';
 import { ITEMS } from '../../content/critters/items.js';
 import { INGREDIENTS } from '../../content/recipes.js';

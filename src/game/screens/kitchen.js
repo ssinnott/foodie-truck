@@ -16,11 +16,11 @@
 // checksumFields(). Rigs are built once in enter(), never in draw().
 import { VIEW_W, UI, SIGNAL, PLAYER_COLORS } from '../../constants.js';
 import { Screen } from '../game.js';
-import { rng } from '../../engine/rng.js';
+import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.js';
 import { blitAt } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt, burstCrumbs, burstSparkle } from '../../art/fx.js';
-import { drawRig, jointScreen } from '../../art/rig.js';
+import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import { drawBust, idlePoseOf } from '../../art/portraits.js';
 import { drawFood } from '../../art/food.js';
 import { critterRig } from '../../content/critters/common.js';
@@ -29,7 +29,7 @@ import { getCustomer } from '../../content/critters/customers.js';
 import { ITEMS } from '../../content/critters/items.js';
 import { STATIONS } from '../../content/places.js';
 import { INGREDIENTS } from '../../content/recipes.js';
-import { AnimPlayer } from '../animation.js';
+import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawTicket, drawOrderTicket, drawNamePlate, drawHint, drawStamp, ROW } from '../ui.js';
 import { drawText } from '../../engine/text.js';
 import { kitchenLayer, ROWS, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.js';

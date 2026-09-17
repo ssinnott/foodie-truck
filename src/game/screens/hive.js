@@ -26,12 +26,12 @@
 // cosmetic and stay out of checksumFields().
 import { VIEW_W, UI, SIGNAL } from '../../constants.js';
 import { Screen } from '../game.js';
-import { rng, makeRng } from '../../engine/rng.js';
+import { rng, makeRng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.js';
 import { blitAt } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt, burstDust, burstSparkle } from '../../art/fx.js';
 import { drawFood } from '../../art/food.js';
-import { drawRig, jointScreen } from '../../art/rig.js';
+import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import { drawText, measureText } from '../../engine/text.js';
 import { F } from '../../content/critters/common.js';
 import { INGREDIENTS } from '../../content/recipes.js';

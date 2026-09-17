@@ -14,7 +14,7 @@ import { drawText, drawTextOutlined, measureText } from '../../engine/text.js';
 import { drawHeadPortrait, idlePoseOf } from '../../art/portraits.js';
 import { critterRig } from '../../content/critters/common.js';
 import { getCustomer } from '../../content/critters/customers.js';
-import { AnimPlayer } from '../animation.js';
+import { AnimPlayer } from '../../lib/art/animation.ts';
 import { ORDERS, INGREDIENTS } from '../../content/recipes.js';
 import { PLACES } from '../../content/places.js';
 import { drawFood } from '../../art/food.js';

@@ -9,11 +9,11 @@
 import { VIEW_W, UI, PLAYER_COLORS, MAX_PLAYERS } from '../../constants.js';
 import { Screen } from '../game.js';
 import { drawText, drawTextOutlined, measureText } from '../../engine/text.js';
-import { pathRR } from '../../art/shading.js';
+import { pathRR } from '../../lib/art/shading.ts';
 import { drawBust, idlePoseOf } from '../../art/portraits.js';
 import { critterRig } from '../../content/critters/common.js';
 import { CRITTERS } from '../../content/critters/index.js';
-import { AnimPlayer } from '../animation.js';
+import { AnimPlayer } from '../../lib/art/animation.ts';
 import { startRun } from '../run.js';
 import { CARD_W, CARD_H, RING_POS, cardX, drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.js';
 import { drawLane, drawPorthole, PORT_R } from '../../art/logo.js';

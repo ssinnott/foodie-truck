@@ -7,11 +7,11 @@
 // a chunk (evictChunk) and the next chunkLayer() repaints it identically - the repaint-on-demand path the judges asked
 // for. Nothing here animates: the sails, hens, bees, glints, smoke and the truck are the map screen's per-frame marks.
 import { makeLayer, discShaded, boxShaded, boxOutlined, polyOutlined, vGradient, radialGlow, makeGlowSprite, INK } from '../layers.js';
-import { makeRng } from '../../engine/rng.js';
+import { makeRng } from '../../lib/engine/rng.ts';
 import { WORLD_W, WORLD_H, PLACES } from '../../content/places.js';
 import { VIEW_W, VIEW_H, PLUM, SIGNAL } from '../../constants.js';
 import { drawText, measureText } from '../../engine/text.js';
-import { pathRR } from '../shading.js';
+import { pathRR } from '../../lib/art/shading.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
 

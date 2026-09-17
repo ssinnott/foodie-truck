@@ -1,9 +1,9 @@
 // Boot: create services, Game, screens, loop; install window.__game debug/test hooks (docs/ARCHITECTURE.md section 6).
 import { VIEW_W, VIEW_H } from './constants.js';
-import { createLoop } from './engine/loop.js';
+import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.js';
-import { rng } from './engine/rng.js';
-import { createCanvas } from './engine/canvas.js';
+import { rng } from './lib/engine/rng.ts';
+import { createCanvas } from './lib/engine/canvas.ts';
 import { Game } from './game/game.js';
 import { startRun, SCENES } from './game/run.js';
 import { CRITTERS } from './content/critters/index.js';

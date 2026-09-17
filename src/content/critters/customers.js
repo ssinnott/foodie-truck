@@ -3,7 +3,7 @@
 // ear tufts, big whites and cheek discs; an otter with small ears and a thin tail; a goat with drooping ears, two
 // short horns and a beard - in muted village palettes that clear the hatch's plum wall (#4A3038, L .22) by value.
 // They wear the off-duty apron (critterRig(def, -1)): no seat, no player colour.
-import { celPoly } from '../../art/shading.js';
+import { celPoly } from '../../lib/art/shading.ts';
 import { critterBuild, makeCritterAnims, muzzleGeom } from './common.js';
 
 const R = Math.round;

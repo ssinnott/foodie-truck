@@ -22,12 +22,12 @@
 // "good timing" on the gauge is UI.green under an ink line, never gold, as section 4 requires.
 import { VIEW_W, UI, SIGNAL } from '../../constants.js';
 import { Screen } from '../game.js';
-import { rng, makeRng } from '../../engine/rng.js';
+import { rng, makeRng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.js';
 import { blitAt } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt, burstCrumbs, burstSparkle } from '../../art/fx.js';
 import { drawFood } from '../../art/food.js';
-import { drawRig, jointScreen } from '../../art/rig.js';
+import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import { gardenLayers, ROWS } from '../../art/backgrounds/garden.js';
 import {
   CROP, FERN_H, TAG_W, TAG_H, GAUGE_UNITS, GARDEN_TRUG, GARDEN_ANIMS,

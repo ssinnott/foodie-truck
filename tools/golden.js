@@ -9,16 +9,16 @@
 //   node tools/golden.js              print the current fingerprint as JSON
 //   node tools/golden.js --check       compare against tools/golden-baseline.json, exit 1 on any drift
 //   node tools/golden.js --write       refresh the baseline (only when a change is intended and reviewed)
-import { buildRig, drawRig, computeJoints, DEFAULT_PROPORTIONS } from '../src/art/rig.js';
-import { AnimPlayer } from '../src/game/animation.js';
-import { makePose } from '../src/art/poses.js';
+import { buildRig, drawRig, computeJoints, DEFAULT_PROPORTIONS } from '../src/lib/art/rig.ts';
+import { AnimPlayer } from '../src/lib/art/animation.ts';
+import { makePose } from '../src/lib/art/poses.ts';
 import { CRITTERS } from '../src/content/critters/index.js';
 import { owl, otter, goat } from '../src/content/critters/customers.js';
-import * as math from '../src/engine/math.js';
-import * as trig from '../src/engine/trig.js';
-import { makeRng } from '../src/engine/rng.js';
+import * as math from '../src/lib/engine/math.ts';
+import * as trig from '../src/lib/engine/trig.ts';
+import { makeRng } from '../src/lib/engine/rng.ts';
 import * as pal from '../src/art/palettes.js';
-import { makeTones } from '../src/art/shading.js';
+import { makeTones } from '../src/lib/art/shading.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

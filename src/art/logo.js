@@ -10,7 +10,7 @@
 import { makeLayer, vGradient, blitAt, INK, VIEW_W, VIEW_H } from './layers.js';
 import { UI, PLUM } from '../constants.js';
 import { drawText, drawTextOutlined, measureText } from '../engine/text.js';
-import { pathRR } from './shading.js';
+import { pathRR } from '../lib/art/shading.ts';
 import { drawFood } from './food.js';
 import { TRUCK } from './truck.js';
 

@@ -11,7 +11,7 @@
 // what that looks like. That keeps the reserved SIGNAL.hot out of the art module and in the one place that owns it.
 import { UI, PLAYER_COLORS, PLUM } from '../constants.js';
 import { mix } from './palettes.js';
-import { pathRoundedPoly, pathEllipse } from './shapes.js';
+import { pathRoundedPoly, pathEllipse } from '../lib/art/shapes.ts';
 import { DAIRY } from './backgrounds/dairy.js';
 
 const R = Math.round, TAU = Math.PI * 2, DEG = Math.PI / 180;

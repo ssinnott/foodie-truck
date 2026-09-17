@@ -10,13 +10,13 @@
 // splats, rings and float text are cosmetic and stay out of checksumFields().
 import { VIEW_W, UI, SIGNAL } from '../../constants.js';
 import { Screen } from '../game.js';
-import { rng, makeRng } from '../../engine/rng.js';
-import { dsin, dcos } from '../../engine/trig.js';
+import { rng, makeRng } from '../../lib/engine/rng.ts';
+import { dsin, dcos } from '../../lib/engine/trig.ts';
 import { particles } from '../../engine/particles.js';
 import { blitAt } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt } from '../../art/fx.js';
 import { drawFood, foodTones } from '../../art/food.js';
-import { drawRig } from '../../art/rig.js';
+import { drawRig } from '../../lib/art/rig.ts';
 import { makeOrchardLayers, ORCHARD, GRASS_Y, FENCE_Y, BLEED_X, PARALLAX } from '../../art/backgrounds/orchard.js';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.js';
 

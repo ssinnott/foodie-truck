@@ -2,8 +2,8 @@
 // slot object for art/rig.js ({ attach, length, draw }) drawn in HAND space, +x along the forearm, origin at the
 // wrist; the paw is drawn over the handle afterwards so it closes round the grip. `upright()` counter-rotates the
 // hand space so a hanging basket hangs down whatever the arm is doing. Screens set `rig.weapon = ITEMS.basket`.
-import { celRect, celCapsule, celPoly, tones, pathRR, band } from '../../art/shading.js';
-import { LIGHT_X, LIGHT_Y } from '../../art/shading.js';
+import { celRect, celCapsule, celPoly, tones, pathRR, band } from '../../lib/art/shading.ts';
+import { LIGHT_X, LIGHT_Y } from '../../lib/art/shading.ts';
 import { drawFood } from '../../art/food.js';
 
 const R = Math.round;

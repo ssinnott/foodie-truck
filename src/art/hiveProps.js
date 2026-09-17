@@ -12,8 +12,8 @@
 import { PLUM } from '../constants.js';
 import { INK } from './layers.js';
 import { mix } from './palettes.js';
-import { celBall, celCapsule, tones } from './shading.js';
-import { makeRng } from '../engine/rng.js';
+import { celBall, celCapsule, tones } from '../lib/art/shading.ts';
+import { makeRng } from '../lib/engine/rng.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
 

@@ -2,7 +2,7 @@
 // projection is now a plain camera offset because this game's scenes are screen space (side views, the kitchen) or
 // a 2D world plane (the map). Visual only: its randomness is an independent stream and it never touches the sim.
 import { drawText } from './text.js';
-import { makeRng } from './rng.js';
+import { makeRng } from '../lib/engine/rng.ts';
 
 const MAX = 600;
 const prng = makeRng(0xbeef); // visual only: independent of gameplay rng

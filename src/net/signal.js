@@ -14,7 +14,7 @@
 // The page is served over HTTPS, so every socket here MUST be wss:// - a ws:// URL is blocked as
 // mixed content with no visible error.
 
-import { createParser, encodeConnect, encodeSubscribe, encodePublish, encodePingReq, PKT } from './mqtt-codec.js';
+import { createParser, encodeConnect, encodeSubscribe, encodePublish, encodePingReq, PKT } from '../lib/net/mqtt-codec.ts';
 
 /** Room codes: no vowels (so no accidental words) and no 0/O/1/I/L ambiguity when read aloud. */
 export const ALPHABET = '23456789BCDFGHJKMNPQRSTVWXYZ';

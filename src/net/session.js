@@ -26,10 +26,10 @@
 // those packets on (MSG.RELAY). The host is the one peer everybody must reach: they are also the
 // authority for the roster and the START parameters, and the session ends for everyone if they leave.
 
-import { rng } from '../engine/rng.js';
+import { rng } from '../lib/engine/rng.ts';
 import { NET_PLAYERS, NET_MIN_PLAYERS } from '../constants.js';
 import { startRun, SCENES, START_SCENE } from '../game/run.js';
-import { createLockstep } from './lockstep.js';
+import { createLockstep } from '../lib/net/lockstep.ts';
 import { runChecksum } from './checksum.js';
 import { broadcastSignal, mqttSignal, makeRoomCode, createSignalMux } from './signal.js';
 import { MSG, PROTOCOL_VERSION, encodeInput, encodeChecksum, encodeStart, encodeJson, encodePing, encodeDrop, decodeMessage } from './protocol.js';

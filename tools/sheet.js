@@ -10,8 +10,8 @@
 // pixel-zoomed. window.__sheet = { ready, error, bench(n) } for headless capture (tools/sheet-capture.js).
 import { CRITTERS } from '../src/content/critters/index.js';
 import { ITEMS } from '../src/content/critters/items.js';
-import { buildRig, drawRig } from '../src/art/rig.js';
-import { AnimPlayer } from '../src/game/animation.js';
+import { buildRig, drawRig } from '../src/lib/art/rig.ts';
+import { AnimPlayer } from '../src/lib/art/animation.ts';
 
 const q = new URLSearchParams(location.search);
 const mode = q.get('mode') || 'anims';

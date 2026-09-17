@@ -24,7 +24,7 @@ import { drawTruck, TRUCK } from '../../art/truck.js';
 import { drawBust, idlePoseOf } from '../../art/portraits.js';
 import { critterRig } from '../../content/critters/common.js';
 import { CRITTERS } from '../../content/critters/index.js';
-import { AnimPlayer } from '../animation.js';
+import { AnimPlayer } from '../../lib/art/animation.ts';
 import { createNetSession } from '../../net/session.js';
 import { drawTicket, drawSlate, drawMenuRows, drawStamp, drawNamePlate, drawHint, drawDim, ROW } from '../ui.js';
 import { confirmPressed, cancelPressed, navY } from '../menuinput.js';

@@ -2,7 +2,7 @@
 // 1 px ink outline, base + shadow band, a 2 px highlight on the big ones. Every place an apple appears - falling in
 // the orchard, on the HUD ticket, in a paw, on the chopping board - calls the same function at a different `s`, so
 // the player learns each shape once. Origin is the item's centre; `s` is its half-size in px (8 = a 16 px apple).
-import { pathRR } from './shading.js';
+import { pathRR } from '../lib/art/shading.ts';
 
 const INK = '#2A1F1A';
 const R = Math.round;

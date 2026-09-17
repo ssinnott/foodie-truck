@@ -13,14 +13,14 @@
 // (the judges' graft: equal-y overlaps must never flicker).
 import { VIEW_W, UI, SIGNAL } from '../../constants.js';
 import { Screen } from '../game.js';
-import { rng } from '../../engine/rng.js';
-import { dhypot } from '../../engine/trig.js';
+import { rng } from '../../lib/engine/rng.ts';
+import { dhypot } from '../../lib/engine/trig.ts';
 import { particles } from '../../engine/particles.js';
 import { blitAt, INK } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt, burstDust } from '../../art/fx.js';
 import { foodTones } from '../../art/food.js';
-import { drawRig, jointScreen } from '../../art/rig.js';
-import { pathEllipse } from '../../art/shapes.js';
+import { drawRig, jointScreen } from '../../lib/art/rig.ts';
+import { pathEllipse } from '../../lib/art/shapes.ts';
 import { F } from '../../content/critters/common.js';
 import { INGREDIENTS } from '../../content/recipes.js';
 import { coopLayers, ROWS, NEST_X, NEST_EGG_Y } from '../../art/backgrounds/coop.js';

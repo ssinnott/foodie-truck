@@ -9,15 +9,15 @@
 // The camera, the animation players, the sails, the bees, the smoke and the particles are visual and never hashed.
 import { VIEW_W, VIEW_H, SIGNAL } from '../../constants.js';
 import { Screen } from '../game.js';
-import { dcos, dsin } from '../../engine/trig.js';
-import { approach } from '../../engine/math.js';
+import { dcos, dsin } from '../../lib/engine/trig.ts';
+import { approach } from '../../lib/engine/math.ts';
 import { particles } from '../../engine/particles.js';
 import { drawShadow, steamPuff, ringAt, floatText } from '../../art/fx.js';
 import { pulse } from '../../art/layers.js';
 import { measureText } from '../../engine/text.js';
 import { critterRig } from '../../content/critters/common.js';
 import { getCritter } from '../../content/critters/index.js';
-import { AnimPlayer } from '../animation.js';
+import { AnimPlayer } from '../../lib/art/animation.ts';
 import { WORLD_W, WORLD_H, PLACES } from '../../content/places.js';
 import { drawTruck } from '../../art/truck.js';
 import {

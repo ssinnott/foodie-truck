@@ -19,8 +19,8 @@
 import { UI, SIGNAL, PLAYER_COLORS, PLUM } from '../constants.js';
 import { INK } from './layers.js';
 import { mix } from './palettes.js';
-import { pathGear } from './shapes.js';
-import { celPath, pathRR, LIGHT_X, LIGHT_Y } from './shading.js';
+import { pathGear } from '../lib/art/shapes.ts';
+import { celPath, pathRR, LIGHT_X, LIGHT_Y } from '../lib/art/shading.ts';
 import { MILL, ROWS, WINDOW } from './backgrounds/mill.js';
 
 const R = Math.round, TAU = Math.PI * 2;

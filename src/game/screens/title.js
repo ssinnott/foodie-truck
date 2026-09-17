@@ -7,15 +7,15 @@
 import { VIEW_W, UI, REPO_URL, REPO_LABEL } from '../../constants.js';
 import { Screen } from '../game.js';
 import { drawTextOutlined } from '../../engine/text.js';
-import { drawRig } from '../../art/rig.js';
+import { drawRig } from '../../lib/art/rig.ts';
 import { drawShadow } from '../../art/fx.js';
 import { drawTruck } from '../../art/truck.js';
 import { critterRig } from '../../content/critters/common.js';
 import { ITEMS } from '../../content/critters/items.js';
 import { drawFood } from '../../art/food.js';
-import { LIGHT_X, LIGHT_Y } from '../../art/shading.js';
+import { LIGHT_X, LIGHT_Y } from '../../lib/art/shading.ts';
 import { CRITTERS } from '../../content/critters/index.js';
-import { AnimPlayer } from '../animation.js';
+import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawSlate, drawMenuRows, drawHint } from '../ui.js';
 import { confirmPressed, navY } from '../menuinput.js';
 import { drawLane, drawLogoSign, drawCrate, drawBlock, TRUCK_Y, CREW_Y } from '../../art/logo.js';

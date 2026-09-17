@@ -7,7 +7,7 @@ import { VIEW_W, VIEW_H, UI, PLAYER_COLORS, SIGNAL } from '../constants.js';
 import { drawOrderTicket, drawNamePlate, drawStamp, drawSign, drawHint, drawTicket } from './ui.js';
 import { drawFood } from '../art/food.js';
 import { INGREDIENTS } from '../content/recipes.js';
-import { pathRR } from '../art/shading.js';
+import { pathRR } from '../lib/art/shading.ts';
 
 const R = Math.round;
 /** Ingredient id -> glyph id / base hex for the ticket's icons (content/recipes.js). */

@@ -2,9 +2,9 @@
 // the widest body in the cast under a scalloped wool cap, a dark face with the eye whites always on, small drooping
 // ears, hooves, and a brass bell on a plum strap that swings on a one-segment chain. Everything here is a
 // parameter or a hook on the shared chibi rig in ./common.js; the file owns only what is sheep.
-import { celPath, celBall, tones, pathRR, band } from '../../art/shading.js';
-import { getChain } from '../../art/secondary.js';
-import { rad } from '../../engine/math.js';
+import { celPath, celBall, tones, pathRR, band } from '../../lib/art/shading.ts';
+import { getChain } from '../../lib/art/secondary.ts';
+import { rad } from '../../lib/engine/math.ts';
 import { critterBuild, makeCritterAnims, muzzleGeom, F, PLUM_STRAP } from './common.js';
 
 const R = Math.round;

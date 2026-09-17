@@ -18,9 +18,9 @@ import { PLAYER_COLORS, UI, SIGNAL, VIEW_W } from '../constants.js';
 import { critterRig } from '../content/critters/common.js';
 import { getCritter } from '../content/critters/index.js';
 import { ITEMS } from '../content/critters/items.js';
-import { AnimPlayer } from './animation.js';
-import { jointScreen } from '../art/rig.js';
-import { LIGHT_X, LIGHT_Y } from '../art/shading.js';
+import { AnimPlayer } from '../lib/art/animation.ts';
+import { jointScreen } from '../lib/art/rig.ts';
+import { LIGHT_X, LIGHT_Y } from '../lib/art/shading.ts';
 import { drawText, measureText } from '../engine/text.js';
 import { drawTicket, drawBar, drawSign, drawNamePlate } from './ui.js';
 

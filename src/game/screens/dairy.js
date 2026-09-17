@@ -22,12 +22,12 @@
 // only and stay out of checksumFields().
 import { UI, SIGNAL } from '../../constants.js';
 import { Screen } from '../game.js';
-import { rng } from '../../engine/rng.js';
+import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.js';
 import { blitAt } from '../../art/layers.js';
 import { drawShadow, floatText, ringAt, burstDust } from '../../art/fx.js';
 import { drawFood } from '../../art/food.js';
-import { drawRig } from '../../art/rig.js';
+import { drawRig } from '../../lib/art/rig.ts';
 import { F } from '../../content/critters/common.js';
 import { INGREDIENTS } from '../../content/recipes.js';
 import { ROWS, SEAT_X, SEAT_PITCH, CHURN_X, dairyLayers } from '../../art/backgrounds/dairy.js';

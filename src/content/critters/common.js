@@ -7,15 +7,15 @@
 // and add accessories (hat, bandana, scarf). Every hook obeys the readability rules: one 1 px outline per
 // OBJECT (an ear is an object, a muzzle patch is a colour change inside the head's own ink), two tones on
 // narrow parts, colours through rig.col() so the hit flash still works, nothing under 2 px, no allocation.
-import { celPath, celBall, celRect, celCapsule, celTaper, celPoly, tones, makeTones, pathRR, pathCap, band, wantSh } from '../../art/shading.js';
+import { celPath, celBall, celRect, celCapsule, celTaper, celPoly, tones, makeTones, pathRR, pathCap, band, wantSh } from '../../lib/art/shading.ts';
 import { hexToRgb, rgbToHex } from '../../art/palettes.js';
-import { pathTaperedCapsule } from '../../art/shapes.js';
-import { getChain } from '../../art/secondary.js';
-import { P, FACE } from '../../art/poses.js';
-import { brow } from '../../art/rigParts.js';
-import { rad } from '../../engine/math.js';
+import { pathTaperedCapsule } from '../../lib/art/shapes.ts';
+import { getChain } from '../../lib/art/secondary.ts';
+import { P, FACE } from '../../lib/art/poses.ts';
+import { brow } from '../../lib/art/rigParts.ts';
+import { rad } from '../../lib/engine/math.ts';
 import { PLAYER_COLORS, OFF_DUTY_APRON } from '../../constants.js';
-import { buildRig } from '../../art/rig.js';
+import { buildRig } from '../../lib/art/rig.ts';
 
 const R = Math.round;
 const TAU = Math.PI * 2;

@@ -8,7 +8,7 @@ import { INK, boxOutlined, polyOutlined, discShaded, makeGlowSprite, pulse } fro
 import { UI, SIGNAL, PLUM, PLAYER_COLORS } from '../constants.js';
 import { drawFood, foodTones } from './food.js';
 import { steamPuff } from './fx.js';
-import { pathRR } from './shading.js';
+import { pathRR } from '../lib/art/shading.ts';
 import { drawText } from '../engine/text.js';
 import { KITCHEN, ROWS, HATCH, PROP_X, TAG_POS, TAG_W, TAG_H, TAG_NAME, WIDGET_POS } from './backgrounds/kitchen.js';
 

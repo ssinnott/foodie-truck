@@ -4,8 +4,8 @@
 // has its shadow OFF; nothing here allocates per frame except the strings a caller builds in enter().
 import { VIEW_W, UI, PLAYER_COLORS, PLAYER_LABELS, SIGNAL } from '../constants.js';
 import { drawText, drawTextOutlined, measureText } from '../engine/text.js';
-import { pathRR } from '../art/shading.js';
-import { pathStar } from '../art/shapes.js';
+import { pathRR } from '../lib/art/shading.ts';
+import { pathStar } from '../lib/art/shapes.ts';
 
 const R = Math.round;
 /** Size-1 rows sit on the ticket's ruled lines: this pitch (docs/ART_PRINCIPLES.md 30). */

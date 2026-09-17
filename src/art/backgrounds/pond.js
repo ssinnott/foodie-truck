@@ -15,7 +15,7 @@
 // are spread over all 640 px instead of pooled at one end. The reeds are a clump in each bottom corner (they frame
 // the water instead of decorating one edge), and the lily pads, ripples and glints are seeded across the full width.
 import { makeLayer, vGradient, INK } from '../layers.js';
-import { makeRng } from '../../engine/rng.js';
+import { makeRng } from '../../lib/engine/rng.ts';
 import { VIEW_W, PLUM } from '../../constants.js';
 
 const R = Math.round, TAU = Math.PI * 2;

@@ -1,7 +1,7 @@
 // Head portraits and busts drawn FROM THE CRITTER RIGS so every HUD face, lobby seat and select card matches the
 // sprite in play (docs/ART_STYLE.md section 6). Ported from the sibling game; no bitmaps anywhere.
-import { drawRig, computeJoints } from './rig.js';
-import { makePose } from './poses.js';
+import { drawRig, computeJoints } from '../lib/art/rig.ts';
+import { makePose } from '../lib/art/poses.ts';
 
 /** First idle keyframe pose of a critter def (partial pose), or null. */
 export function idlePoseOf(def) {

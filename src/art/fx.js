@@ -1,7 +1,7 @@
 // Stateless FX renderers + particle burst helpers (docs/ART_STYLE.md section 7): ground shadows, rings, float text,
 // dust, steam, sparkles, crumbs. Ported from the sibling game minus the combat pieces. Screen coords unless noted.
 import { particles } from '../engine/particles.js';
-import { pathEllipse } from './shapes.js';
+import { pathEllipse } from '../lib/art/shapes.ts';
 
 /** Ground-contact shadow: every sprite draws one before the sorted pass (w*0.5 x w*0.22, alpha 0.4, shrinking with height). */
 export function drawShadow(ctx, sx, sy, w = 30, alpha = 0.4, height = 0, color = '#2F2338') {
