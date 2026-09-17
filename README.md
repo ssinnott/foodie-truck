@@ -65,12 +65,13 @@ npm run lint         # node --check on every module, then tsc over the JSDoc typ
 npm run art-check    # data-tier art invariants (palettes, player-colour contrast, cast table)
 npm run nettest      # pure-node protocol, lockstep and trig tests
 npm run playtest     # headless Playwright: boots every screen, walks the flow, holds a netplay room
+npm run playtest playthrough   # one scenario: the whole run from the title screen to a served dish
 npm run capture -- tools/screens map "kitchen:critters=0,1,2,3"   # screenshots of any screen at 2x
 node tools/sheet-capture.js tools/screens critter=barley          # critter contact sheets
 npm run build        # single-file dist/index.html
 ```
 
-The GitHub Pages workflow runs lint, art-check, nettest and build on every push and deploys `main`.
+The GitHub Pages workflow runs lint, art-check, nettest, playtest and build on every push and deploys `main`.
 
 ## Licence
 

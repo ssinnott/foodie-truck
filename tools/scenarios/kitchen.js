@@ -26,7 +26,7 @@ const ON_BEAT = 18, OFF_BEAT = 5;
  * Walk seat 0 to a station: hold the direction and step until the summary says it is there (a budget of 400 frames,
  * because Barley's eat gag can lock him for 42 frames on the way), then let go.
  */
-async function walkTo(api, station) {
+export async function walkTo(api, station) {
   let s = await api.summary();
   const x0 = s.top.seats[0][1], target = STATION_X[station];
   await api.hold(0, target > x0 ? { right: true } : { left: true });
@@ -37,7 +37,7 @@ async function walkTo(api, station) {
 }
 
 /** Step until the chop marker is on the beat, then press. */
-async function chopOnBeat(api) {
+export async function chopOnBeat(api) {
   let s = await api.summary();
   for (let i = 0; i < 45 && s.top.t !== ON_BEAT; i++) { await api.step(1); s = await api.summary(); }
   await api.press(0, { action: true }, 1, 0);

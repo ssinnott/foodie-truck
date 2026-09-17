@@ -217,10 +217,13 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
 
 - `npm run dev` — `tools/server.js` on :8080. `npm run build` — `tools/build.js` → `dist/index.html`.
 - `npm run lint` — `node --check` every module + `tsc`. `npm run nettest` — pure-node protocol/lockstep/trig tests.
-- `npm run playtest` — headless Playwright: boots every screen, walks the flow, holds a netplay room.
+- `npm run playtest` — headless Playwright: boots every screen, walks the flow, holds a netplay room. The
+  `playthrough` scenario is the one that never jumps: title → select → drive → mini-games → kitchen → results, on
+  input alone, so it fails when two screens that each pass on their own cannot hand over.
 - `npm run capture -- <dir> [screen[:params]...]` — screenshots of any screen at 2x (`tools/capture.js`).
 - `node tools/sheet-capture.js <dir> critter=<id> [anims,walk,closeup,cast,bench]` — critter contact sheets.
-- `.github/workflows/pages.yml` — lint, nettest, build on every push/PR; deploys `main` to GitHub Pages.
+- `.github/workflows/pages.yml` — lint, art-check, nettest, playtest, build on every push/PR; deploys `main`
+  to GitHub Pages (the workflow installs Chromium for playtest with `playwright-core install`).
 
 ## 10. Code conventions
 
