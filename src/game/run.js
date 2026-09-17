@@ -12,8 +12,12 @@ import { rng } from '../engine/rng.js';
 import { ORDERS, INGREDIENTS } from '../content/recipes.js';
 import { PLACES } from '../content/places.js';
 
-/** Scene indices for the START packet (net/protocol.js): the screen a match opens on. */
-export const SCENES = Object.freeze(['map', 'orchard', 'pond', 'coop', 'kitchen']);
+/**
+ * Scene indices for the START packet (net/protocol.js): the screen a match opens on. The four mini-games finished
+ * last are APPENDED rather than filed next to the first three: the index is what crosses the wire, so inserting
+ * 'dairy' after 'coop' would silently move 'kitchen' under every peer already holding the old table.
+ */
+export const SCENES = Object.freeze(['map', 'orchard', 'pond', 'coop', 'kitchen', 'dairy', 'mill', 'hive', 'garden']);
 
 /**
  * Start a run: seat the party, pick (or take) the order, mark every ingredient as missing.
@@ -51,7 +55,7 @@ export function startRun(game, o) {
     complete() { return run.order.needs.every((n) => n.have >= n.amount); },
     /** The ingredients still missing, in order. */
     missing() { return run.order.needs.filter((n) => n.have < n.amount); },
-    /** The landmark that supplies an ingredient id ('orchard' | 'pond' | 'coop' | ...). */
+    /** The landmark that supplies an ingredient id ('orchard' | 'pond' | 'coop' | 'dairy' | 'mill' | 'hive' | 'garden'). */
     placeFor(id) { const ing = INGREDIENTS[id]; return ing ? ing.place : ''; },
     /** Which screen a landmark opens: its mini-game if it supplies a missing ingredient, else nothing. */
     screenForPlace(placeId) {

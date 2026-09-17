@@ -38,7 +38,8 @@ src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, input (8-action masks), rng, math, trig, text (5x7 pixel font)
 src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (the paper-doll), layers (offscreen
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
-               fishing + hens + kitchenProps (per-scene props), logo, backgrounds/ (one pre-rendered scene each)
+               fishing + hens + kitchenProps + dairyProps + millProps + hiveProps + gardenProps (per-scene props),
+               logo, backgrounds/ (one pre-rendered scene each)
 src/game/      game (screen stack), run (the order + party, the only cross-screen state), animation, menuinput,
                ui (the paper/chalk/wood kit), minigame (shared mini-game furniture), maphud, screens/ (one per screen)
 src/content/   critters/ (the cast: common rig hooks + one file per critter + items + customers), recipes, places
@@ -131,12 +132,14 @@ and `FOOD.<icon>` for `apple egg fish milk sack jar carrot`.
 `startRun(game, { seed, critters, order })` creates `game.run`, plain data: `party[{ slot, critter, score }]`,
 `order { dish, customer, line, steps, needs[{ id, amount, have }] }`, `truck { x, y, heading, at }`, `served`, `score`.
 Mutators: `gather(id, n)`, `complete()`, `missing()`, `placeFor(id)`, `screenForPlace(placeId)`, `serve(stars)`,
-`summary()`. `SCENES = ['map','orchard','pond','coop','kitchen']` are the START-packet scene indices.
+`summary()`. `SCENES = ['map','orchard','pond','coop','kitchen','dairy','mill','hive','garden']` are the
+START-packet scene indices; the four mini-games finished last are **appended**, never filed next to the first three,
+because the index is what crosses the wire.
 The run is the ONLY state shared between screens; it is rebuilt identically on every peer from seed + party.
 
 ### Flow
 ```
-title -> select -> map -> <orchard|pond|coop> -> map -> ... -> map(home) -> kitchen -> results -> map
+title -> select -> map -> <orchard|pond|coop|dairy|mill|hive|garden> -> map -> ... -> map(home) -> kitchen -> results -> map
 title -> lobby (host key) -> select (shared) -> map ...   (online: the host's START opens the same scene everywhere)
 ```
 - `screens/map.js`: the truck drives (`run.truck`), arriving at a landmark with a missing ingredient pushes that
@@ -150,6 +153,26 @@ title -> lobby (host key) -> select (shared) -> map ...   (online: the host's ST
   `input` inside `update()`.
 - Every screen exposes `summary()` (for tests) and, if it holds simulation state, `checksumFields()` → number list
   (for the desync canary).
+
+### `game/minigame.js` — the shared mini-game furniture (the contract)
+
+All seven mini-games stand on this module, so it is **frozen**: a screen that wants different numbers keeps them in
+its own file (the orchard keeps its catch boxes there, the coop its pluck anims). It owns, and is the only place
+that may define:
+
+- `ROUND_FRAMES` 2400 (GDD section 5's 40 seconds), `SIGN_SLAM` 6, `SIGN_HOLD` 60.
+- `makeSeats(game, floorY)` → one seat per party member (rig in the seat's apron colour, `AnimPlayer`, the ribbon
+  basket, `count`, `bumpT`, the reused draw-options object); `seatAnim(seat, name, restart?)`.
+- `makeClock()` / `tickClock(clock)` / `endRound(clock, text)` / `roundOver(clock)` — the round's whole lifecycle.
+- `drawClock(ctx, clock, countStr, drawIcon, title)`, `drawEndSign(ctx, clock, frame)`, `drawSeatPlate(ctx, seat,
+  stack?)` with `PLATES` / `resetPlates()` for the stacking pass.
+
+A mini-game screen is therefore: `enter()` builds its cached layers, its seats, its fixed sim pools and its target
+(**the remainder** of the order line, `max(1, amount - have)`, never the whole line — the map may have banked some
+already); `update()` simulates only while `clock.phase === 0`, calls `finish()` when the party's total reaches the
+target, and once `roundOver()` calls `run.gather(<ingredient>, total)` and `game.replace('map')`; `draw()` blits,
+sorts, plates, then draws the clock, the hint and the end sign. Changing a number in this module changes seven
+screens at once and needs all seven re-measured.
 
 ### Overlays
 `screens/pause.js` is a transparent overlay pushed by `start` in a scene; `cancel` pops it. Online, pause is not

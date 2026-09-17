@@ -6,7 +6,11 @@ import { SCENARIOS as map } from './map.js';
 import { SCENARIOS as orchard } from './orchard.js';
 import { SCENARIOS as pond } from './pond.js';
 import { SCENARIOS as coop } from './coop.js';
+import { SCENARIOS as dairy } from './dairy.js';
+import { SCENARIOS as mill } from './mill.js';
+import { SCENARIOS as hive } from './hive.js';
+import { SCENARIOS as garden } from './garden.js';
 import { SCENARIOS as kitchen } from './kitchen.js';
 import { SCENARIOS as ui } from './ui.js';
 
-export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...kitchen, ...ui };
+export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...kitchen, ...ui };
