@@ -11,6 +11,11 @@
 //             landmark that exists, that landmark carries a screen, that screen is registered in main.js, and
 //             every order is therefore actually completable. This is what stops a mini-game being finished and
 //             then left unreachable behind a signpost.
+//
+//   wholeOrder - the honey loaf driven end to end: the HUD ticket sends the truck to the mill, the mill screen
+//                opens, the flour is banked, the ticket re-points at the hives, the hive screen opens, the honey
+//                is banked, and only then does driving home open the kitchen. The one test that proves an order
+//                built entirely out of the newly finished landmarks can actually be served.
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.js';
 import { INGREDIENTS, ORDERS } from '../../src/content/recipes.js';
@@ -131,6 +136,48 @@ export const SCENARIOS = {
         const s = await api.summary();
         assert(s.screen === p.screen, `${ing.place} opens '${p.screen}' when the order needs ${ingId} (landed on '${s.screen}')`);
       }
+    });
+  },
+
+  /**
+   * One whole order made of the newly finished landmarks, from the phone call to the kitchen door. `?order=4` is
+   * the honey loaf (flour from the mill, honey from the hives). Each stop is driven to for real and its screen is
+   * asserted; the gathering itself is banked straight through run.gather so this scenario tests the FLOW and not
+   * the mini-games' own rules - those have a scenario each.
+   */
+  async wholeOrder(server) {
+    await withPage(server, 'skipTo=map&critters=0,1,2,3&order=4', async (api, page) => {
+      await api.step(5);
+      const s0 = await api.summary();
+      assert(s0.run.dish === 'HONEY LOAF', `?order=4 is the honey loaf (got '${s0.run.dish}')`);
+      assert(s0.top.dest === 'mill', `the ticket sends the truck to the mill first (dest ${s0.top.dest})`);
+
+      for (const [place, ing, screen] of [['mill', 'flour', 'mill'], ['hive', 'honey', 'hive']]) {
+        const p = placeOf(place);
+        await teleport(page, p.x, p.y + 60, 12);
+        await api.hold(0, { up: true }); await api.step(120); await api.release(0);
+        const s = await api.summary();
+        assert(s.screen === screen, `the ${place} opens '${screen}' (landed on '${s.screen}')`);
+        // bank the line and come back out the way a finished round does
+        await page.evaluate((id) => {
+          const run = window.__game.game.run, n = run.order.needs.find((x) => x.id === id);
+          run.gather(id, n.amount);
+          window.__game.game.reset('map');
+        }, ing);
+        await api.step(5);
+        const back = await api.summary();
+        const line = (back.run.needs || []).find((n) => n.startsWith(ing + ':')) || '';
+        const [have, amount] = (line.split(':')[1] || '').split('/');
+        assert(have && have === amount, `the ${ing} line is full (${line})`);
+      }
+
+      const done = await api.summary();
+      assert(done.run.complete === true, 'both lines are aboard, so the order is complete');
+      assert(done.top.dest === 'home', `...and the ticket now points home (dest ${done.top.dest})`);
+      const home = placeOf('home');
+      await teleport(page, home.x, home.y + 70, 12);
+      await api.hold(0, { up: true }); await api.step(150); await api.release(0);
+      assert((await api.screen()) === 'kitchen', `driving home with a full order opens the kitchen (now on ${await api.screen()})`);
     });
   },
 };

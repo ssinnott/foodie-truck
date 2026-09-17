@@ -152,7 +152,22 @@ only as small emitters and banned as decor elsewhere: map `#F2C14E` lantern gold
 `#D9463B` ripe apple (= `UI.red`, the stamp ink too), pond `#5FD3C0` bite ring, coop `#F2C14E` fresh-egg sparkle
 (shared with the map by exemption: both mean "the thing you want"), kitchen `#E23A2E` HOT (also the game-wide
 reserved heat/danger colour: burner, boil-over, burnt, the rooster's comb). "Good timing" on paper UI is
-`UI.green` with an ink outline, never gold on paper (0.17) and never lime. Backdrops are built from 6–8 muted
+`UI.green` with an ink outline, never gold on paper (0.17) and never lime.
+
+The four mini-games finished last **reuse those hexes instead of inventing four more**, and the reason is the
+player colours: P1 owns blue, P2 marmalade, P3 lavender and P4 raspberry, which between them close off every
+saturated family except red, gold, mint and green — so a fifth and sixth invented signal would collide with an
+apron *inside the very scene it marks*. What the table actually holds is three **meanings**, and each new scene
+picks the one it needs:
+
+| meaning | hex | where |
+|---|---|---|
+| **the thing you want / go here** | `#F2C14E` gold | map's next sign, coop's fresh egg, **mill**'s pouring chute, **hive**'s full skep, **garden**'s ripe root |
+| **press on this beat** | `#5FD3C0` mint | pond's bite ring, **dairy**'s pump chevron and full pail |
+| **heat and danger** | `#E23A2E` HOT | burner, boil-over, burnt, the rooster's comb, the cow about to kick, the swarm on the turn |
+
+One scene still shows one signal: a scene that needs a danger telegraph draws it in HOT and its *own* signal for
+the thing the player is after, exactly as the coop has always paired the gold egg with the hot comb. Backdrops are built from 6–8 muted
 constants each, exported by the scene's backdrop module; `ENV` in `palettes.js` is the shared base ladder.
 
 ## 5. Authoring parts, accessories and items
@@ -183,7 +198,8 @@ face (`markings`) or replace the hook; whichever, keep the rows of §0.6 and the
 
 Paint once, blit per frame (`art/layers.js`): every scene pre-renders its layers with a seeded rng (seed blocks:
 map 140–159, orchard 100–109, pond 110–119, coop 120–129, kitchen 130–139,
-title/select/lobby 160–169) and blits at integer offsets; parallax
+title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, market garden 200–209) and blits at integer
+offsets; parallax
 `far 0.2 / mid 0.5 / ground 1 / near 1.2` for side views, none in the kitchen, chunks for the map. 16 rows of bleed.
 Nothing solid in the near layer at critter height; walk lanes carry no scatter; the plane behind the critters'
 torsos is ≥ 25 % darker than the lightest fur or a hue family away; interiors invert (dark room, cast and food the
