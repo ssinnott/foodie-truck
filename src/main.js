@@ -11,6 +11,7 @@ import { installNetHooks } from './net/session.js';
 import { TitleScreen } from './game/screens/title.js';
 import { LobbyScreen } from './game/screens/lobby.js';
 import { SelectScreen } from './game/screens/select.js';
+import { StageScreen } from './game/screens/stage.js';
 import { MapScreen } from './game/screens/map.js';
 import { OrchardScreen } from './game/screens/orchard.js';
 import { PondScreen } from './game/screens/pond.js';
@@ -75,6 +76,7 @@ function boot() {
   game.registerScreen('title', (g) => new TitleScreen(g));
   game.registerScreen('lobby', (g) => new LobbyScreen(g));
   game.registerScreen('select', (g) => new SelectScreen(g));
+  game.registerScreen('stage', (g) => new StageScreen(g));
   game.registerScreen('map', (g) => new MapScreen(g));
   game.registerScreen('orchard', (g) => new OrchardScreen(g));
   game.registerScreen('pond', (g) => new PondScreen(g));

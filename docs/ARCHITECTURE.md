@@ -130,23 +130,32 @@ and `FOOD.<icon>` for `apple egg fish milk sack jar carrot`.
 
 ### `game/run.js` — the run
 `startRun(game, { seed, critters, order })` creates `game.run`, plain data: `party[{ slot, critter, score }]`,
-`order { dish, customer, line, steps, needs[{ id, amount, have }] }`, `truck { x, y, heading, at }`, `served`, `score`.
-Mutators: `gather(id, n)`, `complete()`, `missing()`, `placeFor(id)`, `screenForPlace(placeId)`, `serve(stars)`,
-`summary()`. `SCENES = ['map','orchard','pond','coop','kitchen','dairy','mill','hive','garden']` are the
-START-packet scene indices; the four mini-games finished last are **appended**, never filed next to the first three,
-because the index is what crosses the wire.
+`stages[{ id, stars }]` (one per `content/recipes.js` ORDERS entry — the day's card), `stage` (the index the order
+board last took off it), `order { dish, customer, line, steps, needs[{ id, amount, have }] }`,
+`truck { x, y, heading, at }`, `served`, `lastServed`, `score`.
+Mutators: `gather(id, n)`, `complete()`, `missing()`, `placeFor(id)`, `screenForPlace(placeId)`, `setStage(i)`,
+`serve(stars)`, `cleared()`, `stars()`, `dayComplete()`, `summary()`.
+`SCENES = ['map','orchard','pond','coop','kitchen','dairy','mill','hive','garden','stage']` are the
+START-packet scene indices; scenes finished after the first pass are **appended**, never filed next to their
+neighbours, because the index is what crosses the wire. `START_SCENE` is the index an online match opens on (the
+order board), which is what `net/session.js` seeds `lobby.scene` with.
 The run is the ONLY state shared between screens; it is rebuilt identically on every peer from seed + party.
+A run is FINITE: `serve()` banks stars against the current stage rather than rolling a fresh order, and once
+`dayComplete()` is true the order board closes the day out and the only way on is the title screen.
 
 ### Flow
 ```
-title -> select -> map -> <orchard|pond|coop|dairy|mill|hive|garden> -> map -> ... -> map(home) -> kitchen -> results -> map
-title -> lobby (host key) -> select (shared) -> map ...   (online: the host's START opens the same scene everywhere)
+title -> select -> stage -> map -> <orchard|pond|coop|dairy|mill|hive|garden> -> map -> ... -> map(home) -> kitchen -> results -> stage
+title -> lobby (host key) -> select (shared) -> stage ...  (online: the host's START opens the same scene everywhere)
 ```
 - `screens/map.js`: the truck drives (`run.truck`), arriving at a landmark with a missing ingredient pushes that
   mini-game via `game.replace(run.screenForPlace(id), { place: id })`; arriving home with everything opens the kitchen.
 - Mini-games end with `run.gather(id, amount)` and `game.replace('map')`. Multiplayer: every seat plays at once.
+- `screens/stage.js` (the order board): the seven stages of `run.stages` as paper tickets with ONE shared cursor
+  (`game/menuinput.js`: any joined seat drives it); confirm calls `run.setStage(i)` and fades to the map. Entered
+  with `run.dayComplete()` it draws the closing card instead and its confirm leaves the room (if any) for the title.
 - `screens/kitchen.js`: one critter per seat, stations from `content/places.js STATIONS`, steps from `run.order.steps`;
-  finishes with `game.replace('results')`. `screens/results.js` calls `run.serve(stars)` then `game.replace('map')`.
+  finishes with `game.replace('results')`. `screens/results.js` calls `run.serve(stars)` then `game.replace('stage')`.
 - Screens read input by SEAT: `run.party[i].slot` is the input slot to poll for party member i. Online, every
   seat's mask arrives through `input.setVirtual` from the lockstep buffers, so a screen that only uses `input.*`
   is net-safe by construction. Screens must not read the clock, `Math.random`, or anything outside `run`, `rng` and
@@ -218,8 +227,8 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
 - `npm run dev` — `tools/server.js` on :8080. `npm run build` — `tools/build.js` → `dist/index.html`.
 - `npm run lint` — `node --check` every module + `tsc`. `npm run nettest` — pure-node protocol/lockstep/trig tests.
 - `npm run playtest` — headless Playwright: boots every screen, walks the flow, holds a netplay room. The
-  `playthrough` scenario is the one that never jumps: title → select → drive → mini-games → kitchen → results, on
-  input alone, so it fails when two screens that each pass on their own cannot hand over.
+  `playthrough` scenario is the one that never jumps: title → select → order board → drive → mini-games → kitchen →
+  results → order board, on input alone, so it fails when two screens that each pass on their own cannot hand over.
 - `npm run capture -- <dir> [screen[:params]...]` — screenshots of any screen at 2x (`tools/capture.js`).
 - `node tools/sheet-capture.js <dir> critter=<id> [anims,walk,closeup,cast,bench]` — critter contact sheets.
 - `.github/workflows/pages.yml` — lint, art-check, nettest, playtest, build on every push/PR; deploys `main`

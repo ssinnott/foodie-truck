@@ -7,6 +7,10 @@ short mini-game, drive home and cook the dish step by step. The customer eats. T
 Seven orders, seven ingredients, seven landmarks, and **a different mini-game at every one of them** — each with its
 own verb: catch, fish, collect, pump, fill, creep, pull.
 
+The seven orders are the game's **stages**, pinned up on an order board: pick a customer and their recipe, serve it,
+and it comes back stamped with its stars. Serve all seven and the truck closes for the night — the day ends, the
+takings are totted up, and that is the end of the game.
+
 The cast are original anthropomorphic countryside animals: **Barley** the Suffolk sheep (the hungry one), **Sorrel**
 the field mouse (the chef), **Chicory** the brown hare (the driver) and **Cress** the pond frog (the forager).
 
@@ -18,6 +22,7 @@ so the repository stays reviewable in a diff.
 
 | Part | Screen | What happens |
 |---|---|---|
+| **Order board** | `stage` | The day's seven stages on paper: a customer, their dish and what it needs. Take one off the board to start it; it comes back stamped SERVED with its stars. The last one closes the day. |
 | **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. Arriving where a missing ingredient comes from opens its mini-game. Arriving home with everything opens the kitchen. |
 | **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden` | Catch apples under the trees, fish the millpond, collect eggs from the hens, milk the cows on a two-handed rhythm, fill flour sacks under the mill's chutes, creep to the hives and freeze when the bees turn, and pull carrots out of the market garden without grabbing a thistle. Everyone seated plays at once and the party's total counts. |
 | **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (chop, mix, stove, oven, plate), serve, and watch the customer eat for a star rating. |

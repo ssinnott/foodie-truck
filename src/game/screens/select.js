@@ -1,6 +1,6 @@
 // CRITTER SELECT (docs/GDD.md section 10): four recipe cards on the dimmed lane, one jam-jar-lid cursor per
 // JOINED seat, a beetroot READY stamp when a seat locks in, and the run starts the moment every joined seat
-// has stamped.
+// has stamped - on the order board (game/screens/stage.js), where the party picks the customer and the dish.
 //
 // Seats are read ONLY by slot through engine/input.js, so a couch P2 dropping in mid-screen is the same code
 // path as P1. Everything the screen simulates is two numbers per seat (which card, ready or not), which is what
@@ -134,7 +134,7 @@ export class SelectScreen extends Screen {
       const picks = [];
       for (const s of this.seats) if (s.on) picks.push(s.card);
       startRun(this.game, { seed: this.game.options.seed, critters: picks });
-      this.game.fadeTo(() => this.game.replace('map'));
+      this.game.fadeTo(() => this.game.replace('stage'));
     }
   }
 

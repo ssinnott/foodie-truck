@@ -137,13 +137,14 @@ export { PLAYER_LABELS };
 
 /**
  * The ORDER TICKET (docs/GDD.md section 4): customer, dish, one `NEED` row per ingredient with an ink tick when
- * gathered, and a gold arrow on the first missing one. Shared by the map HUD and the kitchen rail.
+ * gathered, and a gold arrow on the first missing one. Shared by the map HUD and the kitchen rail. The header is
+ * the STAGE the order board pinned up (game/run.js `stage`), so the ticket and the board's card say the same number.
  * Returns the ticket's height. `foods` is art/food.js drawFood (passed in so this module stays free of it).
  */
 export function drawOrderTicket(ctx, run, x, y, w, drawFood, o = {}) {
   const order = run.order, rows = order.needs.length;
   const h = 16 + ROW * (2 + rows) + 4;
-  const top = drawTicket(ctx, x, y, w, h, { title: o.title || `ORDER ${String(run.served + 1).padStart(2, '0')}` });
+  const top = drawTicket(ctx, x, y, w, h, { title: o.title || `ORDER ${String((run.stage | 0) + 1).padStart(2, '0')}` });
   drawText(ctx, `FOR ${order.customer.toUpperCase()}`, x + 6, top + 2, { size: 1, color: UI.ink, shadow: false });
   drawText(ctx, order.dish, x + 6, top + 2 + ROW, { size: 1, color: UI.ink, shadow: false });
   let arrow = false;

@@ -2,7 +2,7 @@
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
 //   ui - the three paths a player takes through the menus:
-//        title -> PLAY -> select -> READY -> the run starts on the map with the picked critter aboard;
+//        title -> PLAY -> select -> READY -> the order board opens with the picked critter seated in the run;
 //        title -> ONLINE -> HOST A TABLE on the broadcast transport -> the lobby mints a host key, reaches its
 //        'connecting' phase and draws the table ticket without a page error (with the art director's shots of
 //        the HOST / JOIN slate and of a stamped recipe card on the way through);
@@ -37,7 +37,7 @@ export const SCENARIOS = {
       await api.shot('select-ready');                       // the beetroot stamp on the picked recipe card
       await api.step(82);                                   // the stamp holds, then the fade hands over to the map
       const s2 = await api.summary();
-      assert(s2.screen === 'map', `a full crew of readies starts the run on the map (now on ${s2.screen})`);
+      assert(s2.screen === 'stage', `a full crew of readies opens the order board (now on ${s2.screen})`);
       assert(s2.run && s2.run.party.length === 1 && s2.run.party[0] === 'sorrel', `the run is seated with the picked critter (${JSON.stringify(s2.run && s2.run.party)})`);
     });
 
@@ -102,7 +102,7 @@ export const SCENARIOS = {
       // stamping again still starts, so the disarm did not break the path
       await api.press(0, { action: true }, 2, 4);
       await api.step(90);
-      assert((await api.summary()).screen === 'map', 'a second READY starts the run as before');
+      assert((await api.summary()).screen === 'stage', 'a second READY hands over to the board as before');
     });
   },
 

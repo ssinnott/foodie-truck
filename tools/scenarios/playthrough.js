@@ -284,7 +284,14 @@ export const SCENARIOS = {
       assert((await api.summary()).top.seats[0].ready === true, 'P1 stamps READY on a card');
       await api.step(90);
       let s = await api.summary();
-      assert(s.screen === 'map', `the stamped card starts the run on the map (on ${s.screen})`);
+      assert(s.screen === 'stage', `the stamped card opens the order board (on ${s.screen})`);
+      assert(s.top.stages === 7 && s.top.cleared === 0, `seven stages are pinned up, none of them served (${s.top.stages}, ${s.top.cleared})`);
+
+      // ---- the order board: the customer and the dish, taken off the board ----
+      await api.press(0, { action: true }, 2, 4);
+      await api.step(60);
+      s = await api.summary();
+      assert(s.screen === 'map', `taking the order starts the run on the map (on ${s.screen})`);
       assert(s.run.dish === 'APPLE PIE' && s.run.needs.join() === 'apple:0/4,egg:0/2',
         `the phone call is the apple pie, nothing gathered (${s.run.dish}, ${s.run.needs.join()})`);
       assert(s.run.truckAt === 'home', `the truck starts parked at home (at '${s.run.truckAt}')`);
@@ -316,19 +323,28 @@ export const SCENARIOS = {
       await api.shot('playthrough-served');
       await api.press(0, { action: true }, 1, 2);
       s = await api.summary();
-      assert(s.screen === 'map' && s.run.served === 1, `confirm banks the order and returns to the map (on ${s.screen}, served ${s.run.served})`);
+      assert(s.screen === 'stage' && s.run.served === 1, `confirm banks the order and hands the board back (on ${s.screen}, served ${s.run.served})`);
+      assert(s.run.stars[0] === stars, `the stage is stamped at the stars the customer gave it (${s.run.stars.join()})`);
       assert(s.run.score === stars * 100, `the run scores what the customer gave it (${s.run.score} for ${stars} stars)`);
       assert(s.run.truckAt === 'home', `the truck is home for the next call (at '${s.run.truckAt}')`);
+      assert(s.run.dayComplete === false && s.top.closed === false, 'six stages are still on the board, so the day is not over');
+      await api.shot('playthrough-board');
     });
   },
 
-  /** The second order: a served run rolls a new dish and the truck can be driven to the landmark it names. */
+  /** The second order: a served stage hands the board back, the next one is taken off it and can be driven. */
   async playthroughSecondOrder(server) {
     await withPage(server, 'skipTo=results&critters=0', async (api) => {
       await api.step(150);
       await api.press(0, { action: true }, 1, 2);
-      const s = await api.summary();
-      assert(s.screen === 'map' && s.run.served === 1, `results banks the first order (on ${s.screen}, served ${s.run.served})`);
+      let s = await api.summary();
+      assert(s.screen === 'stage' && s.run.served === 1, `results banks the first order on the board (on ${s.screen}, served ${s.run.served})`);
+      assert(s.run.stars[0] > 0 && s.run.cleared === 1, `that stage carries stars now (${s.run.stars.join()})`);
+      assert(s.top.sel !== 0, `the cursor stands on a stage still to be cooked (sel ${s.top.sel})`);
+      await api.press(0, { action: true }, 2, 4);
+      await api.step(60);
+      s = await api.summary();
+      assert(s.screen === 'map' && s.run.stage !== 0, `the next stage off the board opens the map (on ${s.screen}, stage ${s.run.stage})`);
       assert(s.run.dish !== 'APPLE PIE' && s.run.needs.every((n) => n.endsWith(':0/' + n.split('/')[1])),
         `a fresh order is on the ticket with nothing gathered (${s.run.dish}, ${s.run.needs.join()})`);
       assert(s.top.dest !== 'home', `the ticket points at a landmark, not home (dest ${s.top.dest})`);

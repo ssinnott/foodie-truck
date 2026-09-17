@@ -11,12 +11,17 @@
 //   netquad - four pages, every guest refusing direct guest-guest links (?netrelay=1) so their traffic rides
 //             the host's relay; the same checks, then guests leaving one by one: the survivors retire each
 //             seat on ONE agreed frame and stay identical, and the last player left is handed the end.
+//   netboard - the room's OPENING scene: a two-peer match starts on the order board (net/session.js START_SCENE),
+//             the guest walks the shared cursor, both machines hold the same card, and the guest's confirm takes
+//             the same stage off the board on both. A shared menu is the one screen where one seat's press must
+//             move something on everybody's machine.
 //   netscenes - a two-peer room opened on EVERY mini-game in turn, both seats holding keys, and the desync
 //             canary watched throughout. The canary hashes game.run plus the top screen's checksumFields()
 //             every 30 frames (net/session.js afterStep), so this is the only test that can catch a screen
 //             whose checksumFields() misses a field its update() moves - a reader cannot prove that, and the
 //             room is where it bites. The first six mini-games shipped without it.
 import { withPeers, assert } from '../playtest.js';
+import { SCENES } from '../../src/game/run.js';
 
 const ROOM_CODE = /^[23456789BCDFGHJKMNPQRSTVWXYZ]{6}$/;
 const TIMEOUT = 30000;
@@ -63,7 +68,7 @@ async function fillRoom(pages) {
  * Everybody picks a critter and readies up; the host auto-starts once the latency measurement is in. `scene` is
  * the index into game/run.js SCENES the START packet carries, and `screenId` is what that index must open.
  */
-async function readyAll(pages, seats, scene = 1, screenId = 'orchard') {
+async function readyAll(pages, seats, scene = 1, screenId = 'orchard', dots = seats) {
   // The host's opening scene travels in the START packet; SCENES[1] is the orchard, where each seat walks its
   // own x, so pressRight below can prove a key is attributed to one seat and not shared out.
   await pages[0].evaluate((i) => { window.__game.net().lobby.scene = i; }, scene);
@@ -87,7 +92,9 @@ async function readyAll(pages, seats, scene = 1, screenId = 'orchard') {
   await step('everyone reaches the match', pages, () => waitAll(pages, (n) => !!n && n.state === 'playing'));
   const states = await Promise.all(pages.map((p) => p.evaluate(() => ({ screen: window.__game.screen(), party: (window.__game.summary().run || { party: [] }).party.length, dots: ((window.__game.summary().top || {}).seats || []).length }))));
   assert(states.every((s) => s.screen === screenId), `the START opens the same scene on every machine (wanted ${screenId}, got ${states.map((s) => s.screen).join()})`);
-  assert(states.every((s) => s.party === seats && s.dots === seats), `every machine built a run with ${seats} seats (${states.map((s) => s.party).join()})`);
+  // `dots` is how many seats the OPENING SCREEN reports in its summary - the party, for a scene that stands one
+  // critter per seat, and 0 for a shared menu like the order board, which has a cursor and no cast.
+  assert(states.every((s) => s.party === seats && s.dots === dots), `every machine built a run with ${seats} seats (${states.map((s) => s.party).join()}, ${states.map((s) => s.dots).join()} on screen)`);
 }
 
 /** Start the real gated loop everywhere and let the match run past `frames`; check the lockstep invariants. */
@@ -168,6 +175,47 @@ export const SCENARIOS = {
         assert(errs.every((e) => e === 0), `${id}: no runtime errors in the room (${errs.join()})`);
       });
     }
+  },
+
+  /**
+   * The order board, online: the scene an online match actually opens on. The guest drives the one shared cursor
+   * and the host must see the same card selected and take the same stage when the guest confirms.
+   */
+  async netboard(server) {
+    const params = ['transport=broadcast&skipTo=title', 'transport=broadcast&skipTo=title'];
+    await withPeers(server, params, async (pages, apis) => {
+      await fillRoom(pages);
+      await readyAll(pages, 2, SCENES.indexOf('stage'), 'stage', 0);
+      await runMatch(pages, 60);
+      const sel = (p) => p.evaluate(() => window.__game.summary().top.sel);
+      const opened = await Promise.all(pages.map(sel));
+      assert(opened.every((n) => n === opened[0]), `both machines open the board on the same card (${opened.join()})`);
+      // the GUEST walks the cursor: one press, seen by both
+      const guest = pages[1];
+      const f0 = (await netState(pages[0])).frame;
+      await guest.bringToFront();
+      await guest.keyboard.down('ArrowRight');
+      await step('the guest\'s press lands everywhere', pages, () => waitFrames(pages, f0 + 20));
+      await guest.keyboard.up('ArrowRight');
+      const f0b = (await netState(pages[0])).frame;
+      await step('...and its release', pages, () => waitFrames(pages, f0b + 12));
+      const moved = await Promise.all(pages.map(sel));
+      assert(moved.every((n) => n === moved[0]), `the guest's press moves the cursor identically on both (${moved.join()})`);
+      assert(moved[0] !== opened[0], `...and it moved at all (${opened[0]} -> ${moved[0]})`);
+      await apis[0].shot('32-netplay-board');
+      // ...and their confirm takes that stage off the board on both machines
+      const f1 = (await netState(pages[0])).frame;
+      await guest.bringToFront();
+      await guest.keyboard.down('KeyZ');
+      await step('the confirm lands everywhere', pages, () => waitFrames(pages, f1 + 20));
+      await guest.keyboard.up('KeyZ');
+      const f2 = (await netState(pages[0])).frame;
+      await step('the fade hands the board over', pages, () => waitFrames(pages, f2 + 60));
+      const took = await Promise.all(pages.map((p) => p.evaluate(() => ({ screen: window.__game.screen(), stage: window.__game.summary().run.stage }))));
+      assert(took.every((t) => t.screen === 'map'), `the board hands both machines to the map (${took.map((t) => t.screen).join()})`);
+      assert(took.every((t) => t.stage === moved[0]), `...on the stage the cursor stood on (${took.map((t) => t.stage).join()})`);
+      await checkLockstep(pages, 'after the board handed over');
+    });
   },
 
   async netplay(server) {
