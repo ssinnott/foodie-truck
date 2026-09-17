@@ -42,8 +42,9 @@ const DUST = { size: 2, life: 20, vy: -0.15 };
 // landmark left to stand on: a sign that is not the kitchen and not a mini-game is always one the order does not need.
 const NOTHING = 'NOTHING NEEDED HERE', GATHER = 'GATHER THE ORDER FIRST';
 const CLOUDS = [[200, 260], [900, 700], [1500, 420]];
-/** The phone rings once per order: remembered per run object so a revisit stays quiet until run.served changes. */
-let rungRun = null, rungServed = -1;
+/** The phone rings once per order taken off the board: remembered per run so a revisit stays quiet until the
+ *  stage (or the count of dishes served, when the same stage is played again) changes. */
+let rungRun = null, rungOrder = '';
 
 /** Rough relative luminance of a #rrggbb fur, used once in enter() to seat the crew by value. */
 function lum(hex) {
@@ -102,7 +103,8 @@ export class MapScreen extends Screen {
     const miss = run.missing();
     this.destId = miss.length ? run.placeFor(miss[0].id) : 'home';
     this.destSign = SIGN_AT[this.destId] || SIGN_AT.home;
-    if (rungRun !== run || rungServed !== run.served) { rungRun = run; rungServed = run.served; this.ring = RING_FRAMES; }
+    const orderKey = `${run.stage}:${run.served}`;
+    if (rungRun !== run || rungOrder !== orderKey) { rungRun = run; rungOrder = orderKey; this.ring = RING_FRAMES; }
     // the y-sorted cast of the map: roadside trees, signposts, the mill's sails and the truck
     this.sprites.length = 0;
     for (const t of ROADSIDE_TREES) { const L = treeSprite(t[2]); this.sprites.push({ kind: KIND_TREE, x: t[0], y: t[1], L, w: L.w, h: L.h, shadow: 18 + t[2] * 4 }); }

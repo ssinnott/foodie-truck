@@ -48,6 +48,8 @@ idle -> signalling -> connecting -> lobby (guest) -> playing -> ended
    frames that exceeds the one-way latency. The match never auto-starts before the measurement is in.
 6. When every seated player is ready and reachable, the host sends `START { seed, scene, delay, critters }` and
    applies it itself. `beginMatch(scene)` is the same thing called by hand (a lobby's START ANYWAY, the tests).
+   `scene` defaults to `game/run.js START_SCENE`, the ORDER BOARD: an online party picks the customer and the
+   dish together on the first shared screen of the match, and the board's one cursor is driven by whoever presses.
 
 ## Topology: a mesh, with the host as the courier of last resort
 
@@ -118,10 +120,12 @@ Until the lobby screen exists, `installNetHooks` puts these on `window.__game`: 
 `netJoin(key, { transport })`, `net()`, `netState()` (= `net.summary()`), `netSetCritter(i)`, `netReady(on)`,
 `netBegin(scene)`. `node tools/playtest.js netplay netquad` drives two and four real headless pages over
 BroadcastChannel signalling and loopback WebRTC: the host key fills a room, picks and ready flags round-trip, the
-START opens the map with one seat per player everywhere, 120+ frames pass with no desync and every peer within
+START opens the same scene with one seat per player everywhere, 120+ frames pass with no desync and every peer within
 `delay + 2` frames, ArrowRight held on a guest moves that seat's dot by the same amount on every machine (in the
 four-player room, from a guest whose traffic is relayed), one guest closing retires its seat on one agreed frame
-while the other three stay identical, and the last player left is handed a clean end. `node tools/nettest.js`
+while the other three stay identical, and the last player left is handed a clean end. `node tools/playtest.js
+netboard` holds a two-peer room on the ORDER BOARD, the scene a match opens on: the guest walks the shared cursor
+and the host sees the same card, and the guest's confirm takes the same stage off the board on both machines. `node tools/nettest.js`
 covers the wire format, lockstep under 50% loss, the canary's `-0`/NaN normalisation and every hashed field,
 `delayForRtt`'s bounds, dense seating, the modulo-the-cast pick rule and the match-boundary input reset.
 

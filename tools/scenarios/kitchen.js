@@ -4,7 +4,7 @@
 //   kitchen - four seats in the kitchen with the first order (APPLE PIE: chop, mix, oven, plate). Seat 0 is walked
 //             to each station in turn and given the right input: five presses on the chop bar's beat, a 180-frame
 //             hold on the bowl, a press to load the oven and one inside its last 40 frames, and the bell. The screen
-//             must reach results with the stars it scored, then the map with run.served 1 on confirm. A second pass
+//             must reach results with the stars it scored, then the order board with run.served 1 on confirm. A second pass
 //             runs the FISH CAKES order (chop, mix, stove, plate) for the stove's hot band and writes
 //             tools/screens/kitchen-stove.png with the pot lit mid-hold. The four timing tags are shot as they come
 //             up (kitchen-chop / -mix / -oven / -plate / -stove): each carries its owner's colour across its head.
@@ -12,7 +12,7 @@
 //             exactly as it was left (step, scores, owners, seat positions); online the push is refused.
 //   kitchenGag - Barley's eat gag hands him an apple and TAKES IT BACK: the rig's held item is cleared with the
 //             state, at a spot where no station suggests one. Writes tools/screens/kitchen-gag.png.
-//   results - opens straight onto results and returns to the map on action, with the order banked; and the party
+//   results - opens straight onto results and returns to the order board on action, with the stage banked; and the party
 //             is IN the room, one rig per seat facing the hatch, every one of them cheering on a stagger once the
 //             stars have landed. Writes tools/screens/results-crew.png.
 import { withPage, assert } from '../playtest.js';
@@ -126,7 +126,8 @@ export const SCENARIOS = {
       await api.shot('results-stamp');
       await api.press(0, { action: true }, 1, 2);
       s = await api.summary();
-      assert(s.screen === 'map' && s.run.served === 1 && s.run.score === 200, `confirm banks the order and returns to the map (on ${s.screen}, served ${s.run.served}, score ${s.run.score})`);
+      assert(s.screen === 'stage' && s.run.served === 1 && s.run.score === 200, `confirm banks the order and returns to the board (on ${s.screen}, served ${s.run.served}, score ${s.run.score})`);
+      assert(s.run.stars[0] === 2, `...with the stage stamped at the stars it was served at (${s.run.stars.join()})`);
     });
 
     // the second order has the STOVE in it: the hot band is the only window that is ended by LETTING GO
@@ -257,7 +258,7 @@ export const SCENARIOS = {
 
       await api.press(0, { action: true }, 1, 2);
       const s1 = await api.summary();
-      assert(s1.screen === 'map' && s1.run.served === 1, `action returns to the map with the order served (on ${s1.screen}, served ${s1.run.served})`);
+      assert(s1.screen === 'stage' && s1.run.served === 1, `action returns to the order board with the stage served (on ${s1.screen}, served ${s1.run.served})`);
     });
   },
 };

@@ -72,7 +72,12 @@ export function runChecksum(game) {
   const run = game.run;
   if (run) {
     h = mix(h, 1);
-    h = mixNum(h, run.seed); h = mix(h, run.orderIndex | 0); h = mix(h, run.served | 0);
+    h = mixNum(h, run.seed); h = mix(h, run.stage | 0); h = mix(h, run.served | 0);
+    // the day's card: which stages have been served and at how many stars, so a peer that banked a different
+    // rating - or a board that picked a different stage - is caught on the frame it happens
+    const stages = run.stages || [];
+    h = mix(h, stages.length);
+    for (const st of stages) h = mix(h, st.stars | 0);
     h = mixNum(h, run.score); h = mix(h, run.frame | 0);
     const order = run.order || { needs: [] };
     h = mixAny(h, order.id);

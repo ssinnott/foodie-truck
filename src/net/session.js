@@ -28,7 +28,7 @@
 
 import { rng } from '../engine/rng.js';
 import { NET_PLAYERS, NET_MIN_PLAYERS } from '../constants.js';
-import { startRun, SCENES } from '../game/run.js';
+import { startRun, SCENES, START_SCENE } from '../game/run.js';
 import { createLockstep } from './lockstep.js';
 import { runChecksum } from './checksum.js';
 import { broadcastSignal, mqttSignal, makeRoomCode, createSignalMux } from './signal.js';
@@ -92,8 +92,9 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
     rttReady: false,
     /** Set when a peer reports a different protocol version. */
     versionMismatch: false,
-    /** Lobby state. `members` is the host's roster, indexed by slot; `scene` the host's opening scene (game/run.js SCENES). */
-    lobby: { myCritter: 0, myReady: false, scene: 0, members: [] },
+    /** Lobby state. `members` is the host's roster, indexed by slot; `scene` the host's opening scene (game/run.js
+     *  SCENES), which is the ORDER BOARD by default so an online party picks the customer and the dish together. */
+    lobby: { myCritter: 0, myReady: false, scene: START_SCENE, members: [] },
     ls: null,
     /** pid -> link record, one per pairing (roster.js createLinks). */
     links: null,

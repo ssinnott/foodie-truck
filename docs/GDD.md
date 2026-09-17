@@ -42,21 +42,31 @@ Palettes, proportions and signature accessories are the art direction's (`docs/A
 ## 3. The loop
 
 ```
-title -> select -> map -> (mini-game -> map)* -> map(home) -> kitchen -> results -> map -> ...
+title -> select -> stage -> map -> (mini-game -> map)* -> map(home) -> kitchen -> results -> stage -> ...
+                     ^                                                                         |
+                     +-------------------------------------------------------------------------+
+                        seven stages on the board; when the last one is served, the day closes
 ```
 
+- **A stage** is one of the seven orders, and the *stage select* (the **order board**) is where the party picks
+  which customer and which recipe the truck works on next. A day is the seven stages; each one is taken off the
+  board, driven, cooked and served, and comes back to the board stamped SERVED with the stars it earned. When every
+  stage carries stars the day is over and the board closes the truck for the night — **that is the end of the game**,
+  and the only way back from it is the title screen.
 - **An order** (`content/recipes.js ORDERS`) names a dish, a customer, a phone line, 2 ingredients with amounts, and
   the kitchen steps in order. Seven orders ship — apple pie, fish cakes, apple omelette, honey loaf, custard tart,
   carrot soup, griddle cakes — between them asking for all seven ingredients, so every landmark on the map is
-  somewhere the truck is actually sent; `run.serve()` rolls the next one (never the same one twice running).
+  somewhere the truck is actually sent, and every one of them is a stage on the board. `run.setStage(i)` takes one
+  off the board with an empty ticket; `run.serve(stars)` banks its stars against that stage and hands the board back.
 - **The map** is where the order is read and the truck is driven. Arriving at a landmark that supplies a *missing*
   ingredient opens its mini-game; arriving home with everything opens the kitchen. Arriving anywhere else does
   nothing but show the sign.
 - **A mini-game** lasts up to 40 seconds (2400 frames) or until the order's amount is gathered; it ends by calling
   `run.gather(id, amount)` and returning to the map. Every seated player plays at once; the party's total counts.
 - **The kitchen** walks `order.steps` in order across the stations; when the plate is served it opens results.
-- **Results** shows the customer eating and a 1–3 star rating; `run.serve(stars)` banks the score and rolls the next
-  order; back to the map.
+- **Results** shows the customer eating and a 1–3 star rating; `run.serve(stars)` banks the score against the stage;
+  back to the order board, where that stage is stamped and the next one is picked — or, if it was the last one, the
+  day's card is totted up and the truck closes.
 
 ## 4. The world map
 
@@ -139,7 +149,7 @@ and a laugh, no score change.
 ## 7. Results
 
 The customer's bust at the hatch, the plate sliding out, three chews, a stamp (`DELICIOUS` / `TASTY` / `EDIBLE`),
-1–3 stars, the tip in coins, then `PRESS Z` (auto-return after 600 frames) → `run.serve(stars)` → map.
+1–3 stars, the tip in coins, then `PRESS Z` (auto-return after 600 frames) → `run.serve(stars)` → the order board.
 
 ## 8. Multiplayer
 
@@ -161,9 +171,20 @@ and the seeded rng, so all peers agree; see `docs/MULTIPLAYER.md`. Pause is loca
 ## 10. Screens — what each must do
 
 - **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / CREW (gallery) / SOURCE; `PRESS START`.
-- **select**: 140×200 cards, one cursor per joined seat, READY stamps; `next` = map (starts the run).
+- **select**: 140×200 cards, one cursor per joined seat, READY stamps; `next` = stage (starts the run).
+- **stage** (the order board): the day's seven orders pinned up as 140×124 paper tickets, four across the top row and
+  three under them — each one a customer's portrait and name, the stars it has been served at, the dish across the
+  middle and its two `NEED` rows. ONE shared cursor any joined seat may drive (the menu scheme of `game/menuinput.js`),
+  the selected ticket lifted and headed in the truck's beetroot, and a pad under the board carrying the selected
+  customer's phone line, their role and the landmarks that order sends the truck to. CONFIRM takes the order off the
+  board (`run.setStage`) and fades to the map; a served stage is washed back, gives its `NEED` rows up to a SERVED
+  stamp (slammed on arrival for the one just cooked) and keeps its stars. **When every stage has been served the
+  board opens closed**: a CLOSING TIME slate over the stamped board with the orders served, the day's stars out of
+  21 and the takings, and the one press left goes back to the title. BACK leaves for the title, and is refused
+  online (a peer walking out of a live room stalls the rest, as with the pause overlay).
 - **lobby**: HOST / JOIN, the host key large, invite link, four seats with busts, ready stamps, `STARTING!`; drives
-  `net/session.js`; hands off to `select`-style picking on the same screen, then the host starts on the map.
+  `net/session.js`; hands off to `select`-style picking on the same screen, then the host starts the match on the
+  order board, so an online party picks the customer and the dish together.
 - **map**, **orchard**, **pond**, **coop**, **dairy**, **mill**, **hive**, **garden**, **kitchen**, **results**:
   as above. Every one exposes `summary()` and `checksumFields()` and reads input only by seat.
 - **pause**: transparent overlay (RESUME / QUIT TO TITLE); refused while `game.net.active`.

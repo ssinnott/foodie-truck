@@ -1,7 +1,8 @@
 // RESULTS (docs/GDD.md section 7): the customer at the hatch eating, the plate sliding out to them over 10 frames
 // with the dish on it, three chews (the customer's `eat` anim three times, a component off the plate on each), then a
 // paper receipt carrying the stars, the tip in coins and - slammed across its foot - the red DELICIOUS / TASTY /
-// EDIBLE stamp, and PRESS Z blinking. Confirm (or 600 frames) banks the order with run.serve(stars) and returns to the map.
+// EDIBLE stamp, and PRESS Z blinking. Confirm (or 600 frames) banks the stage with run.serve(stars) and returns to the
+// ORDER BOARD, where that stage is stamped SERVED and the next one is picked - or the day is closed out.
 //
 // The room is the kitchen's own layer (art/backgrounds/kitchen.js), so the hatch and shelf are the ones the dish was
 // plated on; the room is dimmed and THE PARTY, the customer, the plate and the paper are drawn over the dim, so the
@@ -129,7 +130,7 @@ export class ResultsScreen extends Screen {
     if ((f >= CONFIRM_AT && confirmPressed(game.input) >= 0) || f >= AUTO_AT) {
       this.left = true;
       game.run.serve(this.stars);
-      game.replace('map');
+      game.replace('stage');
     }
   }
 
