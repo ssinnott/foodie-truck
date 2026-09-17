@@ -4,6 +4,9 @@ A cozy co-op cooking adventure for one to four players, drawn entirely in code. 
 crew of a countryside food truck is missing an ingredient, so they drive out to where it comes from, gather it in a
 short mini-game, drive home and cook the dish step by step. The customer eats. The phone rings again.
 
+Seven orders, seven ingredients, seven landmarks, and **a different mini-game at every one of them** — each with its
+own verb: catch, fish, collect, pump, fill, creep, pull.
+
 The cast are original anthropomorphic countryside animals: **Barley** the Suffolk sheep (the hungry one), **Sorrel**
 the field mouse (the chef), **Chicory** the brown hare (the driver) and **Cress** the pond frog (the forager).
 
@@ -16,7 +19,7 @@ so the repository stays reviewable in a diff.
 | Part | Screen | What happens |
 |---|---|---|
 | **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. Arriving where a missing ingredient comes from opens its mini-game. Arriving home with everything opens the kitchen. |
-| **Mini-games** | `orchard`, `pond`, `coop` | Catch apples under the trees, fish the millpond, collect eggs from the hens. Everyone seated plays at once and the party's total counts. |
+| **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden` | Catch apples under the trees, fish the millpond, collect eggs from the hens, milk the cows on a two-handed rhythm, fill flour sacks under the mill's chutes, creep to the hives and freeze when the bees turn, and pull carrots out of the market garden without grabbing a thistle. Everyone seated plays at once and the party's total counts. |
 | **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (chop, mix, stove, oven, plate), serve, and watch the customer eat for a star rating. |
 
 ## Play

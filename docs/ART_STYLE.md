@@ -104,6 +104,19 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   8×5 slot tag above.
 - **Coop**: grey-green boards `#55665A`, nest straw `#C9A05C` (darker than the eggs), packed-earth floor `#48526A`
   (cool, L .32), hens rust `#A8623A` and speckled grey; signal: fresh-egg gold sparkle `#F2C14E`; HOT on the rooster's comb.
+- **Dairy**: a dim stone byre, slate eave `#453F4C`, lime-washed stone `#806A4B`, oak beams `#5C3E22`, byre floor
+  `#5E4C33` under straw `#A07C42`, one bright hay hatch of `#FBE3C4` sky; cows `#A8724A` with cream patches, four
+  stalls on a 126 px pitch; signal: mint `#5FD3C0` on the pump chevron and the full pail, HOT on the cow's kick.
+- **Mill**: a dark timber tower, boarded wall `#4A3A2C` (the plane the whole cast reads against), oak frame
+  `#6B543A`, plank floor `#7A6144` (L .40, so dark hooves keep their contact), hessian `#8A7350`; the flour and the
+  sacks are the lightest things in the room; signal: gold `#F2C14E` at a pouring chute's mouth, HOT on a bursting sack.
+- **Hives**: late-afternoon clover meadow, sky `#F9DDB8`→`#F2C39A`, downs `#B3AE7E`, clipped hedge `#3F5A34` (darker
+  than the orchard's canopy so the two green scenes never twin), meadow cooler and lighter than the orchard's grass,
+  five straw skeps on a bench; signal: gold on a skep with honey left in it, HOT on the swarm's wary/alert crest.
+- **Market garden**: a walled kitchen garden, straw sky `#E9DCBE`→`#F4C9A0`, lime-washed wall `#8A8478`
+  (deliberately near-colourless: brick sat 19° from P2's marmalade apron across 70 rows of frame), tilled beds
+  `#4A3C32` (L .25), crop green `#7FA850`, thistle `#68705E` with a `#6B5E78` head; signal: gold on a ripe root's
+  sparkle — and no HOT anywhere, because nothing in a market garden can hurt you.
 - **Kitchen**: plum wall `#4A3038`, slate counter top `#4F5A62` (rows 200–206), steel counter front `#3E4A55`
   (rows 206–246), floor checker `#4E4450` / `#5A4E5C` (rows 246–340), feet line y 252 so torsos read on the counter
   front and heads on the wall; a floor-standing oven that breaks the counter line; copper pot `#B87333`; paper and
