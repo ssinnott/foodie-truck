@@ -12,10 +12,10 @@ export const PLACES = Object.freeze([
   { id: 'orchard', name: 'PIPPIN ORCHARD', sign: 'APPLES', x: 420, y: 300, screen: 'orchard', accent: '#D9463B' },
   { id: 'pond', name: 'MILLPOND', sign: 'FISH', x: 1480, y: 760, screen: 'pond', accent: '#5FD3C0' },
   { id: 'coop', name: 'CLUCKET COOP', sign: 'EGGS', x: 1500, y: 280, screen: 'coop', accent: '#F2C14E' },
-  { id: 'dairy', name: 'BUTTERCUP DAIRY', sign: 'MILK', x: 300, y: 820, screen: '', accent: '#F1E4C8' },
-  { id: 'mill', name: 'WINDLE MILL', sign: 'FLOUR', x: 960, y: 200, screen: '', accent: '#E3C68F' },
-  { id: 'hive', name: 'CLOVER HIVES', sign: 'HONEY', x: 700, y: 900, screen: '', accent: '#E2B44A' },
-  { id: 'garden', name: 'SATURDAY MARKET', sign: 'MARKET', x: 1250, y: 520, screen: '', accent: '#C96B7A' },
+  { id: 'dairy', name: 'BUTTERCUP DAIRY', sign: 'MILK', x: 300, y: 820, screen: 'dairy', accent: '#F1E4C8' },
+  { id: 'mill', name: 'WINDLE MILL', sign: 'FLOUR', x: 960, y: 200, screen: 'mill', accent: '#E3C68F' },
+  { id: 'hive', name: 'CLOVER HIVES', sign: 'HONEY', x: 700, y: 900, screen: 'hive', accent: '#E2B44A' },
+  { id: 'garden', name: 'SATURDAY MARKET', sign: 'MARKET', x: 1250, y: 520, screen: 'garden', accent: '#C96B7A' },
 ]);
 
 /** Kitchen stations, left to right along the truck's counter. `verb` is the interaction the station asks for. */

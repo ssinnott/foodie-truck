@@ -46,7 +46,9 @@ title -> select -> map -> (mini-game -> map)* -> map(home) -> kitchen -> results
 ```
 
 - **An order** (`content/recipes.js ORDERS`) names a dish, a customer, a phone line, 2 ingredients with amounts, and
-  the kitchen steps in order. The prototype ships three orders; `run.serve()` rolls the next one.
+  the kitchen steps in order. Seven orders ship — apple pie, fish cakes, apple omelette, honey loaf, custard tart,
+  carrot soup, griddle cakes — between them asking for all seven ingredients, so every landmark on the map is
+  somewhere the truck is actually sent; `run.serve()` rolls the next one (never the same one twice running).
 - **The map** is where the order is read and the truck is driven. Arriving at a landmark that supplies a *missing*
   ingredient opens its mini-game; arriving home with everything opens the kitchen. Arriving anywhere else does
   nothing but show the sign.
@@ -61,8 +63,8 @@ title -> select -> map -> (mini-game -> map)* -> map(home) -> kitchen -> results
 - World `1920 x 1080` px (`content/places.js WORLD_W/H`), one flat plane in 3/4 storybook view, y-sorted sprites
   with ground-contact shadows. Camera follows the truck (0.1 lerp, integer snap, clamped to the world).
 - **Landmarks** (`PLACES`): home (the truck stop), orchard (apples), pond (fish), coop (eggs), dairy (milk), mill
-  (flour), hives (honey), market garden (vegetables). The three with mini-games in the prototype are orchard, pond
-  and coop; the rest are scenery with signs and a "COMING SOON" chalk note when driven to.
+  (flour), hives (honey), market garden (carrots). **All seven supply landmarks open a mini-game**; arriving at one
+  the order does not need shows a `NOTHING NEEDED HERE` sign instead.
 - **The truck** is one shared vehicle. Every seated player's stick is a vector; they are summed (the driver's ×1.5),
   quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it,
   turning at most 1 heading step per 4 frames. Roads are the fast path; fields are drivable but slow and dusty;
@@ -89,6 +91,32 @@ and a 60-frame hold, then `run.gather` and back to the map. All randomness throu
   90–150 frames; `action` over an egg plucks it (12-frame crouch). Five hens wander on seeded waypoints; touching
   one is a bump that drops the last egg (it cracks into a yolk puddle). One rooster charges every ~600 frames with a
   20-frame telegraph.
+- **Dairy — PUMP.** A stool and a cow per seat, nobody moves. `action` and `alt` **alternate**: after an `action`
+  the next accepted press is `alt` and back again, and the wrong button is refused for 10 frames at no cost. Six
+  accepted pumps fill a pail — +1 milk, the pail hops to the churn rack, a fresh one slides under the cow. Each cow
+  independently runs a seeded 150–260 frame patience timer, then telegraphs for 24 frames (ear back, tail up, a
+  `SIGNAL.hot` mark) and kicks for 30: **any** press inside that window spills the pail (the part-filled pail is
+  lost and one banked milk with it) and the seat takes the bump. Sitting still through it is free.
+- **Mill — FILL.** Four chutes along the back wall wake on a seeded 70–130 frame timer, at most two at once:
+  24 frames of telegraph, then 110 frames of pouring. Seats walk left and right on their own depth lanes; standing
+  within 18 px of a pouring chute with `action` **held** fills the sack at 1/54 per frame (about 0.9 s from empty).
+  Releasing at or above full ties it off (+1 flour, an 18-frame tie beat); releasing below full **keeps** the part
+  sack to top up at the next chute; holding to 1.5 bursts it — a flour cloud, the critter whitened for 8 frames,
+  the sack's contents gone and one banked flour with them.
+- **Hives — CREEP.** Five straw skeps on a bench; `action` within 16 px of one dips it (16-frame reach, +1 honey)
+  and that skep is empty for 150 frames, so the party is pushed along the bench. One shared swarm cycles
+  **calm** (180–300 frames, the round opens on a fixed 300 so nobody is punished first) → **wary** (36 frames: the
+  telegraph — the cloud rears, a hot crest, the band reads STEADY) → **alert** (70–120 frames: FREEZE). During
+  alert any movement or `action` from a seat stings it — the bump, a 10 px shove, one banked honey lost and a
+  60-frame grace. Standing still is completely safe, and a dip already begun finishes safely. A three-state band
+  across the top of the play area carries the swarm's state as colour *and* silhouette (flat / spiked up / spiked
+  down), so it survives the squint.
+- **Market garden — PULL.** Leafy tops stand in the bed (seven at the start, more every 70–120 frames up to eight,
+  never closer than 42 px). One in five is a **thistle**. `action` within 16 px grips a top and opens a tug gauge
+  above that seat: a needle sweeping the bar in 40 frames each way with a band 26 units wide. `action` again inside
+  the band brings the root out (+1 carrot, a 14-frame pull); outside it the top snaps off at no cost and that root
+  grows a new one in 90 frames. 150 frames without a press lets go. Pulling a thistle costs one banked carrot, takes
+  the full bump and throws the weed over the critter's shoulder.
 
 ## 6. The kitchen
 
@@ -136,7 +164,7 @@ and the seeded rng, so all peers agree; see `docs/MULTIPLAYER.md`. Pause is loca
 - **select**: 140×200 cards, one cursor per joined seat, READY stamps; `next` = map (starts the run).
 - **lobby**: HOST / JOIN, the host key large, invite link, four seats with busts, ready stamps, `STARTING!`; drives
   `net/session.js`; hands off to `select`-style picking on the same screen, then the host starts on the map.
-- **map**, **orchard**, **pond**, **coop**, **kitchen**, **results**: as above. Every one exposes `summary()` and
-  `checksumFields()` and reads input only by seat.
+- **map**, **orchard**, **pond**, **coop**, **dairy**, **mill**, **hive**, **garden**, **kitchen**, **results**:
+  as above. Every one exposes `summary()` and `checksumFields()` and reads input only by seat.
 - **pause**: transparent overlay (RESUME / QUIT TO TITLE); refused while `game.net.active`.
 - **gallery**: the cast contact sheet in game.

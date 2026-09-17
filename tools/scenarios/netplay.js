@@ -11,6 +11,11 @@
 //   netquad - four pages, every guest refusing direct guest-guest links (?netrelay=1) so their traffic rides
 //             the host's relay; the same checks, then guests leaving one by one: the survivors retire each
 //             seat on ONE agreed frame and stay identical, and the last player left is handed the end.
+//   netscenes - a two-peer room opened on EVERY mini-game in turn, both seats holding keys, and the desync
+//             canary watched throughout. The canary hashes game.run plus the top screen's checksumFields()
+//             every 30 frames (net/session.js afterStep), so this is the only test that can catch a screen
+//             whose checksumFields() misses a field its update() moves - a reader cannot prove that, and the
+//             room is where it bites. The first six mini-games shipped without it.
 import { withPeers, assert } from '../playtest.js';
 
 const ROOM_CODE = /^[23456789BCDFGHJKMNPQRSTVWXYZ]{6}$/;
@@ -54,11 +59,14 @@ async function fillRoom(pages) {
   return code;
 }
 
-/** Everybody picks a critter and readies up; the host auto-starts once the latency measurement is in. */
-async function readyAll(pages, seats) {
+/**
+ * Everybody picks a critter and readies up; the host auto-starts once the latency measurement is in. `scene` is
+ * the index into game/run.js SCENES the START packet carries, and `screenId` is what that index must open.
+ */
+async function readyAll(pages, seats, scene = 1, screenId = 'orchard') {
   // The host's opening scene travels in the START packet; SCENES[1] is the orchard, where each seat walks its
   // own x, so pressRight below can prove a key is attributed to one seat and not shared out.
-  await pages[0].evaluate(() => { window.__game.net().lobby.scene = 1; });
+  await pages[0].evaluate((i) => { window.__game.net().lobby.scene = i; }, scene);
   const cast = await pages[0].evaluate(() => window.__game.critterList().length);
   // Ask for the critter that matches each peer's OWN SEAT, not its page index: guests race for the room, so
   // the host may seat page 2 in slot 1, and a pick keyed to the page index would ask for a critter its
@@ -78,7 +86,7 @@ async function readyAll(pages, seats) {
   assert(ok.every(Boolean), 'every peer registered its ready flag');
   await step('everyone reaches the match', pages, () => waitAll(pages, (n) => !!n && n.state === 'playing'));
   const states = await Promise.all(pages.map((p) => p.evaluate(() => ({ screen: window.__game.screen(), party: (window.__game.summary().run || { party: [] }).party.length, dots: ((window.__game.summary().top || {}).seats || []).length }))));
-  assert(states.every((s) => s.screen === 'orchard'), `the START opens the same scene on every machine (${states.map((s) => s.screen).join()})`);
+  assert(states.every((s) => s.screen === screenId), `the START opens the same scene on every machine (wanted ${screenId}, got ${states.map((s) => s.screen).join()})`);
   assert(states.every((s) => s.party === seats && s.dots === seats), `every machine built a run with ${seats} seats (${states.map((s) => s.party).join()})`);
 }
 
@@ -121,7 +129,47 @@ async function pressRight(pages, page, slot, label) {
   assert(still, `${label}: nobody else's dot moved`);
 }
 
+/**
+ * The mini-games a room is held on, by their game/run.js SCENES index. The orchard is netplay's own scene and is
+ * covered there; these are the six that never had a room run on them.
+ */
+const ROOM_SCENES = Object.freeze([[2, 'pond'], [3, 'coop'], [5, 'dairy'], [6, 'mill'], [7, 'hive'], [8, 'garden']]);
+/** Frames a room runs on each scene. 200 is past six checksum exchanges (one every 30 frames) and past the
+ *  telegraph-and-hazard cycle of every scene in the list, so a field left out of a checksum has fired by then. */
+const SCENE_FRAMES = 200;
+
 export const SCENARIOS = {
+  /**
+   * Hold a two-peer room on every mini-game in turn with both seats pushing, and watch the desync canary. A screen
+   * whose checksumFields() misses a field that update() moves passes every single-page test there is and only
+   * fails here, which is why this exists.
+   */
+  async netscenes(server) {
+    for (const [scene, id] of ROOM_SCENES) {
+      const params = ['transport=broadcast&skipTo=title', 'transport=broadcast&skipTo=title'];
+      await withPeers(server, params, async (pages) => {
+        await fillRoom(pages);
+        await readyAll(pages, 2, scene, id);
+        await runMatch(pages, 60);
+        // both seats push at once: every scene in the list either walks on the stick or acts on the buttons, and
+        // a room where nobody presses anything is a room where nothing can diverge
+        for (const p of pages) { await p.bringToFront(); await p.keyboard.down('ArrowRight'); await p.keyboard.down('KeyZ'); }
+        const f0 = (await netState(pages[0])).frame;
+        await step(`${SCENE_FRAMES} frames of ${id} with both seats pushing`, pages, () => waitFrames(pages, f0 + SCENE_FRAMES));
+        for (const p of pages) { await p.bringToFront(); await p.keyboard.up('KeyZ'); await p.keyboard.up('ArrowRight'); }
+        const f1 = (await netState(pages[0])).frame;
+        await step('the releases land everywhere', pages, () => waitFrames(pages, f1 + 12));
+        await checkLockstep(pages, `after ${SCENE_FRAMES} frames of ${id}`);
+        // the canary only compares a hash; compare the SIM itself too, so a scene whose checksum is too thin is
+        // caught by the thing the checksum is standing in for
+        const tops = await Promise.all(pages.map((p) => p.evaluate(() => JSON.stringify(window.__game.game.screen.checksumFields()))));
+        assert(tops[0] === tops[1], `${id}: both machines hold identical checksum fields after the push`);
+        const errs = await Promise.all(pages.map((p) => p.evaluate(() => window.__game.errors.length)));
+        assert(errs.every((e) => e === 0), `${id}: no runtime errors in the room (${errs.join()})`);
+      });
+    }
+  },
+
   async netplay(server) {
     const params = ['transport=broadcast&skipTo=title', 'transport=broadcast&skipTo=title'];
     await withPeers(server, params, async (pages, apis) => {

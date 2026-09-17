@@ -41,7 +41,14 @@ export const SIGNAL = Object.freeze({
   pond: '#5FD3C0',     // the bite ring and the float's stripe
   coop: '#F2C14E',     // fresh-egg sparkle (shared with the map by exemption: both mean "the thing you want")
   kitchen: '#E23A2E',  // HOT
-  hot: '#E23A2E',      // burner, boil-over, burnt, the rooster's comb: never anywhere else
+  // The four landmarks the prototype finished last take their signal from the two meanings already in the table
+  // rather than inventing four more saturated hexes: the player colours own blue, marmalade, lavender and
+  // raspberry, so a fifth and sixth saturated family would collide with an apron inside the very scene it marks.
+  dairy: '#5FD3C0',    // the milking beat: the pump chevron and the full pail's ring (mint = "press on this beat", the pond's bite ring by exemption)
+  mill: '#F2C14E',     // the chute that is pouring NOW (the map/coop gold: "the thing you want")
+  hive: '#F2C14E',     // the skep with honey left in it; the swarm's alert is SIGNAL.hot, as on the rooster's comb
+  garden: '#F2C14E',   // the ripe root's sparkle, the same mark the coop's fresh egg wears
+  hot: '#E23A2E',      // burner, boil-over, burnt, the rooster's comb, the swarm on the turn: never anywhere else
   good: '#5FA652',     // "good timing" fills on paper UI, always ink-outlined (= UI.green)
 });
 /** The apron a critter wears when no seat owns it (gallery, customers, the title's idle crew). */

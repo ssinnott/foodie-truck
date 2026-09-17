@@ -26,4 +26,17 @@ export const ORDERS = Object.freeze([
     needs: [{ id: 'fish', amount: 3 }, { id: 'egg', amount: 1 }], steps: ['chop', 'mix', 'stove', 'plate'] },
   { id: 'omelette', dish: 'APPLE OMELETTE', customer: 'goat', line: 'SOMETHING WITH EGGS. AND APPLES. SURPRISE ME.',
     needs: [{ id: 'egg', amount: 3 }, { id: 'apple', amount: 2 }], steps: ['mix', 'stove', 'plate'] },
+  // The four orders below are what the dairy, the mill, the hives and the market garden are FOR: until an order
+  // asked for milk, flour, honey or carrots, `run.missing()` never named those landmarks, `screenForPlace` never
+  // returned their screens and four finished mini-games would have sat unreachable behind a signpost. Each one
+  // pairs a new ingredient with a second so the truck still makes two stops, and the amounts are the 3..4 a party
+  // gathers inside a 40-second round (measured against the orchard's four apples).
+  { id: 'honeyLoaf', dish: 'HONEY LOAF', customer: 'owl', line: 'A HONEY LOAF. WARM, AND CUT THICK.',
+    needs: [{ id: 'flour', amount: 3 }, { id: 'honey', amount: 2 }], steps: ['mix', 'oven', 'plate'] },
+  { id: 'custardTart', dish: 'CUSTARD TART', customer: 'goat', line: 'CUSTARD TART. NOT TOO WOBBLY.',
+    needs: [{ id: 'milk', amount: 3 }, { id: 'egg', amount: 2 }], steps: ['mix', 'stove', 'oven', 'plate'] },
+  { id: 'carrotSoup', dish: 'CARROT SOUP', customer: 'otter', line: 'SOUP! CARROT SOUP! IT IS PERISHING OUT HERE!',
+    needs: [{ id: 'carrot', amount: 4 }, { id: 'milk', amount: 2 }], steps: ['chop', 'stove', 'plate'] },
+  { id: 'griddleCakes', dish: 'GRIDDLE CAKES', customer: 'otter', line: 'GRIDDLE CAKES. A STACK OF THEM.',
+    needs: [{ id: 'flour', amount: 3 }, { id: 'milk', amount: 2 }], steps: ['mix', 'stove', 'plate'] },
 ]);

@@ -38,7 +38,9 @@ const LANE_SPEED = 2.2, FIELD_SPEED = 1.0, TURN_EVERY = 4, ARRIVE_R = 40, DRIVER
 const HONK_FRAMES = 30, SQUASH_FRAMES = 4, SIGN_FRAMES = 90, RING_FRAMES = 60, TOKEN_SCALE = 0.5;
 const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3;
 const DUST = { size: 2, life: 20, vy: -0.15 };
-const COMING_SOON = 'COMING SOON', NOTHING = 'NOTHING NEEDED HERE', GATHER = 'GATHER THE ORDER FIRST';
+// Every landmark on the plane opens a screen now (content/places.js), so the old COMING SOON chalk note has no
+// landmark left to stand on: a sign that is not the kitchen and not a mini-game is always one the order does not need.
+const NOTHING = 'NOTHING NEEDED HERE', GATHER = 'GATHER THE ORDER FIRST';
 const CLOUDS = [[200, 260], [900, 700], [1500, 420]];
 /** The phone rings once per order: remembered per run object so a revisit stays quiet until run.served changes. */
 let rungRun = null, rungServed = -1;
@@ -191,7 +193,7 @@ export class MapScreen extends Screen {
   arrive(i) {
     const run = this.game.run, id = PLACES[i].id, screen = run.screenForPlace(id);
     if (screen) { this.game.fadeTo(() => this.game.replace(screen, { place: id })); return; }
-    this.signText = id === 'home' ? GATHER : PLACES[i].screen ? NOTHING : COMING_SOON;
+    this.signText = id === 'home' ? GATHER : NOTHING;
     this.signW = measureText(this.signText, 1) + 24;
     this.signTimer = SIGN_FRAMES;
   }

@@ -2,12 +2,23 @@
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
 //   map - four seats on the map: holding right on seat 0 drives the truck east off home, a honk stamps, the river
-//         stops it short of a bridge, the mill's wall stops it outside the tower, a scenery landmark drops a
-//         COMING SOON sign, and driving to the orchard with apples on the order opens the orchard screen. Every
-//         signpost is checked off the driving lane so none of them can drift back onto it. Also writes
-//         tools/screens/map-driving.png.
+//         stops it short of a bridge, the mill's wall stops it outside the tower, a landmark the order does NOT
+//         need drops a NOTHING NEEDED HERE sign, and driving to the orchard with apples on the order opens the
+//         orchard screen. Every signpost is checked off the driving lane so none of them can drift back onto it.
+//         Also writes tools/screens/map-driving.png.
+//
+//   routing - the data invariant behind the seven mini-games: every ingredient in content/recipes.js names a
+//             landmark that exists, that landmark carries a screen, that screen is registered in main.js, and
+//             every order is therefore actually completable. This is what stops a mini-game being finished and
+//             then left unreachable behind a signpost.
+//
+//   wholeOrder - the honey loaf driven end to end: the HUD ticket sends the truck to the mill, the mill screen
+//                opens, the flour is banked, the ticket re-points at the hives, the hive screen opens, the honey
+//                is banked, and only then does driving home open the kitchen. The one test that proves an order
+//                built entirely out of the newly finished landmarks can actually be served.
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.js';
+import { INGREDIENTS, ORDERS } from '../../src/content/recipes.js';
 import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, riverDist, laneDist, wallBlocked } from '../../src/art/backgrounds/map.js';
 
 const placeOf = (id) => PLACES.find((p) => p.id === id);
@@ -52,13 +63,15 @@ export const SCENARIOS = {
       const s3 = await api.summary();
       assert(s3.top.truck.x > b.x + 30, `the bridge carries it across (x ${s3.top.truck.x} vs ${b.x})`);
 
-      // a scenery landmark: the mill drops a COMING SOON sign and stays on the map
+      // a landmark the order does not need: order 1 is the apple pie, so the mill has nothing the truck wants and
+      // arriving there stays on the map behind a sign. (Every landmark opens a screen now, so the old COMING SOON
+      // chalk note has no landmark left to stand on - screens/map.js dropped it.)
       const mill = placeOf('mill');
       await teleport(page, mill.x, mill.y + 70, 12);
       await api.hold(0, { up: true }); await api.step(60); await api.release(0);
       const s4 = await api.summary();
       assert(s4.screen === 'map' && s4.run.truckAt === 'mill', `arriving at the mill stays on the map (screen ${s4.screen}, at '${s4.run.truckAt}')`);
-      assert(s4.top.sign === 'COMING SOON', `...with a COMING SOON sign (got '${s4.top.sign}')`);
+      assert(s4.top.sign === 'NOTHING NEEDED HERE', `...with a NOTHING NEEDED HERE sign (got '${s4.top.sign}')`);
 
       // the mill tower is painted into the ground chunk and never y-sorts against the truck, so a wall test has to
       // keep the token out of it: drive north into the tower and stop at its base
@@ -80,6 +93,91 @@ export const SCENARIOS = {
         assert(d > SIGN_CLEAR, `the ${p.id} signpost clears the driving lane (${d.toFixed(1)} px > ${SIGN_CLEAR})`);
         assert(!wallBlocked(g.x, g.y), `the ${p.id} signpost is not planted inside a building`);
       }
+    });
+  },
+
+  /**
+   * Every order is completable: each ingredient names a real landmark, that landmark opens a real registered
+   * screen, and driving to it with that ingredient missing actually opens it. A finished mini-game that no order
+   * asks for is dead code, and an order whose ingredient has no mini-game is a run that can never be served.
+   */
+  async routing(server) {
+    await withPage(server, 'skipTo=map&critters=0,1', async (api, page) => {
+      await api.step(2);
+      const ids = await page.evaluate(() => window.__game.screenIds());
+      for (const [ingId, ing] of Object.entries(INGREDIENTS)) {
+        const p = placeOf(ing.place);
+        assert(!!p, `${ingId} comes from a landmark that exists ('${ing.place}')`);
+        assert(!!(p && p.screen), `...and ${ing.place} opens a mini-game (screen '${p && p.screen}')`);
+        assert(ids.includes(p && p.screen), `...which main.js registers (screenIds has '${p && p.screen}')`);
+      }
+      for (const o of ORDERS) for (const n of o.needs) {
+        assert(!!INGREDIENTS[n.id], `${o.id} asks for a known ingredient ('${n.id}')`);
+      }
+      // ...and every ingredient is asked for by at least one order, or its mini-game can never open in play
+      for (const ingId of Object.keys(INGREDIENTS)) {
+        assert(ORDERS.some((o) => o.needs.some((n) => n.id === ingId)), `some order asks for ${ingId}, so its mini-game is reachable`);
+      }
+
+      // the drive itself, once per landmark that supplies something: put that ingredient on the order, park the
+      // truck on the door, and the landmark's own screen comes up
+      for (const [ingId, ing] of Object.entries(INGREDIENTS)) {
+        const p = placeOf(ing.place);
+        if (!p || !p.screen) continue;
+        await api.goto('map', {});
+        await page.evaluate(([id, amount]) => {
+          const run = window.__game.game.run;
+          run.order.needs.length = 0;
+          run.order.needs.push({ id, amount, have: 0 });
+          run.truck.at = '';
+        }, [ingId, 2]);
+        await teleport(page, p.x, p.y + 60, 12);
+        await api.hold(0, { up: true }); await api.step(120); await api.release(0);
+        const s = await api.summary();
+        assert(s.screen === p.screen, `${ing.place} opens '${p.screen}' when the order needs ${ingId} (landed on '${s.screen}')`);
+      }
+    });
+  },
+
+  /**
+   * One whole order made of the newly finished landmarks, from the phone call to the kitchen door. `?order=4` is
+   * the honey loaf (flour from the mill, honey from the hives). Each stop is driven to for real and its screen is
+   * asserted; the gathering itself is banked straight through run.gather so this scenario tests the FLOW and not
+   * the mini-games' own rules - those have a scenario each.
+   */
+  async wholeOrder(server) {
+    await withPage(server, 'skipTo=map&critters=0,1,2,3&order=4', async (api, page) => {
+      await api.step(5);
+      const s0 = await api.summary();
+      assert(s0.run.dish === 'HONEY LOAF', `?order=4 is the honey loaf (got '${s0.run.dish}')`);
+      assert(s0.top.dest === 'mill', `the ticket sends the truck to the mill first (dest ${s0.top.dest})`);
+
+      for (const [place, ing, screen] of [['mill', 'flour', 'mill'], ['hive', 'honey', 'hive']]) {
+        const p = placeOf(place);
+        await teleport(page, p.x, p.y + 60, 12);
+        await api.hold(0, { up: true }); await api.step(120); await api.release(0);
+        const s = await api.summary();
+        assert(s.screen === screen, `the ${place} opens '${screen}' (landed on '${s.screen}')`);
+        // bank the line and come back out the way a finished round does
+        await page.evaluate((id) => {
+          const run = window.__game.game.run, n = run.order.needs.find((x) => x.id === id);
+          run.gather(id, n.amount);
+          window.__game.game.reset('map');
+        }, ing);
+        await api.step(5);
+        const back = await api.summary();
+        const line = (back.run.needs || []).find((n) => n.startsWith(ing + ':')) || '';
+        const [have, amount] = (line.split(':')[1] || '').split('/');
+        assert(have && have === amount, `the ${ing} line is full (${line})`);
+      }
+
+      const done = await api.summary();
+      assert(done.run.complete === true, 'both lines are aboard, so the order is complete');
+      assert(done.top.dest === 'home', `...and the ticket now points home (dest ${done.top.dest})`);
+      const home = placeOf('home');
+      await teleport(page, home.x, home.y + 70, 12);
+      await api.hold(0, { up: true }); await api.step(150); await api.release(0);
+      assert((await api.screen()) === 'kitchen', `driving home with a full order opens the kitchen (now on ${await api.screen()})`);
     });
   },
 };
