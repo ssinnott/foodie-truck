@@ -13,7 +13,9 @@
     "capture": "node tools/capture.js",
     "lint": "node tools/check.js && npm run typecheck",
     "typecheck": "tsc -p tsconfig.json",
-    "art-check": "node tools/art-check.js"
+    "art-check": "node tools/art-check.js",
+    "golden": "node tools/golden.js --check",
+    "check": "npm run lint && npm run art-check && npm run nettest && npm run golden"
   },
   "license": "MIT",
   "devDependencies": {
