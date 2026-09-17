@@ -12,8 +12,12 @@ export const MAX_STEPS_PER_FRAME = 5;
 export const INPUT_BUFFER = 8;
 /** Player slots the engine holds. Four, because an online room seats four. */
 export const MAX_PLAYERS = 4;
-/** How many of those slots COUCH play may fill (two people, one keyboard, one nine-key block each). */
-export const LOCAL_PLAYERS = 2;
+/**
+ * How many of those slots COUCH play may fill. All four: the keyboard seats two (one nine-key block each) and a
+ * gamepad claims any free seat on its first press, so four pads - or two pads either side of the keyboard pair -
+ * fill the truck without anybody going online.
+ */
+export const LOCAL_PLAYERS = 4;
 /** An online room holds this many players at most... */
 export const NET_PLAYERS = 4;
 /** ...and at least this many. Below it there is nobody to be in lockstep with. */

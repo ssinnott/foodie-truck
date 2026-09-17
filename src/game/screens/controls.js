@@ -1,0 +1,191 @@
+// CONTROLS (docs/GDD.md section 9) - the order pad the crew's own buttons are written on. Eight action rows down
+// the left, three columns across: P1's keys, P2's keys, and the one pad table every controller shares.
+//
+// Rebinding is a CAPTURE, not a menu: pick a cell, press ACTION, and engine/input.js stops playing input and hands
+// this screen the very next key or button instead (`capture()` / `capturedKey()` / `capturedButton()`). That is
+// the only way a screen can be told "the player pressed C" rather than "the player pressed CANCEL" - and without
+// it the press that picks a binding would also drive the menu it was picked in, so binding CANCEL would throw you
+// off this screen with the same keystroke.
+//
+// The rules live in engine/bindings.js, not here: this screen shows what it is told, prints the refusal it is
+// handed when a binding is refused, and never reaches into a table itself. Bindings are written to storage in
+// exit() - one write, on the way out, off the simulation path (docs/MULTIPLAYER.md).
+import { VIEW_W, UI, PLAYER_COLORS } from '../../constants.js';
+import { Screen } from '../game.js';
+import { ACTIONS, ACTION_LABELS } from '../../engine/actions.js';
+import * as bindings from '../../engine/bindings.js';
+import { drawText, measureText } from '../../engine/text.js';
+import { drawTicket, drawSign, drawHint, drawDim, ROW } from '../ui.js';
+import { drawLane } from '../../art/logo.js';
+import { navX, navY, cancelPressed } from '../menuinput.js';
+
+const R = Math.round;
+const HEAD_TEXT = 'CONTROLS';
+/**
+ * Three columns of bindings and the action name they belong to. `seat` is the keyboard slot a column edits, or -1
+ * for the column that edits the shared pad table.
+ */
+const COLS = [
+  { title: 'P1 KEYS', seat: 0 },
+  { title: 'P2 KEYS', seat: 1 },
+  { title: 'GAMEPAD', seat: -1 },
+];
+/**
+ * The pad on the counter: wide enough for the longest binding name ('D-RIGHT') in every column at size 1, and
+ * exactly as tall as the eight rows and their rules - a ticket with a hand's depth of blank paper under the last
+ * line reads as a form somebody forgot to finish.
+ */
+const PAD_X = 64, PAD_Y = 40, PAD_W = 512, PAD_H = 216;
+/** The action column, then three binding columns of equal width across what is left. */
+const NAME_W = 116;
+const CELL_W = R((PAD_W - NAME_W - 24) / COLS.length);
+const COL_X = COLS.map((_, i) => PAD_X + 12 + NAME_W + i * CELL_W);
+/** Row 0 is the column headings; the eight actions run below it on the ticket's own rules. */
+const HEAD_ROW_Y = 22, FIRST_ROW_Y = 40;
+/** A capture gives up on its own after five seconds, so a pad player who opened one by mistake is not stuck. */
+const CAPTURE_FRAMES = 300;
+/** How long a refusal stays on the hint line. */
+const MESSAGE_FRAMES = 150;
+/** The cell cursor's flash, and the '. . .' a listening cell shows instead of its binding. */
+const BLINK = 30, LISTENING = '. . .';
+
+export class ControlsScreen extends Screen {
+  constructor(game) { super(game, 'controls'); this.row = 0; this.col = 0; }
+
+  enter(params) {
+    super.enter(params);
+    this.row = 0; this.col = 0;
+    this.listening = false; this.listenT = 0;
+    this.message = ''; this.messageT = 0;
+    this.dirty = false;
+    // Every cell's text, rebuilt only when a binding actually changes: draw() joins no strings (ARCHITECTURE 8).
+    this.cells = COLS.map(() => ACTIONS.map(() => ''));
+    this.refresh();
+    this.hint = 'ARROWS: MOVE    Z: REBIND    X: DEFAULTS    C: BACK';
+    this.listenHint = 'PRESS A KEY OR A BUTTON    ESC: CANCEL';
+  }
+
+  /** Written on the way out, once: storage is not the simulation's business (docs/MULTIPLAYER.md). */
+  exit() {
+    if (this.dirty) bindings.save();
+  }
+
+  /** Re-read every cell from engine/bindings.js. Called after an edit, never per frame. */
+  refresh() {
+    for (let c = 0; c < COLS.length; c++) {
+      const col = COLS[c];
+      for (let a = 0; a < ACTIONS.length; a++) {
+        if (col.seat < 0) this.cells[c][a] = bindings.padLabel((bindings.padMap()[ACTIONS[a]] || [])[0]);
+        else {
+          const map = bindings.keyboardMap(col.seat);
+          this.cells[c][a] = map ? (map[ACTIONS[a]] || []).map(bindings.keyLabel).join(' / ') : '-';
+        }
+      }
+    }
+  }
+
+  say(text) { this.message = text; this.messageT = MESSAGE_FRAMES; }
+
+  update() {
+    super.update();
+    const inp = this.game.input;
+    if (this.messageT > 0) this.messageT--;
+    if (this.listening) { this.listen(); return; }
+
+    const dx = navX(inp), dy = navY(inp);
+    if (dx) this.col = (this.col + dx + COLS.length) % COLS.length;
+    if (dy) this.row = (this.row + dy + ACTIONS.length) % ACTIONS.length;
+    if (inp.anyPressed('action') >= 0 || inp.anyPressed('start') >= 0) {
+      this.listening = true; this.listenT = 0;
+      inp.capture();
+      return;
+    }
+    // ALT puts THIS COLUMN back to stock - the column the cursor is in, so a player who has tangled one seat's
+    // keys is not made to throw away the other seat's and the pad's as well.
+    if (inp.anyPressed('alt') >= 0) {
+      const col = COLS[this.col];
+      if (col.seat < 0) bindings.resetPad(); else bindings.resetKeyboard(col.seat);
+      this.dirty = true;
+      this.refresh();
+      this.say(`${col.title} BACK TO DEFAULTS`);
+      return;
+    }
+    if (cancelPressed(inp) >= 0) this.game.reset('title');
+  }
+
+  /**
+   * A capture in progress. ESC backs out (which is why it is the one code bindings.js refuses to bind), and so
+   * does running out of patience: a pad player has no ESC, and a capture nobody can leave is a locked screen.
+   */
+  listen() {
+    const inp = this.game.input;
+    this.listenT++;
+    const code = inp.capturedKey(), button = inp.capturedButton();
+    const col = COLS[this.col], action = ACTIONS[this.row];
+    let done = false;
+    if (code === 'Escape') { this.say('REBIND CANCELLED'); done = true; }
+    else if (col.seat < 0 && button >= 0) { done = this.apply(bindings.bindPad(action, button)); }
+    else if (col.seat >= 0 && code) { done = this.apply(bindings.bindKey(col.seat, action, code)); }
+    // a key pressed at the pad column (or a button at a key column) is the wrong device for this cell, and saying
+    // so is friendlier than a cell that silently refuses to change
+    else if (col.seat < 0 && code) { this.say('THAT COLUMN WANTS A BUTTON'); done = true; }
+    else if (col.seat >= 0 && button >= 0) { this.say('THAT COLUMN WANTS A KEY'); done = true; }
+    else if (this.listenT >= CAPTURE_FRAMES) { this.say('REBIND TIMED OUT'); done = true; }
+    if (done) { inp.endCapture(); this.listening = false; }
+  }
+
+  /** One binding attempt: keep the refusal on screen, and only a change is worth saving. */
+  apply(result) {
+    if (result.ok) { this.dirty = true; this.refresh(); this.say(''); }
+    else this.say(result.reason || 'REBIND REFUSED');
+    return true;
+  }
+
+  draw(ctx) {
+    drawLane(ctx);
+    drawDim(ctx, 0.62);
+    drawSign(ctx, VIEW_W / 2, 2, measureText(HEAD_TEXT, 2) + 18, 26, HEAD_TEXT, { size: 2 });
+    drawTicket(ctx, PAD_X, PAD_Y, PAD_W, PAD_H, { title: 'WHO PRESSES WHAT', rules: false });
+
+    // column headings, each in its own seat colour so the table reads as the couch does
+    for (let c = 0; c < COLS.length; c++) {
+      const col = COLS[c];
+      drawText(ctx, col.title, COL_X[c] + CELL_W / 2, PAD_Y + HEAD_ROW_Y, {
+        size: 1, color: col.seat < 0 ? UI.ink : PLAYER_COLORS[col.seat], align: 'center', shadow: false,
+      });
+    }
+    ctx.fillStyle = UI.paperLine;
+    ctx.fillRect(PAD_X + 8, PAD_Y + HEAD_ROW_Y + 11, PAD_W - 16, 1);
+
+    for (let a = 0; a < ACTIONS.length; a++) {
+      const y = PAD_Y + FIRST_ROW_Y + a * ROW * 2;
+      ctx.fillStyle = UI.paperLine;
+      ctx.fillRect(PAD_X + 8, y + ROW + 4, PAD_W - 16, 1);
+      drawText(ctx, ACTION_LABELS[a], PAD_X + 14, y, { size: 1, color: UI.ink, shadow: false });
+      for (let c = 0; c < COLS.length; c++) {
+        const here = a === this.row && c === this.col;
+        const text = here && this.listening ? LISTENING : this.cells[c][a];
+        if (here) {
+          // the cursor is a jam-jar lid the same beetroot as the READY stamp, drawn UNDER the text
+          const w = measureText(text, 1) + 10;
+          ctx.fillStyle = this.listening && (this.frame % BLINK) < BLINK / 2 ? UI.paper : UI.paperDark;
+          ctx.fillRect(R(COL_X[c] + CELL_W / 2 - w / 2), y - 2, R(w), 12);
+          ctx.fillStyle = UI.ink;
+          ctx.fillRect(R(COL_X[c] + CELL_W / 2 - w / 2), y + 10, R(w), 1);
+        }
+        drawText(ctx, text, COL_X[c] + CELL_W / 2, y, { size: 1, color: UI.ink, align: 'center', shadow: false });
+      }
+    }
+    drawHint(ctx, this.listening ? this.listenHint : (this.messageT > 0 && this.message ? this.message : this.hint));
+  }
+
+  summary() {
+    return {
+      row: ACTIONS[this.row], col: COLS[this.col].title, rowIndex: this.row, colIndex: this.col, listening: this.listening,
+      message: this.messageT > 0 ? this.message : '',
+      cells: this.cells.map((c) => c.slice()), dirty: this.dirty, isDefault: bindings.isDefault(),
+    };
+  }
+  /** Nothing here is simulated, but the screen contract asks for the cursor (docs/ARCHITECTURE.md section 5). */
+  checksumFields() { return [this.row, this.col, this.listening ? 1 : 0]; }
+}

@@ -6,6 +6,8 @@ import { encodeInput, encodeChecksum, encodeStart, encodeDrop, encodeRelay, enco
 import { createLockstep } from '../src/net/lockstep.js';
 import { runChecksum } from '../src/net/checksum.js';
 import { makeMember, packSeats, freeSlot, uniquePicks, critterTaken, firstFreeCritter, picksDistinct, sortRoster, resetSeats, releaseSeats } from '../src/net/roster.js';
+import { LOCAL_PLAYERS, MAX_PLAYERS } from '../src/constants.js';
+import * as bindings from '../src/engine/bindings.js';
 import { createNetSession, delayForRtt } from '../src/net/session.js';
 import { dsin, dcos } from '../src/engine/trig.js';
 
@@ -149,6 +151,156 @@ releaseSeats(input, { players: 2, keep: 0, freeze: true }); input.update();
 assert(input.mask(0) === 1 && input.mask(1) === 0 && !input.joined(1), "an ended session freezes the other seat at neutral and un-joins it, keeping the survivor's own");
 releaseSeats(input); input.update();
 assert(input.mask(0) === 0, 'leaving hands every seat back to the real devices');
+
+// ---- gamepads: four pads on the couch (engine/input.js claimPads / pollRaw) ----
+/** A fake navigator.getGamepads() entry: `down` is a list of standard button indices held this step. */
+const fakePad = (down = [], axes = [0, 0]) => ({ buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: down.includes(i), value: down.includes(i) ? 1 : 0 })), axes });
+const NO_PAD = null;
+/** Back to a bare couch: no pads, no claims, nobody joined but P1, and no keyboard device stuck on a seat. */
+function couchReset(padList = []) {
+  input.setPadVirtual(padList);
+  input.setPadClaims(true);
+  for (let s = 0; s < MAX_PLAYERS; s++) input.clearVirtual(s);
+  input.resetClaims();
+  input.update();
+}
+
+assert(LOCAL_PLAYERS === 4, 'the couch seats four');
+
+// one pad, nobody on the keys: it takes P1's seat and drives it
+couchReset([fakePad([0])]);
+assert(input.padOf(0) === 0 && input.device(0) === 'gamepad' && input.held(0, 'action'), 'a lone pad sits down in seat 1 and its A is ACTION');
+
+// four pads, pressing one at a time: dense seats, lowest first, one pad each
+couchReset([fakePad(), fakePad(), fakePad(), fakePad()]);
+input.setPadVirtual([fakePad([9]), fakePad(), fakePad(), fakePad()]); input.update();
+assert(input.padOf(0) === 0 && !input.joined(1), 'the first pad to press takes the lowest seat and nobody else is seated');
+input.setPadVirtual([fakePad(), fakePad([0]), fakePad(), fakePad()]); input.update();
+input.setPadVirtual([fakePad(), fakePad(), fakePad([0]), fakePad()]); input.update();
+input.setPadVirtual([fakePad(), fakePad(), fakePad(), fakePad([0])]); input.update();
+assert([0, 1, 2, 3].every((s) => input.padOf(s) === s), 'four pads take the four seats in the order they pressed');
+assert([0, 1, 2, 3].every((s) => input.joined(s)), 'and every one of the four seats is joined');
+
+// each seat now reads ONLY its own pad: seat 3 pressing must not move seat 1
+input.setPadVirtual([fakePad(), fakePad(), fakePad([14]), fakePad([15])]); input.update();
+assert(input.axisX(2) === -1 && input.axisX(3) === 1 && input.axisX(0) === 0 && input.axisX(1) === 0, 'a claimed pad drives its own seat and no other');
+assert(input.mask(0) === 0, "seat 1 stops reading the loose pads once they are somebody's");
+
+// a fifth pad has nowhere to sit: the couch is four, so it claims nothing and drives nobody
+input.setPadVirtual([fakePad(), fakePad(), fakePad(), fakePad(), fakePad([0])]); input.update();
+assert(input.padOf(0) === 0 && input.mask(0) === 0, 'a fifth pad finds no free seat and is read by nobody');
+
+// the left stick is the d-pad, past the dead zone only
+couchReset([fakePad([], [0.3, -0.3])]);
+assert(input.mask(0) === 0 && input.padOf(0) === -1, 'a pad resting inside the dead zone claims no seat and presses nothing');
+input.setPadVirtual([fakePad([], [0.9, -0.9])]); input.update();
+assert(input.held(0, 'right') && input.held(0, 'up') && !input.held(0, 'left'), 'past the dead zone the left stick is the d-pad');
+
+// a keyboard seat is not taken out from under its player while a seat is free
+couchReset([]);
+input.setVirtual(0, 0); input.update(); input.clearVirtual(0);   // nothing; seat 0 device is still 'none'
+input.setPadVirtual([fakePad([0])]); input.update();
+assert(input.padOf(0) === 0, 'with nobody on the keys the pad is P1');
+couchReset([fakePad([0])]);
+assert(input.padOf(0) === 0, 'and claims again from a clean couch');
+
+// pollRaw: the wire sees every pad, claimed or not
+couchReset([fakePad(), fakePad()]);
+input.setPadVirtual([fakePad([0]), fakePad()]); input.update();         // pad 0 claims seat 0
+input.setPadVirtual([fakePad(), fakePad([1])]); input.update();         // pad 1 claims seat 1
+assert(input.padOf(1) === 1 && input.mask(0) === 0, 'the second pad is seat 2 and seat 1 is quiet');
+input.setPadVirtual([fakePad(), fakePad([0])]);
+assert((input.pollRaw(0) & packMask({ action: true })) !== 0, "pollRaw sees a pad claimed by another couch seat - online there is one human here and every pad is theirs");
+
+// online: claiming is off, so no pad sits in a seat that belongs to another machine
+couchReset([fakePad(), fakePad()]);
+input.setPadClaims(false);
+input.resetClaims();
+input.setPadVirtual([fakePad([0]), fakePad([0])]); input.update();
+assert(input.padOf(0) === -1 && input.padOf(1) === -1 && !input.joined(1), 'with claiming off no pad takes a seat');
+assert(input.held(0, 'action') && (input.pollRaw(0) & packMask({ action: true })) !== 0, 'and both pads still drive the local seat');
+// a seat a net session is injecting is never claimable, even with claiming back on
+input.setPadClaims(true);
+input.setVirtual(0, 0); input.setVirtual(1, 0); input.update();
+assert(input.padOf(0) === -1 && input.padOf(1) === -1, 'a virtual seat is not free for a pad');
+couchReset([]);
+input.setPadVirtual(null);
+
+// ---- bindings: the rules a rebind has to obey (engine/bindings.js) ----
+const KEY_ALT_DEFAULT = bindings.KEY_DEFAULTS[0].alt.join();
+const KEY_CANCEL_DEFAULT = bindings.KEY_DEFAULTS[0].cancel.join();
+bindings.resetAll();
+assert(bindings.isDefault(), 'a fresh set of bindings is the default set');
+assert(bindings.keyLabel('KeyZ') === 'Z' && bindings.keyLabel('ArrowLeft') === '←' && bindings.keyLabel('Space') === 'SPACE', 'keys are labelled as a player would name them');
+assert(bindings.keyLabel('Semicolon') === ';' && bindings.keyLabel('Numpad7') === 'NUM7' && bindings.keyLabel('') === '', 'and the odd ones have names too');
+assert(bindings.padLabel(0) === 'A' && bindings.padLabel(7) === 'RT' && bindings.padLabel(12) === 'D-UP', 'every standard button is named, shoulders and triggers included');
+
+// a rebind SETS the action to exactly one input
+assert(bindings.bindKey(0, 'action', 'KeyM').ok, "P1's ACTION moves to M");
+assert(bindings.keyboardMap(0).action.join() === 'KeyM', 'and M is the only thing on it - the Z/SPACE alternates went with it');
+assert(!bindings.isDefault(), 'the set is no longer stock');
+
+// an action may not be left with nothing on it
+const takeLast = bindings.bindKey(1, 'action', 'KeyM');
+assert(!takeLast.ok && /P1 ACTION/.test(takeLast.reason || ''), `P2 cannot take P1's only ACTION key (${takeLast.reason})`);
+assert(bindings.keyboardMap(0).action.join() === 'KeyM', 'and the refusal left it where it was');
+// but a code an action has a spare of moves freely, across seats as well as within one
+assert(bindings.bindKey(1, 'left', 'KeyA').ok, "P2 takes A, which P1's LEFT had as a spare");
+assert(bindings.keyboardMap(0).left.join() === 'ArrowLeft' && bindings.keyboardMap(1).left.join() === 'KeyA', 'P1 keeps the arrow and P2 has the letter');
+
+// reserved codes are not for binding
+const esc = bindings.bindKey(0, 'alt', 'Escape');
+assert(!esc.ok && /RESERVED/.test(esc.reason || ''), `ESC cancels a rebind, so it can never be one (${esc.reason})`);
+assert(!bindings.bindKey(0, 'alt', 'Tab').ok && !bindings.bindKey(0, 'alt', '').ok, 'nor TAB, nor nothing at all');
+assert(!bindings.bindKey(9, 'alt', 'KeyQ').ok, 'and a seat with no keyboard block has no keys to bind');
+
+// the pad table is one table, shared by every controller
+assert(bindings.bindPad('action', 7).ok && bindings.padMap().action.join() === '7', 'ACTION moves to the right trigger');
+const stealA = bindings.bindPad('alt', 1);
+assert(!stealA.ok && /CANCEL/.test(stealA.reason || ''), `and B cannot be taken off CANCEL, its only button (${stealA.reason})`);
+assert(!bindings.bindPad('alt', 16).ok && !bindings.bindPad('nope', 3).ok, 'the guide button and made-up actions are both refused');
+
+// a remapped button really does drive a seat
+couchReset([fakePad([7])]);
+assert(input.held(0, 'action') && input.padOf(0) === 0, 'a pad pressing RT now presses ACTION, and claims a seat with it');
+couchReset([fakePad([0])]);
+assert(!input.held(0, 'action'), 'and A, which ACTION used to be on, no longer does');
+
+// capture: while a rebind is listening nothing plays, and the button that lands is swallowed until released
+bindings.resetAll();
+couchReset([fakePad()]);
+input.capture();
+assert(input.capturing(), 'capture is open');
+input.setPadVirtual([fakePad([5])]); input.update();
+assert(input.capturedButton() === 5, 'the first button down is reported as RB');
+assert(input.mask(0) === 0 && input.padOf(0) === -1, 'and while listening no seat reads input and no pad takes a seat');
+assert(bindings.bindPad('cancel', 5).ok, 'RB becomes CANCEL');
+input.endCapture();
+input.update();
+assert(!input.capturing() && input.mask(0) === 0, 'the button that bound CANCEL is swallowed while it is still held');
+input.setPadVirtual([fakePad()]); input.update();
+input.setPadVirtual([fakePad([5])]); input.update();
+assert(input.held(0, 'cancel'), 'and works normally once it has been let go and pressed again');
+
+// storage round trip (node has no localStorage, so the pure pair is what is tested)
+bindings.resetAll();
+bindings.bindKey(0, 'start', 'KeyP');
+bindings.bindPad('start', 4);
+const saved = bindings.serialize();
+bindings.resetAll();
+assert(bindings.isDefault(), 'reset puts everything back');
+assert(bindings.deserialize(saved), 'a saved set is taken back in');
+assert(bindings.keyboardMap(0).start.join() === 'KeyP' && bindings.padMap().start.join() === '4', 'and it is the set that was saved');
+assert(!bindings.deserialize(null) && !bindings.deserialize({ v: 999 }), 'a missing or wrong-version set is ignored');
+// junk falls back per action rather than costing a player the rest of their setup
+bindings.resetAll();
+assert(bindings.deserialize({ v: saved.v, keys: [{ action: ['KeyJ'], alt: [42], cancel: ['Escape'] }], pad: { action: [3], alt: [99] } }), 'a set with junk in it still loads');
+assert(bindings.keyboardMap(0).action.join() === 'KeyJ', 'the good entry is kept');
+assert(bindings.keyboardMap(0).alt.join() === KEY_ALT_DEFAULT && bindings.keyboardMap(0).cancel.join() === KEY_CANCEL_DEFAULT, 'a non-string key and a reserved one fall back to the defaults');
+assert(bindings.padMap().action.join() === '3' && bindings.padMap().alt.join() === '2', 'and so does a button that is not on a standard pad');
+bindings.resetAll();
+couchReset([]);
+input.setPadVirtual(null);
 
 // ---- net/session.js: the lobby rules, on a party seated by hand (start() needs a browser) ----
 const stubInput = { setVirtual() {}, clearVirtual() {}, consume() {}, setJoined() {}, resetClaims() {}, pollRaw: () => 0, playerCount: 4 };

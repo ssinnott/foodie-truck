@@ -21,9 +21,9 @@ import { confirmPressed, navY } from '../menuinput.js';
 import { drawLane, drawLogoSign, drawCrate, drawBlock, TRUCK_Y, CREW_Y } from '../../art/logo.js';
 
 /** The menu, and the screen each row opens. SOURCE is a link, not a screen. */
-const ROWS = ['PLAY', 'ONLINE', 'CREW', 'SOURCE'];
-/** The A-frame slate on the verge, right of the truck. Sized to its four rows: an empty board is dead green. */
-const SLATE = { x: 426, y: 188, w: 176, h: 90 };
+const ROWS = ['PLAY', 'ONLINE', 'CONTROLS', 'CREW', 'SOURCE'];
+/** The A-frame slate on the verge, right of the truck. Sized to its five rows: an empty board is dead green. */
+const SLATE = { x: 426, y: 180, w: 176, h: 104 };
 /**
  * Where the truck parks, the crate it was loaded from, and where the crew lines up.
  *
@@ -86,7 +86,9 @@ export class TitleScreen extends Screen {
 
   enter(params) {
     super.enter(params);
-    // Back at the front door: forget which pad claimed which couch seat and let P2 drop in again from scratch.
+    // Back at the front door: forget which pad claimed which couch seat, and let the couch fill again from
+    // scratch - four seats, pads welcome (an online lobby we have just walked out of had claiming switched off).
+    this.game.input.setPadClaims(true);
     this.game.input.resetClaims();
     this.sel = 0;
     this.crew = CRITTERS.map((def, i) => {
@@ -127,6 +129,7 @@ export class TitleScreen extends Screen {
     const row = ROWS[this.sel];
     if (row === 'PLAY') this.game.replace('select');
     else if (row === 'ONLINE') this.game.replace('lobby');
+    else if (row === 'CONTROLS') this.game.replace('controls');
     else if (row === 'CREW') this.game.replace('gallery');
     else if (row === 'SOURCE') { try { window.open(REPO_URL, '_blank'); } catch { /* popups blocked: stay put */ } }
   }
