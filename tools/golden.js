@@ -25,19 +25,44 @@ import { fileURLToPath } from 'node:url';
 
 const BASELINE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'golden-baseline.json');
 
-/** Round so float noise never shows, and normalise -0 (which would hash differently from 0). */
+/**
+ * Round so float noise never shows, and normalise -0 (which would hash differently from 0).
+ *
+ * The function case is load-bearing, not defensive. The Proxy below answers a read of any property
+ * it has never been assigned with a recorder closure, because it cannot tell `ctx.fillRect` (a
+ * method it must return something callable for) from `ctx.globalAlpha` (a value). Drawing code
+ * saves and restores state the obvious way -- `const prev = ctx.globalAlpha; ...; ctx.globalAlpha =
+ * prev` -- so a FUNCTION gets written back through the set trap. Without this branch it reaches
+ * `String(v)`, which for a function is its SOURCE TEXT, and the fingerprint then depends on how
+ * this harness is written rather than on what the game drew: adding a comment inside the closure
+ * changed every subject hash. Verified, and the reason the CANVAS_DEFAULTS seed below exists too.
+ */
 const num = (v) => {
+  if (typeof v === 'function') return '[fn]';
   if (typeof v !== 'number') return typeof v === 'object' && v !== null ? '[obj]' : String(v);
   if (!isFinite(v)) return String(v);
   const r = Math.round(v * 1000) / 1000;
   return Object.is(r, -0) ? '0' : String(r);
 };
 
+/**
+ * The state properties a real 2D context starts with. Seeding them means a read returns the value a
+ * browser would return rather than a closure, so save/restore round-trips record the actual value
+ * and the stream stays a faithful record of the drawing.
+ */
+const CANVAS_DEFAULTS = {
+  globalAlpha: 1, globalCompositeOperation: 'source-over', fillStyle: '#000000', strokeStyle: '#000000',
+  lineWidth: 1, lineCap: 'butt', lineJoin: 'miter', miterLimit: 10, lineDashOffset: 0, filter: 'none',
+  shadowBlur: 0, shadowColor: 'rgba(0, 0, 0, 0)', shadowOffsetX: 0, shadowOffsetY: 0,
+  font: '10px sans-serif', textAlign: 'start', textBaseline: 'alphabetic', direction: 'inherit',
+  imageSmoothingEnabled: true, imageSmoothingQuality: 'low',
+};
+
 /** A canvas context that draws nothing and remembers everything. */
 function recorder() {
   const ops = [];
   const grad = { addColorStop: (...a) => ops.push('grad.addColorStop(' + a.map(num).join(',') + ')') };
-  const base = { canvas: { width: 640, height: 360 } };
+  const base = { canvas: { width: 640, height: 360 }, ...CANVAS_DEFAULTS };
   const ctx = new Proxy(base, {
     get(t, k) {
       if (k in t) return t[k];

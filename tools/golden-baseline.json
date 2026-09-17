@@ -1,13 +1,13 @@
 {
   "pure": "42c9f06c",
-  "total": "de60229e",
+  "total": "bf26ce2b",
   "subjects": {
-    "critter:barley": "eb50ff24",
-    "critter:chicory": "0f0cf517",
-    "critter:cress": "e227c3c2",
-    "critter:sorrel": "3e8c1f5c",
-    "customer:goat": "4af7b9e4",
-    "customer:otter": "ef930102",
-    "customer:owl": "1b194cb9"
+    "critter:barley": "5f54d7fb",
+    "critter:chicory": "a7bdedba",
+    "critter:cress": "bd92c585",
+    "critter:sorrel": "643bc564",
+    "customer:goat": "9c957aad",
+    "customer:otter": "9085aa41",
+    "customer:owl": "01b8e9f4"
   }
 }
