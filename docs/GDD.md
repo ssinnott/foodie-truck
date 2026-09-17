@@ -175,9 +175,21 @@ P3 and P4 are gamepad seats: there is no third nine-key block left on a keyboard
 is told its own buttons in the hint lines (`A: READY`, not `Z: READY`). The press that sits a player down never
 also stamps their card — they arrive on a cursor, not on a pick.
 
+**Everything in that table is a default.** The `controls` screen is the table as a form: eight action rows by three
+columns (P1's keys, P2's keys, and the one pad table every controller shares), ACTION on a cell listens for the
+next key or button, ALT puts that column back to stock, CANCEL leaves. A rebind sets the action to exactly one
+input — the alternates above are what ships, not what survives a rebind — and is refused, out loud, when it would
+leave another action with nothing on it at all. Bindings persist in `localStorage`; `?defaults=1` boots on the
+stock set without clearing what is stored.
+
+Bindable on a pad: all sixteen standard buttons, the shoulders and triggers included (`LB` `RB` `LT` `RT` do
+nothing by default). NOT bindable: the left stick, which is always the four directions — a stick that could be
+mapped onto CANCEL is a player leaving a mini-game by leaning.
+
 ## 10. Screens — what each must do
 
-- **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / CREW (gallery) / SOURCE; `PRESS START`.
+- **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`.
+- **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
 - **select**: 140×200 cards, one cursor per joined seat, READY stamps; `next` = stage (starts the run).
 - **stage** (the order board): the day's seven orders pinned up as 140×124 paper tickets, four across the top row and
   three under them — each one a customer's portrait and name, the stars it has been served at, the dish across the
