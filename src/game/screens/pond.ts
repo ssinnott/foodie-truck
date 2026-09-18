@@ -153,6 +153,8 @@ export class PondScreen extends Screen {
   declare signPrefix: string;
   declare title: string;
   declare clockIcon: (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
+  /** Which backdrop: 'pond' at the millpond, 'cove' at Cockle Cove (art/backgrounds/pond.js pondLayers). */
+  declare variant: string;
   /** The one-line control prompt under the panel, built once in enter() off seat 0's key. */
   declare hint: string;
   /** What the action key is called on seat 0's device, for the HOW TO PLAY card. */
@@ -164,10 +166,11 @@ export class PondScreen extends Screen {
     super.enter(params);
     const game = this.game, run = game.run;
     particles.clear();
-    pondLayers();
+    const place = PLACES.find((p) => p.id === params.place && p.screen === 'pond');
+    this.variant = place && place.id === 'shore' ? 'cove' : 'pond';
+    pondLayers(this.variant);
     this.total = 0;
     this.clock = makeClock();
-    const place = PLACES.find((p) => p.id === params.place && p.screen === 'pond');
     this.ing = gatherTarget(run, place ? place.id : undefined, 'pond');
     const ing = INGREDIENTS[this.ing] || INGREDIENTS.fish;
     this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
@@ -301,7 +304,7 @@ export class PondScreen extends Screen {
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
-    const L = pondLayers(), f = this.frame;
+    const L = pondLayers(this.variant), f = this.frame;
     blitAt(ctx, L.far.L, 0, L.far.y); blitAt(ctx, L.mid.L, 0, L.mid.y); blitAt(ctx, L.ground.L, 0, L.ground.y);
     // the water's twinkle: 2x1 cream glints, index-hashed so a quarter of them are lit on any frame
     ctx.globalAlpha = 0.6; ctx.fillStyle = POND.glint;

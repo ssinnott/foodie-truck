@@ -124,8 +124,9 @@ A screen whose landmark supplies more than one thing (the orchard, the dairy, th
 screen two landmarks share (the pond's jetty is the cove's, the market's bed is the bank's) asks `run.js
 gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the clock and in the basket,
 its name on the end sign, and the landmark's own name on the clock ticket. The mechanic never changes — a pear is
-caught like an apple, a crab reeled in like a trout — and the backdrop is the borrowed screen's (the cove's crabs
-come off the millpond's boardwalk until it has a jetty of its own).
+caught like an apple, a crab reeled in like a trout. The cove repaints the pond's layers in a seaside palette
+(`art/backgrounds/pond.js COVE`: open sea to the horizon, dunes for the tree-line, sand and marram for the turf,
+foam under the deck, no lily pads); the bank keeps the market's backdrop.
 
 **Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
 kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any

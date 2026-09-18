@@ -102,15 +102,25 @@ function inkEllipse(g, cx, cy, rx, ry, fill, lw = 2) {
   g.fillStyle = fill; g.fill();
 }
 
-function paintFar(g, w, h) {
-  vGradient(g, 0, 0, w, ROWS.sky, [[0, POND.skyTop], [1, POND.skyLow]]);
-  g.fillStyle = POND.skyLow; g.fillRect(0, ROWS.sky, w, h - ROWS.sky);
+function paintFar(g, w, h, rnd, P, sea) {
+  vGradient(g, 0, 0, w, ROWS.sky, [[0, P.skyTop], [1, P.skyLow]]);
+  g.fillStyle = P.skyLow; g.fillRect(0, ROWS.sky, w, h - ROWS.sky);
   // the low sun: a pale disc with the scene's 1 px ink, sitting just above the tree-line
-  g.beginPath(); g.arc(SUN_X, SUN_Y, SUN_R, 0, TAU); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = POND.sun; g.fill();
+  g.beginPath(); g.arc(SUN_X, SUN_Y, SUN_R, 0, TAU); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = P.sun; g.fill();
+  if (sea) {
+    // the cove: open sea to the horizon in place of the hills - a flat band with its 2 px ink edge, a lit line
+    // where the sun's column meets it, and one headland at the left so the horizon is not a bare rule
+    g.fillStyle = INK; g.fillRect(0, 146, w, 2);
+    g.fillStyle = P.hillFar; g.fillRect(0, 148, w, 176 - 148);
+    g.fillStyle = P.glint; for (let x2 = 0; x2 < w; x2 += 9) if ((x2 / 9) & 1) g.fillRect(x2, 149, 5, 1);
+    inkEllipse(g, 40, 168, 150, 46, P.hillNear);
+    g.fillStyle = P.hillNear; g.fillRect(0, 176, w, h - 176);
+    return;
+  }
   // two hill tiers: the far one dusty rose, the near one olive-tan, both cresting where the tree-line dips
-  inkEllipse(g, 150, 150, 260, 62, POND.hillFar); inkEllipse(g, 560, 156, 300, 68, POND.hillFar);
-  inkEllipse(g, 330, 178, 250, 74, POND.hillNear); inkEllipse(g, 40, 176, 160, 66, POND.hillNear);
-  g.fillStyle = POND.hillNear; g.fillRect(0, 176, w, h - 176);
+  inkEllipse(g, 150, 150, 260, 62, P.hillFar); inkEllipse(g, 560, 156, 300, 68, P.hillFar);
+  inkEllipse(g, 330, 178, 250, 74, P.hillNear); inkEllipse(g, 40, 176, 160, 66, P.hillNear);
+  g.fillStyle = P.hillNear; g.fillRect(0, 176, w, h - 176);
 }
 
 /**
@@ -148,23 +158,24 @@ function traceCrowns(g, crowns, w, foot, dy) {
  *   - a nearer row of smaller crowns in the deep plum, its own inked edge running just above the crew's hats, so
  *     the mass the heads sit against is a step darker again and the band has a middle to look at.
  */
-function paintMid(g, w, h, rnd) {
+function paintMid(g, w, h, rnd, P, sea) {
   const foot = ROWS.bank - 6;
-  const far = makeCrowns(w, rnd, ROWS.trees + 4, 16, 8, 15, true);
+  // the cove's tree-line is a row of dunes: wider, lower mounds with no spires, in sand instead of plum
+  const far = sea ? makeCrowns(w, rnd, ROWS.trees + 30, 10, 22, 16, false) : makeCrowns(w, rnd, ROWS.trees + 4, 16, 8, 15, true);
   traceCrowns(g, far, w, foot, 0);
   g.strokeStyle = INK; g.lineWidth = 4; g.lineJoin = 'round'; g.stroke();
-  g.fillStyle = POND.plumLit; g.fill();
+  g.fillStyle = P.plumLit; g.fill();
   g.save(); traceCrowns(g, far, w, foot, 0); g.clip();
-  traceCrowns(g, far, w, foot + 9, 9); g.fillStyle = POND.plum; g.fill();
+  traceCrowns(g, far, w, foot + 9, 9); g.fillStyle = P.plum; g.fill();
   g.restore();
-  const near = makeCrowns(w, rnd, ROWS.trees + 34, 14, 9, 9, false);
+  const near = sea ? makeCrowns(w, rnd, ROWS.trees + 52, 8, 18, 12, false) : makeCrowns(w, rnd, ROWS.trees + 34, 14, 9, 9, false);
   traceCrowns(g, near, w, foot, 0);
   g.strokeStyle = INK; g.lineWidth = 4; g.stroke();
-  g.fillStyle = POND.plumNear; g.fill();
+  g.fillStyle = P.plumNear; g.fill();
   // The far bank's foot: a dark olive strip (the separator) and, under it, the lit edge in 40..80 px dashes with
   // 20..60 px gaps. Unbroken it was a hard rule across all four jaws; broken it reads as light catching a far edge.
-  g.fillStyle = POND.foot; g.fillRect(0, foot, w, 6);
-  g.fillStyle = POND.reflection;
+  g.fillStyle = P.foot; g.fillRect(0, foot, w, 6);
+  g.fillStyle = P.reflection;
   for (let x2 = -10 - Math.floor(rnd() * 40); x2 < w; ) {
     const run = 40 + Math.floor(rnd() * 41);
     g.fillRect(x2, foot + 4, run, 2);
@@ -173,34 +184,34 @@ function paintMid(g, w, h, rnd) {
 }
 
 /** A clump of inked rushes standing on the bank, roots on `base`, drawn left to right from `x0`. */
-function bankRushes(g, rnd, x0, n, base) {
+function bankRushes(g, rnd, x0, n, base, P) {
   for (let i = 0; i < n; i++) {
     const rx = x0 + i * 6 + R(rnd() * 3), tall = 10 + R(rnd() * 9), lean = i & 1 ? 1 : -1;
     g.fillStyle = INK; g.fillRect(rx - 1, base - tall - 1, 4, tall + 1);
-    g.fillStyle = POND.tuft; g.fillRect(rx, base - tall, 2, tall);
+    g.fillStyle = P.tuft; g.fillRect(rx, base - tall, 2, tall);
     g.fillStyle = INK; g.fillRect(rx + lean * 2 - 1, base - tall - 4, 4, 5);
-    g.fillStyle = POND.reed; g.fillRect(rx + lean * 2, base - tall - 3, 2, 3);
+    g.fillStyle = P.reed; g.fillRect(rx + lean * 2, base - tall - 3, 2, 3);
   }
 }
 
-function paintGround(g, w, h, rnd) {
+function paintGround(g, w, h, rnd, P, sea) {
   const y0 = ROWS.bank;   // this layer is blitted at ROWS.bank
   // the near bank: 2 px ink top edge, a tree-shadow band under the tree-line, turf, tufts, the 2 px ink lip
   g.fillStyle = INK; g.fillRect(0, 0, w, 2);
-  g.fillStyle = POND.turfShade; g.fillRect(0, 2, w, 10);
-  g.fillStyle = POND.turf; g.fillRect(0, 12, w, ROWS.lip - y0 - 12);
-  g.fillStyle = POND.tuft;
+  g.fillStyle = P.turfShade; g.fillRect(0, 2, w, 10);
+  g.fillStyle = P.turf; g.fillRect(0, 12, w, ROWS.lip - y0 - 12);
+  g.fillStyle = P.tuft;
   for (let i = 0; i < 46; i++) { const tx = R(rnd() * w), ty = 6 + R(rnd() * 20); g.fillRect(tx, ty, 2, 3); }
   // a rush clump on the bank at each end, where no seat stands: the turf band is 32 rows and was otherwise bare
-  bankRushes(g, rnd, 6, 6, ROWS.lip - y0);
-  bankRushes(g, rnd, 600, 6, ROWS.lip - y0);
+  bankRushes(g, rnd, 6, 6, ROWS.lip - y0, P);
+  bankRushes(g, rnd, 600, 6, ROWS.lip - y0, P);
   g.fillStyle = INK; g.fillRect(0, ROWS.lip - y0, w, ROWS.water - ROWS.lip);
   // the water in three value steps: the lit waterline, the bank's shadow, the lit ripple band, then the body
-  g.fillStyle = POND.water; g.fillRect(0, ROWS.water - y0, w, h - (ROWS.water - y0));
-  g.fillStyle = POND.surface; g.fillRect(0, ROWS.water - y0, w, ROWS.shade - ROWS.water);
-  g.fillStyle = POND.waterShade; g.fillRect(0, ROWS.shade - y0, w, ROWS.surface - ROWS.shade);
+  g.fillStyle = P.water; g.fillRect(0, ROWS.water - y0, w, h - (ROWS.water - y0));
+  g.fillStyle = P.surface; g.fillRect(0, ROWS.water - y0, w, ROWS.shade - ROWS.water);
+  g.fillStyle = P.waterShade; g.fillRect(0, ROWS.shade - y0, w, ROWS.surface - ROWS.shade);
   // the lit ripple band beyond the bank's shadow, in 50..110 px dashes: unbroken it was a rule ruled across 640 px
-  g.fillStyle = POND.surface;
+  g.fillStyle = P.surface;
   for (let x2 = -20 - R(rnd() * 40); x2 < w; ) {
     const run = 50 + R(rnd() * 60);
     g.fillRect(x2, ROWS.surface - y0, run, ROWS.deep - ROWS.surface);
@@ -213,12 +224,12 @@ function paintGround(g, w, h, rnd) {
     const t = (ry - SUN_TOP) / (SUN_BOT - SUN_TOP), half = sunHalf(ry), off = R((rnd() - 0.5) * half);
     const w = half + R(rnd() * half);
     g.globalAlpha = 0.32 + t * 0.28;
-    g.fillStyle = POND.glint; g.fillRect(SUN_X + off - R(w / 2), ry - y0, w, 2);
+    g.fillStyle = P.glint; g.fillRect(SUN_X + off - R(w / 2), ry - y0, w, 2);
     g.globalAlpha = 0.6 + t * 0.35;
     g.fillRect(SUN_X + off - 2, ry - y0, 4 + R(rnd() * 4), 2);
   }
   g.globalAlpha = 1;
-  g.fillStyle = POND.surface;
+  g.fillStyle = P.surface;
   // 14 pre-painted 20x1 ripples across the whole pond, kept off the float columns
   let n = 0, guard = 0;
   while (n < 14 && guard++ < 160) {
@@ -226,13 +237,20 @@ function paintGround(g, w, h, rnd) {
     if (inColumn(rx, 20)) continue;
     g.fillRect(rx, ry - y0, 20, 1); n++;
   }
+  // the sea has no lily pads: it has foam, cream dashes breaking in the deck's shadow band just under its front
+  // edge (the waterline itself is under the planks) and a second, sparser line further out where the swell turns
+  if (sea) {
+    g.fillStyle = P.glint;
+    for (let x2 = -6 - R(rnd() * 12); x2 < w; ) { const run = 8 + R(rnd() * 14); g.fillRect(x2, ROWS.shade - y0 + 5, run, 2); x2 += run + 6 + R(rnd() * 10); }
+    for (let x2 = -6 - R(rnd() * 30); x2 < w; ) { const run = 10 + R(rnd() * 20); if (!inColumn(x2, run)) g.fillRect(x2, ROWS.deep - y0 + 30 + R(rnd() * 3), run, 1); x2 += run + 24 + R(rnd() * 40); }
+  }
   // five lily pads spread over the full width and off the float columns: an inked disc, a shade crescent, a notch
-  const pads = [[120, 330], [258, 274], [386, 338], [498, 276], [586, 296]];
+  const pads = sea ? [] : [[120, 330], [258, 274], [386, 338], [498, 276], [586, 296]];
   for (let i = 0; i < pads.length; i++) {
     const px = pads[i][0], py = pads[i][1] - y0;
-    g.beginPath(); g.ellipse(px, py, 7, 5, 0, 0, TAU); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = POND.lily; g.fill();
-    g.save(); g.beginPath(); g.ellipse(px, py, 7, 5, 0, 0, TAU); g.clip(); g.fillStyle = POND.lilyShade; g.fillRect(px - 8, py + 1, 16, 5); g.restore();
-    g.fillStyle = POND.water; g.fillRect(px + 3, py + 1, 2, 5);
+    g.beginPath(); g.ellipse(px, py, 7, 5, 0, 0, TAU); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = P.lily; g.fill();
+    g.save(); g.beginPath(); g.ellipse(px, py, 7, 5, 0, 0, TAU); g.clip(); g.fillStyle = P.lilyShade; g.fillRect(px - 8, py + 1, 16, 5); g.restore();
+    g.fillStyle = P.water; g.fillRect(px + 3, py + 1, 2, 5);
   }
   // the boardwalk the crew stands on: posts every JETTY.post px down into the water with a reflection streak under
   // each, then the deck with its lower shade band and a plank seam every 26 px. Painted after the water so the
@@ -240,43 +258,61 @@ function paintGround(g, w, h, rnd) {
   const J = JETTY, jy = J.y - y0;
   for (let px = J.x + 14; px < J.x + J.w - 8; px += J.post) {
     g.fillStyle = INK; g.fillRect(px - 1, jy + J.h, 6, 15);
-    g.fillStyle = POND.jettyDark; g.fillRect(px, jy + J.h, 4, 14);
+    g.fillStyle = P.jettyDark; g.fillRect(px, jy + J.h, 4, 14);
     g.fillRect(px + 1, jy + J.h + 15, 2, 12);
   }
   g.fillStyle = INK; g.fillRect(J.x - 2, jy - 2, J.w + 4, J.h + 4);
-  g.fillStyle = POND.jetty; g.fillRect(J.x, jy, J.w, J.h);
-  g.fillStyle = POND.jettyDark; g.fillRect(J.x, jy + J.h - 4, J.w, 4);
+  g.fillStyle = P.jetty; g.fillRect(J.x, jy, J.w, J.h);
+  g.fillStyle = P.jettyDark; g.fillRect(J.x, jy + J.h - 4, J.w, 4);
   for (let sx = J.x + 26; sx < J.x + J.w; sx += 26) g.fillRect(sx - 1, jy, 2, J.h - 4);
 }
 
 /** One clump of reeds rising off the bottom edge; `x0` is its left stem, `n` how many. */
-function reedClump(g, rnd, x0, n, bottom) {
+function reedClump(g, rnd, x0, n, bottom, P) {
   for (let i = 0; i < n; i++) {
     const rx = x0 + i * 6 + R(rnd() * 3), top = 2 + R(rnd() * 26);
     g.fillStyle = INK; g.fillRect(rx - 1, top - 1, 4, bottom - top + 1);
-    g.fillStyle = POND.reed; g.fillRect(rx, top, 2, bottom - top);
-    if (i & 1) { g.fillStyle = INK; g.fillRect(rx - 2, top - 4, 6, 8); g.fillStyle = POND.reedHead; g.fillRect(rx - 1, top - 3, 4, 6); }
+    g.fillStyle = P.reed; g.fillRect(rx, top, 2, bottom - top);
+    if (i & 1) { g.fillStyle = INK; g.fillRect(rx - 2, top - 4, 6, 8); g.fillStyle = P.reedHead; g.fillRect(rx - 1, top - 3, 4, 6); }
   }
 }
 
 /** A reed clump in each bottom corner (they frame the water) and a 10-row turf edge along the bottom. */
-function paintNear(g, w, h, rnd) {
+function paintNear(g, w, h, rnd, P) {
   const y0 = ROWS.near, bottom = ROWS.edge - y0 + 2;
   g.fillStyle = INK; g.fillRect(0, ROWS.edge - y0, w, 2);
-  g.fillStyle = POND.turf; g.fillRect(0, ROWS.edge - y0 + 2, w, h);
-  reedClump(g, rnd, 2, 5, bottom);
-  reedClump(g, rnd, 598, 7, bottom);
+  g.fillStyle = P.turf; g.fillRect(0, ROWS.edge - y0 + 2, w, h);
+  reedClump(g, rnd, 2, 5, bottom, P);
+  reedClump(g, rnd, 598, 7, bottom, P);
 }
 
-let layers = null;
+/**
+ * Cockle Cove's palette: the same painters with the sea in the pond's place. The plum tree-line becomes a row of
+ * sand dunes with cream-lit crests, the turf becomes sand with marram grass for tufts and rushes, the water goes a
+ * step deeper and greener, and the hills give way to the open sea (paintFar). The sky, the sun and the jetty are
+ * the pond's own, so the cove is unmistakably the same hour on a different shore. Seed block shared with the pond:
+ * the layout is the same rnd stream, only the colours differ.
+ */
+export const COVE = Object.freeze({
+  skyTop: POND.skyTop, skyLow: POND.skyLow, sun: POND.sun, hillFar: '#5E93A8', hillNear: '#C9B287',
+  plum: '#C4AA78', plumLit: '#D9C393', plumNear: '#B09466', foot: '#8E7A55', reflection: '#F1E4C8',
+  turf: '#D9C393', turfShade: '#C4AA78', tuft: '#A9B26A',
+  water: '#3F7E8E', waterShade: '#2F6577', surface: '#5FA3B0', lily: POND.lily, lilyShade: POND.lilyShade,
+  jetty: POND.jetty, jettyDark: POND.jettyDark, reed: '#A9B26A', reedHead: '#C9B287', glint: POND.glint,
+});
+
+/** The pre-rendered layers per variant: 'pond' (the millpond) and 'cove' (Cockle Cove, which borrows the screen). */
+const layers = { pond: null, cove: null };
 /** The four pre-rendered layers, painted on first use: { far, mid, ground, near } with the y each blits at. */
-export function pondLayers() {
-  if (layers) return layers;
-  layers = {
-    far: { L: makeLayer(VIEW_W, ROWS.bank, paintFar, SEED0), y: 0 },
-    mid: { L: makeLayer(VIEW_W, ROWS.bank, paintMid, SEED0 + 1), y: 0 },
-    ground: { L: makeLayer(VIEW_W, ROWS.bottom - ROWS.bank, paintGround, SEED0 + 2), y: ROWS.bank },
-    near: { L: makeLayer(VIEW_W, ROWS.bottom - ROWS.near, paintNear, SEED0 + 3), y: ROWS.near },
+export function pondLayers(variant = 'pond') {
+  const key = variant === 'cove' ? 'cove' : 'pond';
+  if (layers[key]) return layers[key];
+  const P = key === 'cove' ? COVE : POND, sea = key === 'cove';
+  layers[key] = {
+    far: { L: makeLayer(VIEW_W, ROWS.bank, (g, w, h, rnd) => paintFar(g, w, h, rnd, P, sea), SEED0), y: 0 },
+    mid: { L: makeLayer(VIEW_W, ROWS.bank, (g, w, h, rnd) => paintMid(g, w, h, rnd, P, sea), SEED0 + 1), y: 0 },
+    ground: { L: makeLayer(VIEW_W, ROWS.bottom - ROWS.bank, (g, w, h, rnd) => paintGround(g, w, h, rnd, P, sea), SEED0 + 2), y: ROWS.bank },
+    near: { L: makeLayer(VIEW_W, ROWS.bottom - ROWS.near, (g, w, h, rnd) => paintNear(g, w, h, rnd, P), SEED0 + 3), y: ROWS.near },
   };
-  return layers;
+  return layers[key];
 }

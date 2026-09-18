@@ -114,8 +114,12 @@ export const SPOTS = Object.freeze({
   hiveCentre: { x: HIVE.x, y: HIVE.y - 46 },
   hens: [{ x: COOP.x - 18, y: COOP.y - 34 }, { x: COOP.x + 16, y: COOP.y - 42 }],
   pond: { x: POND.x, y: POND.y - 56, rx: 50, ry: 28 },
-  /** The cove's water, east of its door and inside the border hedge (DRIVE_MAX_X is 1896; the water is paint, not a block). */
-  cove: { x: SHORE.x + 70, y: SHORE.y - 30, rx: 56, ry: 34 },
+  /**
+   * The cove's coast: the sea comes in over the east hedge from `top` to `bottom`, its shoreline weaving about
+   * x = `x`, with sand from `x - 36` back to the meadow. Paint, not a block (DRIVE_MAX_X is 1896): the truck can
+   * paddle, like it can at the pond.
+   */
+  cove: { x: SHORE.x + 50, top: SHORE.y - 170, bottom: SHORE.y + 170, deep: 26 },
 });
 /**
  * Signpost base points (world): beside each door, off the lane, and a few rows above the door line so a truck parked
@@ -152,13 +156,15 @@ export function wallBlocked(px, py) {
 
 /** Meadow shade blobs and the tree scatter come from module seeds, so every chunk agrees on where they fall. */
 const SHADE = (() => { const r = makeRng(SEED0 + 18), out = []; for (let i = 0; i < 44; i++) out.push([r.int(0, WORLD_W), r.int(HORIZON_H + 40, WORLD_H), r.int(40, 120), r.int(18, 48)]); return out; })();
+/** True on the cove's sand or sea (SPOTS.cove), with `m` px of margin: no tree or flower grows there. */
+function inCove(x, y, m) { const c = SPOTS.cove; return x > c.x - 36 - m && y > c.top - m && y < c.bottom + m; }
 function inWheat(x, y, m) { for (const f of WHEAT) if (x >= f[0] - m && x <= f[0] + f[2] + m && y >= f[1] - m && y <= f[1] + f[3] + m) return true; return false; }
 function nearLandmark(x, y, d) { for (let i = 0; i < PLACES.length; i++) { const dx = PLACES[i].x - x, dy = PLACES[i].y - 40 - y; if (dx * dx + dy * dy < d * d) return true; } return false; }
 const TREES = (() => {
   const r = makeRng(SEED0 + 19), baked = [], roadside = [];
   for (let i = 0; i < 700 && (baked.length < 48 || roadside.length < 22); i++) {
     const x = r.int(30, WORLD_W - 30), y = r.int(HORIZON_H + 44, WORLD_H - 30), k = r.int(0, 2);
-    if (riverDist(x, y) < 40 || nearLandmark(x, y, 130) || inWheat(x, y, 16)) continue;
+    if (riverDist(x, y) < 40 || nearLandmark(x, y, 130) || inWheat(x, y, 16) || inCove(x, y, 24)) continue;
     const ld = laneDist(x, y);
     if (ld < 20) continue;
     let crowded = false;
@@ -182,7 +188,7 @@ export const GLINTS = (() => {
   const p = SPOTS.pond;
   for (let i = 0; i < 8; i++) out.push([R(p.x + r.int(-30, 30)), R(p.y + r.int(-14, 14))]);
   const c = SPOTS.cove;
-  for (let i = 0; i < 8; i++) out.push([R(c.x + r.int(-34, 34)), R(c.y + r.int(-18, 18))]);
+  for (let i = 0; i < 14; i++) out.push([R(c.x + 14 + r.int(0, WORLD_W - c.x - 30)), r.int(c.top + 12, c.bottom - 12)]);
   return out;
 })();
 
@@ -299,22 +305,33 @@ function paintLandmarks(g) {
   g.fillStyle = MAP.cobble; pathRR(g, MARKET.x - 24, MARKET.y - 84, 48, 48, 4); g.fill();
   g.fillStyle = MAP.laneEdge; for (let y = MARKET.y - 80; y < MARKET.y - 40; y += 4) for (let x = MARKET.x - 21 + ((y >> 2) & 1) * 2; x < MARKET.x + 22; x += 5) g.fillRect(x, y, 2, 2);
   stall(g, MARKET.x - 62, MARKET.y - 44, MAP.rose); stall(g, MARKET.x + 34, MARKET.y - 44, MAP.shade); stall(g, MARKET.x - 14, MARKET.y - 92, MAP.mustard);
-  // cove: a bite of sand out of the meadow with the sea in it, foam along its edge, rocks, two crab pots on the
-  // sand and a rowing boat pulled up by the door
-  const C = SPOTS.cove;
-  ellipse(g, C.x - 36, C.y + 12, 96, 50, MAP.sand);
-  ellipse(g, C.x + 3, C.y + 3, C.rx + 3, C.ry + 3, INK); ellipse(g, C.x, C.y, C.rx, C.ry, MAP.river); ellipse(g, C.x + 12, C.y + 2, R(C.rx * 0.6), R(C.ry * 0.55), MAP.deep);
-  g.fillStyle = MAP.wall; for (let k = 0; k < 8; k++) g.fillRect(C.x - C.rx + 4 + (k & 1) * 4 + ((k - 3) * (k - 3)) / 2, C.y - 26 + k * 7, 5, 2);
-  for (const rk of [[C.x - 70, C.y + 34, 7], [C.x - 58, C.y + 40, 5], [C.x + 14, C.y + 42, 6]]) { groundShade(g, rk[0], rk[1] + rk[2] - 1, rk[2] * 2); discShaded(g, rk[0], rk[1], rk[2], MAP.churn, MAP.rock); }
-  for (const px of [SHORE.x - 32, SHORE.x - 16]) {
-    groundShade(g, px + 6, SHORE.y - 34, 14, 0.2, 2);
-    boxOutlined(g, px, SHORE.y - 44, 12, 9, MAP.wood);
-    g.fillStyle = MAP.woodDark; g.fillRect(px + 3, SHORE.y - 44, 1, 9); g.fillRect(px + 7, SHORE.y - 44, 1, 9); g.fillRect(px, SHORE.y - 40, 12, 1);
+  // cove: a stretch of COAST, not a pool - the sea comes in over the east hedge between C.top and C.bottom with a
+  // weaving shoreline, a sand strip curving back into the meadow at each end, foam breaking along the waterline,
+  // a deeper band further out, rocks at the tide line, two crab pots on the sand and a rowing boat pulled up by
+  // the door. Everything east of the shoreline is water to the edge of the world.
+  const C = SPOTS.cove, shoreX = (y) => C.x + 7 * Math.sin((y - C.top) / 19) + 4 * Math.sin((y - C.top) / 47);
+  const coast = (dx, capW) => {
+    g.beginPath(); g.moveTo(WORLD_W + 40, C.top - capW); g.lineTo(C.x + dx + capW, C.top - capW);
+    g.quadraticCurveTo(C.x + dx - capW * 0.6, C.top - capW, C.x + dx - 2, C.top + 24);
+    for (let y = C.top + 24; y <= C.bottom - 24; y += 4) g.lineTo(shoreX(y) + dx, y);
+    g.quadraticCurveTo(C.x + dx - capW * 0.6, C.bottom + capW, C.x + dx + capW, C.bottom + capW);
+    g.lineTo(WORLD_W + 40, C.bottom + capW); g.closePath();
+  };
+  coast(-36, 40); g.fillStyle = MAP.sand; g.fill();
+  coast(0, 22); g.strokeStyle = INK; g.lineWidth = 4; g.lineJoin = 'round'; g.stroke(); g.fillStyle = MAP.river; g.fill();
+  coast(C.deep, 8); g.fillStyle = MAP.deep; g.fill();
+  g.fillStyle = MAP.wall;
+  for (let y = C.top + 30; y < C.bottom - 26; y += 9) g.fillRect(R(shoreX(y)) + 3 + ((y / 9) & 1) * 3, y, 5, 2);
+  for (const rk of [[C.x + 4, C.bottom - 60, 6], [C.x + 18, C.bottom - 52, 4], [C.x - 6, C.top + 70, 5]]) { groundShade(g, rk[0], rk[1] + rk[2] - 1, rk[2] * 2); discShaded(g, rk[0], rk[1], rk[2], MAP.churn, MAP.rock); }
+  for (const px of [SHORE.x + 16, SHORE.x + 30]) {
+    groundShade(g, px + 6, SHORE.y - 62, 14, 0.2, 2);
+    boxOutlined(g, px, SHORE.y - 72, 12, 9, MAP.wood);
+    g.fillStyle = MAP.woodDark; g.fillRect(px + 3, SHORE.y - 72, 1, 9); g.fillRect(px + 7, SHORE.y - 72, 1, 9); g.fillRect(px, SHORE.y - 68, 12, 1);
   }
-  groundShade(g, SHORE.x + 26, SHORE.y - 22, 44, 0.16, 3);
-  polyOutlined(g, [SHORE.x + 4, SHORE.y - 36, SHORE.x + 48, SHORE.y - 36, SHORE.x + 42, SHORE.y - 24, SHORE.x + 10, SHORE.y - 24], MAP.roof, INK, 1);
-  g.fillStyle = MAP.roofShade; g.fillRect(SHORE.x + 8, SHORE.y - 28, 34, 3);
-  g.fillStyle = MAP.wood; g.fillRect(SHORE.x + 22, SHORE.y - 35, 8, 3);
+  groundShade(g, SHORE.x + 34, SHORE.y - 22, 44, 0.16, 3);
+  polyOutlined(g, [SHORE.x + 12, SHORE.y - 36, SHORE.x + 56, SHORE.y - 36, SHORE.x + 50, SHORE.y - 24, SHORE.x + 18, SHORE.y - 24], MAP.roof, INK, 1);
+  g.fillStyle = MAP.roofShade; g.fillRect(SHORE.x + 16, SHORE.y - 28, 34, 3);
+  g.fillStyle = MAP.wood; g.fillRect(SHORE.x + 30, SHORE.y - 35, 8, 3);
   // bramble bank: a low turf bank hedged with six berry bushes, a wattle fence with a gap for the gate, and two
   // punnets on a bench beside it (one red, one blue: what the bank is for)
   groundShade(g, BRAMBLE.x, BRAMBLE.y - 30, 128, 0.1, 4);
@@ -380,7 +397,7 @@ function paintChunk(g, i, rnd) {
   for (let n = 0; n < 220; n++) {
     const x = cx + Math.floor(rnd() * (CHUNK_W - 2)), y = cy + Math.floor(rnd() * (CHUNK_H - 3)), kind = Math.floor(rnd() * 4);
     if (y < HORIZON_H + 12 || laneDist(x, y) < LANE_HALF + 6 || riverDist(x, y) < RIVER_HALF + 8 || nearLandmark(x, y, 70)) continue;
-    if (inWheat(x, y, 4)) continue;
+    if (inWheat(x, y, 4) || inCove(x, y, 4)) continue;
     if (kind === 0) { g.fillStyle = MAP.rose; g.fillRect(x, y, 2, 2); }
     else if (kind === 1) { g.fillStyle = MAP.wall; g.fillRect(x, y, 2, 2); }
     else { g.fillStyle = MAP.shade; g.fillRect(x, y, 2, 3); }
