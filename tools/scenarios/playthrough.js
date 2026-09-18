@@ -15,7 +15,7 @@
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.ts';
 import { LANES } from '../../src/art/backgrounds/map.ts';
-import { walkTo, chopOnBeat } from './kitchen.js';
+import { walkTo, chopOnce } from './kitchen.js';
 
 // ---------------------------------------------------------------- driving
 
@@ -127,8 +127,6 @@ async function handBack(api, from) {
 
 /** Orchard geometry the chase has to agree with (game/screens/orchard.js): the apple's size, the run speed, the lane. */
 const APPLE_S = 5, RUN_SPEED = 2.2, LANE_MIN = 24, LANE_MAX = 616;
-/** A wormy apple this close to where seat 0 is standing, and this near to landing, is stepped away from. */
-const WORM_X = 15, WORM_T = 45, DODGE = 40;
 
 /** Everything the chase reads out of the live orchard: seat 0, its catch boxes, and the fruit in the air. */
 function orchardState(page) {
@@ -139,7 +137,7 @@ function orchardState(page) {
     return {
       x: s.x, y: s.y, facing: s.facing, phase: sc.clock.phase,
       boxCatchX: s.boxCatchX, boxCatchY: s.boxCatchY,
-      apples: sc.apples.filter((a) => a.active).map((a) => [a.x, a.y, a.vy, a.kind, a.hang]),
+      apples: sc.apples.filter((a) => a.active).map((a) => [a.x, a.y, a.vy, a.hang]),
     };
   });
 }
@@ -160,31 +158,25 @@ function standFor(st, appleX) {
 }
 
 /**
- * Play one round in the orchard: chase the ripe apples, dodge the wormy ones, and leave when the round hands back to
- * the map (the target reached, or the 40-second clock out). Input only - nothing here touches the sim.
+ * Play one round in the orchard: chase the apples and leave when the round hands back to the map (the target
+ * reached, or the 40-second clock out). Input only - nothing here touches the sim.
  */
 async function pickApples(api, page) {
   for (let poll = 0; poll < 700; poll++) {
     const st = await orchardState(page);
     if (!st || st.phase !== 0) break;
-    const boxY = st.y + st.boxCatchY, boxX = st.x + st.facing * st.boxCatchX;
+    const boxY = st.y + st.boxCatchY;
     // fall time (frames) until an apple's bottom reaches the rim's row
     const fall = (a) => (boxY - (a[1] + APPLE_S)) / a[2];
-    let want = null, soonest = Infinity, worm = null;
+    let want = null, soonest = Infinity;
     for (const a of st.apples) {
-      if (a[4] > 0) continue;                                  // still hanging on its branch
+      if (a[3] > 0) continue;                                  // still hanging on its branch
       const t = fall(a);
       if (t < 2) continue;                                     // past the rim: nothing to do about this one
-      if (a[3] === 1) { if (t < WORM_T && Math.abs(a[0] - boxX) < WORM_X) worm = a; continue; }
       const spot = standFor(st, a[0]);
       if (spot == null) continue;
       if (Math.abs(spot - st.x) / RUN_SPEED + 6 > t) continue; // cannot be under it in time
       if (t < soonest) { soonest = t; want = spot; }
-    }
-    // a wormy one aimed at where we stand costs a caught apple and locks the seat for 21 frames: step out from under it
-    if (worm && (want == null || Math.abs(want - st.x) < 4)) {
-      want = worm[0] > st.x ? st.x - DODGE : st.x + DODGE;
-      want = Math.max(LANE_MIN, Math.min(LANE_MAX, want));
     }
     if (want == null || Math.abs(want - st.x) <= 2) await api.release(0);
     else await api.hold(0, want > st.x ? { right: true } : { left: true });
@@ -196,32 +188,26 @@ async function pickApples(api, page) {
 
 // ---------------------------------------------------------------- the coop, played
 
-/** Plucking reach (game/screens/coop.js PLUCK_R), and the stick that points at an egg. */
-const PLUCK_R = 14;
-function towardEgg(dx, dy) {
-  const k = {};
-  if (dx > 2) k.right = true; else if (dx < -2) k.left = true;
-  if (dy > 1) k.down = true; else if (dy < -1) k.up = true;
-  return k;
-}
-function nearest(list, x, y) {
+/** Plucking reach along the lane (game/screens/coop.js PLUCK_R). */
+const PLUCK_R = 18;
+function nearest(list, x) {
   let best = null, bd = 1e9;
-  for (const p of list) { const d = Math.abs(p[0] - x) + Math.abs(p[1] - y); if (d < bd) { bd = d; best = p; } }
+  for (const p of list) { const d = Math.abs(p[0] - x); if (d < bd) { bd = d; best = p; } }
   return best;
 }
 
-/** Play one round in the coop: walk seat 0 onto the nearest egg's reach point and press, until the round is over. */
+/** Play one round in the coop: walk seat 0 along its lane to the nearest egg's x and press, until the round is over. */
 async function pluckEggs(api) {
   let s = await api.summary();
   for (let poll = 0; poll < 700 && s.screen === 'coop' && s.top.phase === 0; poll++) {
-    const me = s.top.seats[0], egg = nearest(s.top.eggs, me[1], me[2]);
+    const me = s.top.seats[0], egg = nearest(s.top.eggs, me[1]);
     if (!egg) { await api.release(0); await api.step(6); s = await api.summary(); continue; }
-    const dx = egg[0] - me[1], dy = egg[1] - me[2];
-    if (Math.abs(dx) <= PLUCK_R - 4 && Math.abs(dy) <= PLUCK_R - 4) {
+    const dx = egg[0] - me[1];
+    if (Math.abs(dx) <= PLUCK_R - 4) {
       await api.release(0);
       await api.press(0, { action: true }, 1, 2);
     } else {
-      await api.hold(0, towardEgg(dx, dy));
+      await api.hold(0, dx > 0 ? { right: true } : { left: true });
       await api.step(4);
     }
     s = await api.summary();
@@ -236,26 +222,24 @@ async function pluckEggs(api) {
 const STATION = { chop: 0, mix: 1, stove: 2, oven: 3, plate: 4 };
 
 /**
- * Cook whatever steps the order carries, each with the input its station asks for: five chops on the beat, a
- * 180-frame hold on the bowl, a hold into the stove's hot band, the oven loaded and emptied inside its green
- * window, and the bell. Leaves the kitchen on the hand-over to results.
+ * Cook whatever steps the order carries, each with the input its station asks for: five taps on the board, a hold
+ * on the bowl, a hold on the stove, a hold on the oven, and the bell. Every hold is kept down until the step
+ * advances, which is what a player does. Leaves the kitchen on the hand-over to results.
  */
 async function cook(api) {
   let s = await api.summary();
-  for (const name of s.top.steps.map((n) => n.toLowerCase())) {
+  const steps = s.top.steps.map((n) => n.toLowerCase());
+  for (let k = 0; k < steps.length; k++) {
+    const name = steps[k];
     s = await walkTo(api, STATION[name]);
-    if (name === 'chop') { for (let i = 0; i < 5; i++) s = await chopOnBeat(api); }
-    else if (name === 'mix') { await api.hold(0, { action: true }); await api.step(181); await api.release(0); }
-    else if (name === 'stove') {
+    if (name === 'chop') { for (let i = 0; i < 5; i++) s = await chopOnce(api); }
+    else if (name === 'plate') await api.press(0, { action: true }, 1, 0);
+    else {
       await api.hold(0, { action: true });
-      for (let i = 0; i < 40 && (await api.summary()).top.t < 126; i++) await api.step(4);
+      for (let i = 0; i < 60 && (await api.summary()).top.step === k; i++) await api.step(4);
       await api.release(0);
       await api.step(2);
-    } else if (name === 'oven') {
-      await api.press(0, { action: true }, 1, 0);
-      await api.step(270);
-      await api.press(0, { action: true }, 1, 0);
-    } else await api.press(0, { action: true }, 1, 0);
+    }
     s = await api.summary();
   }
   return s;

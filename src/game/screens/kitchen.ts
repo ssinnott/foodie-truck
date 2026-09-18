@@ -2,13 +2,13 @@
 // camera locked: one critter per seat walks the counter between the five stations (content/places.js STATIONS) and
 // the order's steps are worked IN ORDER. The first seat to interact at the current step's station owns it (its slot
 // colour fills the paper tag over the station); its input alone drives the step:
-//   CHOP  five presses on the beat of a sliding bar (a 40-frame sweep, a press within 6 frames of centre counts)
-//   MIX   hold for 180 frames while a dial fills; letting go pauses it
-//   STOVE hold while a bar fills; let go inside the hot band (the last 20 %) - letting go short of it costs a miss
-//         and pauses the bar exactly like MIX, so the band is the only way out short of burning it
-//   OVEN  a press loads the tray; 300 frames run; a press in the last 40 is perfect, earlier is done, none is burnt
+//   CHOP  five presses, any rhythm: every tap is a chop and the fifth finishes the board
+//   MIX   hold for 180 frames while a dial fills; letting go pauses it, and it picks up where it left off
+//   STOVE hold for 150 frames while a bar fills; letting go pauses it the same way
+//   OVEN  hold for 180 frames while the bake runs; letting go pauses it the same way
 //   PLATE a press at the hatch plates the dish and rings the bell: ORDER UP!, then results
-// Each step scores 0..2; stars = max(1, round(total / (2 * steps) * 3)). Barley's gag: on every completed step, a
+// Every step completed is worth its full 2 (there is no way to burn, miss or spoil anything), so a served dish is
+// always three stars: stars = max(1, round(total / (2 * steps) * 3)). Barley's gag: on every completed step, a
 // seeded one-in-six chance he eats an ingredient (crumbs, NOM, no score change).
 //
 // Determinism (docs/ARCHITECTURE.md section 0): every sim field is an integer or a px/frame sum driven by seat input;
@@ -48,11 +48,11 @@ const CHOP = 0, MIX = 1, STOVE = 2, OVEN_S = 3, PLATE_S = 4;
 const STATION_IDX = { chop: CHOP, mix: MIX, stove: STOVE, oven: OVEN_S, plate: PLATE_S };
 /** Walking: px/frame along the feet line. */
 const SPEED = 2.0;
-/** The timing windows (docs/GDD.md section 6). */
-const CHOP_HITS = 5, CHOP_SWEEP = 40, CHOP_BEAT = 20, CHOP_WINDOW = 6;
+/** The steps' lengths (docs/GDD.md section 6): taps on the board, frames of holding everywhere else. */
+const CHOP_HITS = 5;
 const MIX_FRAMES = 180;
-const STOVE_FRAMES = 150, STOVE_BAND = 0.8;
-const OVEN_FRAMES = 300, OVEN_WINDOW = 40;
+const STOVE_FRAMES = 150;
+const OVEN_FRAMES = 180;
 /** After the bell: one component lands on the plate every DROP_FRAMES, the stamp slams, then results. */
 const SERVE_FRAMES = 96, DROP_FRAMES = 12, STAMP_AT = 40;
 /** The ORDER UP! stamp's resting row: the wall's clear band between the station signs (104..121) and the props
@@ -67,8 +67,8 @@ const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18 };
 /** The lowest row a name plate's top may take: the module's own contract is that nothing to read sits in rows
  *  156..200, where the pot, the bowl and the board's ingredient are. A tall crown lifts a plate above this. */
 const PLATE_Y_MAX = 160;
-const HINTS = { chop: 'CHOP: TAP ON THE BEAT', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD, LET GO PAST THE MARK', oven: 'OVEN: LOAD, THEN TAKE OUT IN THE GREEN', plate: 'PLATE: RING THE BELL' };
-const PERFECT = 'PERFECT!', DONE = 'DONE', BURNT = 'BURNT!', NOM = 'NOM', ORDER_UP = 'ORDER UP!', RING = 'RING!';
+const HINTS = { chop: 'CHOP: TAP OVER AND OVER', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD TO COOK', oven: 'OVEN: HOLD TO BAKE', plate: 'PLATE: RING THE BELL' };
+const PERFECT = 'PERFECT!', DONE = 'DONE', NOM = 'NOM', ORDER_UP = 'ORDER UP!', RING = 'RING!';
 const CARD_X = RECIPE.x, CARD_Y = RECIPE.y, CARD_W = RECIPE.w;
 // the recipe card is the SMALLER paper: it hangs below the rail on two strings and carries no perforated top, so
 // it never reads as the order ticket's twin at the other end of the same rail (the two papers used to match)
@@ -121,16 +121,14 @@ export interface Seat {
   head: Point;
 }
 
-/** The current step's timing state (`st`), zeroed by completeStep() as the next step comes up. */
+/** The current step's state (`st`), zeroed by completeStep() as the next step comes up. */
 export interface StepState {
-  /** 0 = waiting, 1 = the MIX / STOVE hold or the OVEN bake is running. */
+  /** 0 = waiting or paused, 1 = the MIX / STOVE / OVEN hold is running this frame. */
   phase: number;
-  /** Frames into the step: the CHOP sweep (0..CHOP_SWEEP), the MIX / STOVE hold, the OVEN countdown. */
+  /** Frames the MIX / STOVE / OVEN hold has run for so far. */
   t: number;
-  /** Chops landed on the beat. */
+  /** Chops landed on the board. */
   count: number;
-  /** Missed beats and pauses: any miss at all caps the step at DONE. */
-  miss: number;
 }
 
 export class KitchenScreen extends Screen {
@@ -166,7 +164,7 @@ export class KitchenScreen extends Screen {
   declare stepIdx: number;
   /** The score banked so far, 0..2 per completed step. */
   declare total: number;
-  /** The current step's timing state. */
+  /** The current step's state. */
   declare st: StepState;
   /** True from the bell to the results screen. */
   declare served: boolean;
@@ -174,16 +172,10 @@ export class KitchenScreen extends Screen {
   declare serveT: number;
   /** 1..3, set by serve() from `total`. */
   declare stars: number;
-  /** 1 once the pot has boiled dry: the burnt look on the stove and its steam. */
-  declare stoveBurnt: number;
-  /** 1 once the tray has burnt in the oven. */
-  declare ovenBurnt: number;
   /** Frames of oven afterglow left, 0..60 (cosmetic). */
   declare ovenGlow: number;
   /** Frames left of the board's knife flash (cosmetic). */
   declare tak: number;
-  /** Frames left of the board's miss wobble (cosmetic). */
-  declare wobbleT: number;
   /** Frames into the bell's ring, 0..60; -1 before it has rung (cosmetic). */
   declare ringT: number;
   /** The action key's label for the hint line (engine/input.ts keyText). */
@@ -219,10 +211,10 @@ export class KitchenScreen extends Screen {
     this.has = [false, false, false, false, false];
     for (const s of this.steps) this.has[s] = true;
     this.stepIdx = 0; this.total = 0;
-    this.st = { phase: 0, t: 0, count: 0, miss: 0 };
+    this.st = { phase: 0, t: 0, count: 0 };
     this.served = false; this.serveT = 0; this.stars = 0;
-    this.stoveBurnt = 0; this.ovenBurnt = 0; this.ovenGlow = 0;
-    this.tak = 0; this.wobbleT = 0; this.ringT = -1;
+    this.ovenGlow = 0;
+    this.tak = 0; this.ringT = -1;
     this.keyName = game.input.keyText(0, 'action');
     this.setHint();
     // the customer leaning into the hatch
@@ -255,7 +247,6 @@ export class KitchenScreen extends Screen {
     particles.update();
     this.custPlayer.tick();
     if (this.tak > 0) this.tak--;
-    if (this.wobbleT > 0) this.wobbleT--;
     if (this.ringT >= 0 && this.ringT < 60) this.ringT++;
     if (this.ovenGlow > 0 && !(this.currentStation() === OVEN_S && this.st.phase === 1)) this.ovenGlow--;
     this.updateSeats(inp);
@@ -311,43 +302,30 @@ export class KitchenScreen extends Screen {
   stepStation(inp: Input): void {
     const station = this.currentStation(), st = this.st;
     if (station < 0) { this.serve(null); return; }
-    const s = this.actor(inp, station, station === MIX || station === STOVE);
+    const holdStation = station === MIX || station === STOVE || station === OVEN_S;
+    const s = this.actor(inp, station, holdStation);
     const pressed = s ? inp.pressed(s.slot, 'action') : false, held = s ? inp.held(s.slot, 'action') : false;
     switch (station) {
       case CHOP:
-        st.t = (st.t + 1) % CHOP_SWEEP;   // the marker sweeps whether or not anyone is there
         if (pressed) {
-          const d = st.t - CHOP_BEAT;
-          if (d >= -CHOP_WINDOW && d <= CHOP_WINDOW) {
-            st.count++; this.tak = 6; s.facing = 1; s.actT = CHOP_ANIM; this.playAnim(s, 'chop', true);
-            ringAt(PROP_X[CHOP], ROWS.counterTop - 8, 3, 12, UI.cream, 2, 10, false, true);
-            if (st.count >= CHOP_HITS) this.completeStep(st.miss === 0 ? 2 : 1, s);
-          } else { st.miss++; this.wobbleT = 8; }
+          st.count++; this.tak = 6; s.facing = 1; s.actT = CHOP_ANIM; this.playAnim(s, 'chop', true);
+          ringAt(PROP_X[CHOP], ROWS.counterTop - 8, 3, 12, UI.cream, 2, 10, false, true);
+          if (st.count >= CHOP_HITS) this.completeStep(2, s);
         }
         break;
       case MIX:
-        if (held) { st.phase = 1; st.t++; s.facing = 1; s.actT = 2; if (st.t >= MIX_FRAMES) this.completeStep(st.miss === 0 ? 2 : 1, s); }
-        else if (st.phase === 1) { st.phase = 0; st.miss++; }
-        break;
       case STOVE:
+      case OVEN_S: {
+        // one rule for the three holds: the bar runs while the button is down, pauses while it is up, and the step
+        // is done the frame it fills. Nothing is lost by letting go.
+        const need = station === MIX ? MIX_FRAMES : station === STOVE ? STOVE_FRAMES : OVEN_FRAMES;
         if (held) {
           st.phase = 1; st.t++; s.facing = 1; s.actT = 2;
-          if (st.t >= STOVE_FRAMES) { this.stoveBurnt = 1; this.smoke(PROP_X[STOVE], POT.y); this.completeStep(0, s); }
-        } else if (st.phase === 1) {
-          st.phase = 0;
-          // inside the band it is cooked; short of it the pot goes off the boil and costs a miss, so tapping the
-          // bar up to the band scores DONE, never PERFECT (MIX punishes the identical pause the same way)
-          if (st.t / STOVE_FRAMES >= STOVE_BAND) this.completeStep(st.miss === 0 ? 2 : 1, null); else st.miss++;
-        }
+          if (station === OVEN_S) this.ovenGlow = 60;
+          if (st.t >= need) this.completeStep(2, s);
+        } else st.phase = 0;
         break;
-      case OVEN_S:
-        if (st.phase === 0) { if (pressed) { st.phase = 1; st.t = OVEN_FRAMES; this.ovenGlow = 60; s.actT = ACT_FRAMES; s.facing = 1; this.playAnim(s, 'reach', true); } }
-        else {
-          st.t--;
-          if (pressed) { s.actT = ACT_FRAMES; s.facing = 1; this.playAnim(s, 'reach', true); this.completeStep(st.t <= OVEN_WINDOW ? 2 : 1, s); }
-          else if (st.t <= 0) { this.ovenBurnt = 1; this.smoke(PROP_X[OVEN_S], OVEN.winY); this.completeStep(0, null); }
-        }
-        break;
+      }
       default:   // PLATE
         if (pressed) { s.actT = ACT_FRAMES; s.facing = 1; this.playAnim(s, 'reach', true); this.completeStep(2, s); this.serve(s); }
         break;
@@ -360,10 +338,9 @@ export class KitchenScreen extends Screen {
     this.scores[idx] = score; this.total += score;
     const px = PROP_X[station], py = ROWS.counterTop - 40;
     if (score === 2) { floatText(px, py, PERFECT, UI.cream, 1, true); burstSparkle(px, py + 10, 5, UI.cream, true); }
-    else if (score === 1) floatText(px, py, DONE, UI.cream, 1, true);
-    else floatText(px, py, BURNT, SIGNAL.hot, 1, true);
+    else floatText(px, py, DONE, UI.cream, 1, true);
     this.stepIdx++;
-    this.st.phase = 0; this.st.t = 0; this.st.count = 0; this.st.miss = 0;
+    this.st.phase = 0; this.st.t = 0; this.st.count = 0;
     this.setHint();
     // the hungry one: a seeded one-in-six bite on every completed step, whoever completed it
     for (let i = 0; i < this.seats.length; i++) {
@@ -388,9 +365,6 @@ export class KitchenScreen extends Screen {
     ringAt(BELL.x + BELL.w / 2, BELL.y + 4, 4, 22, UI.cream, 2, 16, false, true);
     void s;
   }
-
-  /** Burnt: four dark puffs off the pot or the oven window (cosmetic). */
-  smoke(x: number, y: number): void { particles.burst('smoke', x, y, 4, { speed: 0.8, up: 1.6, sizeJitter: 1.5, screen: true }); }
 
   playAnim(s: Seat, name: string, restart: boolean): void { s.anim = name; s.player.play(name, { restart, fallback: 'idle' }); }
 
@@ -442,13 +416,14 @@ export class KitchenScreen extends Screen {
   drawStations(ctx: CanvasRenderingContext2D, f: number, st: StepState, station: number): void {
     if (this.has[CHOP]) {
       const cut = this.done(CHOP) ? 2 : station === CHOP ? (st.count < 2 ? 0 : st.count < 4 ? 1 : 2) : 0;
-      drawChopItem(ctx, this.icons[0], this.hexes[0], cut, this.wobbleT > 0 ? ((this.wobbleT & 2) ? 2 : -2) : 0, this.tak > 0);
+      drawChopItem(ctx, this.icons[0], this.hexes[0], cut, 0, this.tak > 0);
     }
     if (this.has[MIX]) drawBowlContents(ctx, this.done(MIX) ? 1 : station === MIX ? st.t / MIX_FRAMES : 0);
     const stoveOn = station === STOVE || this.done(STOVE);
-    drawStove(ctx, stoveOn, station === STOVE ? st.t / STOVE_FRAMES : 1, f, this.stoveBurnt === 1);
-    const baking = station === OVEN_S && st.phase === 1;
-    drawOvenWindow(ctx, baking ? 1 - st.t / OVEN_FRAMES : this.ovenGlow / 60, baking || this.ovenBurnt === 1, this.ovenBurnt === 1);
+    drawStove(ctx, stoveOn, station === STOVE ? st.t / STOVE_FRAMES : 1, f);
+    // the tray is in from the first frame of the bake; the glow follows the hold and lingers after it
+    const baking = station === OVEN_S && st.t > 0;
+    drawOvenWindow(ctx, baking ? st.t / OVEN_FRAMES : this.ovenGlow / 60, baking);
     const plated = this.served ? Math.min(this.icons.length, Math.floor(this.serveT / DROP_FRAMES) + 1) : 0;
     drawPlate(ctx, PLATE.x + 13, PLATE.y, this.icons, this.hexes, plated, plated > 0 && this.serveT % DROP_FRAMES < 3 ? 1.25 : 1);
     drawBellRing(ctx, this.ringT);
@@ -475,16 +450,16 @@ export class KitchenScreen extends Screen {
     if (k === CHOP) return st.count;
     if (k === MIX) return Math.floor(st.t * segs / MIX_FRAMES);
     if (k === STOVE) return Math.floor(st.t * segs / STOVE_FRAMES);
-    if (k === OVEN_S) return st.phase === 1 ? Math.floor((OVEN_FRAMES - st.t) * segs / OVEN_FRAMES) : 0;
+    if (k === OVEN_S) return Math.floor(st.t * segs / OVEN_FRAMES);
     return 0;
   }
 
   drawWidget(ctx: CanvasRenderingContext2D, st: StepState, station: number): void {
     const slot = this.liveSlot(station);
-    if (station === CHOP) drawChopBar(ctx, st.t, CHOP_SWEEP, st.count, CHOP_HITS, slot);
+    if (station === CHOP) drawChopBar(ctx, st.count, CHOP_HITS, slot);
     else if (station === MIX) drawDial(ctx, st.t / MIX_FRAMES, st.phase === 0 && st.t > 0, slot);
-    else if (station === STOVE) drawStoveBar(ctx, st.t / STOVE_FRAMES, STOVE_BAND, slot);
-    else if (station === OVEN_S) drawOvenTimer(ctx, st.phase === 1 ? 1 - st.t / OVEN_FRAMES : 0, OVEN_WINDOW / OVEN_FRAMES, slot);
+    else if (station === STOVE) drawStoveBar(ctx, st.t / STOVE_FRAMES, slot);
+    else if (station === OVEN_S) drawOvenTimer(ctx, st.t / OVEN_FRAMES, slot);
     else if (station === PLATE_S) drawPlatePrompt(ctx, RING, slot);
   }
 
@@ -508,7 +483,7 @@ export class KitchenScreen extends Screen {
   override summary() {
     return {
       step: this.stepIdx, steps: this.stepNames, scores: this.scores.slice(), owners: this.owners.slice(), total: this.total, stars: this.stars, served: this.served,
-      phase: this.st.phase, t: this.st.t, count: this.st.count, miss: this.st.miss,
+      phase: this.st.phase, t: this.st.t, count: this.st.count,
       seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
     };
   }
@@ -516,7 +491,7 @@ export class KitchenScreen extends Screen {
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.stepIdx, this.total, this.st.phase, this.st.t, this.st.count, this.st.miss, this.served ? 1 : 0, this.serveT, this.stars, this.stoveBurnt, this.ovenBurnt);
+    f.push(this.stepIdx, this.total, this.st.phase, this.st.t, this.st.count, this.served ? 1 : 0, this.serveT, this.stars);
     for (let i = 0; i < this.steps.length; i++) f.push(this.scores[i], this.owners[i]);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.station, s.moving ? 1 : 0, s.actT, s.eatT); }
     return f;

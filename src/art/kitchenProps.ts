@@ -252,7 +252,7 @@ export function drawBowlContents(ctx, fill) {
 }
 
 /** The stove: the flame glow under the pot when lit (alpha by heat and pulse), the copper pot, steam over it. */
-export function drawStove(ctx, lit, heat, frame, burnt) {
+export function drawStove(ctx, lit, heat, frame) {
   sprites();
   const P = POT, a = ctx.globalAlpha;
   if (lit) {
@@ -261,7 +261,7 @@ export function drawStove(ctx, lit, heat, frame, burnt) {
     ctx.globalAlpha = a;
   }
   // the pot: two ink-looped handles, a tapered body, the overhanging rim last so it reads as a lip
-  const body = burnt ? PROPS.burnt : PROPS.copper, shade = burnt ? PLUM.deep : PROPS.copperSh;
+  const body = PROPS.copper, shade = PROPS.copperSh;
   ctx.fillStyle = INK; ctx.fillRect(P.x - 7, P.y + 3, 7, 5); ctx.fillRect(P.x + P.w, P.y + 3, 7, 5);
   ctx.fillStyle = body; ctx.fillRect(P.x - 6, P.y + 4, 6, 3); ctx.fillRect(P.x + P.w, P.y + 4, 6, 3);
   ctx.beginPath();
@@ -269,24 +269,23 @@ export function drawStove(ctx, lit, heat, frame, burnt) {
   ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = body; ctx.fill();
   ctx.save(); ctx.clip();
   ctx.fillStyle = shade; ctx.fillRect(P.x, P.y + P.h - 11, P.w, 11);
-  if (!burnt) { ctx.fillStyle = PROPS.copperHi; ctx.fillRect(P.x + 4, P.y + 9, 3, 10); }   // one highlight, top-left
+  ctx.fillStyle = PROPS.copperHi; ctx.fillRect(P.x + 4, P.y + 9, 3, 10);   // one highlight, top-left
   ctx.restore();
   ctx.fillStyle = INK; ctx.fillRect(P.x - 3, P.y, P.w + 6, 7);                              // the rim, inked
   ctx.fillStyle = body; ctx.fillRect(P.x - 2, P.y + 1, P.w + 4, 5);
   ctx.fillStyle = PLUM.deep; ctx.fillRect(P.x + 1, P.y + 1, P.w - 2, 3);                    // the dark inside over the rim
-  if (lit && heat > 0.15 && !burnt) { steamPuff(ctx, PROP_X[2] - 6, P.y - 2, frame, 20); steamPuff(ctx, PROP_X[2] + 7, P.y - 4, frame + 9, 24); }
+  if (lit && heat > 0.15) { steamPuff(ctx, PROP_X[2] - 6, P.y - 2, frame, 20); steamPuff(ctx, PROP_X[2] + 7, P.y - 4, frame + 9, 24); }
 }
 
-/** The oven window: the interior glows by `heat` (0..1), with a tray of dough (pale, then golden, then burnt) inside. */
-export function drawOvenWindow(ctx, heat, tray, burnt) {
+/** The oven window: the interior glows by `heat` (0..1), with a tray of dough (pale, then golden) inside. */
+export function drawOvenWindow(ctx, heat, tray) {
   sprites();
   const O = OVEN, a = ctx.globalAlpha;
   ctx.save(); ctx.beginPath(); ctx.rect(O.winX, O.winY, O.winW, O.winH); ctx.clip();
   if (heat > 0) { ctx.globalAlpha = a * heat; ctx.drawImage(glowOven.canvas, PROP_X[3] - 22, O.winY + O.winH - 22); ctx.globalAlpha = a; }
   if (tray) {
     ctx.fillStyle = INK; ctx.fillRect(O.winX + 7, O.winY + 6, 26, 6);
-    ctx.fillStyle = burnt ? PROPS.burnt : heat > 0.7 ? PROPS.maple : PROPS.dough; ctx.fillRect(O.winX + 8, O.winY + 7, 24, 4);
-    if (burnt) { ctx.fillStyle = SIGNAL.hot; ctx.fillRect(O.winX + 12, O.winY + 8, 2, 2); ctx.fillRect(O.winX + 24, O.winY + 9, 2, 2); }
+    ctx.fillStyle = heat > 0.7 ? PROPS.maple : PROPS.dough; ctx.fillRect(O.winX + 8, O.winY + 7, 24, 4);
   }
   ctx.restore();
 }
@@ -350,15 +349,11 @@ function hub(ctx, cx, cy, slot) {
   ctx.fillStyle = UI.paper; ctx.fillRect(cx - 1, cy - 1, 2, 2);
 }
 
-/** CHOP: the 36x5 sliding bar; `t` in 0..sweep is the marker's sweep, the beat is the green window at its centre. */
-export function drawChopBar(ctx, t, sweep, hits, total, slot) {
-  const x = WIDGET_POS[0][0], y = WIDGET_POS[0][1], bx = x + 6, by = y + 10, w = 36, h = 5;
+/** CHOP: a row of `total` pips, one lit green per chop landed - a tally, not a beat. */
+export function drawChopBar(ctx, hits, total, slot) {
+  const x = WIDGET_POS[0][0], y = WIDGET_POS[0][1], pitch = 7, w = 5, bx = x + 24 - R((total * pitch - 2) / 2), by = y + 13;
   card(ctx, x, y, 48, 26, slot);
-  ctx.fillStyle = UI.ink; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
-  ctx.fillStyle = UI.paperLine; ctx.fillRect(bx, by, w, h);
-  ctx.fillStyle = SIGNAL.good; ctx.fillRect(bx + 13, by, 10, h);
-  ctx.fillStyle = UI.ink; ctx.fillRect(bx + R(t * (w - 2) / (sweep - 1)) - 1, by - 3, 3, h + 6);   // the marker
-  for (let i = 0; i < total; i++) { ctx.fillStyle = UI.ink; ctx.fillRect(bx + i * 7, by + 8, 5, 5); ctx.fillStyle = i < hits ? SIGNAL.good : UI.paperDark; ctx.fillRect(bx + i * 7 + 1, by + 9, 3, 3); }
+  for (let i = 0; i < total; i++) { ctx.fillStyle = UI.ink; ctx.fillRect(bx + i * pitch, by, w, w); ctx.fillStyle = i < hits ? SIGNAL.good : UI.paperDark; ctx.fillRect(bx + i * pitch + 1, by + 1, w - 2, w - 2); }
 }
 
 /** MIX: a round paper dial filling clockwise in green; the needle greys out while the hold is released. */
@@ -373,30 +368,24 @@ export function drawDial(ctx, fill, paused, slot) {
   if (paused) { ctx.fillStyle = UI.ink; ctx.fillRect(cx - 4, cy - 4, 8, 8); ctx.fillStyle = UI.paperDark; ctx.fillRect(cx - 3, cy - 3, 6, 6); } else hub(ctx, cx, cy, slot);
 }
 
-/** STOVE: a bar that fills while held; the hot band is an open frame over the last 20 %, so the green head runs
- *  THROUGH it instead of painting over it and the target is still there when you are standing on it. */
-export function drawStoveBar(ctx, fill, hotFrom, slot) {
+/** STOVE: a bar that fills green while held, and is done when it is full. */
+export function drawStoveBar(ctx, fill, slot) {
   const x = WIDGET_POS[2][0], y = WIDGET_POS[2][1], bx = x + 6, by = y + 13, w = 36, h = 6;
   card(ctx, x, y, 48, 26, slot);
   ctx.fillStyle = UI.ink; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
   ctx.fillStyle = UI.paperLine; ctx.fillRect(bx, by, w, h);
   ctx.fillStyle = SIGNAL.good; ctx.fillRect(bx, by, R(w * Math.min(1, fill)), h);
-  // the band's frame: two inked hot rails above and below it, and the 2 px mark the hint tells you to pass
-  const hx = bx + R(w * hotFrom), hw = w - R(w * hotFrom);
-  ctx.fillStyle = UI.ink; ctx.fillRect(hx - 1, by - 5, hw + 2, 4); ctx.fillRect(hx - 1, by + h + 1, hw + 2, 4);
-  ctx.fillStyle = SIGNAL.hot; ctx.fillRect(hx, by - 4, hw, 2); ctx.fillRect(hx, by + h + 2, hw, 2);
-  ctx.fillStyle = UI.ink; ctx.fillRect(hx - 1, by - 2, 4, h + 4);
-  ctx.fillStyle = SIGNAL.hot; ctx.fillRect(hx, by - 1, 2, h + 2);
 }
 
-/** OVEN: a round paper timer; a HOT arc sweeps as the bake runs, the green notch is its last 40 frames. */
-export function drawOvenTimer(ctx, k, windowK, slot) {
+/** OVEN: a round paper timer; a green arc sweeps round as the bake runs, and the bake is done when it closes. */
+export function drawOvenTimer(ctx, k, slot) {
   const cx = WIDGET_POS[3][0] + 24, cy = WIDGET_POS[3][1] + 12;
   disc(ctx, cx, cy, 12);
-  ctx.beginPath(); ctx.arc(cx, cy, 9, -Math.PI / 2 + TAU * (1 - windowK), -Math.PI / 2 + TAU);
-  ctx.strokeStyle = UI.ink; ctx.lineWidth = 6; ctx.stroke();                 // UI.green on paper is always inked
-  ctx.strokeStyle = SIGNAL.good; ctx.lineWidth = 4; ctx.stroke();
-  if (k > 0) { ctx.beginPath(); ctx.arc(cx, cy, 9, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, k)); ctx.strokeStyle = SIGNAL.hot; ctx.lineWidth = 3; ctx.stroke(); }
+  if (k > 0) {
+    ctx.beginPath(); ctx.arc(cx, cy, 9, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, k));
+    ctx.strokeStyle = UI.ink; ctx.lineWidth = 6; ctx.stroke();                 // UI.green on paper is always inked
+    ctx.strokeStyle = SIGNAL.good; ctx.lineWidth = 4; ctx.stroke();
+  }
   hub(ctx, cx, cy, slot);
 }
 

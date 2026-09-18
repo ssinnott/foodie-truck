@@ -1,6 +1,7 @@
 // ORCHARD - CATCH (docs/GDD.md section 5; docs/ART_STYLE.md section 1 "Orchard"). Side view, daylight: every seat
 // runs left and right along its own depth lane with a basket held in front, apples drop out of the canopy at a
-// seeded x and a seeded speed, the basket's rim is the catch box, one apple in eight is wormy and costs one. The
+// seeded x and a seeded speed, and the basket's rim is the catch box. Every apple is a good one: a missed apple
+// splats on the grass and costs nothing, so the only thing the scene asks is to be underneath the next one. The
 // round ends when the party's total reaches the order's amount or the 40-second clock runs out; a wooden sign drops
 // in on ropes, is held a second, then run.gather() and back to the map.
 //
@@ -49,20 +50,22 @@ const MAX_APPLES = 12, SPAWN_MIN = 30, SPAWN_MAX = 60, APPLE_Y0 = 66, VY_MIN = 1
  * apple the player is about to chase, held one beat earlier, not a red fleck painted into the backdrop.
  */
 const HANG_FRAMES = 22, SHIVER_FRAMES = 6, HANG_STEM = 6;
-/** Drawn at s 5 (a 10 px apple); one in eight is wormy. */
-const APPLE_S = 5, WORMY_IN = 8;
+/** Drawn at s 5 (a 10 px apple). */
+const APPLE_S = 5;
 /** Where a missed apple lands: in front of the front lane, outside the clean band, above the fence. */
 const APPLE_FLOOR = 330;
 /** The catch box: the basket's drawn rim is 22 px across, so the box is too, and the rows below the rim an apple's bottom counts in (vy < 4 never skips it). */
 const BOX_HALF = 11, BOX_ABOVE = 2, BOX_BELOW = 4, RIM_BELOW_PAW = 8;
-/** The catch beat (basket squash 1.15) and the bump beat (4/10/6 frames of the shared `bump` anim, movement locked). */
-const CATCH_FRAMES = 3, BUMP_FRAMES = 21;
+/** The catch beat (basket squash 1.15). */
+const CATCH_FRAMES = 3;
 /** Splats: a missed apple as one inked flat ellipse stepping down a size every 5 frames, gone in 20. */
 const SPLAT_FRAMES = 20, SPLAT_STEP = 5, MAX_SPLATS = 8;
 const SPLAT_RX = Int8Array.of(8, 6, 4, 3), SPLAT_RY = Int8Array.of(3, 3, 2, 2);
+/** The splat's shade band: the ripe apple's own shadow tone, taken once. */
+const SPLAT_SH = foodTones(SIGNAL.orchard).sh;
 /** Petals: a cosmetic stream (seed from the orchard block), one every few frames so about two dozen are in the air. */
 const PETAL_EVERY = 6, PETAL_SEED = 105, PETAL_PALE = '#F1E4C8';
-const PLUS_ONE = '+1', MINUS_ONE = '-1', TITLE = 'PIPPIN ORCHARD', SIGN_PREFIX = 'APPLES: ';
+const PLUS_ONE = '+1', TITLE = 'PIPPIN ORCHARD', SIGN_PREFIX = 'APPLES: ';
 /** The shared anim keys the boxes are built from (content/critters/common.js CARRY / catch frame 0). */
 const CATCH_POSE = { torso: -4, upper: 72, lower: 48 }, WALK_POSE = { torso: 6, upper: 60, lower: 50 };
 
@@ -137,8 +140,6 @@ export interface Apple {
   y: number;
   /** Fall speed in px/frame (VY_MIN..VY_MAX). */
   vy: number;
-  /** 0 = ripe, 1 = wormy. */
-  kind: number;
   /** The sway phase: seeded at spawn, held while it hangs, counted up once it falls. */
   t: number;
   /** Frames left on the branch; 0 once it has let go. */
@@ -151,8 +152,6 @@ export interface Splat {
   t: number;
   x: number;
   y: number;
-  /** Ripe red or wormy brown, taken from the apple that made it. */
-  hex: string;
 }
 
 export class OrchardScreen extends Screen {
@@ -212,9 +211,9 @@ export class OrchardScreen extends Screen {
       seatAnim(s, 'catch');
     }
     this.apples = [];
-    for (let i = 0; i < MAX_APPLES; i++) this.apples.push({ active: false, x: 0, x0: 0, y: 0, vy: 0, kind: 0, t: 0, hang: 0 });
+    for (let i = 0; i < MAX_APPLES; i++) this.apples.push({ active: false, x: 0, x0: 0, y: 0, vy: 0, t: 0, hang: 0 });
     this.splats = [];
-    for (let i = 0; i < MAX_SPLATS; i++) this.splats.push({ t: SPLAT_FRAMES, x: 0, y: 0, hex: SIGNAL.orchard });
+    for (let i = 0; i < MAX_SPLATS; i++) this.splats.push({ t: SPLAT_FRAMES, x: 0, y: 0 });
     this.splatCursor = 0;
     this.nextSpawn = SPAWN_MIN;
     const need = run ? run.order.needs.find((x) => x.id === 'apple') : null;
@@ -248,12 +247,11 @@ export class OrchardScreen extends Screen {
     if (tickClock(clock)) this.finish();
   }
 
-  /** Every seat: read its stick, move along its lane, pick the anim, tick the beats. */
+  /** Every seat: read its stick, move along its lane, pick the anim, tick the catch beat. */
   updateSeats(input: Input): void {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.catchT > 0) s.catchT--;
-      if (s.bumpT > 0) { s.bumpT--; s.moving = false; s.player.tick(); continue; }
       const ax = input.axisX(s.slot);
       s.moving = ax !== 0;
       if (s.moving) {
@@ -274,7 +272,7 @@ export class OrchardScreen extends Screen {
         const a = this.apples[i];
         if (a.active) continue;
         a.active = true; a.x0 = rng.int(X_MIN + 8, X_MAX - 8); a.x = a.x0; a.y = APPLE_Y0;
-        a.vy = rng.range(VY_MIN, VY_MAX); a.kind = rng.int(1, WORMY_IN) === 1 ? 1 : 0; a.t = rng.int(0, 100);
+        a.vy = rng.range(VY_MIN, VY_MAX); a.t = rng.int(0, 100);
         a.hang = HANG_FRAMES;
         break;
       }
@@ -289,27 +287,19 @@ export class OrchardScreen extends Screen {
       let caught = false;
       for (let k = 0; k < this.seats.length && !caught; k++) {
         const s = this.seats[k];
-        if (s.bumpT > 0) continue;
         const bx = s.x + s.facing * (s.moving ? s.boxWalkX : s.boxCatchX), by = s.y + (s.moving ? s.boxWalkY : s.boxCatchY);
         if (a.x < bx - BOX_HALF || a.x > bx + BOX_HALF || bottom < by - BOX_ABOVE || bottom >= by + BOX_BELOW) continue;
         caught = true;
         a.active = false;
-        if (a.kind === 0) {
-          s.count++; s.catchT = CATCH_FRAMES;
-          this.setTotal(this.total + 1);
-          ringAt(bx, by, 4, 14, UI.cream, 2, 12, false, true);
-          floatText(bx, by - 12, PLUS_ONE, s.colour, 1, true);
-        } else {
-          if (s.count > 0) { s.count--; this.setTotal(this.total - 1); }
-          s.bumpT = BUMP_FRAMES; s.moving = false;
-          seatAnim(s, 'bump', true);
-          floatText(bx, by - 12, MINUS_ONE, UI.cream, 1, true);
-        }
+        s.count++; s.catchT = CATCH_FRAMES;
+        this.setTotal(this.total + 1);
+        ringAt(bx, by, 4, 14, UI.cream, 2, 12, false, true);
+        floatText(bx, by - 12, PLUS_ONE, s.colour, 1, true);
       }
       if (!caught && bottom >= APPLE_FLOOR) {
         a.active = false;
         const sp = this.splats[this.splatCursor]; this.splatCursor = (this.splatCursor + 1) % this.splats.length;
-        sp.t = 0; sp.x = R(a.x); sp.y = APPLE_FLOOR; sp.hex = a.kind ? ORCHARD.wormy : SIGNAL.orchard;
+        sp.t = 0; sp.x = R(a.x); sp.y = APPLE_FLOOR;
       }
     }
   }
@@ -320,7 +310,7 @@ export class OrchardScreen extends Screen {
   finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, SIGN_PREFIX + this.total);
-    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.moving = false; s.bumpT = 0; seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true); }
+    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.moving = false; seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true); }
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
@@ -348,40 +338,20 @@ export class OrchardScreen extends Screen {
     if (this.game.options.debug) this.drawBoxes(ctx);
   }
 
-  /**
-   * The apple, and the one the player must NOT catch.
-   *
-   * A colour swap alone was not a tell: the old dull brown was the same value as the grass it fell across, and the
-   * worm was a 4x2 cream rect with a square end that read as a price sticker. The wormy one now differs three ways
-   * at a squint — a bruised body two value steps below the grass, the canopy and the trodden band; an ink bite hole
-   * on its shoulder that takes the stem and the leaf with it (a ripe apple always keeps its leaf); and a grub of two
-   * inked cream beads climbing out of that hole and over the rim, so the silhouette breaks too. Each bead carries
-   * its own 1 px ink (ART_STYLE 0.2: separate objects, separate lines) and is 3 px across, over the 2 px floor.
-   */
+  /** The apple: on its branch with a stalk into the leaves, then falling. */
   drawApple(ctx: CanvasRenderingContext2D, a: Apple): void {
     if (!a.active) return;
     const x = R(a.x), y = R(a.y);
     // the branch it is still holding on to: a 2 px ink stalk (the 2 px floor, ART_STYLE 0.8) from the apple's own
     // stem up into the leaves, so a hanging apple reads as fruit ON the tree and not fruit stuck in mid-air
     if (a.hang > 0) { ctx.fillStyle = UI.ink; ctx.fillRect(x - 1, y - APPLE_S - HANG_STEM, 2, HANG_STEM + 2); }
-    if (a.kind === 0) {
-      drawFood(ctx, 'apple', x, y, APPLE_S);
-      // The one highlight (ART_STYLE 0.5 allows exactly one): art/food.js only caps a ball at r >= 6 and the falling
-      // apple is r 4.6, so a 10 px red ball crossing the canopy carried no light at all - red #D9463B against the
-      // canopy #4F6B3A is 0.17 apart by value, under the 0.25 the ladder asks for, and at 1x it sank into the leaves.
-      // A 3 px cream pip on the lit top-left clears every plane the apple falls across (canopy, plum wood, haze
-      // floor, grass) by value alone, and it doubles as the ripe/wormy tell: a ripe apple is shiny, the bruised one
-      // stays dull.
-      ctx.fillStyle = UI.cream; ctx.fillRect(x - 3, y - 3, 3, 3);
-      return;
-    }
-    drawFood(ctx, 'apple', x, y, APPLE_S, ORCHARD.wormy);
-    ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.arc(x + 2, y - 1, 2.5, 0, TAU); ctx.fill();        // the bite hole
-    ctx.beginPath(); ctx.arc(x + 2, y - 3, 2.6, 0, TAU); ctx.fill();                                // the grub, inked...
-    ctx.beginPath(); ctx.arc(x + 4.5, y - 5.5, 2.6, 0, TAU); ctx.fill();
-    ctx.fillStyle = UI.cream;
-    ctx.beginPath(); ctx.arc(x + 2, y - 3, 1.6, 0, TAU); ctx.fill();                                // ...then its two beads
-    ctx.beginPath(); ctx.arc(x + 4.5, y - 5.5, 1.6, 0, TAU); ctx.fill();
+    drawFood(ctx, 'apple', x, y, APPLE_S);
+    // The one highlight (ART_STYLE 0.5 allows exactly one): art/food.js only caps a ball at r >= 6 and the falling
+    // apple is r 4.6, so a 10 px red ball crossing the canopy carried no light at all - red #D9463B against the
+    // canopy #4F6B3A is 0.17 apart by value, under the 0.25 the ladder asks for, and at 1x it sank into the leaves.
+    // A 3 px cream pip on the lit top-left clears every plane the apple falls across (canopy, plum wood, haze
+    // floor, grass) by value alone.
+    ctx.fillStyle = UI.cream; ctx.fillRect(x - 3, y - 3, 3, 3);
   }
 
   /**
@@ -395,8 +365,8 @@ export class OrchardScreen extends Screen {
     if (sp.t >= SPLAT_FRAMES) return;
     const k = (sp.t / SPLAT_STEP) | 0, rx = SPLAT_RX[k], ry = SPLAT_RY[k];
     ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx + 1, ry + 1, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = sp.hex; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = foodTones(sp.hex).sh;
+    ctx.fillStyle = SIGNAL.orchard; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = SPLAT_SH;
     ctx.beginPath(); ctx.ellipse(sp.x + 1, sp.y + 1, rx - 1, ry - 1, 0, 0, TAU); ctx.fill();
   }
 
@@ -421,8 +391,8 @@ export class OrchardScreen extends Screen {
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.nextSpawn);
-    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.count, s.bumpT, s.moving ? 1 : 0); }
-    for (let i = 0; i < this.apples.length; i++) { const a = this.apples[i]; f.push(a.active ? 1 : 0, a.x, a.y, a.vy, a.kind, a.t); }
+    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.count, s.moving ? 1 : 0); }
+    for (let i = 0; i < this.apples.length; i++) { const a = this.apples[i]; f.push(a.active ? 1 : 0, a.x, a.y, a.vy, a.t); }
     return f;
   }
 }

@@ -3,8 +3,8 @@
 //
 //   orchard - four seats in the orchard: 600 frames with seat 0 running left and right (no errors, a numeric
 //             caught count, seat 0 actually moved and stayed inside the lane, the other seats did not), then the
-//             mini-game's one rule driven by hand - an apple aimed at seat 0's rim scores, a wormy one takes the
-//             score back and locks the seat in its bump - then the clock is forced to its last frames: the APPLES
+//             mini-game's one rule driven by hand - an apple aimed at seat 0's rim scores, one that misses the rim
+//             splats and costs nothing - then the clock is forced to its last frames: the APPLES
 //             sign drops, is held, and the screen returns to the map with the order's apple line updated by the
 //             party's total. Also writes tools/screens/orchard-catch.png (the catch beat, with two apples left in
 //             the canopy so the shot answers "can you see one against the leaves?") and orchard-sign.png.
@@ -21,21 +21,23 @@ const CATCH_SHOT = 22;
  * else is switched off first (every other apple parked, the spawner pushed out of reach) so the beat is the only
  * thing that can move the count.
  */
-async function dropOnSeat0(page, kind, homeX) {
-  return page.evaluate(([k, hx]) => {
+async function dropOnSeat0(page, aimed, homeX) {
+  return page.evaluate(([hit, hx]) => {
     const sc = window.__game.game.screen, s = sc.seats[0];
     sc.nextSpawn = 100000;
     // back to the lane position it was given in enter(): 600 frames of running left leaves seat 0 standing on top
     // of seat 1, and the catch shot wants to show one basket taking one apple, not two critters in a heap
     if (hx) { s.x = hx; s.facing = 1; s.moving = false; }
     for (const a of sc.apples) a.active = false;
-    // hold the target out of reach for the beat, or the +1 could end the round before the wormy half runs.
+    // hold the target out of reach for the beat, or the +1 could end the round before the miss half runs.
     // run.gather() clamps to the order's own line, so the bank assert still reads the real target.
     sc.target = Math.max(sc.target, sc.total + 3); sc.setTotal(sc.total);
     const a = sc.apples[0];
     const bx = s.x + s.facing * (s.moving ? s.boxWalkX : s.boxCatchX), by = s.y + (s.moving ? s.boxWalkY : s.boxCatchY);
-    // hang 0: this one is already off the branch, so DROP_FRAMES is 40 px of fall and nothing else
-    a.active = true; a.kind = k; a.t = 0; a.vy = 2; a.x0 = bx; a.x = bx; a.y = by - 40; a.hang = 0;
+    // hang 0: this one is already off the branch, so DROP_FRAMES is 40 px of fall and nothing else; a miss is the
+    // same apple started a basket's width to the side, so it falls past the rim and onto the grass
+    const ax = hit ? bx : bx + 30;
+    a.active = true; a.t = 0; a.vy = 2; a.x0 = ax; a.x = ax; a.y = by - 40; a.hang = 0;
     // two more apples held ON their branches for the picture, at the far ends of the lane where no rim can reach
     // them inside the beat (the whole point of the shot is a red apple against #4F6B3A leaves at 1x, hanging
     // on its stalk before it lets go)
@@ -44,18 +46,18 @@ async function dropOnSeat0(page, kind, homeX) {
     const ends = [60, 540], rows = [66, 74];
     for (let i = 0; i < 2; i++) {
       const d = sc.apples[i + 1];
-      d.active = true; d.kind = 0; d.t = i * 20; d.vy = 1.6; d.x0 = ends[i]; d.x = ends[i]; d.y = rows[i];
+      d.active = true; d.t = i * 20; d.vy = 1.6; d.x0 = ends[i]; d.x = ends[i]; d.y = rows[i];
       d.hang = 200;
     }
     return { count: s.count, total: sc.total, target: sc.target };
-  }, [kind, homeX]);
+  }, [aimed, homeX]);
 }
 
 /** Seat 0 as the sim holds it (the summary only carries slot/x/count). */
 function seat0(page) {
   return page.evaluate(() => {
     const s = window.__game.game.screen.seats[0];
-    return { count: s.count, bumpT: s.bumpT, anim: s.anim, total: window.__game.game.screen.total };
+    return { count: s.count, anim: s.anim, total: window.__game.game.screen.total, apples: window.__game.game.screen.apples.filter((a) => a.active).length };
   });
 }
 
@@ -90,21 +92,21 @@ export const SCENARIOS = {
         assert(last.top.timer === 2400 - 603, `the clock counted every frame (timer ${last.top.timer})`);
       }
 
-      // the rule itself: a ripe apple into seat 0's rim is +1, a wormy one is -1 and a locked seat. Without this a
+      // the rule itself: an apple into seat 0's rim is +1, one past the rim splats and costs nothing. Without this a
       // dead catch box would still pass every assert above.
       if (!ended) {
-        const before = await dropOnSeat0(page, 0, x0);
+        const before = await dropOnSeat0(page, true, x0);
         await api.step(CATCH_SHOT);
         await api.shot('orchard-catch');
         await api.step(DROP_FRAMES - CATCH_SHOT);
         const hit = await seat0(page);
-        assert(hit.count === before.count + 1, `a ripe apple on the rim is caught (seat 0 ${before.count} -> ${hit.count})`);
+        assert(hit.count === before.count + 1, `an apple on the rim is caught (seat 0 ${before.count} -> ${hit.count})`);
         assert(hit.total === before.total + 1, `the party's total went up with it (${before.total} -> ${hit.total})`);
-        const worm = await dropOnSeat0(page, 1, x0);
-        await api.step(DROP_FRAMES);
-        const bump = await seat0(page);
-        assert(bump.count === worm.count - 1, `a wormy apple costs one (seat 0 ${worm.count} -> ${bump.count})`);
-        assert(bump.bumpT > 0 && bump.anim === 'bump', `and locks the seat in its bump (bumpT ${bump.bumpT}, anim '${bump.anim}')`);
+        const beside = await dropOnSeat0(page, false, x0);
+        await api.step(DROP_FRAMES + 60);   // the miss has 40 px to the rim's row and another ~60 rows to the grass
+        const missed = await seat0(page);
+        assert(missed.count === beside.count && missed.total === beside.total, `a missed apple costs nothing (seat 0 still ${missed.count})`);
+        assert(missed.anim !== 'bump', `and nothing bumps anyone (anim '${missed.anim}')`);
         last = await api.summary();
         if (last.screen !== 'orchard') ended = true;
       }

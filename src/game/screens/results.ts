@@ -227,7 +227,7 @@ export class ResultsScreen extends Screen {
     blitAt(ctx, this.layer, 0, 0);
     // the copper pot's body is a per-frame mark in the kitchen, so it has to be drawn here too or the hob is a
     // bare slab; it goes UNDER the dim with the rest of the room (off the heat, no flame, no steam)
-    drawStove(ctx, false, 0, f, false);
+    drawStove(ctx, false, 0, f);
     drawKettleSteam(ctx, f);   // the kettle is still on while somebody eats: the room's one unstoppable mark
     drawDim(ctx, 0.66);
     // over the dim: the party along the counter, the customer in the hatch, the plate sliding between them. The

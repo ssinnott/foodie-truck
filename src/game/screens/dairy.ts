@@ -1,38 +1,26 @@
 // DAIRY - PUMP (docs/GDD.md section 5; docs/ART_STYLE.md section 1 "Dairy"). A byre on a warm afternoon: every seat
 // sits STATIC on its own three-legged stool with a cow in front of it and a tin pail under the udder, and milks by
-// ALTERNATING the two buttons. After an ACTION the next accepted press is ALT, after an ALT it is ACTION; the
-// button that is not next does nothing at all but is visibly refused, because a player must never be punished for
-// learning the game. PUMP_PER_PAIL accepted presses fill a pail, the pail hops onto the churn rack as +1 milk for
-// the PARTY, a fresh one slides under the cow and the alternation resets.
+// TAPPING `action` over and over. Every press is a squirt; PUMP_PER_PAIL of them fill a pail, the pail hops onto
+// the churn rack as +1 milk for the PARTY and a fresh one slides under the cow. The cows are placid: nothing in
+// this byre kicks, refuses or costs anything, and the only question the scene asks is how fast you can tap.
 //
-// The cost is THE COW'S PATIENCE, and it is a moment of restraint rather than a reflex: each cow independently, on
-// a seeded timer, telegraphs for TELEGRAPH frames (ear back, tail up, a SIGNAL.hot mark blinking over its rump -
-// the same reserved danger colour the rooster's comb wears in the coop) and then opens a KICK_FRAMES window with
-// the mark SOLID and the tail held up. (The cow also draws its near hind hoof up, but the milker sits in front of
-// that leg and covers it: it is motion, not a tell, and the two tells above are the ones the window is sold on -
-// see the note in art/dairyProps.js drawCow.) ANY press inside that window is a kick: the shared bump beat, the pail
-// spills its progress, and one banked milk goes with it if the seat has one - the wormy apple's price, exactly.
-// Sitting still through the window costs nothing and the cow settles.
-//
-// Determinism (docs/ARCHITECTURE.md section 0): every seat and every cow is a plain sim object built in enter() and
-// never grown; the only randomness is rng.int for a cow's calm timer inside update(); input is read by seat slot
-// only; nothing in update() calls Math.sin/cos or reads a clock. The stall geometry is arithmetic on each rig's own
-// proportions with the two trig constants below precomputed, so four browsers place four identical stalls. The
-// squirt's bright head, the jet's slide, the pail's hop arc, the splashes, the swallow and the particles are draw
-// only and stay out of checksumFields().
+// Determinism (docs/ARCHITECTURE.md section 0): every seat is a plain sim object built in enter() and never grown;
+// nothing in update() draws from rng, calls Math.sin/cos or reads a clock, and input is read by seat slot only. The
+// stall geometry is arithmetic on each rig's own proportions with the two trig constants below precomputed, so four
+// browsers place four identical stalls. The squirt's bright head, the jet's slide, the pail's hop arc, the swallow
+// and the particles are draw only and stay out of checksumFields().
 import { UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, Input, ScreenParams } from '../game.ts';
-import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
 import { blitAt } from '../../art/layers.ts';
-import { drawShadow, floatText, ringAt, burstDust } from '../../art/fx.ts';
+import { drawShadow, floatText, ringAt } from '../../art/fx.ts';
 import { drawFood } from '../../art/food.ts';
 import { drawRig } from '../../lib/art/rig.ts';
 import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { ROWS, SEAT_X, SEAT_PITCH, CHURN_X, dairyLayers } from '../../art/backgrounds/dairy.ts';
-import { drawCow, drawStool, drawPail, drawJet, drawChevrons, drawSplash, drawChurn, drawSwallow, TEAT_DX, TEAT_DY, PAIL_H } from '../../art/dairyProps.ts';
+import { drawCow, drawStool, drawPail, drawJet, drawChevrons, drawChurn, drawSwallow, TEAT_DX, TEAT_DY, PAIL_H } from '../../art/dairyProps.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawHint } from '../ui.ts';
@@ -40,50 +28,20 @@ import { drawHint } from '../ui.ts';
 const R = Math.round;
 
 /**
- * THE NUMBERS, and the arithmetic that picked them. The five starting values (6 / 24 / 30 / 150..260 / a 3-frame
- * beat) came from the BRIEF this screen was built to, not from the design document: GDD section 5 owns the rules
- * every mini-game shares (the 40-second clock, the +1 and its ring, the bump beat, the sign and the hand-back to
- * the map, and "all randomness through rng inside update()") and the dairy obeys all of them, but its own bullet
- * is not written yet - section 5 still lists Orchard, Pond and Coop only, as it does for the mill, the hives and
- * the market garden. Whoever adds those four bullets should carry these numbers into them; until then this comment
- * is where they are justified, and nothing below quotes a line the document does not contain.
- *
- * PUMP_PER_PAIL 6 is kept: six alternating presses is about 1.2 s at a comfortable two-finger tap (5 presses/s,
- * one press per 12 frames), which is long enough for the cow to interrupt a pail and short enough that a pail is
- * never a chore. A solo player therefore banks the shipped fallback target of 3 in 3 x 72 = 216 frames of pressing.
- * The cow's cycle is CALM (150..260) + TELEGRAPH 24 + KICK 30 = 204..314 frames, so in those 216 frames a solo
- * player meets about one window and waits out at most 30 frames of it: ~250 frames, a tenth of the 2400-frame
- * round. A deliberate player at 2 presses/s (30 frames each) needs 6 x 30 x 3 = 540 frames plus two windows: ~600,
- * a quarter of the round. Both have the room to spare the brief asks for, and both leave the clock as a backstop
- * rather than the opponent - the cow is the opponent.
- *
- * TELEGRAPH 24 and KICK_FRAMES 30 are kept as given and they hold up: 24 frames (0.4 s) is two presses' worth of
- * warning at the fast rate and one at the slow one, which is exactly "you may finish this squirt, not the next";
- * 30 frames (0.5 s) of window is short enough that waiting it out never feels like a penalty. Shortening the
- * telegraph to 16 was tried on paper and rejected - at 5 presses/s that is three frames of reaction after the
- * press already in flight, which turns a restraint mechanic into a reflex one.
+ * PUMP_PER_PAIL 6: six taps is about 1.2 s at a comfortable 5 presses/s and 3 s at a careful 2 presses/s, so a solo
+ * player banks the shipped fallback target of 3 in well under a tenth of the 2400-frame round either way. The clock
+ * is a backstop, never the opponent: this scene has no opponent.
  */
-const PUMP_PER_PAIL = 6, TELEGRAPH = 24, KICK_FRAMES = 30, CALM_MIN = 150, CALM_MAX = 260;
-/** Cow states: calm, the telegraph, the window a press is punished in. */
-const CALM = 0, WARN = 1, KICK = 2;
-const COW_STATES = Object.freeze(['calm', 'warn', 'kick']);
+const PUMP_PER_PAIL = 6;
 /**
- * The squirt beat. The brief's 3 frames were doubled after the first capture: at a comfortable 12-frame press
- * cadence a 3-frame jet is drawn on a quarter of the frames, and the capture at the pump beat caught the gap - the
- * milker read as miming. At 6 the stream is up for half of a fast player's frames and reads as continuous milking,
- * and it is still well inside the 12, so a jet never survives into the next accepted press.
+ * The squirt beat. At a comfortable 12-frame press cadence a 6-frame jet is up for half of a fast player's frames
+ * and reads as continuous milking, and it is still well inside the 12, so a jet never survives into the next press.
  */
 const SQUIRT_FRAMES = 6;
-/** The refusal: long enough to see the plate drain and jitter, short enough that the right button is never late. */
-const REFUSE_FRAMES = 10;
-/** The kick's bump beat: the shared 4/10/6 of `bump`, plus the grace before a seat can be kicked again. */
-const BUMP_FRAMES = 21;
 /** A fresh pail slides in: the tin squashes 3 % per frame left, the same landing beat the pond's bucket takes. */
 const PAIL_LAND = 5, PAIL_LAND_K = 0.03;
 /** The full pail's flight to the rack, and how high it arcs over the cows on the way. */
 const HOP_FRAMES = 16, HOP_LIFT = 26, MAX_HOPS = 4;
-/** The spilled pail: four inked sizes, a step every 5 frames, gone in 20 (art/dairyProps.js drawSplash). */
-const SPLASH_STEP = 5, SPLASH_FRAMES = 20, MAX_SPLASHES = 4;
 /** Odd stalls stand five rows nearer, so four identical stalls read as a row of stalls and not one stamp repeated. */
 const STALL_DY = 5;
 /**
@@ -113,7 +71,7 @@ const SIT_ROOT_Y = 4;
 /** The chibi's hip is only 11..16 px off the ground, so a milking stool is a low one; each seat's is cut to its rig. */
 const STOOL_MIN = 6;
 const FALLBACK_TARGET = 3;
-const PLUS_ONE = '+1', MINUS_ONE = '-1', TITLE = 'BUTTERCUP DAIRY', SIGN_PREFIX = 'MILK: ';
+const PLUS_ONE = '+1', TITLE = 'BUTTERCUP DAIRY', SIGN_PREFIX = 'MILK: ';
 const MILK_HEX = INGREDIENTS.milk.hex;
 
 function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'milk', x, y, 4, MILK_HEX); }
@@ -128,10 +86,10 @@ function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { 
  * 12 px stool looks like when the whole leg is 17 px long. The far leg is a touch less forward so two legs do not
  * print as one. Round 1 folded harder (96 / -74) and dropped the hip to 10 px, which left no stool to see.
  *
- * pumpR / pumpL are the alternation made visible ON the critter: the milking paw pulls down while the braced paw
- * rides up, and which one is down says which button just landed, so a player reading the chevron and a player
- * reading the crew learn the same rule. Both are non-looping and fall back to milkIdle when they finish, so a crew
- * that has stopped pumping breathes instead of freezing mid-pull.
+ * pumpR / pumpL are the tapping made visible ON the critter: the milking paw pulls down while the braced paw rides
+ * up, and the two alternate press by press so a run of taps reads as a rhythm rather than one pose stuttering.
+ * Both are non-looping and fall back to milkIdle when they finish, so a crew that has stopped pumping breathes
+ * instead of freezing mid-pull.
  *
  * WHERE THE OFF PAW IS, and why it is not on a teat. Round 1 put both arms up at the udder (armR 126 / armL 122),
  * and both paws were then within 4 degrees of each other: the far arm is rooted 16..20 px BEHIND the near one
@@ -163,23 +121,6 @@ const DAIRY_ANIMS = Object.freeze({
   pumpL: { loop: false, frames: [
     F(4, { ...SIT, armR: [138, -6], armL: [-16, -2], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 9, face: 'happy' }, { ease: 'out' }),
     F(9, { ...SIT, armR: [136, -4], armL: [-19, -4], root: [0, SIT_ROOT_Y], torso: 5, head: 8, face: 'happy' }),
-  ] },
-  /** The refusal: the milking paw comes off the udder, the braced one lifts off the stool with it, and the face
-   *  drops to concentration. No loss, no flinch. */
-  balk: { loop: false, frames: [
-    F(4, { ...SIT, armR: [152, -22], armL: [-54, -22], root: [0, SIT_ROOT_Y - 1], torso: -2, head: -4, face: 'neutral' }, { ease: 'out' }),
-    F(6, { ...SIT, armR: [128, 0], armL: [-30, -12], root: [0, SIT_ROOT_Y], torso: 4, head: 8, face: 'happy' }, { ease: 'inout' }),
-  ] },
-  /**
-   * The kick, on the shared bump's 5/10/6 beat and its hurt -> dazed faces, but seated: the stock `bump` sets
-   * standing legs, so a kicked milker stood up off the stool for 21 frames and sat back down. The pond overrode
-   * `bump` for the same reason (its rod snapped to the waterline); this one keeps the knees up and throws the root
-   * backward instead, so the critter is shoved on the stool rather than launched off it.
-   */
-  bump: { loop: false, frames: [
-    F(5, { legR: [118, -46], legL: [106, -40], armR: [-30, -20], armL: [-44, -16], root: [-5, SIT_ROOT_Y - 2], torso: -24, head: -20, squash: 1.08, face: 'hurt' }, { ease: 'out' }),
-    F(10, { ...SIT, armR: [-6, 4], armL: [-18, 6], root: [-2, SIT_ROOT_Y], torso: -8, head: -6, face: 'hurt' }, { ease: 'inout' }),
-    F(6, { ...SIT, armR: [18, 12], armL: [-6, 10], root: [0, SIT_ROOT_Y], torso: 2, head: 2, face: 'dazed' }),
   ] },
   /**
    * Seated cheer and seated sulk for the end sign: a paw up off the udder and the other thrown up BEHIND the
@@ -215,14 +156,9 @@ export interface DairyLayers {
   near: DairyLayer;
 }
 
-/** One cow's patience: the sim object enter() builds per stall and update() runs down (see stepCow). */
+/** One cow: which of the two looks to draw (art/dairyProps.ts drawCow). It stands there and chews. */
 export interface Cow {
-  /** Which of the two cow looks to draw (art/dairyProps.ts drawCow). */
   kind: number;
-  /** CALM, WARN or KICK. */
-  state: number;
-  /** Frames left of the state it is in. */
-  t: number;
 }
 
 /**
@@ -242,13 +178,9 @@ export interface DairySeat extends Seat {
   pailY: number;
   /** The stool's height, cut to this rig's own hip. */
   stoolH: number;
-  /** Which button is next: 0 = action, 1 = alt. */
-  next: number;
-  /** Accepted presses into the pail under the cow (0..PUMP_PER_PAIL). */
+  /** Presses into the pail under the cow (0..PUMP_PER_PAIL). */
   fill: number;
-  /** Frames left of the refusal beat (the wrong button). */
-  refuseT: number;
-  /** Frames left of the squirt the last accepted press started. */
+  /** Frames left of the squirt the last press started. */
   squirtT: number;
   /** Frames left of a fresh pail's landing squash. */
   pailT: number;
@@ -270,14 +202,6 @@ export interface Hop {
   slot: number;
 }
 
-/** A kicked pail's spill, lying flat on the straw (cosmetic). */
-export interface Splash {
-  /** Frames into the spill; SPLASH_FRAMES means the slot is free. */
-  t: number;
-  x: number;
-  y: number;
-}
-
 export class DairyScreen extends Screen {
   // The fields, for the checker only, in the order enter() fills them (the two the constructor seeds first).
   // `declare` for the reason game.ts gives over its own block: a plain field declaration would emit a class field
@@ -295,16 +219,10 @@ export class DairyScreen extends Screen {
   declare hops: Hop[];
   /** The next hop slot to reuse. */
   declare hopCursor: number;
-  /** The splash pool (cosmetic): MAX_SPLASHES slots handed out in turn. */
-  declare splashes: Splash[];
-  /** The next splash slot to reuse. */
-  declare splashCursor: number;
   /** Milk the round is played to: what the order still needs, or FALLBACK_TARGET with no run. */
   declare target: number;
   /** Milk in the party's churns right now. */
   declare total: number;
-  /** Kicks the party has taken this round (the playtest reads it). */
-  declare kicks: number;
   /** "3/4" for the clock ticket, rebuilt by setTotal() as the count changes. */
   declare countStr: string;
   /** The hint line along the bottom. */
@@ -345,13 +263,8 @@ export class DairyScreen extends Screen {
       s.teatX = s.cowX + TEAT_DX; s.teatY = s.cowY + TEAT_DY;
       s.pailX = s.teatX + PAIL_DX; s.pailY = s.y + PAIL_DY;
       s.stoolH = Math.max(STOOL_MIN, R(-rig.hipY * rig.scale) - SIT_ROOT_Y + 1);
-      s.next = 0; s.fill = 0; s.count = 0; s.bumpT = 0; s.refuseT = 0; s.squirtT = 0; s.pailT = 0;
-      // The first calm is seeded off the SEAT INDEX, not off rng: the coop seeds its hens from `20 + i * 11` and
-      // its rooster from ROOSTER_MIN, the orchard its first spawn from SPAWN_MIN, and the pond draws nothing until
-      // a cast - none of the three touches rng in enter(). GDD section 5 wants randomness inside update(), and
-      // drawing here would hang the byre's opening state off wherever the shared stream happened to be left.
-      // i * 53 modulo the range walks the four cows a third of a cycle apart (150 / 203 / 256 / 198).
-      s.cow = { kind: i & 1, state: CALM, t: CALM_MIN + (i * 53) % (CALM_MAX - CALM_MIN + 1) };
+      s.fill = 0; s.count = 0; s.bumpT = 0; s.squirtT = 0; s.pailT = 0;
+      s.cow = { kind: i & 1 };
       seatAnim(s, 'milkIdle', true);
       // four people at four stools, not one pose printed four times: each breath starts a beat later (pose only)
       for (let k = i * 11; k > 0; k--) s.player.tick();
@@ -359,16 +272,12 @@ export class DairyScreen extends Screen {
     this.hops = [];
     for (let i = 0; i < MAX_HOPS; i++) this.hops.push({ t: HOP_FRAMES, x0: 0, y0: 0, tx: 0, ty: 0, slot: 0 });
     this.hopCursor = 0;
-    this.splashes = [];
-    for (let i = 0; i < MAX_SPLASHES; i++) this.splashes.push({ t: SPLASH_FRAMES, x: 0, y: 0 });
-    this.splashCursor = 0;
     const need = run ? run.order.needs.find((x) => x.id === 'milk') : null;
     // the remainder, not the whole order: the map may already have banked some (the orchard, pond and coop agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;
-    this.kicks = 0;
     this.countStr = '0/' + this.target;
-    this.hint = 'PUMP: ' + game.input.keyText(0, 'action') + ' THEN ' + game.input.keyText(0, 'alt') + '   WATCH THE COW';
+    this.hint = 'MILK: TAP ' + game.input.keyText(0, 'action') + ' OVER AND OVER';
     this.clock = makeClock();
     // the sorted pass's fixed index array: four objects per stall (the cow, its pail, the stool, the milker)
     const total = n * 4;
@@ -381,13 +290,12 @@ export class DairyScreen extends Screen {
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
     for (let i = 0; i < this.hops.length; i++) if (this.hops[i].t < HOP_FRAMES) this.hops[i].t++;
-    for (let i = 0; i < this.splashes.length; i++) if (this.splashes[i].t < SPLASH_FRAMES) this.splashes[i].t++;
     const clock = this.clock;
     if (clock.phase === 0) {
-      for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; this.stepCow(s); this.stepSeat(s, input); }
+      for (let i = 0; i < this.seats.length; i++) this.stepSeat(this.seats[i], input);
       if (this.total >= this.target) this.finish();
     } else {
-      // the sign hangs: the crew holds its last beat, no cow moves and no press counts
+      // the sign hangs: the crew holds its last beat and no press counts
       for (let i = 0; i < this.seats.length; i++) this.seats[i].player.tick();
       if (roundOver(clock)) {
         if (game.run) game.run.gather('milk', this.total);
@@ -398,23 +306,14 @@ export class DairyScreen extends Screen {
     if (tickClock(clock)) this.finish();
   }
 
-  /** One cow's patience: calm for a seeded 150..260, then the telegraph, then the window, then calm again. */
-  stepCow(s: DairySeat): void {
-    const c = s.cow;
-    if (c.state === CALM) { if (--c.t <= 0) { c.state = WARN; c.t = TELEGRAPH; } return; }
-    if (c.state === WARN) { if (--c.t <= 0) { c.state = KICK; c.t = KICK_FRAMES; } return; }
-    if (--c.t <= 0) { c.state = CALM; c.t = rng.int(CALM_MIN, CALM_MAX); }
-  }
-
   /**
-   * One seat's frame. The beats run down first because they lock the buttons, then the two presses are read by
-   * SLOT (never anyPressed) and resolved in one place: inside the kick window ANY press is a kick, otherwise the
-   * button that is next is a squirt and the other one is refused. A frame that carries both buttons at once counts
-   * as the one that is next - a player mashing both is pumping, not cheating, and the alternation still advances.
+   * One seat's frame. The beats run down first, then the press is read by SLOT (never anyPressed): every `action`
+   * press is a squirt, and the sixth one fills the pail. `bumpT` is only ever set by the shared furniture (a seat
+   * arrives with it at 0 and nothing here raises it), but it is still honoured so the shared bump beat, if a future
+   * rule ever uses it, locks the buttons the way it does in every other mini-game.
    */
   stepSeat(s: DairySeat, input: Input): void {
     if (s.squirtT > 0) s.squirtT--;
-    if (s.refuseT > 0) s.refuseT--;
     if (s.pailT > 0) s.pailT--;
     if (s.bumpT > 0) {
       s.bumpT--;
@@ -422,20 +321,14 @@ export class DairyScreen extends Screen {
       s.player.tick();
       return;
     }
-    const a = input.pressed(s.slot, 'action'), b = input.pressed(s.slot, 'alt');
-    if (a || b) {
-      if (s.cow.state === KICK) this.kick(s);
-      else if (s.next === 0 ? a : b) this.pump(s);
-      else this.refuse(s);
-    }
-    if (s.bumpT === 0 && s.refuseT === 0 && s.player.done) seatAnim(s, 'milkIdle');
+    if (input.pressed(s.slot, 'action')) this.pump(s);
+    if (s.bumpT === 0 && s.player.done) seatAnim(s, 'milkIdle');
     s.player.tick();
   }
 
-  /** One accepted press: a squirt, the alternation flips, and the sixth one fills the pail. */
+  /** One press: a squirt, the paws swap over, and the sixth one fills the pail. */
   pump(s: DairySeat): void {
-    const down = s.next;
-    s.next = s.next === 0 ? 1 : 0;
+    const down = s.fill & 1;
     s.fill++;
     s.squirtT = SQUIRT_FRAMES;
     seatAnim(s, down === 0 ? 'pumpR' : 'pumpL', true);
@@ -444,42 +337,17 @@ export class DairyScreen extends Screen {
   }
 
   /**
-   * A full pail: +1 milk for the PARTY, the pail flies to the next free slot on the churn rack, a fresh one slides
-   * in under the cow and the alternation resets to ACTION so nobody has to remember where they were.
+   * A full pail: +1 milk for the PARTY, the pail flies to the next free slot on the churn rack, and a fresh one
+   * slides in under the cow.
    */
   bank(s: DairySeat): void {
-    s.fill = 0; s.next = 0; s.pailT = PAIL_LAND;
+    s.fill = 0; s.pailT = PAIL_LAND;
     s.count++; this.setTotal(this.total + 1);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     const slot = Math.min(this.total - 1, CHURN_X.length - 1);
     h.t = 0; h.x0 = s.pailX; h.y0 = s.pailY; h.tx = CHURN_X[slot]; h.ty = ROWS.rack; h.slot = s.slot;
     ringAt(s.pailX, s.pailY - PAIL_H, 4, 18, SIGNAL.dairy, 2, 16, false, true);
     floatText(s.pailX, s.pailY - PAIL_H - 16, PLUS_ONE, s.colour, 1, true);
-  }
-
-  /** The wrong button: nothing happens to the pail, and the seat says so. */
-  refuse(s: DairySeat): void { s.refuseT = REFUSE_FRAMES; seatAnim(s, 'balk', true); }
-
-  /**
-   * A press inside the kick window. The pail's progress is gone and, if the seat has banked any milk, one of those
-   * goes too - the wormy apple's price, and the coop's hen's, so a player who has met one mini-game knows this one.
-   * The alternation resets with it: a kicked milker should be looking at the cow, not remembering a button.
-   */
-  kick(s: DairySeat): void {
-    s.bumpT = BUMP_FRAMES; s.fill = 0; s.next = 0; s.refuseT = 0; s.squirtT = 0; s.pailT = 0;
-    seatAnim(s, 'bump', true);
-    const sp = this.splashes[this.splashCursor]; this.splashCursor = (this.splashCursor + 1) % this.splashes.length;
-    sp.t = 0; sp.x = s.pailX - 15; sp.y = s.pailY - 1;   // beside the pail, clear of the chevron tag at its foot
-    burstDust(s.pailX, s.pailY, 3, 1.2, true);
-    // paper-dark rings, never mint: SIGNAL.dairy says "press on this beat" and must never also say "you lost it"
-    ringAt(s.pailX, s.pailY - 4, 4, 20, UI.paperDark, 2, 18, true, true);
-    if (s.count > 0) {
-      s.count--; this.setTotal(this.total - 1);
-      // thrown to the milker's OPEN side, into the gap between this stall and the next cow's nose: at +18 it
-      // landed on the sheep's own brow through the whole bump beat, and ART_STYLE 0.6 keeps that row clear
-      floatText(s.x + 26, s.y - 58, MINUS_ONE, s.colour, 1, true);
-    }
-    this.kicks++;
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
@@ -490,7 +358,7 @@ export class DairyScreen extends Screen {
     endRound(this.clock, SIGN_PREFIX + this.total);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      s.bumpT = 0; s.refuseT = 0; s.squirtT = 0; s.cow.state = CALM;
+      s.bumpT = 0; s.squirtT = 0;
       seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true);
     }
   }
@@ -502,25 +370,23 @@ export class DairyScreen extends Screen {
     this.drawChurns(ctx);
     blitAt(ctx, L.floor.L, 0, L.floor.y);
     particles.draw(ctx, null, 'back');
-    // ground contact first: every cow, every pail, every milker, then the spills lying flat on the straw
+    // ground contact first: every cow, every pail, every milker
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       drawShadow(ctx, s.cowX - 6, s.cowY, 78, 0.38, 0);
       drawShadow(ctx, s.pailX, s.pailY, 26, 0.32, 0);
       drawShadow(ctx, s.x, s.y, s.rig.width + 18, 0.4, 0);   // wide enough to carry the stool's feet too
     }
-    for (let i = 0; i < this.splashes.length; i++) { const sp = this.splashes[i]; if (sp.t < SPLASH_FRAMES) drawSplash(ctx, sp.x, sp.y, (sp.t / SPLASH_STEP) | 0); }
     this.drawSorted(ctx, f);
     for (let i = 0; i < this.seats.length; i++) this.drawJetAt(ctx, this.seats[i]);
     for (let i = 0; i < this.hops.length; i++) this.drawHop(ctx, this.hops[i]);
     blitAt(ctx, L.near.L, 0, L.near.y);
     particles.draw(ctx, null, 'front');
-    // the chevrons after the near lip: the one thing a first-time player must read is never behind anything
+    // the chevrons after the near lip: the one thing a first-time player must read is never behind anything. The
+    // lit chevron swaps sides with every press, so a tapping player sees the taps land.
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      const refused = s.refuseT > 0;
-      drawChevrons(ctx, s.pailX, s.pailY + CHEV_DY, s.next, refused ? UI.paperDark : s.colour, SIGNAL.dairy,
-        refused && (f & 1) ? 1 : 0, ((f >> 3) & 1) === 0);
+      drawChevrons(ctx, s.pailX, s.pailY + CHEV_DY, s.fill & 1, s.colour, SIGNAL.dairy, 0, ((f >> 3) & 1) === 0);
     }
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
@@ -559,18 +425,12 @@ export class DairyScreen extends Screen {
   }
 
   /**
-   * One cow. The telegraph BLINKS the warning mark on a 4-frame beat and the window holds it solid with the hoof
-   * cocked, so the two halves of the beat are two pictures rather than two speeds (the coop's rooster learned the
-   * same lesson the other way round: its comb had to keep flashing through the charge). The chew is a slow
-   * index-hashed beat off the frame counter, one cow to the next, so a row of four never chews in unison.
+   * One cow, chewing: a slow index-hashed beat off the frame counter, one cow to the next, so a row of four never
+   * chews in unison. Ears up, tail down, no mark: there is nothing to warn about in this byre.
    */
   drawCowAt(ctx: CanvasRenderingContext2D, s: DairySeat, f: number): void {
-    const c = s.cow, warn = c.state === WARN, kickWin = c.state === KICK;
-    const ear = warn || kickWin ? 1 : 0;
-    const tail = kickWin ? 1 : warn ? 1 - c.t / TELEGRAPH : 0;
-    const mark = kickWin || (warn && ((f >> 2) & 1)) ? SIGNAL.hot : null;
-    const chew = c.state === CALM && (((f + s.slot * 37) >> 4) & 3) === 0 ? 1 : 0;
-    drawCow(ctx, s.cowX, s.cowY, c.kind, ear, tail, chew, kickWin ? 1 : 0, mark);
+    const chew = (((f + s.slot * 37) >> 4) & 3) === 0 ? 1 : 0;
+    drawCow(ctx, s.cowX, s.cowY, s.cow.kind, 0, 0, chew, 0, null);
   }
 
   drawPailAt(ctx: CanvasRenderingContext2D, s: DairySeat): void {
@@ -629,19 +489,19 @@ export class DairyScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText, kicks: this.kicks,
-      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), next: s.next, fill: s.fill, count: s.count, bumpT: s.bumpT, refuseT: s.refuseT })),
-      cows: this.seats.map((s) => [COW_STATES[s.cow.state], s.cow.t]),
+      total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
+      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), fill: s.fill, count: s.count, bumpT: s.bumpT })),
+      cows: this.seats.map((s) => s.cow.kind),
     };
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.kicks);
+    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      f.push(s.next, s.fill, s.count, s.bumpT, s.refuseT, s.squirtT, s.pailT, s.cow.state, s.cow.t);
+      f.push(s.fill, s.count, s.bumpT, s.squirtT, s.pailT);
     }
     return f;
   }

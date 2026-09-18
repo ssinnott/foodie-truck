@@ -7,26 +7,26 @@
 //            * 300 frames of seat 0 running left and right through api.hold - it moved, stayed inside the floor,
 //              and the three seats with no input stayed exactly where they were put;
 //            * the ONE RULE, driven by hand: with a chute forced to POUR and seat 0 stood under it, holding action
-//              raises the fill (a dead FILL_RATE or a dead catch test fails here), releasing at the brim scores +1
-//              and banks it in the party's total, and holding past the brim BURSTS - the part fill goes, the seat's
-//              bump beat starts and one BANKED sack goes with it. The same hold with the chute dormant fills
-//              nothing, which is the assert that catches a fill that forgot to check the chute;
+//              raises the fill (a dead FILL_RATE or a dead catch test fails here), the brim ties the sack off BY
+//              ITSELF while the button is still down (+1, banked in the party's total), a release under the brim
+//              keeps the part fill, and a hold that goes on and on just fills the next sack - nothing bursts. The
+//              same hold with the chute dormant fills nothing, which is the assert that catches a fill that forgot
+//              to check the chute;
 //            * the clock forced to its last frames: the FLOUR sign drops with the party's total on it, is held,
 //              the screen hands back to the map and run.gather('flour') has moved the order's flour line.
 //          Writes tools/screens/mill-fill.png (a sack in the brim band under a pouring chute - the shot the
-//          "nearly full vs about to burst" read is judged from) and mill-burst.png (the flour cloud, the whitened
-//          critter and the '-1').
+//          "nearly full" read is judged from).
 import { withPage, assert } from '../playtest.js';
 
 const SLAM = 6, HOLD = 60;
 /** The screen's own numbers, restated here so a change to either side shows up as a failing assert, not a silent pass. */
-const FILL_RATE = 1 / 54, FULL = 1, BRIM_AT = 0.65, BURST = 1.5;
+const FILL_RATE = 1 / 54, FULL = 1, BRIM_AT = 0.65, TIE_FRAMES = 18;
 /** Frames of holding that land the sack inside the brim band: 45/54 = 0.833, comfortably between 0.65 and 1. */
 const TO_BRIM = 45;
-/** ...and from there to just over the brim (57/54 = 1.055), where a release ties the sack off. */
-const TO_FULL = 12;
-/** A full hold from empty to the bang: BURST / FILL_RATE = 81 frames, plus one so the test never sits on the edge. */
-const TO_BURST = 82;
+/** ...and from there to the brim (54/54), where the sack ties itself off; plus one so the test never sits on the edge. */
+const TO_FULL = 10;
+/** A long hold from empty: a tie at 54, the tie beat, and a good way into the next sack. Nothing bursts. */
+const LONG_HOLD = 100;
 
 /**
  * Stand seat 0 under chute `ci` with an empty sack and that chute pouring, and switch everything else off: no more
@@ -43,7 +43,7 @@ async function stage(api, page, ci, pouring) {
     // step then gives it the screen's own POUR_FRAMES, so the test never invents a state the sim cannot reach
     if (on) { sc.chutes[i].state = 1; sc.chutes[i].t = 1; }
     s.x = sc.summary().chutes[i][3]; s.facing = 1; s.moving = false;
-    s.fill = 0; s.bumpT = 0; s.tieT = 0; s.whiteT = 0; s.wasHeld = false; s.chute = -1;
+    s.fill = 0; s.bumpT = 0; s.tieT = 0; s.chute = -1;
     sc.target = Math.max(sc.target, sc.total + 4); sc.setTotal(sc.total);
     return { count: s.count, total: sc.total, target: sc.target };
   }, [ci, pouring]);
@@ -55,7 +55,7 @@ async function stage(api, page, ci, pouring) {
 function seat0(page) {
   return page.evaluate(() => {
     const sc = window.__game.game.screen, s = sc.seats[0];
-    return { x: s.x, fill: s.fill, count: s.count, bumpT: s.bumpT, whiteT: s.whiteT, tieT: s.tieT, anim: s.anim, chute: s.chute, total: sc.total, bursts: sc.bursts, tied: sc.tied };
+    return { x: s.x, fill: s.fill, count: s.count, bumpT: s.bumpT, tieT: s.tieT, anim: s.anim, chute: s.chute, total: sc.total, tied: sc.tied };
   });
 }
 
@@ -108,34 +108,27 @@ export const SCENARIOS = {
       assert(brim.fill > BRIM_AT && brim.fill < FULL,
         `${TO_BRIM} frames of hold puts the sack in the brim band (fill ${brim.fill.toFixed(3)}, band ${BRIM_AT}..${FULL})`);
       assert(Math.abs(brim.fill - TO_BRIM * FILL_RATE) < 0.02, `and it filled at FILL_RATE (${brim.fill.toFixed(3)} vs ${(TO_BRIM * FILL_RATE).toFixed(3)})`);
-      // one shot carrying BOTH reads: seat 0 in the brim band (green tie, green on the tag) beside seat 2 held over
-      // the brim (green/HOT strobe, red past the tag's brim post) - and the gold, which belongs to the pouring
-      // chute alone, on the spouts above them. That side-by-side IS the readability claim.
+      // one shot carrying both reads: seat 0 in the brim band (green tie, green on the tag) beside seat 2 just
+      // started (its own colour on the tag) - and the gold, which belongs to the pouring chute alone, on the spouts
       await api.hold(2, { action: true });
       await page.evaluate(() => {
         const sc = window.__game.game.screen, s = sc.seats[2];
         sc.chutes[3].state = 2; sc.chutes[3].t = 90;
-        s.x = sc.summary().chutes[3][3]; s.facing = 1; s.moving = false; s.fill = 1.3; s.wasHeld = true;
+        s.x = sc.summary().chutes[3][3]; s.facing = 1; s.moving = false; s.fill = 0.3;
       });
       await api.step(1);
-      const hot = await page.evaluate(() => window.__game.game.screen.seats[2].fill);
-      assert(hot > FULL && hot < BURST, `seat 2 is held over the brim for the shot (fill ${hot.toFixed(3)})`);
       await api.shot('mill-fill');
       await api.release(2);
-      // put seat 2 back before it can score off the staged fill: clearing wasHeld means no release is seen
-      await page.evaluate(() => { const s = window.__game.game.screen.seats[2]; s.fill = 0; s.wasHeld = false; s.chute = -1; });
+      await page.evaluate(() => { const s = window.__game.game.screen.seats[2]; s.fill = 0; s.chute = -1; });
 
-      // --- part three: releasing at or over the brim ties the sack off
+      // --- part three: the brim ties the sack off by itself, with the button still down
       await api.step(TO_FULL);
-      const over = await seat0(page);
-      assert(over.fill >= FULL, `holding on carries it over the brim (fill ${over.fill.toFixed(3)})`);
-      await api.release(0);
-      await api.step(2);
       const tied = await seat0(page);
-      assert(tied.count === before.count + 1, `releasing over the brim ties the sack off (seat 0 ${before.count} -> ${tied.count})`);
+      assert(tied.count === before.count + 1, `reaching the brim ties the sack off without a release (seat 0 ${before.count} -> ${tied.count})`);
       assert(tied.total === before.total + 1, `and the party's total went up with it (${before.total} -> ${tied.total})`);
       assert(tied.fill === 0 && tied.tieT > 0 && tied.anim === 'tie', `a fresh empty sack and the tie beat (fill ${tied.fill}, tieT ${tied.tieT}, anim '${tied.anim}')`);
-      await api.step(20);
+      await api.release(0);
+      await api.step(TIE_FRAMES + 2);
 
       // --- part four: a release UNDER the brim keeps the part fill instead of scoring
       const partBefore = await stage(api, page, 1, true);
@@ -147,23 +140,17 @@ export const SCENARIOS = {
       assert(part.count === partBefore.count && part.fill > 0 && part.fill < FULL,
         `releasing under the brim keeps the part-filled sack and scores nothing (count ${part.count}, fill ${part.fill.toFixed(3)})`);
 
-      // --- part five: holding past the brim bursts, and it costs a BANKED sack
-      const burstBefore = await stage(api, page, 1, true);
-      assert(burstBefore.count > 0, `seat 0 has a banked sack to lose (${burstBefore.count})`);
+      // --- part five: a long hold never bursts - it ties one sack and starts on the next
+      const longBefore = await stage(api, page, 1, true);
       await api.hold(0, { action: true });
-      await api.step(TO_BURST);
-      const bang = await seat0(page);
+      await api.step(LONG_HOLD);
+      const long = await seat0(page);
       await api.release(0);
-      // five frames on: the cloud is at its widest step and the critter is still whitened (WHITE_FRAMES is 8)
+      assert(long.count === longBefore.count + 1 && long.total === longBefore.total + 1,
+        `${LONG_HOLD} frames of hold tie one sack (seat 0 ${longBefore.count} -> ${long.count}, total ${longBefore.total} -> ${long.total})`);
+      assert(long.fill > 0 && long.fill < FULL, `and the next sack is part way there (fill ${long.fill.toFixed(3)})`);
+      assert(long.bumpT === 0 && long.anim !== 'bump', `nothing burst (bumpT ${long.bumpT}, anim '${long.anim}')`);
       await api.step(5);
-      await api.shot('mill-burst');
-      assert(bang.bursts === 1, `${TO_BURST} frames of hold (BURST ${BURST} / FILL_RATE) bursts the sack (${bang.bursts} bursts)`);
-      assert(bang.fill === 0, `the part fill is gone (fill ${bang.fill})`);
-      assert(bang.count === burstBefore.count - 1 && bang.total === burstBefore.total - 1,
-        `and one banked sack goes with it (seat 0 ${burstBefore.count} -> ${bang.count}, total ${burstBefore.total} -> ${bang.total})`);
-      assert(bang.bumpT > 0 && bang.anim === 'bump' && bang.whiteT > 0,
-        `the seat takes the shared bump beat, whitened with flour (bumpT ${bang.bumpT}, anim '${bang.anim}', whiteT ${bang.whiteT})`);
-      await api.step(25);
 
       // --- the ending: force the clock to its last frames, expect the sign, the hold, then the map and the bank
       const lastMill = await api.summary();
