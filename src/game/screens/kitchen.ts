@@ -1,7 +1,10 @@
 // KITCHEN - COOK (docs/GDD.md section 6; docs/ART_STYLE.md section 1 "Kitchen"). The truck's interior, side-on,
-// camera locked: one critter per seat walks the counter between the five stations (content/places.js STATIONS) and
+// camera locked: one critter per seat walks the counter between the six stations (content/places.js STATIONS) and
 // the order's steps are worked IN ORDER. The first seat to interact at the current step's station owns it (its slot
 // colour fills the paper tag over the station); its input alone drives the step:
+//   FRIDGE one press per item the order wants, any rhythm: each tap pulls the next ingredient out of the door and
+//          sends it flying along the counter to the station that uses it next, where it piles up until that step
+//          is done (a graphic, never a choice); the last one closes the door
 //   CHOP  ten presses, any rhythm: every tap is a chop and the tenth finishes the board
 //   MIX   hold for 240 frames while a dial fills; letting go pauses it, and it picks up where it left off
 //   STOVE hold for 240 frames while a bar fills; letting go pauses it the same way
@@ -43,20 +46,24 @@ import { drawText } from '../../engine/text.ts';
 import { kitchenLayer, ROWS, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.ts';
 import {
   paintStations, drawStationFocus, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
-  drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, drawKettleSteam, PLATE, BELL, POT, OVEN,
+  drawFridge, drawPulls, drawPullBar, drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, drawKettleSteam,
+  PLATE, BELL, POT, OVEN, FRIDGE,
 } from '../../art/kitchenProps.ts';
 
 /** The HOW TO PLAY card's pictograms per station (game/controlcard.ts): walk, then the station's own verb. */
-const SCHEMES: Record<string, readonly CardScheme[]> = { chop: ['move', 'mash'], mix: ['move', 'hold'], stove: ['move', 'hold'], oven: ['move', 'hold'], plate: ['move', 'tap'] };
+const SCHEMES: Record<string, readonly CardScheme[]> = { fridge: ['move', 'mash'], chop: ['move', 'mash'], mix: ['move', 'hold'], stove: ['move', 'hold'], oven: ['move', 'hold'], plate: ['move', 'tap'] };
 /** Where the HOW TO PLAY card rests in the kitchen: up on the rail between the two papers. */
 const CARD_TOP_Y = 12;
 const R = Math.round;
-const CHOP = 0, MIX = 1, STOVE = 2, OVEN_S = 3, PLATE_S = 4;
-const STATION_IDX = { chop: CHOP, mix: MIX, stove: STOVE, oven: OVEN_S, plate: PLATE_S };
+const FRIDGE_S = 0, CHOP = 1, MIX = 2, STOVE = 3, OVEN_S = 4, PLATE_S = 5;
+const STATION_IDX = { fridge: FRIDGE_S, chop: CHOP, mix: MIX, stove: STOVE, oven: OVEN_S, plate: PLATE_S };
 /** Walking: px/frame along the feet line. */
 const SPEED = 2.0;
-/** The steps' lengths (docs/GDD.md section 6): taps on the board, frames of holding everywhere else. */
+/** The steps' lengths (docs/GDD.md section 6): taps on the board, frames of holding everywhere else; the fridge
+ *  takes as many taps as the order has items. */
 const CHOP_HITS = 10;
+/** The door stands open this long after a pull, and the item is on its arc along the counter for the first PULL_FLY of it. */
+const DOOR_FRAMES = 30, PULL_FLY = 24;
 const MIX_FRAMES = 240;
 const STOVE_FRAMES = 240;
 const OVEN_FRAMES = 240;
@@ -67,14 +74,14 @@ const SERVE_FRAMES = 96, DROP_FRAMES = 12, STAMP_AT = 40;
 const STAMP_Y = 140;
 /** The reach beat's hold, the eat gag's length, the chop anim's length. */
 const ACT_FRAMES = 20, EAT_FRAMES = 42, CHOP_ANIM = 21, GAG_CHANCE = 1 / 6;
-/** Segments on each station's paper tag. */
-const SEGS = [CHOP_HITS, 4, 4, 4, 1];
+/** Segments on each station's paper tag; the fridge's is the order's own item count (`segs`). */
+const SEGS = [1, CHOP_HITS, 4, 4, 4, 1];
 /** Rows a critter's tallest head part reaches above its skull (ears, toque, sunhat), for the name plate. */
 const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18, rowan: 18 };
 /** The lowest row a name plate's top may take: the module's own contract is that nothing to read sits in rows
  *  156..200, where the pot, the bowl and the board's ingredient are. A tall crown lifts a plate above this. */
 const PLATE_Y_MAX = 160;
-const HINTS = { chop: 'CHOP: TAP OVER AND OVER', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD TO COOK', oven: 'OVEN: HOLD TO BAKE', plate: 'PLATE: RING THE BELL' };
+const HINTS = { fridge: 'FRIDGE: TAP TO PULL IT OUT', chop: 'CHOP: TAP OVER AND OVER', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD TO COOK', oven: 'OVEN: HOLD TO BAKE', plate: 'PLATE: RING THE BELL' };
 const PERFECT = 'PERFECT!', DONE = 'DONE', NOM = 'NOM', ORDER_UP = 'ORDER UP!', RING = 'RING!';
 const CARD_X = RECIPE.x, CARD_Y = RECIPE.y, CARD_W = RECIPE.w;
 // the recipe card is the SMALLER paper: it hangs below the rail on two strings and carries no perforated top, so
@@ -163,8 +170,19 @@ export class KitchenScreen extends Screen {
   declare icons: string[];
   /** Those ingredients' base hexes, in the same order. */
   declare hexes: string[];
+  /** Every ITEM the order wants, one entry per unit (four apples, two eggs): what comes out of the fridge, in order. */
+  declare pullIcons: string[];
+  declare pullHexes: string[];
+  /** How many items have been pulled out of the fridge so far (0..pullIcons.length). */
+  declare pulled: number;
+  /** The station the pulls fly to and pile up at: the step after the fridge (CHOP for a recipe that chops, else MIX). */
+  declare pullDest: number;
+  /** Frames since the last pull (the door's swing and the item's arc are timed off it); large when idle. */
+  declare pullT: number;
   /** Per-ingredient glyph and hex tables for the order ticket (game/ui.ts drawOrderTicket). */
   declare ticketOpts: OrderTicketOpts;
+  /** The ticket's two head rows, worded once: whose order it is and the dish. */
+  declare ticketHead: string[];
   /** Which stations this order uses, indexed by station: the stations that draw their per-frame marks. */
   declare has: boolean[];
   /** The step being worked: an index into `steps`, `steps.length` once every step is done. */
@@ -217,7 +235,15 @@ export class KitchenScreen extends Screen {
     this.owners = this.steps.map(() => -1);
     this.icons = order.needs.map((n) => (INGREDIENTS[n.id] || INGREDIENTS.apple).icon);
     this.hexes = order.needs.map((n) => (INGREDIENTS[n.id] || INGREDIENTS.apple).hex);
+    // what the fridge holds for this order: one entry per unit, in the order's own order
+    this.pullIcons = []; this.pullHexes = [];
+    for (let i = 0; i < order.needs.length; i++) for (let k = 0; k < order.needs[i].amount; k++) { this.pullIcons.push(this.icons[i]); this.pullHexes.push(this.hexes[i]); }
+    this.pulled = 0; this.pullT = DOOR_FRAMES;
+    const fk = this.steps.indexOf(FRIDGE_S);
+    this.pullDest = fk >= 0 && fk + 1 < this.steps.length ? this.steps[fk + 1] : (this.steps.length ? this.steps[0] : CHOP);
+    if (this.pullDest === FRIDGE_S) this.pullDest = CHOP;
     this.ticketOpts = { icons: {}, hexes: {} };
+    this.ticketHead = [`FOR ${getCustomer(order.customer).name}`, order.dish];
     for (const n of order.needs) { const ing = INGREDIENTS[n.id]; if (ing) { this.ticketOpts.icons[n.id] = ing.icon; this.ticketOpts.hexes[n.id] = ing.hex; } }
     this.has = [false, false, false, false, false];
     for (const s of this.steps) this.has[s] = true;
@@ -260,6 +286,7 @@ export class KitchenScreen extends Screen {
     particles.update();
     this.custPlayer.tick();
     if (this.tak > 0) this.tak--;
+    if (this.pullT < DOOR_FRAMES) this.pullT++;
     if (this.ringT >= 0 && this.ringT < 60) this.ringT++;
     if (this.ovenGlow > 0 && !(this.currentStation() === OVEN_S && this.st.phase === 1)) this.ovenGlow--;
     this.updateSeats(inp);
@@ -324,6 +351,15 @@ export class KitchenScreen extends Screen {
     const s = this.actor(inp, station, holdStation);
     const pressed = s ? inp.pressed(s.slot, 'action') : false, held = s ? inp.held(s.slot, 'action') : false;
     switch (station) {
+      case FRIDGE_S:
+        // one item out per tap, in the order's own order; the door swings, the item arcs onto the tray
+        if (pressed) {
+          st.count++; this.pulled = Math.min(this.pullIcons.length, this.pulled + 1); this.pullT = 0;
+          s.facing = 1; s.actT = ACT_FRAMES; this.playAnim(s, 'reach', true);
+          ringAt(FRIDGE.x + FRIDGE.w / 2, FRIDGE.doorY + 20, 3, 12, UI.cream, 2, 10, false, true);
+          if (st.count >= this.segs(FRIDGE_S)) this.completeStep(2, s);
+        }
+        break;
       case CHOP:
         if (pressed) {
           st.count++; this.tak = 6; s.facing = 1; s.actT = CHOP_ANIM; this.playAnim(s, 'chop', true);
@@ -349,6 +385,9 @@ export class KitchenScreen extends Screen {
         break;
     }
   }
+
+  /** How many segments a station's tag and tally carry: the fridge's is the order's item count, the rest are fixed. */
+  segs(k: number): number { return k === FRIDGE_S ? Math.max(1, this.pullIcons.length) : SEGS[k]; }
 
   /** Bank a step's score, say so over the station, roll the gag, move on. */
   completeStep(score: number, s: Seat | null): void {
@@ -418,7 +457,7 @@ export class KitchenScreen extends Screen {
       jointScreen(s.rig, 'head', s.head);
     }
     particles.draw(ctx, null, 'front');
-    for (let i = 0; i < this.steps.length; i++) drawTag(ctx, this.steps[i], this.owners[i], SEGS[this.steps[i]], this.tagFill(i));
+    for (let i = 0; i < this.steps.length; i++) drawTag(ctx, this.steps[i], this.owners[i], this.segs(this.steps[i]), this.tagFill(i));
     for (let i = this.seats.length - 1; i >= 0; i--) {
       const s = this.seats[i], py = R(s.head.y - s.rig.p.headR - s.crown) - 14;
       drawNamePlate(ctx, s.slot, s.name, R(s.head.x), py < PLATE_Y_MAX ? py : PLATE_Y_MAX);
@@ -434,6 +473,10 @@ export class KitchenScreen extends Screen {
   done(k: number): boolean { for (let i = 0; i < this.steps.length; i++) if (this.steps[i] === k) return this.scores[i] >= 0; return false; }
 
   drawStations(ctx: CanvasRenderingContext2D, f: number, st: StepState, station: number): void {
+    // the fridge: the door open for a beat after each pull, and the pulls piled at the station that uses them next
+    // until that step has taken them
+    drawFridge(ctx, DOOR_FRAMES - this.pullT, this.pullIcons, this.pullHexes, this.pulled);
+    if (!this.done(this.pullDest)) drawPulls(ctx, this.pullIcons, this.pullHexes, this.pulled, this.pullDest, this.pullT >= PULL_FLY ? 1 : this.pullT / PULL_FLY);
     if (this.has[CHOP]) {
       const cut = this.done(CHOP) ? 2 : station === CHOP ? (st.count < 2 ? 0 : st.count < 4 ? 1 : 2) : 0;
       drawChopItem(ctx, this.icons[0], this.hexes[0], cut, 0, this.tak > 0);
@@ -463,11 +506,11 @@ export class KitchenScreen extends Screen {
 
   /** How many of a step's tag segments are lit: all when done, its progress while current, none before. */
   tagFill(i: number): number {
-    const k = this.steps[i], segs = SEGS[k];
+    const k = this.steps[i], segs = this.segs(k);
     if (this.scores[i] >= 0) return segs;
     if (i !== this.stepIdx) return 0;
     const st = this.st;
-    if (k === CHOP) return st.count;
+    if (k === CHOP || k === FRIDGE_S) return st.count;
     if (k === MIX) return Math.floor(st.t * segs / MIX_FRAMES);
     if (k === STOVE) return Math.floor(st.t * segs / STOVE_FRAMES);
     if (k === OVEN_S) return Math.floor(st.t * segs / OVEN_FRAMES);
@@ -476,7 +519,8 @@ export class KitchenScreen extends Screen {
 
   drawWidget(ctx: CanvasRenderingContext2D, st: StepState, station: number): void {
     const slot = this.liveSlot(station);
-    if (station === CHOP) drawChopBar(ctx, st.count, CHOP_HITS, slot);
+    if (station === FRIDGE_S) drawPullBar(ctx, st.count, this.segs(FRIDGE_S), slot);
+    else if (station === CHOP) drawChopBar(ctx, st.count, CHOP_HITS, slot);
     else if (station === MIX) drawDial(ctx, st.t / MIX_FRAMES, st.phase === 0 && st.t > 0, slot);
     else if (station === STOVE) drawStoveBar(ctx, st.t / STOVE_FRAMES, slot);
     else if (station === OVEN_S) drawOvenTimer(ctx, st.t / OVEN_FRAMES, slot);
@@ -485,7 +529,7 @@ export class KitchenScreen extends Screen {
 
   drawHud(ctx: CanvasRenderingContext2D, f: number): void {
     const run = this.game.run;
-    drawOrderTicket(ctx, run, TICKET.x, TICKET.y, TICKET.w, drawFood, this.ticketOpts);
+    drawOrderTicket(ctx, run, TICKET.x, TICKET.y, TICKET.w, this.ticketHead, drawFood, this.ticketOpts);
     // the recipe card: one row per step, the owner's 6x6 slot ring at the left, an ink tick when done, '>' on the current
     const n = this.steps.length, h = 16 + ROW * n + 6;
     const top = drawTicket(ctx, CARD_X, CARD_Y, CARD_W, h, CARD_OPTS);
@@ -503,7 +547,7 @@ export class KitchenScreen extends Screen {
   override summary() {
     return {
       step: this.stepIdx, steps: this.stepNames, scores: this.scores.slice(), owners: this.owners.slice(), total: this.total, stars: this.stars, served: this.served,
-      phase: this.st.phase, t: this.st.t, count: this.st.count,
+      phase: this.st.phase, t: this.st.t, count: this.st.count, pulled: this.pulled, pulls: this.pullIcons.length, pullDest: this.pullDest,
       seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
     };
   }
@@ -511,7 +555,7 @@ export class KitchenScreen extends Screen {
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.stepIdx, this.total, this.st.phase, this.st.t, this.st.count, this.served ? 1 : 0, this.serveT, this.stars);
+    f.push(this.stepIdx, this.total, this.st.phase, this.st.t, this.st.count, this.pulled, this.served ? 1 : 0, this.serveT, this.stars);
     for (let i = 0; i < this.steps.length; i++) f.push(this.scores[i], this.owners[i]);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.station, s.moving ? 1 : 0, s.actT, s.eatT); }
     return f;

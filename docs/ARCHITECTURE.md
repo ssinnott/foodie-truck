@@ -62,7 +62,7 @@ src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
                fishing + hens + kitchenProps + dairyProps + millProps + hiveProps + gardenProps (per-scene props),
                logo, backgrounds/ (one pre-rendered scene each)
-src/game/      game (screen stack), run (the order + party, the only cross-screen state), animation, menuinput,
+src/game/      game (screen stack), run (the day plan + party + shopping list, the only cross-screen state), animation, menuinput,
                ui (the paper/chalk/wood kit), minigame (shared mini-game furniture), maphud, screens/ (one per screen)
 src/content/   critters/ (the cast: common rig hooks + one file per critter + items + customers), recipes, places
 src/net/       signal (room codes over MQTT / BroadcastChannel), mqtt-codec, peer (WebRTC), lockstep, protocol,
@@ -189,33 +189,48 @@ and `FOOD.<icon>` for `apple egg fish milk sack jar carrot`.
 `Game.update()` ticks only the TOP screen; overlays set `transparent = true` so the screen below still draws.
 
 ### `game/run.js` — the run
-`startRun(game, { seed, critters, order })` creates `game.run`, plain data: `party[{ slot, critter, score }]`,
-`stages[{ id, stars }]` (one per `content/recipes.js` ORDERS entry — the day's card), `stage` (the index the order
-board last took off it), `order { dish, customer, line, steps, needs[{ id, amount, have }] }`,
-`truck { x, y, heading, at }`, `served`, `lastServed`, `score`.
-Mutators: `gather(id, n)`, `complete()`, `missing()`, `placeFor(id)`, `screenForPlace(placeId)`, `setStage(i)`,
-`serve(stars)`, `cleared()`, `stars()`, `dayComplete()`, `summary()`.
-`SCENES = ['map','orchard','pond','coop','kitchen','dairy','mill','hive','garden','stage']` are the
+`planDay(seed, { order?, recipes? })` lays a day out from a seed on its own `makeRng` stream (never the gameplay
+singleton, whose call count the canary hashes): `RECIPES_PER_DAY` recipe ids, and `LINES_PER_DAY` lines of
+`LINE_LENGTH` `{ customer, recipe }` at distinct supply landmarks. `order` (1-based, `?order=`) forces a recipe onto
+the menu and into the first customer's paws; `recipes` (0-based ORDERS indices, `?recipes=`) fixes the menu.
+`startRun(game, { seed, critters, order, recipes })` creates `game.run`, plain data: `party[{ slot, critter, score }]`,
+`recipes[]`, `lines[{ place, served, customers[{ customer, recipe, stars }] }]`, `needs[{ id, amount, have, used }]`
+(the shopping list: every order summed; `have` gathered, `used` cooked), `line` / `customer` (who is at the hatch),
+`order { id, dish, customer, line, steps, needs }` (that customer's, rebuilt by `startLine` and `serve`),
+`truck { x, y, heading, at }`, `served`, `lastServed` (the line finished last), `score`.
+Mutators: `need(id)`, `have(id)`, `stock(id)`, `gather(id, n)`, `complete()`, `missing()`, `placeFor(id)`,
+`lineAt(placeId)`, `screenForPlace(placeId)`, `startLine(i)`, `serve(stars)`, `lineDone()`, `linesServed()`,
+`stars()`, `dayComplete()`, `summary()`.
+`SCENES = ['map','orchard','pond','coop','kitchen','dairy','mill','hive','garden','stage','line']` are the
 START-packet scene indices; scenes finished after the first pass are **appended**, never filed next to their
 neighbours, because the index is what crosses the wire. `START_SCENE` is the index an online match opens on (the
-order board), which is what `net/session.js` seeds `lobby.scene` with.
+day board), which is what `net/session.js` seeds `lobby.scene` with.
 The run is the ONLY state shared between screens; it is rebuilt identically on every peer from seed + party.
-A run is FINITE: `serve()` banks stars against the current stage rather than rolling a fresh order, and once
-`dayComplete()` is true the order board closes the day out and the only way on is the title screen.
+A run is FINITE: the plan is fixed at `startRun`, `serve()` banks stars against the customer at the hatch rather
+than rolling a fresh order, and once `dayComplete()` is true the day board closes the day out and the only way on
+is the title screen.
 
 ### Flow
 ```
-title -> select -> stage -> map -> <orchard|pond|coop|dairy|mill|hive|garden> -> map -> ... -> map(home) -> kitchen -> results -> stage
+title -> select -> stage -> map -> <orchard|pond|coop|dairy|mill|hive|garden> -> map -> ... (run.complete())
+      -> map -> line -> kitchen -> results -> line -> kitchen -> results -> map -> line ... -> results -> stage (closed)
 title -> lobby (host key) -> select (shared) -> stage ...  (online: the host's START opens the same scene everywhere)
 ```
-- `screens/map.js`: the truck drives (`run.truck`), arriving at a landmark with a missing ingredient pushes that
-  mini-game via `game.replace(run.screenForPlace(id), { place: id })`; arriving home with everything opens the kitchen.
+- `screens/map.js`: the truck drives (`run.truck`); arriving at a landmark pushes whatever `run.screenForPlace(id)`
+  names via `game.replace(screen, { place: id })` - its mini-game while the shopping list is short of what it
+  supplies, the `line` screen (after `run.startLine(run.lineAt(id))`) once the pantry is full and a queue waits
+  there - else it drops a sign. A queue at the landmark the truck already stands on when the map is entered
+  (the pantry filled right there) re-fires the arrival by itself after 45 frames; a mini-game never does.
 - Mini-games end with `run.gather(id, amount)` and `game.replace('map')`. Multiplayer: every seat plays at once.
-- `screens/stage.js` (the order board): the seven stages of `run.stages` as paper tickets with ONE shared cursor
-  (`game/menuinput.js`: any joined seat drives it); confirm calls `run.setStage(i)` and fades to the map. Entered
-  with `run.dayComplete()` it draws the closing card instead and its confirm leaves the room (if any) for the title.
-- `screens/kitchen.js`: one critter per seat, stations from `content/places.js STATIONS`, steps from `run.order.steps`;
-  finishes with `game.replace('results')`. `screens/results.js` calls `run.serve(stars)` then `game.replace('stage')`.
+- `screens/stage.js` (the day board): `run.lines` as paper tickets over the shopping list; no cursor, any joined
+  seat's confirm (`game/menuinput.js`) fades to the map. Entered with `run.dayComplete()` it draws the closing
+  card instead and its confirm leaves the room (if any) for the title.
+- `screens/line.js`: the queue at `run.lines[run.line]` from `run.customer` on; confirm (or 600 frames) fades to
+  the kitchen.
+- `screens/kitchen.js`: one critter per seat, stations from `content/places.js STATIONS` (fridge, chop, mix, stove, oven,
+  plate), steps from `run.order.steps` (every recipe's first is the fridge);
+  finishes with `game.replace('results')`. `screens/results.js` calls `run.serve(stars)` then replaces itself with
+  `line` (`!run.lineDone()`), `stage` (`run.dayComplete()`) or `map`.
 - Screens read input by SEAT: `run.party[i].slot` is the input slot to poll for party member i. Online, every
   seat's mask arrives through `input.setVirtual` from the lockstep buffers, so a screen that only uses `input.*`
   is net-safe by construction. Screens must not read the clock, `Math.random`, or anything outside `run`, `rng` and
@@ -251,8 +266,9 @@ implemented (a paused peer would stall the room) — the pause overlay is refuse
 
 URL params: `?autotest=1` (test mode: no rAF loop, seeded rng, `window.__game` populated), `?debug=1`, `?seed=N`,
 `?skipTo=<screen>` (straight into a screen with a run started), `?critters=0,1,2,3` (party for skipTo), `?place=coop`,
-`?order=N`, `?room=CODE` / `?host=1` (online), `?transport=broadcast` (same-machine netplay for tests), `?netrelay=1`,
-`?defaults=1` (boot on stock key/button bindings without clearing the saved ones).
+`?order=N` (force recipe N onto the day's menu and into the first customer's paws), `?recipes=0,2` (fix the menu to
+those ORDERS indices), `?room=CODE` / `?host=1` (online), `?transport=broadcast` (same-machine netplay for tests),
+`?netrelay=1`, `?defaults=1` (boot on stock key/button bindings without clearing the saved ones).
 
 ```js
 window.__game = {
@@ -292,8 +308,10 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
 - `npm run dev` — `tools/server.js` on :8080. `npm run build` — `tools/build.js` → `dist/index.html`.
 - `npm run lint` — `node --check` every module + `tsc`. `npm run nettest` — pure-node protocol/lockstep/trig tests.
 - `npm run playtest` — headless Playwright: boots every screen, walks the flow, holds a netplay room. The
-  `playthrough` scenario is the one that never jumps: title → select → order board → drive → mini-games → kitchen →
-  results → order board, on input alone, so it fails when two screens that each pass on their own cannot hand over.
+  `playthrough` scenario is the one that never jumps: title → select → day board → drive → mini-games until the list
+  is full → the queue → kitchen → results → the next in line → kitchen → results → map, on input alone (the menu
+  fixed with `?recipes=` to the two landmarks it can play), so it fails when two screens that each pass on their
+  own cannot hand over.
 - `npm run capture -- <dir> [screen[:params]...]` — screenshots of any screen at 2x (`tools/capture.js`).
 - `node tools/sheet-capture.js <dir> critter=<id> [anims,walk,closeup,cast,bench]` — critter contact sheets.
 - `.github/workflows/pages.yml` — lint, art-check, nettest, playtest, build on every push/PR; deploys `main`

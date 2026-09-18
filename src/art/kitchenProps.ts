@@ -1,5 +1,5 @@
-// The kitchen's five stations (docs/GDD.md section 6; docs/ART_STYLE.md section 1 "Kitchen"): what sits on the
-// counter at CHOP / MIX / STOVE / OVEN / PLATE, drawn in the rig's ink and three tones from the kitchen palette.
+// The kitchen's six stations (docs/GDD.md section 6; docs/ART_STYLE.md section 1 "Kitchen"): what stands at
+// FRIDGE / CHOP / MIX / STOVE / OVEN / PLATE, drawn in the rig's ink and three tones from the kitchen palette.
 // `paintStations(g)` paints the static bodies ONCE into the room layer (art/backgrounds/kitchen.js); the exported
 // draw* helpers are the few per-frame marks: the flame glow, the steam, the oven window's heat, the ingredient on the
 // board, the bowl's contents, the plate and the paper timing widgets. Every helper is allocation-free; glow sprites
@@ -11,9 +11,11 @@ import { steamPuff } from './fx.ts';
 import { pathRR } from '../lib/art/shading.ts';
 import { drawText } from '../engine/text.ts';
 import type { DrawTextOptions } from '../engine/text.ts';
-import { KITCHEN, ROWS, HATCH, PROP_X, TAG_POS, TAG_W, TAG_H, TAG_NAME, WIDGET_POS } from './backgrounds/kitchen.ts';
+import { KITCHEN, ROWS, HATCH, PROP_X, TAG_POS, TAG_W, TAG_H, TAG_NAME, WIDGET_POS, PLATE_I } from './backgrounds/kitchen.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
+/** Station indices, in content/places.js STATIONS order. */
+const FRIDGE_I = 0, CHOP_I = 1, MIX_I = 2, STOVE_I = 3, OVEN_I = 4;
 /** The warm things in the room: wood, copper, enamel, brass, paper. Heat is SIGNAL.hot and the #FFD27A core, nowhere else. */
 export const PROPS = Object.freeze({
   maple: '#C9A05C', mapleEnd: '#6B4E3A', copper: '#B87333', copperSh: '#8A5220', copperHi: '#D9935A', hob: '#2A2428',
@@ -24,22 +26,33 @@ export const PROPS = Object.freeze({
   bowlIn: PLUM.shadow, plate: '#FFF6E0', plateRim: '#D8C093', core: '#FFD27A', burnt: '#3A2430', dough: '#EBDCC0',
 });
 const TOP = ROWS.counterTop;
+/** The floor-standing fridge at the left end of the counter: a tall enamel box from the wall's clear band down to
+ *  the floor, breaking the counter line like the range does; its door swings open for a beat on every pull. */
+export const FRIDGE = Object.freeze({ x: PROP_X[FRIDGE_I] - 22, y: 146, w: 44, h: 110, doorY: 172 });
+/**
+ * Where a pull LANDS: not beside the fridge but on the counter at the station that uses it next, so the pie's
+ * apples pile up by the chopping board and an omelette's eggs by the bowl. One x per station, clear of that
+ * station's own prop and of its neighbours' (left of the board, the bowl and the pot; right of the range, which
+ * has the pot on its left); two rows of PILE_COLS on PILE_PITCH. The fridge's own entry is never used.
+ */
+export const PILE_X = Object.freeze([PROP_X[FRIDGE_I] + 30, PROP_X[CHOP_I] - 56, PROP_X[MIX_I] - 56, PROP_X[STOVE_I] - 62, PROP_X[OVEN_I] + 30, PROP_X[PLATE_I] - 40]);
+const PILE_COLS = 4, PILE_PITCH = 9;
 /** The chopping board: 48x11 on the counter top, with the big round board leaning behind it (the station's
  *  vertical, and what tells CHOP from MIX at 1x over a cook's head) and the knife rack on the wall above it. */
-export const BOARD = Object.freeze({ x: PROP_X[0] - 24, y: TOP - 11, w: 48, h: 11 });
-const RACK = Object.freeze({ x: PROP_X[0] - 20, y: 70, w: 40, h: 6 });
+export const BOARD = Object.freeze({ x: PROP_X[CHOP_I] - 24, y: TOP - 11, w: 48, h: 11 });
+const RACK = Object.freeze({ x: PROP_X[CHOP_I] - 20, y: 70, w: 40, h: 6 });
 /** The mixing bowl: 40x26 on the counter top, with the wooden spoon standing in it. */
-export const BOWL = Object.freeze({ x: PROP_X[1] - 20, y: TOP - 26, w: 40, h: 26 });
+export const BOWL = Object.freeze({ x: PROP_X[MIX_I] - 20, y: TOP - 26, w: 40, h: 26 });
 /** The hob (60x6 on the counter top) and the copper pot standing on it (44x30). */
-export const HOB = Object.freeze({ x: PROP_X[2] - 30, y: TOP - 6, w: 60, h: 6 });
-export const POT = Object.freeze({ x: PROP_X[2] - 22, y: TOP - 36, w: 44, h: 30 });
+export const HOB = Object.freeze({ x: PROP_X[STOVE_I] - 30, y: TOP - 6, w: 60, h: 6 });
+export const POT = Object.freeze({ x: PROP_X[STOVE_I] - 22, y: TOP - 36, w: 44, h: 30 });
 /** The floor-standing oven: 48x70 from above the counter top to the floor, so it breaks the counter line. */
-export const OVEN = Object.freeze({ x: PROP_X[3] - 24, y: TOP - 14, w: 48, h: 70, winX: PROP_X[3] - 20, winY: TOP + 6, winW: 40, winH: 14 });
+export const OVEN = Object.freeze({ x: PROP_X[OVEN_I] - 24, y: TOP - 14, w: 48, h: 70, winX: PROP_X[OVEN_I] - 20, winY: TOP + 6, winW: 40, winH: 14 });
 /** The enamel kettle on the range's back ring - the one thing in the room that is on whatever the cast is doing. */
 export const KETTLE = Object.freeze({ x: OVEN.x + 26, y: OVEN.y - 16 });
 /** The plate on the hatch shelf (26x8) and the brass bell beside it (20x14 on its post). */
-export const PLATE = Object.freeze({ x: PROP_X[4] - 13, y: HATCH.shelfY - 8, w: 26, h: 8 });
-export const BELL = Object.freeze({ x: PROP_X[4] + 22, y: HATCH.shelfY - 16, w: 20, h: 14 });
+export const PLATE = Object.freeze({ x: PROP_X[PLATE_I] - 13, y: HATCH.shelfY - 8, w: 26, h: 8 });
+export const BELL = Object.freeze({ x: PROP_X[PLATE_I] + 22, y: HATCH.shelfY - 16, w: 20, h: 14 });
 
 let glowFlame = null, glowOven = null, glowSoft = null, glowWork = null;
 function sprites() {
@@ -54,6 +67,17 @@ function sprites() {
 }
 
 // ---------------------------------------------------------------- static bodies (into the room layer)
+/** The fridge's carcass: the door is a per-frame mark (drawFridge), since it opens. */
+function paintFridge(g) {
+  const F = FRIDGE;
+  g.fillStyle = INK; g.fillRect(F.x - 2, F.y - 2, F.w + 4, F.h + 4);
+  g.fillStyle = PROPS.range; g.fillRect(F.x, F.y, F.w, F.h);
+  g.fillStyle = PROPS.rangeSh; g.fillRect(F.x + F.w - 5, F.y, 5, F.h); g.fillRect(F.x, F.y + F.h - 8, F.w, 8);
+  g.fillStyle = INK; g.fillRect(F.x, F.y + F.h - 6, F.w, 6);                          // the plinth
+  g.fillRect(F.x + 4, F.y + F.h, 6, 3); g.fillRect(F.x + F.w - 10, F.y + F.h, 6, 3);   // two feet
+  g.fillStyle = UI.cream; g.fillRect(F.x + 3, F.y + 3, 2, 14);                          // the one highlight, top-left
+}
+
 function paintBoard(g) {
   const B = BOARD;
   g.fillStyle = INK; g.fillRect(B.x + 2, B.y + B.h, B.w - 4, 2);              // the shadow line under the board
@@ -179,7 +203,54 @@ function paintShelfProps(g) {
 
 /** Paint every station's static body into the room layer (called once by the backdrop). */
 export function paintStations(g) {
-  paintBoard(g); paintBowl(g); paintHob(g); paintOven(g); paintShelfProps(g);
+  paintFridge(g); paintBoard(g); paintBowl(g); paintHob(g); paintOven(g); paintShelfProps(g);
+}
+
+/**
+ * The fridge door, per frame: shut, it is an enamel slab with a brass handle and the freezer seam; open (`openT`
+ * frames left of the swing), it stands out to the left as a thin slab and the dark inside shows three shelves with
+ * whatever is still to come out (`icons`/`hexes` from `next` on, at most six of them).
+ */
+export function drawFridge(ctx, openT, icons, hexes, next) {
+  const F = FRIDGE, dy = F.doorY, dh = F.y + F.h - 6 - dy;
+  if (openT <= 0) {
+    ctx.fillStyle = INK; ctx.fillRect(F.x, F.y + 22, F.w, 1); ctx.fillRect(F.x, dy - 1, F.w, 1);      // the freezer seam and the door's top
+    ctx.fillStyle = PROPS.brass; ctx.fillRect(F.x + 5, F.y + 8, 3, 10); ctx.fillRect(F.x + 5, dy + 8, 3, 22);   // the two handles
+    ctx.fillStyle = PROPS.brassSh; ctx.fillRect(F.x + 7, F.y + 8, 1, 10); ctx.fillRect(F.x + 7, dy + 8, 1, 22);
+    return;
+  }
+  // open: the inside, the shelves, what is left on them, and the door out on its hinge
+  ctx.fillStyle = INK; ctx.fillRect(F.x, dy - 1, F.w, dh + 1);
+  ctx.fillStyle = PLUM.deep; ctx.fillRect(F.x + 2, dy + 1, F.w - 7, dh - 3);
+  ctx.fillStyle = PROPS.steelSh;
+  for (let k = 1; k <= 3; k++) ctx.fillRect(F.x + 2, dy + k * R(dh / 3.5), F.w - 7, 2);
+  for (let i = next, k = 0; i < icons.length && k < 6; i++, k++) {
+    drawFood(ctx, icons[i], F.x + 9 + (k % 2) * 16, dy + 4 + ((k / 2) | 0) * R(dh / 3.5), 3, hexes[i]);
+  }
+  ctx.fillStyle = INK; ctx.fillRect(F.x - 9, dy - 1, 9, dh + 1);
+  ctx.fillStyle = PROPS.range; ctx.fillRect(F.x - 8, dy, 7, dh - 1);
+  ctx.fillStyle = PROPS.rangeSh; ctx.fillRect(F.x - 3, dy, 2, dh - 1);
+  ctx.fillStyle = PROPS.brass; ctx.fillRect(F.x - 7, dy + 8, 2, 22);
+}
+
+/** Where pull `i` lands at station `dest`: two rows of PILE_COLS on the counter, the second behind and above the first. */
+export function pileSlotX(dest, i) { return PILE_X[dest] + (i % PILE_COLS) * PILE_PITCH; }
+export function pileSlotY(i) { return TOP - 5 - ((i / PILE_COLS) | 0) * 7; }
+
+/**
+ * The pulls, piled on the counter at the station that uses them next (`dest`): the first `n` of the order's items
+ * in order, and - while `flyT` (0..1) runs - the last one still on its arc out of the fridge door and along the
+ * counter (Math.sin is fine here: draw only). Nothing is drawn for n = 0.
+ */
+export function drawPulls(ctx, icons, hexes, n, dest, flyT) {
+  for (let i = 0; i < n && i < icons.length; i++) {
+    let x = pileSlotX(dest, i), y = pileSlotY(i);
+    if (i === n - 1 && flyT < 1) {
+      const F = FRIDGE, x0 = F.x + F.w / 2, y0 = F.doorY + 20, k = flyT;
+      x = R(x0 + (x - x0) * k); y = R(y0 + (y - y0) * k - 44 * Math.sin(k * Math.PI));
+    }
+    drawFood(ctx, icons[i], x, y, 3, hexes[i]);
+  }
 }
 
 // ---------------------------------------------------------------- per-frame marks
@@ -203,7 +274,7 @@ export function drawStationFocus(ctx, station, frame) {
   ctx.fillStyle = UI.paperLine; ctx.fillRect(x + 1, y + 1, TAG_W - 2, 4);
   drawText(ctx, TAG_NAME[station], x + R(TAG_W / 2), y + 6, WIDGET_TEXT);
   // the chevron sits under the timing card, which grew 2 rows (CHOP, STOVE) / 6 rows (PLATE) for its owner strip
-  const cx = PROP_X[station], cy = WIDGET_POS[station][1] + (station === 4 ? 26 : 28) + ((frame >> 3) & 1);
+  const cx = PROP_X[station], cy = WIDGET_POS[station][1] + (station === PLATE_I ? 26 : 28) + ((frame >> 3) & 1);
   ctx.fillStyle = UI.ink;
   ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx + 6, cy); ctx.lineTo(cx, cy + 8); ctx.closePath(); ctx.fill();
   ctx.fillStyle = UI.paper;
@@ -231,7 +302,7 @@ export function drawKettleSteam(ctx, frame) {
  * shakes the board); `tak` flashes a 2 px cream spark on a hit.
  */
 export function drawChopItem(ctx, icon, hex, cut, wobble, tak) {
-  const cx = PROP_X[0] + wobble, cy = BOARD.y - 6;
+  const cx = PROP_X[CHOP_I] + wobble, cy = BOARD.y - 6;
   if (cut === 0) drawFood(ctx, icon, cx, cy, 6, hex);
   else if (cut === 1) { drawFood(ctx, icon, cx - 7, cy + 1, 4, hex); drawFood(ctx, icon, cx + 7, cy + 1, 4, hex); }
   else {
@@ -257,7 +328,7 @@ export function drawStove(ctx, lit, heat, frame) {
   const P = POT, a = ctx.globalAlpha;
   if (lit) {
     ctx.globalAlpha = a * (0.55 + 0.45 * pulse(frame, 40)) * Math.max(0.35, heat);
-    ctx.drawImage(glowFlame.canvas, PROP_X[2] - 14, HOB.y - 14);
+    ctx.drawImage(glowFlame.canvas, PROP_X[STOVE_I] - 14, HOB.y - 14);
     ctx.globalAlpha = a;
   }
   // the pot: two ink-looped handles, a tapered body, the overhanging rim last so it reads as a lip
@@ -274,7 +345,7 @@ export function drawStove(ctx, lit, heat, frame) {
   ctx.fillStyle = INK; ctx.fillRect(P.x - 3, P.y, P.w + 6, 7);                              // the rim, inked
   ctx.fillStyle = body; ctx.fillRect(P.x - 2, P.y + 1, P.w + 4, 5);
   ctx.fillStyle = PLUM.deep; ctx.fillRect(P.x + 1, P.y + 1, P.w - 2, 3);                    // the dark inside over the rim
-  if (lit && heat > 0.15) { steamPuff(ctx, PROP_X[2] - 6, P.y - 2, frame, 20); steamPuff(ctx, PROP_X[2] + 7, P.y - 4, frame + 9, 24); }
+  if (lit && heat > 0.15) { steamPuff(ctx, PROP_X[STOVE_I] - 6, P.y - 2, frame, 20); steamPuff(ctx, PROP_X[STOVE_I] + 7, P.y - 4, frame + 9, 24); }
 }
 
 /** The oven window: the interior glows by `heat` (0..1), with a tray of dough (pale, then golden) inside. */
@@ -282,7 +353,7 @@ export function drawOvenWindow(ctx, heat, tray) {
   sprites();
   const O = OVEN, a = ctx.globalAlpha;
   ctx.save(); ctx.beginPath(); ctx.rect(O.winX, O.winY, O.winW, O.winH); ctx.clip();
-  if (heat > 0) { ctx.globalAlpha = a * heat; ctx.drawImage(glowOven.canvas, PROP_X[3] - 22, O.winY + O.winH - 22); ctx.globalAlpha = a; }
+  if (heat > 0) { ctx.globalAlpha = a * heat; ctx.drawImage(glowOven.canvas, PROP_X[OVEN_I] - 22, O.winY + O.winH - 22); ctx.globalAlpha = a; }
   if (tray) {
     ctx.fillStyle = INK; ctx.fillRect(O.winX + 7, O.winY + 6, 26, 6);
     ctx.fillStyle = heat > 0.7 ? PROPS.maple : PROPS.dough; ctx.fillRect(O.winX + 8, O.winY + 7, 24, 4);
@@ -349,16 +420,20 @@ function hub(ctx, cx, cy, slot) {
   ctx.fillStyle = UI.paper; ctx.fillRect(cx - 1, cy - 1, 2, 2);
 }
 
-/** CHOP: a row of `total` pips, one lit green per chop landed - a tally, not a beat. Ten pips go on a 4 px pitch. */
-export function drawChopBar(ctx, hits, total, slot) {
-  const x = WIDGET_POS[0][0], y = WIDGET_POS[0][1], pitch = total > 6 ? 4 : 7, w = pitch - 1, bx = x + 24 - R((total * pitch - 1) / 2), by = y + 13;
+/** A tally card: a row of `total` pips, one lit green per hit landed - a tally, not a beat. Over six go on a 4 px pitch. */
+function pips(ctx, station, hits, total, slot) {
+  const x = WIDGET_POS[station][0], y = WIDGET_POS[station][1], pitch = total > 6 ? 4 : 7, w = pitch - 1, bx = x + 24 - R((total * pitch - 1) / 2), by = y + 13;
   card(ctx, x, y, 48, 26, slot);
   for (let i = 0; i < total; i++) { ctx.fillStyle = UI.ink; ctx.fillRect(bx + i * pitch, by, w, w); ctx.fillStyle = i < hits ? SIGNAL.good : UI.paperDark; ctx.fillRect(bx + i * pitch + 1, by + 1, w - 2, w - 2); }
 }
+/** FRIDGE: one pip per item the order wants out of it. */
+export function drawPullBar(ctx, pulls, total, slot) { pips(ctx, FRIDGE_I, pulls, total, slot); }
+/** CHOP: one pip per chop landed. Ten pips go on a 4 px pitch. */
+export function drawChopBar(ctx, hits, total, slot) { pips(ctx, CHOP_I, hits, total, slot); }
 
 /** MIX: a round paper dial filling clockwise in green; the needle greys out while the hold is released. */
 export function drawDial(ctx, fill, paused, slot) {
-  const cx = WIDGET_POS[1][0] + 24, cy = WIDGET_POS[1][1] + 12;
+  const cx = WIDGET_POS[MIX_I][0] + 24, cy = WIDGET_POS[MIX_I][1] + 12;
   disc(ctx, cx, cy, 12);
   if (fill > 0) {
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, 9, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, fill)); ctx.closePath();
@@ -370,7 +445,7 @@ export function drawDial(ctx, fill, paused, slot) {
 
 /** STOVE: a bar that fills green while held, and is done when it is full. */
 export function drawStoveBar(ctx, fill, slot) {
-  const x = WIDGET_POS[2][0], y = WIDGET_POS[2][1], bx = x + 6, by = y + 13, w = 36, h = 6;
+  const x = WIDGET_POS[STOVE_I][0], y = WIDGET_POS[STOVE_I][1], bx = x + 6, by = y + 13, w = 36, h = 6;
   card(ctx, x, y, 48, 26, slot);
   ctx.fillStyle = UI.ink; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
   ctx.fillStyle = UI.paperLine; ctx.fillRect(bx, by, w, h);
@@ -379,7 +454,7 @@ export function drawStoveBar(ctx, fill, slot) {
 
 /** OVEN: a round paper timer; a green arc sweeps round as the bake runs, and the bake is done when it closes. */
 export function drawOvenTimer(ctx, k, slot) {
-  const cx = WIDGET_POS[3][0] + 24, cy = WIDGET_POS[3][1] + 12;
+  const cx = WIDGET_POS[OVEN_I][0] + 24, cy = WIDGET_POS[OVEN_I][1] + 12;
   disc(ctx, cx, cy, 12);
   if (k > 0) {
     ctx.beginPath(); ctx.arc(cx, cy, 9, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, k));
@@ -391,7 +466,7 @@ export function drawOvenTimer(ctx, k, slot) {
 
 /** PLATE: a paper card above the hatch telling whoever is there to ring the bell. */
 export function drawPlatePrompt(ctx, text, slot) {
-  const x = WIDGET_POS[4][0], y = WIDGET_POS[4][1];
+  const x = WIDGET_POS[PLATE_I][0], y = WIDGET_POS[PLATE_I][1];
   card(ctx, x, y, 60, 24, slot);
   drawText(ctx, text, x + 30, y + 11, WIDGET_TEXT);
 }

@@ -85,8 +85,11 @@ assert(maxErr < 1e-14, `dsin/dcos within 1e-14 of Math (got ${maxErr})`);
 const fakeGame = (screen = { id: 'map', checksumFields: () => [1.5, 2] }) => ({
   rng: { state: 12345 }, frame: 10, screen,
   run: {
-    seed: 7, orderIndex: 0, served: 0, score: 0, frame: 0,
-    order: { id: 'pie', needs: [{ id: 'apple', amount: 3, have: 1 }] },
+    seed: 7, line: 0, customer: 0, served: 0, score: 0, frame: 0,
+    recipes: ['pie'],
+    lines: [{ place: 'mill', served: false, customers: [{ customer: 'owl', recipe: 'pie', stars: 0 }] }],
+    needs: [{ id: 'apple', amount: 3, have: 1, used: 0 }],
+    order: { id: 'pie', customer: 'owl', needs: [{ id: 'apple', amount: 3, have: 1 }] },
     truck: { x: 10, y: 20, heading: 0, at: 'home' },
     party: [{ slot: 0, critter: 'generic', score: 0 }, { slot: 1, critter: 'generic', score: 0 }],
   },
@@ -104,6 +107,12 @@ assert(withGame((g) => { g.run.truck.at = 'orchard'; }) !== base, 'a STRING fiel
 assert(withGame((g) => { g.run.party[1].critter = 'other'; }) !== base, 'a party critter difference is caught');
 assert(withGame((g) => { g.run.party.pop(); }) !== base, 'a party size difference is caught');
 assert(withGame((g) => { g.run.score = 100; g.run.served = 1; }) !== base, 'a score / served difference is caught');
+assert(withGame((g) => { g.run.needs[0].have = 2; }) !== base, 'a shopping-list difference is caught');
+assert(withGame((g) => { g.run.needs[0].used = 1; }) !== base, 'a pantry draw-down difference is caught');
+assert(withGame((g) => { g.run.lines[0].customers[0].stars = 3; }) !== base, 'a customer rating difference is caught');
+assert(withGame((g) => { g.run.lines[0].served = true; }) !== base, 'a served-line difference is caught');
+assert(withGame((g) => { g.run.lines[0].place = 'hive'; }) !== base, 'a line placed elsewhere is caught');
+assert(withGame((g) => { g.run.customer = 1; }) !== base, 'a different customer at the hatch is caught');
 assert(withGame((g) => { g.screen.id = 'orchard'; }) !== base, 'one peer on a different screen is caught');
 assert(runChecksum(fakeGame({ id: 'map', checksumFields: () => [1.5, 3] })) !== base, "a difference in the screen's checksumFields is caught");
 assert(runChecksum(fakeGame({ id: 'map', checksumFields: () => [1.5, 2, 0] })) !== base, 'an extra checksum field is caught');

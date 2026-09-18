@@ -320,7 +320,7 @@ export class GardenScreen extends Screen {
     for (let i = 0; i < MAX_FLIGHTS; i++) this.flights.push({ t: FLIGHT_FRAMES, x0: 0, y0: 0, seat: 0 });
     this.flightCursor = 0;
 
-    const need = run ? run.order.needs.find((x) => x.id === 'carrot') : null;
+    const need = run ? run.need('carrot') : null;
     // the REMAINDER, not the whole line: the map may already have banked some (the other six mini-games agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;

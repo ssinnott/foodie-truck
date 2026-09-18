@@ -1,17 +1,20 @@
 # Foodie Truck
 
-A cozy co-op cooking adventure for one to four players, drawn entirely in code. A customer phones in an order, the
-crew of a countryside food truck is missing an ingredient, so they drive out to where it comes from, gather it in a
-short mini-game, drive home and cook the dish step by step. The customer eats. The phone rings again.
+A cozy co-op cooking adventure for one to four players, drawn entirely in code. The crew of a countryside food
+truck opens for the day with a menu of three recipes and a shopping list that adds up everything the day's
+customers will order. They drive round the countryside gathering it all — a short mini-game at every landmark —
+until the pantry is full, then drive to the queues of villagers lined up at three of those landmarks and cook for
+them one at a time, order by order, until the third line has been served. Then the truck closes for the night.
 
-Seven orders, seven ingredients, seven landmarks, and **a different mini-game at every one of them** — each with its
-own verb: catch, fish, collect, pump, fill, creep, pull. Every one of them is played with the same three inputs —
+Seven recipes, seven ingredients, seven landmarks, and **a different mini-game at every one of them** — each with
+its own verb: catch, fish, collect, pump, fill, creep, pull. Every one of them is played with the same three inputs —
 move left and right, tap the action button over and over, or hold it down — with no timing windows and nothing to
 lose, so a small child can play the whole game.
 
-The seven orders are the game's **stages**, pinned up on an order board: pick a customer and their recipe, serve it,
-and it comes back stamped with its stars. Serve all seven and the truck closes for the night — the day ends, the
-takings are totted up, and that is the end of the game.
+Every day is laid out from a seed: which three recipes are on the menu, which three landmarks the lines form at,
+who is in each line and what they order. The **day board** pins the whole plan up before the truck opens; the
+**shopping list** on it is what the truck gathers first, and the **lines** are what it serves afterwards. Serve
+all three and the day ends, the takings are totted up, and that is the end of the game.
 
 The cast are original anthropomorphic countryside animals — **Barley** the Suffolk sheep (the hungry one), **Sorrel**
 the field mouse (the chef), **Chicory** the brown hare (the driver) and **Cress** the pond frog (the forager) — and
@@ -25,10 +28,11 @@ so the repository stays reviewable in a diff.
 
 | Part | Screen | What happens |
 |---|---|---|
-| **Order board** | `stage` | The day's seven stages on paper: a customer, their dish and what it needs. Take one off the board to start it; it comes back stamped SERVED with its stars. The last one closes the day. |
-| **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. Arriving where a missing ingredient comes from opens its mini-game. Arriving home with everything opens the kitchen. |
+| **Day board** | `stage` | The day's plan on paper: the three lines (where each waits, who is in it, what they order) and the shopping list they add up to. Confirm opens the truck. After the last line it comes back closed, every customer's stars on it. |
+| **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, arriving at a landmark with a line opens the queue. |
 | **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows, hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, and tap to pull carrots out of the market garden. Everyone seated plays at once and the party's total counts. |
-| **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to chop; hold to mix, cook and bake; ring the bell to plate), serve, and watch the customer eat. |
+| **The line** | `line` | The truck pulled up at a queue: the customer at its front steps up and says what they want. Take the order into the kitchen. |
+| **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to pull each ingredient out of the fridge; tap to chop; hold to mix, cook and bake; ring the bell to plate), serve, and watch the customer eat. The next in line steps up; when the line is empty, the truck drives to the next one. |
 
 ## Play
 
@@ -62,8 +66,9 @@ which is the way back in if you ever bind yourself into a corner.
 The shoulders and triggers are bindable too — they do nothing by default, so `LB` / `RB` are there if you want the
 dairy's two-handed milking on two hands. The left stick is always the four directions and is not bindable.
 
-Any screen can be opened directly for a look: `index.html?debug=1&skipTo=orchard&critters=0,1,2,3&seed=7`. The title's
-CREW row opens the gallery, a contact sheet of every critter and animation.
+Any screen can be opened directly for a look: `index.html?debug=1&skipTo=orchard&critters=0,1,2,3&seed=7`. Add
+`&order=4` to force a recipe onto the day's menu (and into the first customer's paws), or `&recipes=0,2` to fix the
+whole menu. The title's CREW row opens the gallery, a contact sheet of every critter and animation.
 
 ## Online co-op with a host key
 
@@ -90,7 +95,7 @@ npm run lint         # node --check on every module, then tsc over the JSDoc typ
 npm run art-check    # data-tier art invariants (palettes, player-colour contrast, cast table)
 npm run nettest      # pure-node protocol, lockstep and trig tests
 npm run playtest     # headless Playwright: boots every screen, walks the flow, holds a netplay room
-npm run playtest playthrough   # one scenario: the whole run from the title screen to a served dish
+npm run playtest playthrough   # one scenario: the whole day from the title screen to the first line served
 npm run capture -- tools/screens map "kitchen:critters=0,1,2,3"   # screenshots of any screen at 2x
 node tools/sheet-capture.js tools/screens critter=barley          # critter contact sheets
 npm run build        # single-file dist/index.html

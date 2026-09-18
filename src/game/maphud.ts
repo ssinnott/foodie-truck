@@ -1,11 +1,13 @@
-// The map's HUD (docs/GDD.md section 4, docs/ART_STYLE.md section 12): the order ticket top-left, one name plate per
+// The map's HUD (docs/GDD.md section 4, docs/ART_STYLE.md section 12): the day's ticket top-left (the shopping list
+// while the pantry is short, the lines once it is full), one name plate per
 // seat top-right, the 28x28 steering-wheel widget bottom-left whose four slot-colour ticks light straight from each
 // seat's stick, the off-screen destination arrow pinned to the view edge, the HONK! stamp and the wooden sign plate an
 // arrival drops in, and the one hint line. Screen space, integer coordinates, nothing allocated per frame: every
 // string is built by the map screen in enter().
 import { VIEW_W, VIEW_H, UI, PLAYER_COLORS, SIGNAL } from '../constants.ts';
-import { drawOrderTicket, drawNamePlate, drawStamp, drawSign, drawHint, drawTicket } from './ui.ts';
+import { drawNeedsTicket, drawNamePlate, drawStamp, drawSign, drawHint, drawTicket, ROW } from './ui.ts';
 import { drawFood } from '../art/food.ts';
+import { drawText } from '../engine/text.ts';
 import { INGREDIENTS } from '../content/recipes.ts';
 import { pathRR } from '../lib/art/shading.ts';
 
@@ -19,8 +21,37 @@ export const HINT = 'STEER: ARROWS   HONK: X';
 /** The wheel widget's box (bottom-left, above the hint strip). */
 export const WHEEL_X = 8, WHEEL_Y = VIEW_H - 8 - 12 - 30, WHEEL_SIZE = 30;
 
-/** The order ticket, top-left. */
-export function drawTicketHud(ctx, run) { drawOrderTicket(ctx, run, 8, 8, 120, drawFood, TICKET_OPTS); }
+const SHOPPING_TITLE = 'SHOPPING LIST', LINES_TITLE = 'THE LINES', NO_HEAD = Object.freeze([]);
+const LINE_TEXT = { size: 1, color: UI.ink, shadow: false }, LINE_DONE_TEXT = { size: 1, color: UI.paperLine, shadow: false };
+
+/** The shopping list, top-left: one row per ingredient the day asks for, ticked as its line fills. */
+export function drawShoppingHud(ctx, run) { drawNeedsTicket(ctx, 8, 8, 120, SHOPPING_TITLE, NO_HEAD, run.needs, drawFood, TICKET_OPTS); }
+
+/**
+ * The lines, top-left, once the pantry is full: one row per queue - `rows[i]` is the caller's own wording of where
+ * it waits and how many are in it - washed back once it has been served, with the gold arrow on the one the
+ * compass points at (`dest`, an index into the rows, or -1).
+ */
+export function drawLinesHud(ctx, run, rows, dest) {
+  const x = 8, y = 8, w = 120, h = 16 + ROW * rows.length + 4;
+  const top = drawTicket(ctx, x, y, w, h, { title: LINES_TITLE });
+  for (let i = 0; i < rows.length; i++) {
+    const ry = top + 2 + ROW * i, done = run.lines[i] && run.lines[i].served;
+    drawText(ctx, rows[i], x + 6, ry, done ? LINE_DONE_TEXT : LINE_TEXT);
+    if (done) { ctx.fillStyle = UI.ink; ctx.fillRect(x + w - 14, ry + 3, 2, 3); ctx.fillRect(x + w - 12, ry + 1, 2, 5); ctx.fillRect(x + w - 10, ry - 1, 2, 3); }
+    else if (i === dest) { ctx.fillStyle = UI.ink; ctx.fillRect(x + w - 15, ry, 7, 7); ctx.fillStyle = SIGNAL.map; ctx.fillRect(x + w - 14, ry + 2, 2, 3); ctx.fillRect(x + w - 12, ry + 1, 2, 5); ctx.fillRect(x + w - 10, ry + 2, 2, 3); }
+  }
+}
+
+/**
+ * The paper tag over a landmark where a line is waiting: '2 IN LINE' on a small ticket pinned above its signpost
+ * (screen space; the map screen converts). Built strings only: `text` and `w` come from the map's enter().
+ */
+export function drawLineTag(ctx, sx, sy, text, w) {
+  const x = R(sx - w / 2), y = R(sy);
+  drawTicket(ctx, x, y, w, 14, { header: false, rules: false, perforated: false });
+  drawText(ctx, text, x + w / 2, y + 3, { size: 1, color: UI.ink, align: 'center', shadow: false });
+}
 
 /**
  * The crew strip, top-right: the seats' name plates on ONE paper card of the order ticket's own recipe, not four
@@ -69,7 +100,7 @@ export function drawWheel(ctx, pushMask, turn) {
 }
 
 /** The arrow rides this far inside the view edge, and slides ALONG that edge past each HUD corner's keep-out. */
-const ARROW_INSET = 14, TICKET_R = 152, TICKET_B = 100, CREW_L = VIEW_W - 104, CREW_B = 76, WHEEL_R = 46;
+const ARROW_INSET = 14, TICKET_R = 152, TICKET_B = 108, CREW_L = VIEW_W - 104, CREW_B = 76, WHEEL_R = 46;
 const WHEEL_T = VIEW_H - 58, HINT_L = 200, HINT_R = 440;
 
 /**

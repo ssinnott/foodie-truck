@@ -56,21 +56,25 @@ export const HATCH = Object.freeze({ x: 500, y: 90, w: 140, h: 140, shelfY: 230,
  *  proportions (the owl's headR 13 against Barley's 15) carry the size difference now. `margin` then stands the
  *  customer on the strip of lane seen through the opening: their silhouette's top row is y + margin. */
 export const BUST = Object.freeze({ x: 548, y: 94, w: 92, h: 136, scale: 1, margin: 86 });
-/** The window onto the lane, high on the wall so the cast's name plates never collide with it. */
-export const WINDOW = Object.freeze({ x: 150, y: 44, w: 90, h: 50 });
+/** The window onto the lane, high on the wall so the cast's name plates never collide with it; it sits right of
+ *  the knife rack now that the FRIDGE has pushed the chopping board along the counter. */
+export const WINDOW = Object.freeze({ x: 196, y: 44, w: 80, h: 50 });
 /** The order ticket is PINNED flush under the rail at its left end, full width, with its perforated top: it is the
  *  screen's one big paper. The recipe card is the smaller checklist and HANGS below the rail on two visible pegs at
  *  the other end, narrower and un-perforated, so the two papers never read as a symmetric pair of UI slabs. */
 export const TICKET = Object.freeze({ x: 8, y: 12, w: 112 });
-export const RECIPE = Object.freeze({ x: 396, y: 26, w: 92 });
-/** Where each station's critter stands (feet centre) for STATIONS chop / mix / stove / oven / plate, left to right. */
-export const STATION_X = Object.freeze([80, 190, 300, 410, 490]);
+export const RECIPE = Object.freeze({ x: 396, y: 16, w: 92 });
+/** Where each station's critter stands (feet centre) for STATIONS fridge / chop / mix / stove / oven / plate, left
+ *  to right: six spots, every pair at least 86 px apart so no x is "at" two of them (AT_RANGE). */
+export const STATION_X = Object.freeze([36, 122, 214, 306, 398, 490]);
 /** How far right of its standing spot each station's prop sits: far enough that the cook's head never hides it,
  *  and (MIX, STOVE) far enough that a seven-letter name plate clears the bowl and the pot. */
-export const PROP_DX = Object.freeze([46, 52, 56, 34, 26]);
+export const PROP_DX = Object.freeze([40, 46, 52, 56, 34, 26]);
 /** Prop centres on the counter (and, for the plate, on the hatch shelf). */
 export const PROP_X = Object.freeze(STATION_X.map((x, i) => x + PROP_DX[i]));
-/** A seat is "at" a station within this many px of its standing spot: 40, so any part of the critter over the station counts (the closest two spots are 80 apart). */
+/** A seat is "at" a station within this many px of its standing spot: 40, so any part of the critter over the station counts (the closest two spots are 86 apart). */
+/** The plate is the last station: its sign and widget hang in the hatch opening rather than on the wall. */
+export const PLATE_I = STATIONS.length - 1;
 export const AT_RANGE = 40;
 /** The walk lane's ends: half a body in from the edges. */
 export const X_MIN = 30, X_MAX = 606;
@@ -81,8 +85,8 @@ export const TAG_W = 36, TAG_H = 15;
 /** The sign hangs over its own station's prop, the timing widget's card under it; the plate's pair hangs in the
  *  hatch opening instead, which is not wall. Rows 104..146 is the wall's clear band: under the knife rack, the
  *  window sill and the pans, and above the props that stand on the counter (156..200). */
-export const TAG_POS = Object.freeze(PROP_X.map((x, i) => [x - R(TAG_W / 2), i === 4 ? 30 : 104]));
-export const WIDGET_POS = Object.freeze(PROP_X.map((x, i) => [x - 24, i === 4 ? 50 : 122]));
+export const TAG_POS = Object.freeze(PROP_X.map((x, i) => [x - R(TAG_W / 2), i === PLATE_I ? 30 : 104]));
+export const WIDGET_POS = Object.freeze(PROP_X.map((x, i) => [x - 24, i === PLATE_I ? 50 : 122]));
 /** The station names as the signs letter them (content/places.js owns the strings). */
 export const TAG_NAME = Object.freeze(STATIONS.map((s) => s.name));
 
@@ -140,7 +144,7 @@ function paintWindow(g, rnd) {
 
 /** Hanging pans and a ladle: open shapes on a 2 px rod, rows 42..80, between the window and the recipe card. */
 function paintPans(g) {
-  const rod = ROWS.pans, x0 = 258;
+  const rod = ROWS.pans, x0 = 282;
   g.fillStyle = INK; g.fillRect(x0 - 4, rod, 116, 2);
   const steel = '#B8C4C9', steelSh = '#8A9AA2', copper = '#B87333', copperSh = '#8A5220';
   for (let i = 0; i < 2; i++) {

@@ -154,7 +154,7 @@ export class PondScreen extends Screen {
     pondLayers();
     this.total = 0;
     this.clock = makeClock();
-    const need = run ? run.order.needs.find((n) => n.id === 'fish') : null;
+    const need = run ? run.need('fish') : null;
     // the remainder, not the whole order: the map may already have banked some (the orchard and the coop agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.countStr = '0/' + this.target;

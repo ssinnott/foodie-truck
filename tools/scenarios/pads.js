@@ -3,7 +3,7 @@
 //
 //   pads - four controllers and nothing else: no keyboard press anywhere in this scenario. A pad opens PLAY from
 //        the title, three more sit down on the critter select, each picks a different card and stamps it, and the
-//        order board opens with a party of four in seat order. This is the whole point of the feature, so it is
+//        day board opens with a party of four in seat order. This is the whole point of the feature, so it is
 //        walked through the real screens rather than poked at through the input module (tools/nettest.js does
 //        that). The last beat is the one that used to be impossible: a fifth pad has no seat to take.
 import { withPage, assert } from '../playtest.js';
@@ -93,7 +93,7 @@ export const SCENARIOS = {
       // ---- the run opens with a party of four ----
       await api.step(90);                                  // the stamps hold, then the fade hands over to the board
       const s5 = await api.summary();
-      assert(s5.screen === 'stage', `a full couch of readies opens the order board (now on ${s5.screen})`);
+      assert(s5.screen === 'stage', `a full couch of readies opens the day board (now on ${s5.screen})`);
       assert(s5.run && s5.run.party.length === 4, `the run is seated with four critters (${JSON.stringify(s5.run && s5.run.party)})`);
       assert(s5.run.party.join() === 'barley,sorrel,chicory,cress', `one per pad, in seat order (${s5.run.party.join()})`);
 

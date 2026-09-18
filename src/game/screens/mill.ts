@@ -405,7 +405,7 @@ export class MillScreen extends Screen {
     this.hopCursor = 0;
     this.tied = 0;
 
-    const need = run ? run.order.needs.find((x) => x.id === 'flour') : null;
+    const need = run ? run.need('flour') : null;
     // the remainder, not the whole order: the map may already have banked some (the three shipped scenes agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;

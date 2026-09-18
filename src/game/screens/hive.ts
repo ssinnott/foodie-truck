@@ -214,7 +214,7 @@ export class HiveScreen extends Screen {
     this.skeps = [];
     for (let i = 0; i < SKEP_X.length; i++) this.skeps.push({ refill: 0, held: 0 });
     this.swarm = { phase: 0, x: VIEW_W / 2, tx: VIEW_W / 2 };
-    const need = run ? run.order.needs.find((x) => x.id === 'honey') : null;
+    const need = run ? run.need('honey') : null;
     // the remainder, not the whole order: the map may already have banked some (every mini-game agrees)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;

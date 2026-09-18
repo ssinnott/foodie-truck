@@ -72,15 +72,25 @@ export function runChecksum(game) {
   const run = game.run;
   if (run) {
     h = mix(h, 1);
-    h = mixNum(h, run.seed); h = mix(h, run.stage | 0); h = mix(h, run.served | 0);
-    // the day's card: which stages have been served and at how many stars, so a peer that banked a different
-    // rating - or a board that picked a different stage - is caught on the frame it happens
-    const stages = run.stages || [];
-    h = mix(h, stages.length);
-    for (const st of stages) h = mix(h, st.stars | 0);
+    h = mixNum(h, run.seed); h = mix(h, run.line | 0); h = mix(h, run.customer | 0); h = mix(h, run.served | 0);
+    // the day's plan and how far it has got: the menu, every line's place and every customer's stars, so a peer
+    // that banked a different rating - or pulled up at a different line - is caught on the frame it happens
+    const recipes = run.recipes || [];
+    h = mix(h, recipes.length);
+    for (const id of recipes) h = mixAny(h, id);
+    const lines = run.lines || [];
+    h = mix(h, lines.length);
+    for (const ln of lines) {
+      h = mixAny(h, ln.place); h = mix(h, ln.served ? 1 : 0); h = mix(h, ln.customers.length);
+      for (const c of ln.customers) { h = mixAny(h, c.customer); h = mixAny(h, c.recipe); h = mix(h, c.stars | 0); }
+    }
+    // the shopping list: what has been gathered and what the kitchen has cooked out of it
+    const needs = run.needs || [];
+    h = mix(h, needs.length);
+    for (const n of needs) { h = mixAny(h, n.id); h = mixNum(h, n.amount); h = mixNum(h, n.have); h = mixNum(h, n.used | 0); }
     h = mixNum(h, run.score); h = mix(h, run.frame | 0);
     const order = run.order || { needs: [] };
-    h = mixAny(h, order.id);
+    h = mixAny(h, order.id); h = mixAny(h, order.customer);
     h = mix(h, order.needs.length);
     for (const n of order.needs) { h = mixAny(h, n.id); h = mixNum(h, n.amount); h = mixNum(h, n.have); }
     const t = run.truck || {};
