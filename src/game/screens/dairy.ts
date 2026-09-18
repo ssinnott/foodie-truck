@@ -28,11 +28,12 @@ import { drawHint } from '../ui.ts';
 const R = Math.round;
 
 /**
- * PUMP_PER_PAIL 6: six taps is about 1.2 s at a comfortable 5 presses/s and 3 s at a careful 2 presses/s, so a solo
- * player banks the shipped fallback target of 3 in well under a tenth of the 2400-frame round either way. The clock
- * is a backstop, never the opponent: this scene has no opponent.
+ * PUMP_PER_PAIL 12: twelve taps is about 2.4 s at a comfortable 5 presses/s and 6 s at a careful 2 presses/s, so a
+ * solo player banks the shipped fallback target of 3 in under a third of the 2400-frame round even at the slow
+ * rate - long enough that a pail feels earned, short enough that the clock stays a backstop and never the
+ * opponent: this scene has no opponent.
  */
-const PUMP_PER_PAIL = 6;
+const PUMP_PER_PAIL = 12;
 /**
  * The squirt beat. At a comfortable 12-frame press cadence a 6-frame jet is up for half of a fast player's frames
  * and reads as continuous milking, and it is still well inside the 12, so a jet never survives into the next press.
@@ -308,7 +309,7 @@ export class DairyScreen extends Screen {
 
   /**
    * One seat's frame. The beats run down first, then the press is read by SLOT (never anyPressed): every `action`
-   * press is a squirt, and the sixth one fills the pail. `bumpT` is only ever set by the shared furniture (a seat
+   * press is a squirt, and the twelfth one fills the pail. `bumpT` is only ever set by the shared furniture (a seat
    * arrives with it at 0 and nothing here raises it), but it is still honoured so the shared bump beat, if a future
    * rule ever uses it, locks the buttons the way it does in every other mini-game.
    */
@@ -326,7 +327,7 @@ export class DairyScreen extends Screen {
     s.player.tick();
   }
 
-  /** One press: a squirt, the paws swap over, and the sixth one fills the pail. */
+  /** One press: a squirt, the paws swap over, and the twelfth one fills the pail. */
   pump(s: DairySeat): void {
     const down = s.fill & 1;
     s.fill++;

@@ -22,7 +22,7 @@ const SLAM = 6, HOLD = 60;
 /** ?order=6 is ORDERS[5], CARROT SOUP: carrot 4 + milk 2, so `carrot` is a real line on the ticket. */
 const BOOT = 'skipTo=garden&critters=0,1,2,3&order=6';
 /** The screen's own numbers, mirrored here so a change to either side shows up as a failing assert. */
-const PULL_PRESSES = 6, PULL_FRAMES = 14, GRIP_TIMEOUT = 150, GAUGE_UNITS = 120;
+const PULL_PRESSES = 12, PULL_FRAMES = 14, GRIP_TIMEOUT = 150, GAUGE_UNITS = 120;
 /** The frame of the pull the shot is taken on: the root is mid-arc and the hole is still open behind it. */
 const PULL_SHOT = 5;
 

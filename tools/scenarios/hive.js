@@ -17,9 +17,9 @@ import { withPage, assert } from '../playtest.js';
 
 const SLAM = 6, HOLD = 60;
 /** The screen's own numbers, mirrored here so an assert says what it expects rather than what it found. */
-const ROUND_FRAMES = 2400, DIP_HOLD = 40;
+const ROUND_FRAMES = 2400, DIP_HOLD = 60;
 /** The frame of the hold the picture is taken on: the dipper is up in the doorway and the bar is half full. */
-const DIP_SHOT = 20;
+const DIP_SHOT = 30;
 /** Held-input leg: 90 frames of `right` is 162 px at the screen's 1.8 px/frame creep. */
 const CREEP_FRAMES = 90;
 

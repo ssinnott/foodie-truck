@@ -8,7 +8,7 @@
 import { withPage, assert } from '../playtest.js';
 
 /** The screen's own numbers, mirrored here so a change to either side shows up as a failing assert. */
-const WAIT_MIN = 60, WAIT_MAX = 150, REEL_PRESSES = 6;
+const WAIT_MIN = 60, WAIT_MAX = 150, REEL_PRESSES = 12;
 const seat0 = (s) => s.top.seats[0];
 /** Step one frame at a time until seat 0 is in `state` (or the frame budget runs out); returns the summary. */
 async function untilState(api, state, budget) {

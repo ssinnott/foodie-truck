@@ -2,7 +2,7 @@
 // Saturday Market's own walled kitchen garden, and the crew works one row of it. Leafy tops stand in the crop ridge
 // at seeded x positions; every seat walks LEFT and RIGHT along the row on its own depth lane; `action` within REACH
 // of a top takes HOLD of it and opens that seat's PULL GAUGE - a paper bar that fills a step with every further
-// `action` press. Tap it over and over and the root comes out (+1). There is no beat to hit and nothing to pull by
+// `action` press. Tap it over and over - a dozen times - and the root comes out (+1). There is no beat to hit and nothing to pull by
 // mistake: every top in this bed is a carrot, a top nobody has pressed on for GRIP_TIMEOUT frames is simply let go
 // of at no cost, and the only thing the row asks of anyone is to keep tapping. The round ends when the party's total
 // reaches the order's amount or the 40-second clock runs out; the CARROTS sign drops, is held, then
@@ -89,11 +89,11 @@ const GRIP_DX = 10, REACH = 16;
 
 /**
  * THE GAUGE. A pull is PULL_PRESSES taps of `action` after the grip, each one worth PULL_STEP of the bar's
- * GAUGE_UNITS: six taps and the root is out. Integers, because a press count is the kind of state a lockstep room
- * agrees on without thinking. Six is about a second of tapping at a child's pace and no faster is asked for: the
- * gauge never drains, so a pull can be as slow as it likes.
+ * GAUGE_UNITS: twelve taps and the root is out. Integers, because a press count is the kind of state a lockstep
+ * room agrees on without thinking. Twelve is a couple of seconds of tapping at a child's pace and no faster is
+ * asked for: the gauge never drains, so a pull can be as slow as it likes.
  */
-const PULL_PRESSES = 6, PULL_STEP = GAUGE_UNITS / PULL_PRESSES;
+const PULL_PRESSES = 12, PULL_STEP = GAUGE_UNITS / PULL_PRESSES;
 /**
  * Letting go: GRIP_TIMEOUT frames without a press and the critter straightens up, at no cost. 150 frames is two and
  * a half seconds - long enough that nobody is ever hurried off a root, short enough that a seat cannot park on the

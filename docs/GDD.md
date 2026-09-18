@@ -101,27 +101,27 @@ what they have gathered, and the 40-second clock is a backstop rather than an op
   instead of fusing.
 - **Pond — FISH** (*tap*). Fixed standing spots on a jetty, one float column per seat. `action` casts; the float
   bobs; after a seeded 60–150 frames the fish bites (the float drops, a mint ring) and stays on. Tapping `action`
-  six times reels it in: every press is one turn of the reel, drawn as a bar over the float. A press during the wait
+  twelve times reels it in: every press is one turn of the reel, drawn as a bar over the float. A press during the wait
   does nothing.
 - **Coop — COLLECT** (*move + tap*). Walk left/right along a depth lane; eggs appear in nests and on the floor in
   front of the lanes every 90–150 frames; `action` within 18 px along the lane plucks one (a 12-frame reach up into
   a nest from the gold ring on the floor under it, a 12-frame crouch to a floor egg). Five hens potter about the
   back of the floor and touch nobody.
-- **Dairy — PUMP** (*tap*). A stool and a cow per seat, nobody moves. Every `action` press is a squirt; six fill a
+- **Dairy — PUMP** (*tap*). A stool and a cow per seat, nobody moves. Every `action` press is a squirt; twelve fill a
   pail — +1 milk, the pail hops to the churn rack, a fresh one slides under the cow. Any rhythm works, and the cows
   never kick.
 - **Mill — FILL** (*move + hold*). Four chutes along the back wall wake on a seeded 70–130 frame timer, at most two
   at once: 24 frames of telegraph, then 110 frames of pouring. Seats walk left and right on their own depth lanes;
-  standing within 18 px of a pouring chute with `action` **held** fills the sack at 1/54 per frame (about 0.9 s
-  from empty). The moment it reaches the brim it ties itself off (+1 flour, an 18-frame tie beat, a fresh sack);
+  standing within 18 px of a pouring chute with `action` **held** fills the sack at 1/90 per frame (1.5 s from
+  empty). The moment it reaches the brim it ties itself off (+1 flour, an 18-frame tie beat, a fresh sack);
   letting go early **keeps** the part sack to top up at the next chute. Nothing bursts.
 - **Hives — CREEP** (*move + hold*). Five straw skeps on a bench; **holding** `action` within 16 px of a full one
-  for 40 frames dips it — a strand of honey climbs the dipper and a bar fills over the skep — then +1 honey, and
+  for 60 frames dips it — a strand of honey climbs the dipper and a bar fills over the skep — then +1 honey, and
   that skep is empty for 150 frames, so the party is pushed along the bench. Letting go early costs nothing. The
   bees drone over the bench and never turn.
 - **Market garden — PULL** (*move + tap*). Leafy tops stand in the bed (seven at the start, more every 70–120
   frames up to eight, never closer than 42 px); every one is a carrot. `action` within 16 px grips a top and opens
-  a pull gauge above that seat; each further `action` press fills it a sixth, and the sixth brings the root out
+  a pull gauge above that seat; each further `action` press fills it a twelfth, and the twelfth brings the root out
   (+1 carrot, a 14-frame pull). 150 frames without a press lets go at no cost.
 
 ## 6. The kitchen
@@ -132,10 +132,10 @@ are worked in order; the recipe card shows them with checks. Interactions:
 
 | Station | Verb | Rule |
 |---|---|---|
-| CHOP | tap | five `action` presses, any rhythm; the pips on the card light one per chop |
-| MIX | hold | hold `action` for 180 frames while a dial fills; releasing pauses it, holding again resumes it |
-| STOVE | hold | hold `action` for 150 frames while a bar fills; releasing pauses it the same way |
-| OVEN | hold | hold `action` for 180 frames while the bake runs; releasing pauses it the same way |
+| CHOP | tap | ten `action` presses, any rhythm; the pips on the card light one per chop |
+| MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it |
+| STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way |
+| OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way |
 | PLATE | tap | `action` plates the dish and rings the bell; the customer eats |
 
 Nothing can burn or be missed: every completed step scores its full 2, so stars = round(total / max × 3) is always

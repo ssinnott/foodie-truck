@@ -349,9 +349,9 @@ function hub(ctx, cx, cy, slot) {
   ctx.fillStyle = UI.paper; ctx.fillRect(cx - 1, cy - 1, 2, 2);
 }
 
-/** CHOP: a row of `total` pips, one lit green per chop landed - a tally, not a beat. */
+/** CHOP: a row of `total` pips, one lit green per chop landed - a tally, not a beat. Ten pips go on a 4 px pitch. */
 export function drawChopBar(ctx, hits, total, slot) {
-  const x = WIDGET_POS[0][0], y = WIDGET_POS[0][1], pitch = 7, w = 5, bx = x + 24 - R((total * pitch - 2) / 2), by = y + 13;
+  const x = WIDGET_POS[0][0], y = WIDGET_POS[0][1], pitch = total > 6 ? 4 : 7, w = pitch - 1, bx = x + 24 - R((total * pitch - 1) / 2), by = y + 13;
   card(ctx, x, y, 48, 26, slot);
   for (let i = 0; i < total; i++) { ctx.fillStyle = UI.ink; ctx.fillRect(bx + i * pitch, by, w, w); ctx.fillStyle = i < hits ? SIGNAL.good : UI.paperDark; ctx.fillRect(bx + i * pitch + 1, by + 1, w - 2, w - 2); }
 }

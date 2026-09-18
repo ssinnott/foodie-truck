@@ -2,8 +2,8 @@
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
 //   kitchen - four seats in the kitchen with the first order (APPLE PIE: chop, mix, oven, plate). Seat 0 is walked
-//             to each station in turn and given the right input: five taps on the board in any rhythm, a 180-frame
-//             hold on the bowl (with a pause in the middle that costs nothing), a 180-frame hold on the oven, and
+//             to each station in turn and given the right input: ten taps on the board in any rhythm, a 240-frame
+//             hold on the bowl (with a pause in the middle that costs nothing), a 240-frame hold on the oven, and
 //             the bell. The screen must reach results with three stars, then the order board with run.served 1 on
 //             confirm. A second pass runs the FISH CAKES order (chop, mix, stove, plate) for the stove's hold and
 //             writes tools/screens/kitchen-stove.png with the pot lit mid-hold. The tags are shot as they come up
@@ -43,10 +43,10 @@ export async function chopOnce(api) {
 /** Chop and mix are the first two steps of both prototype orders; drive them through. */
 async function chopAndMix(api) {
   await walkTo(api, 0);
-  for (let i = 0; i < 5; i++) await chopOnce(api);
+  for (let i = 0; i < 10; i++) await chopOnce(api);
   await walkTo(api, 1);
   await api.hold(0, { action: true });
-  await api.step(181);
+  await api.step(241);
   await api.release(0);
   return api.summary();
 }
@@ -60,44 +60,44 @@ export const SCENARIOS = {
       assert(s0.top.steps.join() === 'CHOP,MIX,OVEN,PLATE', `the first order's steps are chop, mix, oven, plate (${s0.top.steps.join()})`);
       assert(s0.top.step === 0 && !s0.top.served, 'the first step is up and nothing is served');
 
-      // CHOP: walk to the board; the first tap claims the step, five taps in any rhythm finish it
+      // CHOP: walk to the board; the first tap claims the step, ten taps in any rhythm finish it
       let s = await walkTo(api, 0);
       assert(s.top.seats[0][2] === 0, `seat 0 is at the chop station (station ${s.top.seats[0][2]}, x ${s.top.seats[0][1]})`);
       assert(s.top.seats.slice(1).every((x, i) => x[1] === s0.top.seats[i + 1][1]), 'the other seats, with no input, stayed put');
       s = await chopOnce(api);
       assert(s.top.count === 1 && s.top.owners[0] === 0, `the first tap is a chop and claims the step for P1 (count ${s.top.count}, owner ${s.top.owners[0]})`);
       await api.step(40);                        // a long think between chops costs nothing
-      for (let i = 0; i < 4; i++) { s = await chopOnce(api); if (i === 0) { await api.step(7); await api.shot('kitchen-chop'); } }
-      assert(s.top.step === 1 && s.top.scores[0] === 2, `five taps complete the step as PERFECT (step ${s.top.step}, score ${s.top.scores[0]})`);
+      for (let i = 0; i < 9; i++) { s = await chopOnce(api); if (i === 3) { await api.step(7); await api.shot('kitchen-chop'); } }
+      assert(s.top.step === 1 && s.top.scores[0] === 2, `ten taps complete the step as PERFECT (step ${s.top.step}, score ${s.top.scores[0]})`);
 
-      // MIX: hold at the bowl for 180 frames; a release halfway pauses it and costs nothing
+      // MIX: hold at the bowl for 240 frames; a release halfway pauses it and costs nothing
       s = await walkTo(api, 1);
       assert(s.top.seats[0][2] === 1, `seat 0 is at the mixing bowl (station ${s.top.seats[0][2]})`);
       await api.hold(0, { action: true });
-      await api.step(90);
+      await api.step(120);
       s = await api.summary();
-      assert(s.top.t === 90 && s.top.owners[1] === 0, `90 frames held fill half the dial (${s.top.t}) and P1 owns the step`);
+      assert(s.top.t === 120 && s.top.owners[1] === 0, `120 frames held fill half the dial (${s.top.t}) and P1 owns the step`);
       assert(s.top.seats[0][3] === 'stir', `the mixer stirs (${s.top.seats[0][3]})`);
       await api.shot('kitchen-mix');
       await api.release(0);
       await api.step(20);
       s = await api.summary();
-      assert(s.top.t === 90 && s.top.phase === 0, `letting go pauses the dial (${s.top.t}, phase ${s.top.phase})`);
+      assert(s.top.t === 120 && s.top.phase === 0, `letting go pauses the dial (${s.top.t}, phase ${s.top.phase})`);
       await api.hold(0, { action: true });
-      await api.step(91);
+      await api.step(121);
       await api.release(0);
       s = await api.summary();
       assert(s.top.step === 2 && s.top.scores[1] === 2, `the hold finishes the mix as PERFECT, pause and all (step ${s.top.step}, score ${s.top.scores[1]})`);
 
-      // OVEN: hold at the oven for 180 frames while the bake runs
+      // OVEN: hold at the oven for 240 frames while the bake runs
       s = await walkTo(api, 3);
       assert(s.top.seats[0][2] === 3, `seat 0 is at the oven (station ${s.top.seats[0][2]})`);
       await api.hold(0, { action: true });
-      await api.step(120);
+      await api.step(160);
       s = await api.summary();
-      assert(s.top.phase === 1 && s.top.t === 120 && s.top.owners[2] === 0, `120 frames held bake two thirds of the way (phase ${s.top.phase}, t ${s.top.t}) and P1 owns the step`);
+      assert(s.top.phase === 1 && s.top.t === 160 && s.top.owners[2] === 0, `160 frames held bake two thirds of the way (phase ${s.top.phase}, t ${s.top.t}) and P1 owns the step`);
       await api.shot('kitchen-oven');
-      await api.step(61);
+      await api.step(81);
       await api.release(0);
       s = await api.summary();
       assert(s.top.step === 3 && s.top.scores[2] === 2, `holding to the end of the bake is PERFECT (step ${s.top.step}, score ${s.top.scores[2]})`);
@@ -140,11 +140,11 @@ export const SCENARIOS = {
       s = await api.summary();
       assert(s.top.phase === 0 && s.top.t === 60, `letting go pauses the bar where it is (phase ${s.top.phase}, t ${s.top.t})`);
       await api.hold(0, { action: true });
-      await api.step(66);             // 150 frames fill the bar
+      await api.step(140);            // 240 frames fill the bar
       s = await api.summary();
-      assert(s.top.phase === 1 && s.top.t === 126, `the pot is back on and the bar is nearly full (${s.top.t}/150)`);
+      assert(s.top.phase === 1 && s.top.t === 200, `the pot is back on and the bar is nearly full (${s.top.t}/240)`);
       await api.shot('kitchen-stove');
-      await api.step(25);
+      await api.step(41);
       await api.release(0);
       s = await api.summary();
       assert(s.top.step === 3 && s.top.scores[2] === 2, `holding until the bar fills is PERFECT, pause and all (step ${s.top.step}, score ${s.top.scores[2]})`);

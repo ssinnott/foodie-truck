@@ -20,13 +20,13 @@ import { withPage, assert } from '../playtest.js';
 
 const SLAM = 6, HOLD = 60;
 /** The screen's own numbers, restated here so a change to either side shows up as a failing assert, not a silent pass. */
-const FILL_RATE = 1 / 54, FULL = 1, BRIM_AT = 0.65, TIE_FRAMES = 18;
-/** Frames of holding that land the sack inside the brim band: 45/54 = 0.833, comfortably between 0.65 and 1. */
-const TO_BRIM = 45;
-/** ...and from there to the brim (54/54), where the sack ties itself off; plus one so the test never sits on the edge. */
-const TO_FULL = 10;
-/** A long hold from empty: a tie at 54, the tie beat, and a good way into the next sack. Nothing bursts. */
-const LONG_HOLD = 100;
+const FILL_RATE = 1 / 90, FULL = 1, BRIM_AT = 0.65, TIE_FRAMES = 18;
+/** Frames of holding that land the sack inside the brim band: 75/90 = 0.833, comfortably between 0.65 and 1. */
+const TO_BRIM = 75;
+/** ...and from there to the brim (90/90), where the sack ties itself off; plus one so the test never sits on the edge. */
+const TO_FULL = 16;
+/** A long hold from empty: a tie at 90, the tie beat, and a good way into the next sack. Nothing bursts. */
+const LONG_HOLD = 150;
 
 /**
  * Stand seat 0 under chute `ci` with an empty sack and that chute pouring, and switch everything else off: no more
@@ -142,6 +142,9 @@ export const SCENARIOS = {
 
       // --- part five: a long hold never bursts - it ties one sack and starts on the next
       const longBefore = await stage(api, page, 1, true);
+      // a pour is 110 frames and the first sack and its tie beat take 108 of them: keep this spout going so the
+      // hold has something to fill the second sack from
+      await page.evaluate(() => { window.__game.game.screen.chutes[1].t = 400; });
       await api.hold(0, { action: true });
       await api.step(LONG_HOLD);
       const long = await seat0(page);

@@ -72,21 +72,21 @@ const LANE_Y0 = ROWS.feet, LANE_GAP = 8;
  */
 const POUR_MAX = 2, TELEGRAPH = 24, POUR_FRAMES = 110, WAKE_MIN = 70, WAKE_MAX = 130;
 /**
- * Measured headless over seeds 1/7/23/99, one seat, a bot that walks to the nearest awake spout and holds: a SOLO
- * party banks the fallback target of 3 in about 480..658 frames of the 2400, on 5..7 wakes. The same bot told to
- * camp under one spout and never walk banks 3 in 650..1451 frames. Walking is worth two to three times camping, so
- * moving is plainly the better play; camping still finishes inside the round, so a player who has not worked that
- * out is never locked out of a cozy game's ingredient. A four-seat party shares the same 2400 frames and the same
- * two live spouts, which is what keeps a full room co-operative rather than four people racing each other.
+ * The tuning: a sack is 90 frames of one 110-frame pour, so a player who reaches a spout inside its telegraph ties
+ * a sack off that pour, and a player who arrives late tops the part sack up at the next one. Wakes land every
+ * 70..130 frames, so a solo party banks the fallback target of 3 in a handful of wakes, well inside the 2400-frame
+ * round even camping under one spout. A four-seat party shares the same 2400 frames and the same two live spouts,
+ * which is what keeps a full room co-operative rather than four people racing each other.
  */
 /** A seat is under a chute within this of its centre: 36 px of standing room, a little wider than a critter. */
 const CATCH_HALF = 18;
 /**
- * The sack. FILL_RATE is 1/54, so an empty sack takes 54 frames (0.9 s) under a pour - the beat the whole scene is
- * cut to. FULL is the brim, where the sack ties itself off; BRIM_BAND is the last 0.35 of a sack (19 frames) where
- * the tag and the sack's own tie turn green, so a player sees "nearly there" before the tie beat lands.
+ * The sack. FILL_RATE is 1/90, so an empty sack takes 90 frames (1.5 s) under a pour - the beat the whole scene is
+ * cut to, and comfortably inside one 110-frame pour. FULL is the brim, where the sack ties itself off; BRIM_BAND is
+ * the last 0.35 of a sack (32 frames) where the tag and the sack's own tie turn green, so a player sees "nearly
+ * there" before the tie beat lands.
  */
-const FILL_RATE = 1 / 54, FULL = 1, BRIM_BAND = 0.35;
+const FILL_RATE = 1 / 90, FULL = 1, BRIM_BAND = 0.35;
 const BRIM_AT = FULL - BRIM_BAND;
 /** The tie beat (18 frames of the `tie` anim) and the frame of it the sack leaves the paw on. */
 const TIE_FRAMES = 18, TIE_TOSS = 9;

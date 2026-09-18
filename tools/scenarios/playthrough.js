@@ -222,7 +222,7 @@ async function pluckEggs(api) {
 const STATION = { chop: 0, mix: 1, stove: 2, oven: 3, plate: 4 };
 
 /**
- * Cook whatever steps the order carries, each with the input its station asks for: five taps on the board, a hold
+ * Cook whatever steps the order carries, each with the input its station asks for: ten taps on the board, a hold
  * on the bowl, a hold on the stove, a hold on the oven, and the bell. Every hold is kept down until the step
  * advances, which is what a player does. Leaves the kitchen on the hand-over to results.
  */
@@ -232,11 +232,11 @@ async function cook(api) {
   for (let k = 0; k < steps.length; k++) {
     const name = steps[k];
     s = await walkTo(api, STATION[name]);
-    if (name === 'chop') { for (let i = 0; i < 5; i++) s = await chopOnce(api); }
+    if (name === 'chop') { for (let i = 0; i < 10; i++) s = await chopOnce(api); }
     else if (name === 'plate') await api.press(0, { action: true }, 1, 0);
     else {
       await api.hold(0, { action: true });
-      for (let i = 0; i < 60 && (await api.summary()).top.step === k; i++) await api.step(4);
+      for (let i = 0; i < 80 && (await api.summary()).top.step === k; i++) await api.step(4);
       await api.release(0);
       await api.step(2);
     }

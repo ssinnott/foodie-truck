@@ -2,9 +2,9 @@
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
 //   dairy - four seats in the byre on the CUSTARD TART order, so the target is the order's own milk line and not
-//           the fallback: seat 0 is milked with REAL input through api.press - six taps of action, one pail, the
+//           the fallback: seat 0 is milked with REAL input through api.press - twelve taps of action, one pail, the
 //           party's total up by one, and the other seats still on zero. Then the two things the byre promises:
-//             any rhythm works - six taps spread over three seconds fill a pail just the same;
+//             any rhythm works - twelve taps spread over six seconds fill a pail just the same;
 //             nothing else does anything - `alt` moves nothing, and no cow ever kicks.
 //           Finally the clock is forced to its last frames: the MILK sign drops, is held, and the screen hands back
 //           to the map with the order's milk line updated by the party's total.
@@ -14,7 +14,7 @@ import { withPage, assert } from '../playtest.js';
 
 const SLAM = 6, HOLD = 60;
 /** The screen's own numbers, mirrored here so a change to either side shows up as a failing assert. */
-const PUMP_PER_PAIL = 6;
+const PUMP_PER_PAIL = 12;
 /** ?order=5 is ORDERS[4], CUSTARD TART: milk 3 + egg 2, so `milk` is a real line on the ticket. */
 const BOOT = 'skipTo=dairy&critters=0,1,2,3&order=5';
 /** The frame of the squirt the pump shot is taken on: the jet is still up and the ring has opened. */
@@ -43,7 +43,7 @@ export const SCENARIOS = {
       assert(milkLine === `milk:0/${s0.top.target}` && s0.top.target > 0, `the target is the order's own milk line (${milkLine}, target ${s0.top.target})`);
       const others0 = JSON.stringify(s0.top.seats.slice(1).map((s) => s.count));
 
-      // --- real input: six quick taps fill a pail and bank one milk for the party
+      // --- real input: twelve quick taps fill a pail and bank one milk for the party
       await holdTarget(page);
       const before = await seat0(page);
       assert(before.fill === 0, `seat 0 starts with an empty pail (fill ${before.fill})`);
@@ -58,20 +58,20 @@ export const SCENARIOS = {
         if (i < PUMP_PER_PAIL - 1) assert(mid.fill === i + 1, `tap ${i + 1} is a squirt: the pail is ${i + 1}/${PUMP_PER_PAIL} (fill ${mid.fill})`);
       }
       const filled = await seat0(page);
-      assert(filled.count === before.count + 1, `six taps bank a pail (seat 0 ${before.count} -> ${filled.count})`);
+      assert(filled.count === before.count + 1, `twelve taps bank a pail (seat 0 ${before.count} -> ${filled.count})`);
       assert(filled.total === before.total + 1, `and the party's total goes up with it (${before.total} -> ${filled.total})`);
       assert(filled.fill === 0, `a fresh pail slides in (fill ${filled.fill})`);
       const after = await api.summary();
       assert(JSON.stringify(after.top.seats.slice(1).map((s) => s.count)) === others0, 'the other seats, with no input, milked nothing');
 
-      // --- any rhythm: six slow taps, half a second apart, fill a pail just the same
+      // --- any rhythm: twelve slow taps, half a second apart, fill a pail just the same
       const slowBefore = await seat0(page);
       for (let i = 0; i < PUMP_PER_PAIL; i++) await api.press(0, { action: true }, 1, 29);
       const slow = await seat0(page);
-      assert(slow.count === slowBefore.count + 1 && slow.fill === 0, `six slow taps fill a pail too (seat 0 ${slowBefore.count} -> ${slow.count}, fill ${slow.fill})`);
+      assert(slow.count === slowBefore.count + 1 && slow.fill === 0, `twelve slow taps fill a pail too (seat 0 ${slowBefore.count} -> ${slow.count}, fill ${slow.fill})`);
 
       // --- nothing else does anything: `alt` is not a pump, and no cow ever kicks
-      // forty taps are six more pails: push the finish line well out so the mash cannot end the round under the assert
+      // forty taps are three more pails: push the finish line well out so the mash cannot end the round under the assert
       await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = sc.total + 20; sc.setTotal(sc.total); });
       const altBefore = await seat0(page);
       await api.press(0, { alt: true }, 1, 3);

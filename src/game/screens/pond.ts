@@ -37,7 +37,7 @@ const R = Math.round;
 const IDLE = 0, CAST = 1, WAIT = 2, BITE = 3, HOOKED = 4;
 const STATE_NAMES = Object.freeze(['idle', 'cast', 'wait', 'bite', 'hooked']);
 /** The wait before the bite, and the reel: REEL_PRESSES taps of `action` land a fish that has bitten. */
-const WAIT_MIN = 60, WAIT_MAX = 150, REEL_PRESSES = 6, RESULT_FRAMES = 40;
+const WAIT_MIN = 60, WAIT_MAX = 150, REEL_PRESSES = 12, RESULT_FRAMES = 40;
 /** Frames the float and the rod tug for after each reel press (draw only, but kept in the sim as a plain counter). */
 const TUG_FRAMES = 6;
 const FISH_ARC = 20, FALLBACK_TARGET = 3;

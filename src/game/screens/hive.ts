@@ -45,11 +45,11 @@ const SKEP_TOP = ROWS.bench - SKEP_H, CRATE_Y = ROWS.bench;
 /**
  * The dip. REACH is half the drawn skep (18 px) less a couple, so a seat has to be standing essentially under its
  * doorway - the backdrop wears a scuffed dip spot at every SKEP_X exactly that wide, which is the only teaching
- * this rule gets. DIP_HOLD is how long `action` is held for the honey to come: 40 frames, two thirds of a second,
- * long enough to be a hold rather than a tap and short enough that a child never wonders if it is working - the
- * strand of honey climbing onto the dipper and the bar over the skep both say so from the first frame.
+ * this rule gets. DIP_HOLD is how long `action` is held for the honey to come: 60 frames, a full second, long
+ * enough to be a hold rather than a tap and short enough that a child never wonders if it is working - the strand
+ * of honey climbing onto the dipper and the bar over the skep both say so from the first frame.
  */
-const REACH = 16, DIP_HOLD = 40;
+const REACH = 16, DIP_HOLD = 60;
 /**
  * A dipped skep is empty for this long. 150 frames is a couple of walks along the bench, so the party is pushed
  * ALONG the bench rather than parked at one skep, which is the movement this mini-game is made of.

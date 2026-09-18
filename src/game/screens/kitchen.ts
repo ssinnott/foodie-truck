@@ -2,10 +2,10 @@
 // camera locked: one critter per seat walks the counter between the five stations (content/places.js STATIONS) and
 // the order's steps are worked IN ORDER. The first seat to interact at the current step's station owns it (its slot
 // colour fills the paper tag over the station); its input alone drives the step:
-//   CHOP  five presses, any rhythm: every tap is a chop and the fifth finishes the board
-//   MIX   hold for 180 frames while a dial fills; letting go pauses it, and it picks up where it left off
-//   STOVE hold for 150 frames while a bar fills; letting go pauses it the same way
-//   OVEN  hold for 180 frames while the bake runs; letting go pauses it the same way
+//   CHOP  ten presses, any rhythm: every tap is a chop and the tenth finishes the board
+//   MIX   hold for 240 frames while a dial fills; letting go pauses it, and it picks up where it left off
+//   STOVE hold for 240 frames while a bar fills; letting go pauses it the same way
+//   OVEN  hold for 240 frames while the bake runs; letting go pauses it the same way
 //   PLATE a press at the hatch plates the dish and rings the bell: ORDER UP!, then results
 // Every step completed is worth its full 2 (there is no way to burn, miss or spoil anything), so a served dish is
 // always three stars: stars = max(1, round(total / (2 * steps) * 3)). Barley's gag: on every completed step, a
@@ -49,10 +49,10 @@ const STATION_IDX = { chop: CHOP, mix: MIX, stove: STOVE, oven: OVEN_S, plate: P
 /** Walking: px/frame along the feet line. */
 const SPEED = 2.0;
 /** The steps' lengths (docs/GDD.md section 6): taps on the board, frames of holding everywhere else. */
-const CHOP_HITS = 5;
-const MIX_FRAMES = 180;
-const STOVE_FRAMES = 150;
-const OVEN_FRAMES = 180;
+const CHOP_HITS = 10;
+const MIX_FRAMES = 240;
+const STOVE_FRAMES = 240;
+const OVEN_FRAMES = 240;
 /** After the bell: one component lands on the plate every DROP_FRAMES, the stamp slams, then results. */
 const SERVE_FRAMES = 96, DROP_FRAMES = 12, STAMP_AT = 40;
 /** The ORDER UP! stamp's resting row: the wall's clear band between the station signs (104..121) and the props
