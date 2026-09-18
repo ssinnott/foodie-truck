@@ -68,7 +68,10 @@ function seat0(page) {
 
 export const SCENARIOS = {
   async orchard(server) {
-    await withPage(server, 'skipTo=orchard&critters=0,1,2,3', async (api, page) => {
+    // ?order=1 is ORDERS[0], APPLE PIE: apple 4 + egg 2, so `apple` is a real line on the ticket. The orchard now drops
+    // pears, peaches and avocados too, and gathers whichever the day is short of (game/run.js gatherTarget); a seed
+    // whose menu never asked for apples would put the AVOCADOS sign up instead of the one this scenario reads.
+    await withPage(server, 'skipTo=orchard&critters=0,1,2,3&order=1', async (api, page) => {
       await api.step(2);
       const s0 = await api.summary();
       assert(s0.screen === 'orchard', `the orchard is up with a run started (on ${s0.screen})`);

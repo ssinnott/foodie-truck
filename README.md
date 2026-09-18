@@ -6,10 +6,14 @@ customers will order. They drive round the countryside gathering it all — a sh
 until the pantry is full, then drive to the queues of villagers lined up at three of those landmarks and cook for
 them one at a time, order by order, until the third line has been served. Then the truck closes for the night.
 
-Seven recipes, seven ingredients, seven landmarks, and **a different mini-game at every one of them** — each with
-its own verb: catch, fish, collect, pump, fill, creep, pull. Every one of them is played with the same three inputs —
-move left and right, tap the action button over and over, or hold it down — with no timing windows and nothing to
-lose, so a small child can play the whole game.
+Twenty-two recipes, twenty-three ingredients, nine landmarks, and **seven mini-games** — each with its own verb:
+catch, fish, collect, pump, fill, creep, pull. A landmark can supply several things (the orchard drops pears, peaches
+and avocados as well as apples; the market garden's bed grows six vegetables besides the carrot; the dairy churns
+butter and the mill fills rice sacks), and the two newest landmarks — Cockle Cove, where crabs, seaweed and sea salt
+come off a jetty, and Bramble Bank, where strawberries and blueberries are pulled from the beds — borrow the pond's
+and the market's mini-games. Every one of them is played with the same three inputs — move left and right, tap the
+action button over and over, or hold it down — with no timing windows and nothing to lose, so a small child can play
+the whole game.
 
 Every day is laid out from a seed: which three recipes are on the menu, which three landmarks the lines form at,
 who is in each line and what they order. The **day board** pins the whole plan up before the truck opens; the

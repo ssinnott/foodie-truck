@@ -30,6 +30,7 @@ import type { Rig, RigWeapon } from '../../lib/art/rig.ts';
 import type { Point } from '../../lib/art/rigParts.ts';
 import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
+import { gatherTarget } from '../run.ts';
 import { MILL, ROWS, CHUTE_X, CHUTE_PITCH, SHAFT, millLayers } from '../../art/backgrounds/mill.ts';
 import {
   MILL_SACK, DORMANT, WAKING, POURING, TAG_W, TAG_H,
@@ -124,8 +125,7 @@ const MAX_HOPS = 4, HOP_FRAMES = 20, HOP_LIFT = 30;
 /** The motes hanging in the shaft: a cosmetic stream off the mill's own seed block, about 20 in the air at once. */
 const MOTE_SEED = 184, MOTE_EVERY = 7;
 const FALLBACK_TARGET = 3;
-const PLUS_ONE = '+1', TITLE = 'WINDLE MILL', SIGN_PREFIX = 'FLOUR: ';
-const FLOUR_HEX = INGREDIENTS.flour.hex;
+const PLUS_ONE = '+1', TITLE = 'WINDLE MILL';
 
 /**
  * The two beats this scene owns, as an AnimPlayer overlay on the shared table (content/critters/common.js is not
@@ -152,7 +152,6 @@ const MILL_ANIMS = Object.freeze({
   ] },
 });
 
-function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'sack', x, y, 4, FLOUR_HEX); }
 
 /** Reused by pawRoot so the sack-offset maths allocates nothing (it runs once per seat, in enter()). */
 const PAW: Point = { x: 0, y: 0 };
@@ -319,6 +318,14 @@ export class MillScreen extends Screen {
 
   /** One seat per party member, in party order (not slot order). */
   declare seats: MillSeat[];
+  /**
+   * What this visit gathers (game/run.js gatherTarget): flour, or the rice the same chutes fill sacks of. `icon`/`hex` are its glyph, the sign prefix its name.
+   */
+  declare ing: string;
+  declare icon: string;
+  declare hex: string;
+  declare signPrefix: string;
+  declare clockIcon: (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
   /** The four spouts, one slot per CHUTE_X, built in enter() and never grown. */
   declare chutes: Chute[];
   /** The backdrop, pre-rendered once (art/backgrounds/mill.js millLayers) and blitted per frame. */
@@ -405,7 +412,12 @@ export class MillScreen extends Screen {
     this.hopCursor = 0;
     this.tied = 0;
 
-    const need = run ? run.need('flour') : null;
+    this.ing = gatherTarget(run, params.place, 'mill');
+    const ing = INGREDIENTS[this.ing] || INGREDIENTS.flour;
+    this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
+    const icon = this.icon, hex = this.hex;
+    this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
+    const need = run ? run.need(this.ing) : null;
     // the remainder, not the whole order: the map may already have banked some (the three shipped scenes agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;
@@ -432,7 +444,7 @@ export class MillScreen extends Screen {
     } else {
       for (let i = 0; i < this.seats.length; i++) this.seats[i].player.tick();
       if (roundOver(clock)) {
-        if (game.run) game.run.gather('flour', this.total);
+        if (game.run) game.run.gather(this.ing, this.total);
         game.replace('map');
         return;
       }
@@ -533,7 +545,7 @@ export class MillScreen extends Screen {
   /** The round is over: drop the sign; a seat that tied a sack cheers, one that never did sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, SIGN_PREFIX + this.total);
+    endRound(this.clock, this.signPrefix + this.total);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.moving = false; s.bumpT = 0; s.tieT = 0; s.chute = -1;
@@ -560,7 +572,7 @@ export class MillScreen extends Screen {
     particles.draw(ctx, null, 'front');
     blitAt(ctx, L.beam.L, 0, L.beam.y);                 // the ceiling boards: the gear's teeth run up into them
     this.drawPlates(ctx);
-    drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawClock(ctx, this.clock, this.countStr, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);

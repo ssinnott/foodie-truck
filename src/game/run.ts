@@ -19,7 +19,7 @@
 // Nothing in here draws, and nothing in here reads the clock or Math.random: the day plan is drawn from its own
 // seeded stream (never the gameplay singleton, whose call count the checksum hashes), so four machines given the
 // same seed lay the same day out.
-import { ORDERS, INGREDIENTS } from '../content/recipes.ts';
+import { ORDERS, INGREDIENTS, ingredientsAt } from '../content/recipes.ts';
 import { PLACES } from '../content/places.ts';
 import { makeRng } from '../lib/engine/rng.ts';
 import type { RngInstance } from '../lib/engine/rng.ts';
@@ -155,7 +155,7 @@ export function startRun(game, o) {
     complete() { return run.needs.every((n) => n.have >= n.amount); },
     /** The shopping-list lines still short, in order. */
     missing() { return run.needs.filter((n) => n.have < n.amount); },
-    /** The landmark that supplies an ingredient id ('orchard' | 'pond' | 'coop' | 'dairy' | 'mill' | 'hive' | 'garden'). */
+    /** The landmark that supplies an ingredient id (a content/places.js PLACES id, never 'home'). */
     placeFor(id) { const ing = INGREDIENTS[id]; return ing ? ing.place : ''; },
     /** The line still waiting at a landmark (an index into `lines`), or -1. */
     lineAt(placeId) { for (let i = 0; i < run.lines.length; i++) if (run.lines[i].place === placeId && !run.lines[i].served) return i; return -1; },
@@ -210,6 +210,31 @@ export function startRun(game, o) {
   };
   game.run = run;
   return run;
+}
+
+/**
+ * Which ingredient a mini-game gathers this visit (docs/GDD.md section 5). A landmark can supply several (the
+ * orchard drops apples, pears, peaches and avocados; the market garden pulls seven roots), and two landmarks can
+ * share one screen (the cove borrows the pond's jetty), so the screen asks with the landmark it stands at -
+ * `place` is the map's hand-off param, or a ?place= dev jump - and its own id as the fallback:
+ *   1. the landmark's ingredients, in INGREDIENTS order, or every ingredient of every landmark that opens `screen`
+ *      when no landmark was named (a bare ?skipTo=orchard);
+ *   2. the first of those the shopping list is still SHORT of, else the first the list asks for at all, else the
+ *      first listed - so a dev jump with no order still catches apples, and a garden round on the carrot soup
+ *      pulls carrots even once the list has them.
+ * Returns the ingredient id; `run` may be null (a screen booted without a run gathers into nothing).
+ */
+export function gatherTarget(run: Run | null, place: string | undefined, screen: string): string {
+  let ids: string[] = place ? ingredientsAt(place) : [];
+  if (!ids.length) for (const p of PLACES) if (p.screen === screen && p.id !== 'home') ids = ids.concat(ingredientsAt(p.id));
+  if (!ids.length) ids = Object.keys(INGREDIENTS);
+  if (run) {
+    const short = ids.find((id) => { const n = run.need(id); return !!n && n.have < n.amount; });
+    if (short) return short;
+    const asked = ids.find((id) => !!run.need(id));
+    if (asked) return asked;
+  }
+  return ids[0];
 }
 
 /** An ORDERS entry by id; an unknown id gets the first, so a stale plan still cooks. */
