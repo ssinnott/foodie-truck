@@ -23,7 +23,7 @@ export const SCENARIOS = {
       await api.step(5);
       assert((await api.screen()) === 'title', 'the title comes up');
       const t0 = await api.summary();
-      assert(t0.top.row === 'PLAY' && t0.top.crew === 4, `the menu opens on PLAY with the crew idling (${t0.top.row}, ${t0.top.crew} critters)`);
+      assert(t0.top.row === 'PLAY' && t0.top.crew === 5, `the menu opens on PLAY with the crew idling (${t0.top.row}, ${t0.top.crew} cast members)`);
       await api.press(0, { action: true }, 2, 4);
       assert((await api.screen()) === 'select', `PLAY opens the critter select (now on ${await api.screen()})`);
       const s0 = await api.summary();

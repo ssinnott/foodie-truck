@@ -13,11 +13,11 @@ import { cancelPressed, navX, navY } from '../menuinput.ts';
 import { drawSign, drawHint, drawNamePlate } from '../ui.ts';
 
 const ANIMS = ['idle', 'walk', 'run', 'carry', 'carryWalk', 'reach', 'catch', 'cheer', 'sad', 'eat', 'chop', 'stir',
-  'bump', 'hop', 'wave', 'sit', 'sneak', 'honk', 'cast'];
-/** The last three are signature keys only one critter authors; everyone else falls back to idle (animation.js play). */
-const SIGNATURE = 3;
+  'bump', 'hop', 'wave', 'sit', 'sneak', 'honk', 'cast', 'taste'];
+/** The last four are signature keys only one cast member authors; everyone else falls back to idle (animation.js play). */
+const SIGNATURE = 4;
 /** Which held item a pose is authored around, so the gallery shows the pair. */
-const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: 'food', chop: 'knife', stir: 'spoon', honk: 'horn', cast: 'rod' };
+const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: 'food', chop: 'knife', stir: 'spoon', honk: 'horn', cast: 'rod', taste: 'spoon' };
 const FLOOR_Y = 250;
 /** Each critter hangs on its own card, so no fur ever sits on a plane of its own value. */
 const CARD_TOP_PAD = 10;

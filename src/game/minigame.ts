@@ -55,7 +55,7 @@ export const SIGN_SLAM = 6, SIGN_HOLD = 60;
  * Extra rows a critter's tallest head part reaches above its skull (ears, toque, sunhat), measured off the rigs: the
  * plate sits above whatever is tallest, so the plate row is ragged and that is fine (docs/ART_STYLE.md section 12).
  */
-const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18 };
+const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18, rowan: 18 };
 const SCRATCH = { x: 0, y: 0 };
 /** Option objects the draw helpers mutate instead of allocating per frame. */
 const COUNT_TEXT = { size: 1, color: UI.ink, shadow: false };

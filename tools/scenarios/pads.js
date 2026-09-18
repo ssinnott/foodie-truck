@@ -56,17 +56,18 @@ export const SCENARIOS = {
       await api.pads(IDLE);
       await api.step(4);
       const s2 = await api.summary();
-      assert(s2.top.seats[3].critter === 'barley', `seat 4's d-pad wrapped its own cursor round the cast (${s2.top.seats[3].critter})`);
+      assert(s2.top.seats[3].critter === 'rowan', `seat 4's d-pad moved its own cursor onto the fifth card (${s2.top.seats[3].critter})`);
       assert(s2.top.seats[0].critter === 'barley' && s2.top.seats[1].critter === 'sorrel' && s2.top.seats[2].critter === 'chicory', 'and left every other cursor where it was');
 
-      // walk seat 4 the rest of the way round the cast, back onto its own card: four distinct critters again
-      for (let k = 0; k < 3; k++) {
+      // walk seat 4 the rest of the way round the cast (five cards, so four more steps from the fifth), back onto
+      // its own card: four distinct critters again
+      for (let k = 0; k < 4; k++) {
         await api.pads(press(3, RIGHT));
         await api.step(2);
         await api.pads(IDLE);
         await api.step(4);
       }
-      assert((await api.summary()).top.seats[3].critter === 'cress', 'and a lap of the cast brings it home');
+      assert((await api.summary()).top.seats[3].critter === 'cress', 'and a lap of the cast (wrapping past the fifth card) brings it home');
 
       // ---- B un-stamps, and a run only starts when every seat has stamped ----
       for (const pad of [0, 1, 2, 3]) {

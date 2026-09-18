@@ -69,9 +69,10 @@ in §12. **Canonical reference rig: Barley** (`content/critters/barley.js`).
 | | species | role | h / headR | silhouette cue | fur `skin` (L) | markings `hair` | light `belly` | legs `secondary` | `shorts` | signature |
 |---|---|---|---|---|---|---|---|---|---|---|
 | **Barley** | Suffolk sheep | the hungry one — EAT / CARRY | 64 / 15 | widest body, scalloped wool cap, dark face, drooping ears, brass bell | `#F1E4C8` (.90) | face `#3F3A48` | muzzle `#8C7A86` | `#3F3A48` | `#3F3A48` | bell on a plum strap; eye whites always on (dark face) |
-| **Sorrel** | field mouse | the chef — CHOP / MIX | 48 / 11 | smallest body under the tallest toque, big round ears, thin rose tail | `#E2DDEA` (.88) | `#7A6A8C` | `#D9A2AE` (rose) | `#E2DDEA` | `#4A3F6B` | white toque with a 4 px blackberry band; paring knife |
+| **Sorrel** | field mouse | the chef — CHOP / MIX | 48 / 11 | smallest body under a puffed toque, big round ears, thin rose tail | `#E2DDEA` (.88) | `#7A6A8C` | `#D9A2AE` (rose) | `#E2DDEA` | `#4A3F6B` | white toque with a 4 px blackberry band; paring knife |
 | **Chicory** | brown hare | the driver — DRIVE / HONK | 56 / 13 | 16 px upright ears with dark tips, flat cap + goggles, cream scarf | `#6B5241` (.34) | `#3A2B22` | `#EBD9B4` | `#6B5241` | `#8C6E48` | goggles slide onto the eyes on `hurt`; bulb horn |
 | **Cress** | pond frog | the forager — GATHER / CAST | 57 / 13 | wide head with two eye domes on top, long legs and big feet, straw sunhat | `#3F7D3B` (.39) | `#2A5A2A` | `#CFE3A6` | `#3F7D3B` | `#2F5F7A` | straw hat with a plum band; dark-willow basket on the hip |
+| **Rowan** | human | the head chef — TASTE / ORDER | 61 / 13 | the tallest toque in the cast, straight-sided and pleated, on a round skull with no muzzle, no animal ears and no tail; chef's whites under the apron | skin `#603A28` (.26) | hair `#BFB7AA` (silver) | jacket `#F4F0E6` | `#515A68` | `#515A68` | beetroot neckerchief and hat band (the truck's own body colour: the owner wears the livery); a wooden spoon |
 
 Heights are the shipped rig's (`tools/art-check.js` holds the cast to a 46–68 px band): the two small critters
 grew a couple of pixels in the torso so the apron — the player's own colour — is not swallowed by the head.
@@ -82,6 +83,18 @@ seat** to `PLAYER_COLORS[slot]` (`critterRig(def, slot)`); an unseated critter w
 `#D8C093`. Straps and the pocket seam are drawn in the apron colour so nothing pale sits on pale fur. Baskets
 are dark willow `#6B4E3A` with cream highlights (wicker collided with P2's marmalade). Feet: Barley hooves and
 Chicory paws are dark, so every floor they stand on is ≥ L .30.
+
+**The human** keeps every slot's meaning but one: `skin` is skin, `hair` is hair (and the brows, which is why it
+is light — dark brows vanish on dark skin), `belly` is the jacket, the plane the apron actually sits on, and that is
+what `palette/player-spot` measures for a human (whites .32+ against all four). The upper arm is the jacket's
+sleeve (`critterBuild`'s `sleeveHex`) and the forearm is skin, the one material crossing an arm may carry (§0.8).
+The skin is deep on purpose: every mid skin tone lands within a few percent of a player colour by value (the
+hands hang beside the apron), and a pale one collides with Barley's wool by both hue and value (`cast/fur`); L .26
+clears all four aprons by .5+ and the nearest fur, Chicory's peat, by .23. The head is then the darkest thing on
+the body and the whites the lightest, with the apron between them — the ladder reads at the 0.5× squint as dark
+head / white hat and coat / mid apron / dark trousers, a silhouette none of the furs can make. Sorrel and Rowan
+both wear a toque: Sorrel's is the low puffed one with two balls, Rowan's the tall straight pleated one, so the
+two chefs never read as one silhouette on the cast sheet.
 
 ### The truck
 
@@ -193,8 +206,11 @@ far-side hooks colour from `info.pal`. Helpers: `celBall/celCapsule/celTaper/cel
 
 `critterBuild(spec)` assembles a critter from parameters — `ears: round|point|long|small`, `earTip`, `muzzle`
 size, `markings` (e.g. `maskMarking`, `cheekMarking`), `tail: stub|puff|bushy|ring|thin`, `boots`, `apron`,
-`accessories` (`chefHat`, `bandana(hex)`, `scarf(hex)`, `cap(hex)`), `parts` overrides. Prefer a parameter over a
-per-species hook so a renderer fix reaches the whole cast (ART_PRINCIPLES 49). Held items are `ITEMS.*` in
+`sleeveHex`, `accessories` (`chefHat`, `bandana(hex)`, `scarf(hex)`, `cap(hex)`), `parts` overrides. Prefer a
+parameter over a per-species hook so a renderer fix reaches the whole cast (ART_PRINCIPLES 49). The human
+(`content/critters/rowan.ts`) is the one cast member built mostly from `parts` overrides — head, face, torso, hand
+— because what it replaces is the animal itself; it still draws its apron through the shared `drawApron` and its
+torso from the shared `eggPath`, so the player spot and the body are the cast's. Held items are `ITEMS.*` in
 `content/critters/items.js` and are set at runtime: `rig.weapon = ITEMS.basket; rig.basketFill = 0.5`.
 
 Steam and smoke are the only soft marks (`steamPuff`, the `steam` particle); glow is flat with a 2 px `#FFD27A`
@@ -269,7 +285,7 @@ Items covered by `npm run art-check` name their rule; *(eye)* means a human stil
 - [ ] Every shared animation present, loops loop, cycle lengths in band, idle breathes, walk bobs — `anim/*`.
 - [ ] Cast: species unique, furs ≥ 25° hue or ≥ 20 % value apart, aprons apart — `cast/*`.
 - [ ] Nothing crosses the face at rest; raised paws land beside the muzzle — *(eye: anims sheet)*.
-- [ ] Squint: the cast sheet at 0.5× still tells four critters apart — *(eye)*.
+- [ ] Squint: the cast sheet at 0.5× still tells five cast members apart — *(eye)*.
 - [ ] Mirror: `facing=-1` sheet shows the tail, ears and item on the right side — *(eye)*.
 - [ ] Held items hang upright from the paw; the paw closes over the handle — *(eye: `item=` sheets)*.
 - [ ] No `Math.random`, no clock, no per-frame allocation in a hook — *(eye)*; `node tools/check.js` clean.

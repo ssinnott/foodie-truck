@@ -63,7 +63,7 @@ const ACT_FRAMES = 20, EAT_FRAMES = 42, CHOP_ANIM = 21, GAG_CHANCE = 1 / 6;
 /** Segments on each station's paper tag. */
 const SEGS = [CHOP_HITS, 4, 4, 4, 1];
 /** Rows a critter's tallest head part reaches above its skull (ears, toque, sunhat), for the name plate. */
-const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18 };
+const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18, rowan: 18 };
 /** The lowest row a name plate's top may take: the module's own contract is that nothing to read sits in rows
  *  156..200, where the pot, the bowl and the board's ingredient are. A tall crown lifts a plate above this. */
 const PLATE_Y_MAX = 160;

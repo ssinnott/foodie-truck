@@ -1,12 +1,12 @@
 // Playtest scenarios for the cast work (registered in tools/scenarios/index.js). Each export is
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
-//   cast - opens the CREW gallery with the four critters, steps through every animation in its list for 40 frames
-//          each (every hook, chain and accessory of every rig runs at least once), flips the facing and flips it
-//          back, then draws EVERY authored key of EVERY critter - including the signature keys the gallery's fixed
-//          list does not cycle (sneak, honk, cast) - straight through drawRig on a scratch canvas, so a broken key
-//          or a throwing hook cannot ship unseen. Asserts the cast is four strong, the gallery stayed up, and the
-//          page recorded no error.
+//   cast - opens the CREW gallery with the five cast members, steps through every animation in its list for 40
+//          frames each (every hook, chain and accessory of every rig runs at least once), flips the facing and flips
+//          it back, then draws EVERY authored key of EVERY cast member - including the signature keys the gallery's
+//          fixed list does not cycle (sneak, honk, cast, taste) - straight through drawRig on a scratch canvas, so a
+//          broken key or a throwing hook cannot ship unseen. Asserts the cast is five strong, the gallery stayed
+//          up, and the page recorded no error.
 import { withPage, assert } from '../playtest.js';
 
 // The gallery owns its own list (game/screens/gallery.js ANIMS) and may grow it; the scenario reads the list off
@@ -14,7 +14,7 @@ import { withPage, assert } from '../playtest.js';
 const BASE_ANIMS = ['idle', 'walk', 'run', 'carry', 'carryWalk', 'reach', 'catch', 'cheer', 'sad', 'eat', 'chop', 'stir', 'bump', 'hop', 'wave', 'sit'];
 const FRAMES_PER_ANIM = 40;
 /** Keys no screen plays yet, so nothing else in the suite would ever draw them. */
-const SIGNATURE = ['sneak', 'honk', 'cast'];
+const SIGNATURE = ['sneak', 'honk', 'cast', 'taste'];
 
 /**
  * Draw every keyframe of every animation of every critter in the page, with the item each pose is authored
@@ -26,7 +26,7 @@ async function drawEveryKey(page, signature) {
       import('/src/content/critters/index.ts'), import('/src/content/critters/common.ts'),
       import('/src/content/critters/items.ts'), import('/src/lib/art/rig.ts'), import('/src/lib/art/animation.ts'),
     ]);
-    const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: 'food', chop: 'knife', stir: 'spoon', cast: 'rod', honk: 'horn' };
+    const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: 'food', chop: 'knife', stir: 'spoon', cast: 'rod', honk: 'horn', taste: 'spoon' };
     const cv = document.createElement('canvas'); cv.width = 160; cv.height = 160;
     const ctx = cv.getContext('2d');
     let cells = 0, keys = [];
@@ -57,9 +57,9 @@ export const SCENARIOS = {
   async cast(server) {
     await withPage(server, 'skipTo=gallery', async (api, page) => {
       const cast = await page.evaluate(() => window.__game.critterList().map((c) => c.id));
-      assert(cast.join() === 'barley,sorrel,chicory,cress', `the cast is Barley, Sorrel, Chicory, Cress in that order (${cast.join()})`);
+      assert(cast.join() === 'barley,sorrel,chicory,cress,rowan', `the cast is Barley, Sorrel, Chicory, Cress, Rowan in that order (${cast.join()})`);
       const first = await api.summary();
-      assert(first.screen === 'gallery' && first.top.critters === 4, `the gallery seats all four critters (${first.top.critters})`);
+      assert(first.screen === 'gallery' && first.top.critters === 5, `the gallery seats all five cast members (${first.top.critters})`);
       // Walk the gallery one step at a time until it comes back to where it started: that IS the list.
       const seen = [];
       for (let i = 0; i < 64; i++) {

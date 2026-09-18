@@ -40,12 +40,18 @@ for (const c of CRITTERS) {
   const b = c.build, pal = b.palette || {};
   if (b.outline !== INK) err(S, 'palette/outline', `outline ${b.outline} is not the game ink ${INK}`);
   for (const k of ['skin', 'hair', 'belly', 'primary', 'secondary', 'shorts', 'accent', 'dark']) if (!pal[k]) err(S, 'palette/slots', `palette.${k} missing`);
-  if (pal.sleeve && pal.sleeve !== pal.skin) warn(S, 'palette/sleeve', 'sleeve should equal skin: a critter\'s arms are fur (critterBuild sets it)');
+  // A human wears a jacket: the upper arm is its sleeve (critterBuild's `sleeveHex`) and the apron sits on its
+  // whites, which the build carries in `belly` (the slot a critter's light torso front takes). Everything else
+  // about the ladder is the same rule measured against the same slot, so `body` is the only thing that branches.
+  const human = c.species === 'human';
+  if (pal.sleeve && pal.sleeve !== pal.skin && !human) warn(S, 'palette/sleeve', 'sleeve should equal skin: a critter\'s arms are fur (critterBuild sets it)');
   // The apron is the PLAYER SPOT (ART_STYLE section 4): primary is set per seat to PLAYER_COLORS[slot], so the fur it
-  // sits on must clear all four hexes BY VALUE ALONE (measured: wool .29+, mouse .27+, hare .37+, frog .28+).
+  // sits on must clear all four hexes BY VALUE ALONE (measured: wool .29+, mouse .27+, hare .37+, frog .28+,
+  // and the head chef's whites .32+).
+  const body = human ? pal.belly : pal.skin, bodyName = human ? 'jacket' : 'fur';
   const shorts = pal.shorts || pal.secondary;
   PLAYER_COLORS.forEach((pc, i) => {
-    if (pal.skin && relDiff(pal.skin, pc) < 0.25) err(S, 'palette/player-spot', `${PLAYER_LABELS[i]} apron ${pc} on fur ${pal.skin}: relDiff ${relDiff(pal.skin, pc).toFixed(2)} < 0.25 (value alone must carry the player spot)`);
+    if (body && relDiff(body, pc) < 0.25) err(S, 'palette/player-spot', `${PLAYER_LABELS[i]} apron ${pc} on ${bodyName} ${body}: relDiff ${relDiff(body, pc).toFixed(2)} < 0.25 (value alone must carry the player spot)`);
     if (shorts && !separated(pc, shorts, 0.18)) err(S, 'palette/apron-vs-shorts', `${PLAYER_LABELS[i]} apron ${pc} vs shorts ${shorts} too close`);
   });
   if (pal.skin && pal.belly && relDiff(pal.skin, pal.belly) < 0.12) err(S, 'palette/belly-vs-fur', `belly ${pal.belly} vs fur ${pal.skin}: relDiff ${relDiff(pal.skin, pal.belly).toFixed(2)} < 0.12 (the muzzle must read)`);

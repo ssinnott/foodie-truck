@@ -13,11 +13,13 @@
 import { ACTIONS } from '../engine/input.ts';
 
 /**
- * Bumped whenever ACTIONS, the message layout or a simulation rule changes. Peers compare this in
+ * Bumped whenever ACTIONS, the message layout, the cast or a simulation rule changes. Peers compare this in
  * HELLO and refuse to start on a mismatch: GitHub Pages is CDN-cached, so one player can easily be
  * on yesterday's bundle, and a shifted bit would silently turn their 'action' into someone's 'cancel'.
+ * 2: the cast grew to five (content/critters/index.ts). A START packet's cast index 4 is the head chef on this
+ * build and wraps to Barley on the last one - whose kitchen gag then fires on one machine only.
  */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 if (ACTIONS.length > 16) throw new Error('net/protocol: more than 16 actions no longer fit a uint16 mask');
 /** Frames of input repeated in every INPUT packet. */
 export const REDUNDANCY = 8;

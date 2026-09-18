@@ -3,7 +3,7 @@
 //
 // Nothing here simulates anything: the only state is which menu row is selected, so `checksumFields` is one
 // number and the screen is trivially net-safe. The lane and the sign are pre-rendered layers (art/logo.js); the
-// four critters are the only per-frame drawing, each on its own beat of the shared animation table.
+// five cast members are the only per-frame drawing, each on its own beat of the shared animation table.
 import { VIEW_W, UI, REPO_URL, REPO_LABEL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
@@ -24,8 +24,12 @@ import { drawLane, drawLogoSign, drawCrate, drawBlock, TRUCK_Y, CREW_Y } from '.
 
 /** The menu, and the screen each row opens. SOURCE is a link, not a screen. */
 const ROWS = ['PLAY', 'ONLINE', 'CONTROLS', 'CREW', 'SOURCE'];
-/** The A-frame slate on the verge, right of the truck. Sized to its five rows: an empty board is dead green. */
-const SLATE = { x: 426, y: 180, w: 176, h: 104 };
+/**
+ * The A-frame slate on the verge, right of the crew. Sized to its five rows: an empty board is dead green. It
+ * stood at x 426, 176 wide, while the crew were four; the fifth member takes the lane up to ~478, so the board
+ * is 36 px narrower and starts where the lineup stops (its widest row, CONTROLS, is 48 px of the 140).
+ */
+const SLATE = { x: 482, y: 180, w: 140, h: 104 };
 /**
  * Where the truck parks, the crate it was loaded from, and where the crew lines up.
  *
@@ -38,11 +42,12 @@ const TRUCK_X = 150, CRATE_X = 56, CRATE_Y = 300;
 /**
  * Wider and unevenly spaced, not a 48 px rank: once each critter carries its own beat the knife, the raised paw
  * and the basket all need room around them, and at the old pitch Cress's basket hung over Chicory's chest.
- * The chef stands behind the chopping block, so their gap is the block's width.
+ * The chef stands behind the chopping block, so their gap is the block's width. The head chef closes the line
+ * at the right, turned in toward the crew: the boss facing the workers, and beside the day's menu.
  */
-const CREW_X = [202, 270, 352, 406];
+const CREW_X = [196, 264, 346, 400, 454];
 /**
- * The crew are drawn a third up from the sprite's own scale: at 1x, four 56 px critters on a 360 px picture read
+ * The crew are drawn a third up from the sprite's own scale: at 1x, five 56 px critters on a 360 px picture read
  * as a row of tokens rather than as the cast, and the cast is one of the three things this screen has to say.
  */
 const CREW_SCALE = 1.35;
@@ -57,7 +62,7 @@ const APPLE: RigWeapon = { attach: 'handR', length: 12, draw(ctx, rig) {
   ctx.save(); ctx.rotate(a); drawFood(ctx, 'apple', 1, 2, 8, UI.red); ctx.restore();
 } };
 /** The chopping block stands where the blade comes down, with a clear strip of lane either side of it. */
-const BLOCK_X = 313, BLOCK_Y = 294;
+const BLOCK_X = 307, BLOCK_Y = 294;
 
 /** One seat's turn on the lane: the beat it plays, the prop it plays it with, and how it is timed. */
 export interface CrewAct {
@@ -70,7 +75,7 @@ export interface CrewAct {
    * these keys back off it - so the assertion says what items.ts cannot yet.
    */
   item: RigWeapon | null;
-  /** 1 = facing right, -1 = facing left: two of the four turn in toward the others. */
+  /** 1 = facing right, -1 = facing left: three of the five turn in toward the others. */
   facing: number;
   /** px off the others' baseline, so the row is a group standing about rather than a rank. */
   dy: number;
@@ -85,17 +90,19 @@ export interface CrewAct {
  * every eye on the lens, was a passport photo: the silhouettes differed by costume and by nothing else, and the
  * screen advertised a food truck with no food in it. Each seat now plays its OWN beat off the shared table with
  * the prop that beat is authored around (content/critters/items.js), so the row reads as a working crew:
- * Barley has an apple, Sorrel is chopping over the block, Chicory waves back down the line and Cress walks the
- * basket up it - two of them turned in toward the others instead of eight eyes on the lens. `dy` sets each one a
- * few pixels off the others' baseline so the row is a group standing about rather than a rank, `hold` is how long
- * a one-shot beat sits on its last key before it goes again (a repeated action, not a stutter), and `phase` opens
- * the screen with all four on different beats. Pose, prop, facing and footing only - no new rig art, no new anims.
+ * Barley has an apple, Sorrel is chopping over the block, Chicory waves back down the line, Cress walks the
+ * basket up it and Rowan, at the head of the line, tastes from the spoon - three of them turned in toward the
+ * others instead of ten eyes on the lens. `dy` sets each one a few pixels off the others' baseline so the row is
+ * a group standing about rather than a rank, `hold` is how long a one-shot beat sits on its last key before it
+ * goes again (a repeated action, not a stutter), and `phase` opens the screen with all five on different beats.
+ * Pose, prop, facing and footing only - no rig art or anim exists for this screen alone.
  */
 const CREW_ACT: CrewAct[] = [
   { anim: 'eat', item: APPLE, facing: 1, dy: 0, hold: 0, phase: 12 },
   { anim: 'chop', item: ITEMS.knife as RigWeapon, facing: 1, dy: -5, hold: 30, phase: 20 },
   { anim: 'wave', item: null, facing: -1, dy: -2, hold: 0, phase: 5 },
   { anim: 'carry', item: ITEMS.basket as RigWeapon, facing: -1, dy: 1, hold: 0, phase: 31 },
+  { anim: 'taste', item: ITEMS.spoon as RigWeapon, facing: -1, dy: -3, hold: 36, phase: 8 },
 ];
 /** The sign swings +-0.02 rad about its top centre, slowly enough to read as weight. */
 const SWING = 0.02, SWING_RATE = 0.045;
@@ -149,7 +156,7 @@ export class TitleScreen extends Screen {
       seat.rig.weapon = act.item;
       seat.rig.basketFill = 0.5;
       seat.player.play(act.anim);
-      // every seat starts a dozen-odd frames into its own beat: four loops of different lengths that never
+      // every seat starts a dozen-odd frames into its own beat: five loops of different lengths that never
       // line up, and nobody is caught on their anticipation key the moment the screen opens
       for (let k = 0; k < act.phase; k++) this.tickSeat(seat);
       return seat;
