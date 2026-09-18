@@ -23,8 +23,8 @@ const SIGNATURE = ['sneak', 'honk', 'cast'];
 async function drawEveryKey(page, signature) {
   return page.evaluate(async (sig) => {
     const [reg, common, items, rig, anim] = await Promise.all([
-      import('/src/content/critters/index.js'), import('/src/content/critters/common.js'),
-      import('/src/content/critters/items.js'), import('/src/art/rig.js'), import('/src/game/animation.js'),
+      import('/src/content/critters/index.ts'), import('/src/content/critters/common.ts'),
+      import('/src/content/critters/items.ts'), import('/src/lib/art/rig.ts'), import('/src/lib/art/animation.ts'),
     ]);
     const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: 'food', chop: 'knife', stir: 'spoon', cast: 'rod', honk: 'horn' };
     const cv = document.createElement('canvas'); cv.width = 160; cv.height = 160;

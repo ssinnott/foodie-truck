@@ -46,8 +46,21 @@ export function createServer() {
     if (pathname.endsWith('/')) pathname += 'index.html';
     const file = path.normalize(path.join(ROOT, pathname));
     if (!file.startsWith(ROOT)) { res.writeHead(403); res.end('forbidden'); return; }
-    fs.readFile(file, (err, data) => {
+    fs.readFile(file, (err, raw) => {
       if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('not found: ' + pathname); return; }
+      let data = raw;
+      if (path.extname(file).toLowerCase() === '.ts') {
+        // A browser cannot parse TypeScript. Serving it raw under a JavaScript content type fails with
+        // "Unexpected token" on the first annotation, which is a blank page, not a helpful error.
+        try { data = transformTs(raw, file); }
+        catch (e) {
+          // Report the syntax error as a module that throws, so it surfaces in the page's error
+          // handler (and therefore in the playtest) instead of arriving as unparseable bytes.
+          const msg = `${path.relative(ROOT, file)}: ${e.message}`;
+          data = Buffer.from(`throw new SyntaxError(${JSON.stringify(msg)});`, 'utf8');
+          console.error('transform failed: ' + msg);
+        }
+      }
       res.writeHead(200, {
         'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream',
         'Cache-Control': 'no-store',
