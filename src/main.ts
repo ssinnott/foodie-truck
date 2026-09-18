@@ -1,11 +1,10 @@
 // Boot: create services, Game, screens, loop; install window.__game debug/test hooks (docs/ARCHITECTURE.md section 6).
-import { VIEW_W, VIEW_H, DT, MAX_STEPS_PER_FRAME } from './constants.ts';
+import { VIEW_W, VIEW_H } from './constants.ts';
 import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.ts';
 import { rng } from './lib/engine/rng.ts';
 import { createCanvas } from './lib/engine/canvas.ts';
 import { Game } from './game/game.ts';
-import type { GameOptions } from './game/game.ts';
 import { startRun, SCENES } from './game/run.ts';
 import { CRITTERS } from './content/critters/index.ts';
 import { installNetHooks } from './net/session.ts';
@@ -24,10 +23,12 @@ import { GardenScreen } from './game/screens/garden.ts';
 import { KitchenScreen } from './game/screens/kitchen.ts';
 import { ResultsScreen } from './game/screens/results.ts';
 import { GalleryScreen } from './game/screens/gallery.ts';
+import { ControlsScreen } from './game/screens/controls.ts';
+import * as bindings from './engine/bindings.ts';
 import { PauseScreen } from './game/screens/pause.ts';
 
 /** Parse URL params into game options. */
-export function parseOptions(search: string = window.location.search): GameOptions {
+export function parseOptions(search = window.location.search) {
   const q = new URLSearchParams(search);
   const flag = (k) => q.has(k) && q.get(k) !== '0' && q.get(k) !== 'false';
   const autotest = flag('autotest'), debug = flag('debug');
@@ -46,6 +47,9 @@ export function parseOptions(search: string = window.location.search): GameOptio
     // Online co-op invite links: ?room=CODE joins that room, ?host=1 hosts one.
     room: (q.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8),
     host: flag('host'),
+    // ?defaults=1 boots on stock key and button bindings without clearing the saved ones: the way back in for a
+    // player who has bound themselves into a corner, and the clean slate every playtest starts from.
+    defaults: flag('defaults'),
     // ?transport=broadcast is the same-machine end-to-end test hook; room codes over MQTT are what the UI offers.
     transport: q.get('transport') === 'broadcast' ? 'broadcast' : 'mqtt',
     netrelay: devOnly && flag('netrelay'),
@@ -68,10 +72,12 @@ window.addEventListener('unhandledrejection', (e) => { if (!hooks._record) hooks
 function boot() {
   const options = parseOptions();
   rng.seed(options.seed);
-  // The library defaults to 640x360, which is what these constants are, but pass them anyway: the
-  // resolution is this game's decision and the library should never be the place it is recorded.
-  const view = createCanvas(document.getElementById('game') || document.body, { width: VIEW_W, height: VIEW_H });
+  const view = createCanvas(document.getElementById('game') || document.body);
   const ctx = view.ctx;
+  // Saved key and button bindings come back BEFORE the first listener is attached, so the very first keypress is
+  // read through the player's own bindings rather than the defaults (engine/bindings.js). `?defaults=1` boots on
+  // stock bindings without touching what is stored - a way back in for a player who has bound themselves out.
+  if (!options.defaults) bindings.load();
   input.init(view.canvas);
 
   const game = new Game({ input, rng, options });
@@ -91,10 +97,10 @@ function boot() {
   game.registerScreen('kitchen', (g) => new KitchenScreen(g));
   game.registerScreen('results', (g) => new ResultsScreen(g));
   game.registerScreen('gallery', (g) => new GalleryScreen(g));
+  game.registerScreen('controls', (g) => new ControlsScreen(g));
   game.registerScreen('pause', (g) => new PauseScreen(g));
 
   const loop = createLoop({
-    dt: DT, maxSteps: MAX_STEPS_PER_FRAME,   // this game's clock, not the library's default
     update() {
       try {
         // Netplay first: beforeStep samples the local devices, records them into lockstep and injects every
@@ -115,7 +121,7 @@ function boot() {
   // Opening screen: a dev/test jump lands on any screen with a run already started (game/run.js).
   const skip = options.skipTo;
   if (skip && game.factories[skip] && skip !== 'title') {
-    if (skip !== 'gallery' && skip !== 'lobby') startRun(game, { seed: options.seed, critters: options.critters, order: options.order });
+    if (skip !== 'gallery' && skip !== 'lobby' && skip !== 'controls') startRun(game, { seed: options.seed, critters: options.critters, order: options.order });
     game.reset(skip, { place: options.place, autoRoom: skip === 'lobby' });
   } else if (options.room || options.host) {
     game.reset('lobby', { autoRoom: true });
@@ -142,6 +148,25 @@ function boot() {
     },
     setInput(p, actions) { input.setVirtual(p, actions); },
     clearInput(p) { input.clearVirtual(p); },
+    /**
+     * Test hook: stand fake gamepads in for navigator.getGamepads(). `specs` is one compact entry per pad -
+     * `{ down: [0, 14], axes: [x, y] }`, or null for an empty port - and null clears the whole lot again.
+     */
+    setPads(specs) {
+      if (!specs) { input.setPadVirtual(null); return; }
+      input.setPadVirtual(specs.map((g) => (g ? {
+        buttons: Array.from({ length: 17 }, (_, i) => { const on = !!(g.down && g.down.indexOf(i) >= 0); return { pressed: on, value: on ? 1 : 0 }; }),
+        axes: g.axes || [0, 0],
+      } : null)));
+    },
+    padOf(p) { return input.padOf(p); },
+    /** Bindings, for the tests that drive the CONTROLS screen: read them, set them, put them back to stock. */
+    bindings: {
+      get() { return bindings.serialize(); },
+      set(data) { return bindings.deserialize(data); },
+      reset() { bindings.resetAll(); bindings.save(); },
+      saved() { try { return localStorage.getItem('foodie-truck.bindings'); } catch { return null; } },
+    },
     critterList() { return CRITTERS.map((c) => ({ id: c.id, name: c.name })); },
     errors: hooks.errors,
     ready: true,

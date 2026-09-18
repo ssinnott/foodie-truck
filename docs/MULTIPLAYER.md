@@ -103,7 +103,9 @@ their own keyboard (`beforeStep` keeps feeding it from `pollRaw(0)`); `leave()` 
 - Read player intent only through `engine/input.js`, **by seat**: `run.party[i].slot` is the slot to poll for
   party member i. Online, every seat's mask arrives through `setVirtual`, so `held/pressed/buffered/axisX` are
   identical on every machine by construction. Never read `device()`, `idleFrames()`, gamepads or the DOM in
-  `update()`.
+  `update()`. Rebound keys and buttons (`engine/bindings.js`) are safe and need no thought: a binding decides which
+  key makes a mask BIT, and what crosses the wire is the bit. Two players on different bindings produce the same
+  byte, and a screen never learns which key it came from.
 - Inside `update()`: no clock, no `Math.random`, no `Math.sin/cos/pow/hypot/atan2` on anything that reaches state
   (`engine/trig.js`), no `localStorage`, no window size. The gameplay `rng` is consumed in `update()` only, never
   in `draw()` (render runs per rAF, update at 60Hz, so a draw-time draw diverges by refresh rate).

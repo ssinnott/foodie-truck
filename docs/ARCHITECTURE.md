@@ -56,7 +56,8 @@ author). Where a module says "ported", its behaviour is that game's, and `docs/A
 index.html               the page: one canvas, the error box, the module entry
 src/constants.js         every shared number and UI colour (never hardcode these elsewhere)
 src/main.js              boot: services, Game, screens, loop, window.__game
-src/engine/    loop, canvas, input (8-action masks), rng, math, trig, text (5x7 pixel font)
+src/engine/    loop, canvas, actions (the eight, frozen), bindings (which key/button each one is on), input
+               (8-action masks), rng, math, trig, text (5x7 pixel font)
 src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (the paper-doll), layers (offscreen
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
                fishing + hens + kitchenProps + dairyProps + millProps + hiveProps + gardenProps (per-scene props),
@@ -94,12 +95,46 @@ gating render — lockstep returns false while waiting for a peer's input.
 
 ### `engine/input.js`
 `ACTIONS = ['left','right','up','down','action','alt','cancel','start']`, bit i of a mask. Four seats (`MAX_PLAYERS`),
-couch play fills two (`LOCAL_PLAYERS`): P1 arrows/WASD + Z X C Enter, P2 T F G H + V B N 5; a gamepad claims the
-lowest free couch seat on its first press. API: `update()` once per step; `held(p,a)`, `pressed(p,a)`,
-`buffered(p,a,window)`, `consume(p,a)`, `axisX(p)`, `axisY(p)`, `mask(p)`, `anyPressed(a)` → slot or −1,
-`typedCodes()` (text entry), `setVirtual(p, mask|actions)` / `clearVirtual(p)` (netplay + tests), `pollRaw(p)` (the local
-devices as a mask, no edge state — netplay samples this to send), `joined(p)`, `joinPressed(p)`, `setJoined`,
-`resetClaims`, `keyText(p,a)`. `packMask` / `unpackMask` own the bit layout; `net/protocol.js` sends the mask as is.
+and couch play fills all four (`LOCAL_PLAYERS`): P1 arrows/WASD + Z X C Enter, P2 T F G H + V B N 5, and seats 3
+and 4 pad-only. A gamepad claims the LOWEST couch seat that is free — not bound to another pad, not being driven by
+a keyboard block, not virtual — on its first press. Lowest, because a run's party is a dense array indexed by input
+slot (`game/run.js` startRun), so a hole would hand a seat somebody else's critter. Standard mapping: A/B/X →
+action/cancel/alt, Start, d-pad 12–15, left stick on axes 0/1 past a 0.45 dead zone.
+
+Claims are COUCH-ONLY. `setPadClaims(false)` turns them off for the whole of an online session (`screens/lobby.js`
+on the way in, back on for the couch on the way out), because seats 1–3 belong to other machines; online, every pad
+in the room reaches the local seat through `pollRaw()`, which reads every pad whether or not it is claimed.
+
+API: `update()` once per step; `held(p,a)`, `pressed(p,a)`, `buffered(p,a,window)`, `consume(p,a)`, `axisX(p)`,
+`axisY(p)`, `mask(p)`, `anyPressed(a)` → slot or −1, `typedCodes()` (text entry), `setVirtual(p, mask|actions)` /
+`clearVirtual(p)` (netplay + tests), `pollRaw(p)` (the local devices as a mask, no edge state — netplay samples this
+to send), `joined(p)`, `joinPressed(p)`, `setJoined`, `resetClaims`, `setPadClaims(on)`, `padOf(p)`,
+`device(p)`, `keyText(p,a)`, `padText(a)` (the button an action sits on, for a hint line a pad seat reads —
+seats 3 and 4 have no keys to name, so a screen builds both lines in `enter()` and picks one in `draw()` by
+`device(p)`; never read the device in `update()`, see docs/MULTIPLAYER.md), `setPadVirtual(list)` (tests).
+`packMask` / `unpackMask` own the bit layout; `net/protocol.js` sends the mask as is.
+
+REBINDING goes through a CAPTURE, because a screen otherwise only ever hears "the player pressed ACTION", never
+"the player pressed C": `capture()` holds every seat at neutral and reports the first key or button down through
+`capturedKey()` / `capturedButton()`, and `endCapture()` forgets it as held so the press that picked a binding is
+not then played as what it now means. `game/screens/controls.js` is the only caller.
+
+### `engine/actions.js`, `engine/bindings.js`
+`actions.js` is `ACTIONS` (frozen — bit i of a mask, and `net/protocol.js` puts that byte on the wire), `BIT` and
+`ACTION_LABELS`. Its own module so `bindings.js` and `input.js` can both have it without importing each other.
+
+`bindings.js` owns WHICH key and button each action sits on, and is the only place that answer changes: two
+keyboard maps (seats 3 and 4 are pad-only) and one pad map shared by every controller. `keyboardMap(slot)`,
+`padMap()`, `bindKey(slot, action, code)` / `bindPad(action, button)` → `{ ok, reason }`, `resetKeyboard(slot)` /
+`resetPad()` / `resetAll()`, `isDefault()`, `keyLabel(code)` / `padLabel(button)`, `serialize()` / `deserialize()`,
+`load()` / `save()` (localStorage, never throws — a private window just means defaults), `bindingRevision()` and
+`onBindingsChanged(fn)`, which is how `input.js` knows to drop its cached set of bound codes.
+
+Two rules, enforced here rather than in the screen: a rebind sets the action to exactly ONE input, and it is
+refused when the input would have to be taken off an action that has no other — an action with no key is one a
+player can neither press nor see to fix. `RESERVED_CODES` (ESC, TAB, the reload keys) are never bound; ESC is what
+cancels a capture. All 16 standard pad buttons are bindable, shoulders and triggers included; the left stick is
+wired to the four directions and is not.
 
 ### `engine/canvas.js`, `engine/rng.js`, `engine/math.js`, `engine/trig.js`, `engine/text.js` (ported)
 `createCanvas(el)`; `rng.seed/next/range/int/pick/chance/state` + `makeRng(seed)` for cosmetic streams;
@@ -212,13 +247,18 @@ implemented (a paused peer would stall the room) — the pause overlay is refuse
 
 URL params: `?autotest=1` (test mode: no rAF loop, seeded rng, `window.__game` populated), `?debug=1`, `?seed=N`,
 `?skipTo=<screen>` (straight into a screen with a run started), `?critters=0,1,2,3` (party for skipTo), `?place=coop`,
-`?order=N`, `?room=CODE` / `?host=1` (online), `?transport=broadcast` (same-machine netplay for tests), `?netrelay=1`.
+`?order=N`, `?room=CODE` / `?host=1` (online), `?transport=broadcast` (same-machine netplay for tests), `?netrelay=1`,
+`?defaults=1` (boot on stock key/button bindings without clearing the saved ones).
 
 ```js
 window.__game = {
   ready, game, input, rng, options, loop, scenes,
   step(n), screen(), screenIds(), summary(), goto(id, params),
   setInput(slot, actions|mask), clearInput(slot), critterList(), errors: [],
+  // bindings: get() / set(data) / reset() / saved() — what the CONTROLS scenario drives
+  // couch gamepads: stand fake pads in for navigator.getGamepads(), one { down: [buttonIndex], axes: [x, y] }
+  // per port (null for an empty one), null to clear them all again
+  setPads(specs), padOf(slot),
   // online co-op (net/session.js installNetHooks): drive a room without the lobby screen
   netHost({ transport }) -> room code, netJoin(code, { transport }), net(), netState(), netSetCritter(i), netReady(on), netBegin(scene)
 }

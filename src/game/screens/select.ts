@@ -2,11 +2,11 @@
 // JOINED seat, a beetroot READY stamp when a seat locks in, and the run starts the moment every joined seat
 // has stamped - on the order board (game/screens/stage.js), where the party picks the customer and the dish.
 //
-// Seats are read ONLY by slot through engine/input.js, so a couch P2 dropping in mid-screen is the same code
-// path as P1. Everything the screen simulates is two numbers per seat (which card, ready or not), which is what
-// `checksumFields` reports. The rigs are built ONCE in enter() - one per card per possible seat, so a cursor
+// Seats are read ONLY by slot through engine/input.js, so a couch P2 dropping in mid-screen - on the keys or on a
+// pad, seats 3 and 4 being pad-only - is the same code path as P1. Everything the screen simulates is two numbers
+// per seat (which card, ready or not), which is what `checksumFields` reports. The rigs are built ONCE in enter() - one per card per possible seat, so a cursor
 // moving to a card changes which pre-built rig is drawn rather than building one in draw().
-import { VIEW_W, UI, PLAYER_COLORS, MAX_PLAYERS } from '../../constants.ts';
+import { VIEW_W, UI, PLAYER_COLORS, MAX_PLAYERS, LOCAL_PLAYERS } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { CritterDef, Game, ScreenParams } from '../game.ts';
 import { drawText, drawTextOutlined, measureText } from '../../engine/text.ts';
@@ -73,14 +73,14 @@ const BIO = { x: 150, y: 284, w: 340, h: 30 };
 const JOIN_Y = CARD_Y + CARD_H + 10;
 
 /**
- * One seat of the room, one per SLOT and not per joined player: seats 1..3 exist from enter() and sit unjoined
- * until their first key, which is what makes a couch drop-in the same code path as P1. The two numbers that can
- * diverge between machines are `card` and `ready` - `checksumFields` hashes exactly those, plus `on`.
+ * One seat of the room, one per SLOT and not per joined player: seats sit unjoined until their first input,
+ * which is what makes a couch drop-in the same code path as P1. The two numbers that can diverge between
+ * machines are `card` and `ready` - `checksumFields` hashes exactly those, plus `on`.
  */
 export interface SelectSeat {
-  /** Player slot 0..3: the seat's colour, its keys, its cursor and its ring position. */
+  /** Player slot 0..3: the seat's colour, its keys or pad, its cursor and its ring position. */
   slot: number;
-  /** True once engine/input.ts reports the seat joined; an unjoined seat draws no cursor and reads no keys. */
+  /** True once engine/input.ts reports the seat joined; an unjoined seat draws no cursor and reads no input. */
   on: boolean;
   /** Index into `cards` of the card this seat is standing on. */
   card: number;
@@ -110,13 +110,11 @@ export interface SelectCard {
 
 export class SelectScreen extends Screen {
   // The fields, for the checker only, in the order the constructor and then enter() assign them. `declare`, not
-  // plain declarations, for the reason game/game.ts states over its own block: a plain field declaration emits a
-  // class field per name (es2022 defines them before the constructor body runs, and a screen's own declaration
-  // would also define a base field back to undefined), which would wipe what the constructor has just written.
-  // `declare` erases under tsc, under esbuild and under Node's type stripping alike, so the emitted class is the
-  // one that shipped.
+  // plain declarations: es2022 defines a plain field before the constructor body runs, so a screen's own
+  // declaration would also define the base's field back to undefined and wipe what the constructor just wrote.
+  // `declare` erases under tsc, under esbuild and under Node's type stripping alike.
 
-  /** One seat per SLOT, in slot order; `joinedCount()` is how many of them are actually in the room. */
+  /** One seat per SLOT, in slot order; how many are actually in the room is `seats.filter(s => s.on)`. */
   declare seats: SelectSeat[];
   /** The recipe cards, one per cast member in cast order. */
   declare cards: SelectCard[];
@@ -124,16 +122,20 @@ export class SelectScreen extends Screen {
   declare starting: number;
   /** True once the run has been started and the fade is running: the seats stop taking input. */
   declare started: boolean;
-  /** The drop-in prompt, joined once in enter() because it names P2's own key. */
-  declare joinHint: string;
-  /** The hint strip under the cards, likewise. */
+  /** The drop-in prompt for a KEYBOARD seat, joined once in enter() because it names P2's own key. */
+  declare joinHintKeys: string;
+  /** The drop-in prompt for a PAD seat: seats 3 and 4 have no keys, so a pad is the only way in. */
+  declare joinHintPads: string;
+  /** The hint strip under the cards, likewise joined once. */
   declare hint: string;
+  /** The same strip written for a pad, so a player on a gamepad is not told to press a key they do not have. */
+  declare hintPad: string;
   /** The drawBust options, reused every frame (draw() allocates nothing). */
   declare bustOpts: { margin: number; facing: number };
 
   constructor(game: Game) { super(game, 'select'); this.seats = []; this.cards = []; this.starting = -1; this.started = false; }
 
-  override enter(params: ScreenParams): void {
+  override enter(params: ScreenParams) {
     super.enter(params);
     const inp = this.game.input;
     // One rig per card per seat, plus an off-duty one for a card nobody is standing on: the apron is the seat's
@@ -149,27 +151,41 @@ export class SelectScreen extends Screen {
     this.seats = [];
     for (let s = 0; s < MAX_PLAYERS; s++) this.seats.push({ slot: s, on: inp.joined(s), card: s % this.cards.length, ready: false, t: 0 });
     this.starting = -1; this.started = false;
-    this.joinHint = `P2: PRESS ${inp.keyText(1, 'action')} TO JOIN`;
+    // Two drop-in prompts, both built here: while the P2 keys are free the hint names them AND the pads, and once
+    // somebody is on them the pads are all that is left to invite (seats 3 and 4 have no keyboard block).
+    this.joinHintKeys = `P2: PRESS ${inp.keyText(1, 'action')}    GAMEPAD: PRESS ${inp.padText('action')} TO JOIN`;
+    this.joinHintPads = `GAMEPAD: PRESS ${inp.padText('action')} TO JOIN`;
+    // P1's own hint line in P1's own buttons - a lead seat on a pad is told A and B, not Z and C. BOTH are built
+    // here and draw() picks one: the string is never joined in a draw (docs/ARCHITECTURE.md section 8), and the
+    // device is never read in update(), which is where reading it would be a desync (docs/MULTIPLAYER.md).
     this.hint = `${inp.keyText(0, 'action')}: READY    ${inp.keyText(0, 'cancel')}: BACK`;
+    this.hintPad = `${inp.padText('action')}: READY    ${inp.padText('cancel')}: BACK`;
     this.bustOpts = { margin: BUST_MARGIN, facing: 1 };
   }
 
-  /** Seats that are actually in the room (P1 always; P2 after a drop-in; 2 and 3 are online seats). */
-  joinedCount(): number { let n = 0; for (const s of this.seats) if (s.on) n++; return n; }
+  /** Seats that are actually in the room (P1 always; the other three after a keyboard or pad drop-in). */
+  joinedCount() { let n = 0; for (const s of this.seats) if (s.on) n++; return n; }
 
   /** Somebody is here and every seat that is here has stamped. A plain loop: update() allocates nothing. */
-  allReady(): boolean {
+  allReady() {
     let on = 0;
     for (const s of this.seats) { if (!s.on) continue; if (!s.ready) return false; on++; }
     return on > 0;
   }
 
-  override update(): void {
+  override update() {
     super.update();
     const inp = this.game.input;
     for (const seat of this.seats) {
-      // a couch drop-in: engine/input.js joins the seat on its first key, and the cursor appears on its own card
-      if (!seat.on && inp.joined(seat.slot)) { seat.on = true; seat.card = seat.slot % this.cards.length; }
+      // A couch drop-in: engine/input.js joins the seat on its first key or button, and the cursor appears on its
+      // own card. The press that SAT THEM DOWN is then eaten - held and buffered - because it is the same press,
+      // on the same step, that would otherwise stamp READY on a card they have not looked at yet. Three of the
+      // four seats arrive this way, so a join that locks the pick is a party stuck on its default cast.
+      if (!seat.on && inp.joined(seat.slot)) {
+        seat.on = true; seat.card = seat.slot % this.cards.length;
+        inp.consume(seat.slot, 'action');
+        continue;
+      }
       if (!seat.on) continue;
       if (seat.ready) seat.t++;
       if (this.started) continue;
@@ -202,7 +218,7 @@ export class SelectScreen extends Screen {
   // ---- drawing ----
 
   /** The jam-jar lid: a slot-coloured ring with a clip notch and a paper disc carrying the seat number. */
-  cursor(ctx: CanvasRenderingContext2D, seat: SelectSeat): void {
+  cursor(ctx, seat) {
     const card = cardX(seat.card, this.cards.length), pos = RING_POS[seat.slot] || RING_POS[0];
     const x = card + pos[0], y = CARD_Y + pos[1], col = PLAYER_COLORS[seat.slot];
     ctx.save();
@@ -220,9 +236,9 @@ export class SelectScreen extends Screen {
   }
 
   /** Which seat is standing on card `i` (the first one, if two share it), or -1. */
-  pickerOf(i: number): number { for (const s of this.seats) if (s.on && s.card === i) return s.slot; return -1; }
+  pickerOf(i) { for (const s of this.seats) if (s.on && s.card === i) return s.slot; return -1; }
 
-  card(ctx: CanvasRenderingContext2D, i: number): void {
+  card(ctx, i) {
     const c = this.cards[i], x = cardX(i, this.cards.length), y = CARD_Y, slot = this.pickerOf(i);
     // paper, one ink line, a torn top edge, and a header band in the picking seat's colour
     ctx.fillStyle = 'rgba(47,35,56,0.35)'; pathRR(ctx, x + 3, y + 4, CARD_W, CARD_H, 3); ctx.fill();
@@ -269,7 +285,7 @@ export class SelectScreen extends Screen {
     }
   }
 
-  override draw(ctx: CanvasRenderingContext2D): void {
+  override draw(ctx: CanvasRenderingContext2D) {
     drawLane(ctx);
     drawDim(ctx, 0.62);
     drawSign(ctx, VIEW_W / 2, 2, measureText(HEAD_TEXT, 2) + 18, 26, HEAD_TEXT, { size: 2 });
@@ -282,11 +298,11 @@ export class SelectScreen extends Screen {
     }
     // the drop-in prompt goes on a paper strip like every other hint in the kit: outlined cream on the dimmed
     // lane was the one line on this screen you had to hunt for, and it is the line that invites a second player
-    if (!this.game.input.joined(1)) drawHint(ctx, this.joinHint, JOIN_Y);
+    if (this.joinedCount() < LOCAL_PLAYERS) drawHint(ctx, this.game.input.joined(1) ? this.joinHintPads : this.joinHintKeys, JOIN_Y);
     const lead = this.cards[this.seats[0].card];
     drawTicket(ctx, BIO.x, BIO.y, BIO.w, BIO.h, { rules: false, header: false });
     drawText(ctx, lead.def.bio || lead.def.fullName, BIO.x + BIO.w / 2, BIO.y + 11, { size: 1, color: UI.ink, align: 'center', shadow: false });
-    drawHint(ctx, this.hint);
+    drawHint(ctx, this.game.input.device(0) === 'gamepad' ? this.hintPad : this.hint);
   }
 
   override summary() {
@@ -296,7 +312,7 @@ export class SelectScreen extends Screen {
     };
   }
   /** Every number that could differ between two machines: the cursor and the lock of each seat. */
-  override checksumFields(): number[] {
+  override checksumFields() {
     const out = [];
     for (const s of this.seats) out.push(s.on ? 1 : 0, s.card, s.ready ? 1 : 0);
     out.push(this.started ? 1 : 0);
