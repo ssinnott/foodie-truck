@@ -33,12 +33,10 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Syntax and type checks
-        run: npm run lint
-      - name: Art invariants (cast palette ladder, animation table, distinctness)
-        run: npm run art-check
-      - name: Net protocol and lockstep tests
-        run: npm run nettest
+      # Every gate that needs no browser, as one command: syntax, typecheck, the class-field
+      # hazard check, art invariants, the lockstep/protocol tests and the behaviour fingerprint.
+      - name: Gates (lint, class-fields, art, net, golden)
+        run: npm run check
       - name: Headless browser for the playthrough tests
         run: npx playwright-core install --with-deps chromium
       - name: Playthrough tests (every screen, the run flow, a netplay room)
