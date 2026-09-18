@@ -11,8 +11,9 @@ The seven orders are the game's **stages**, pinned up on an order board: pick a 
 and it comes back stamped with its stars. Serve all seven and the truck closes for the night — the day ends, the
 takings are totted up, and that is the end of the game.
 
-The cast are original anthropomorphic countryside animals: **Barley** the Suffolk sheep (the hungry one), **Sorrel**
-the field mouse (the chef), **Chicory** the brown hare (the driver) and **Cress** the pond frog (the forager).
+The cast are original anthropomorphic countryside animals — **Barley** the Suffolk sheep (the hungry one), **Sorrel**
+the field mouse (the chef), **Chicory** the brown hare (the driver) and **Cress** the pond frog (the forager) — and
+the one human who owns the truck and runs them: **Rowan**, the head chef. All five are playable.
 
 The whole game is vanilla JavaScript ES modules and one HTML5 canvas at 640×360, scaled up with nearest-neighbour
 filtering. There are no image, audio or font files: every sprite, backdrop, glyph and particle is drawn from code

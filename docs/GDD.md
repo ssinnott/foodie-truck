@@ -18,8 +18,9 @@ warm, silly, unhurried; the joke that never gets old is the big hungry one eatin
 
 ## 2. The cast
 
-Four playable critters, one per seat; a seat may pick any critter, and online two seats may not pick the same one.
-Roles are flavour and small stat differences, never gates: any critter can do any job.
+Five playable cast members — four critters and the human head chef who owns the truck and runs them — one per
+seat; a seat may pick any of them, and online two seats may not pick the same one. Roles are flavour and small stat
+differences, never gates: anyone can do any job.
 
 | Role | Verb | What the role changes |
 |---|---|---|
@@ -27,6 +28,7 @@ Roles are flavour and small stat differences, never gates: any critter can do an
 | **The chef** | CHOP / MIX | Widest timing windows at the stations; smallest basket |
 | **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks |
 | **The forager** | GATHER / CAST | Fastest in the mini-games; longest fishing cast |
+| **The head chef** | TASTE / ORDER | Owns the truck and runs the crew; steady everywhere, best at the pass; tastes from the spoon |
 
 | Cast index | Name | Species | Role |
 |---|---|---|---|
@@ -34,10 +36,12 @@ Roles are flavour and small stat differences, never gates: any critter can do an
 | 1 | **Sorrel** | field mouse | the chef |
 | 2 | **Chicory** | brown hare | the driver |
 | 3 | **Cress** | pond frog | the forager |
+| 4 | **Rowan** | human | the head chef |
 
-Palettes, proportions and signature accessories are the art direction's (`docs/ART_STYLE.md` §1) and live in
-`src/content/critters/`. Customers are NPC critters built with the same rig (an owl, an otter, a goat) in
-`content/critters/customers.js`. Every critter wears an apron in their seat's player colour.
+The cast index is what the START packet and `?critters=` carry, so new members are appended, never filed in
+between. Palettes, proportions and signature accessories are the art direction's (`docs/ART_STYLE.md` §1) and
+live in `src/content/critters/`. Customers are NPC critters built with the same rig (an owl, an otter, a goat) in
+`content/critters/customers.js`. Every cast member wears an apron in their seat's player colour.
 
 ## 3. The loop
 
@@ -190,7 +194,8 @@ mapped onto CANCEL is a player leaving a mini-game by leaning.
 
 - **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`.
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
-- **select**: 140×200 cards, one cursor per joined seat, READY stamps; `next` = stage (starts the run).
+- **select**: five 116×200 cards (the kit's 140 fitted four across), one cursor per joined seat, READY stamps;
+  `next` = stage (starts the run).
 - **stage** (the order board): the day's seven orders pinned up as 140×124 paper tickets, four across the top row and
   three under them — each one a customer's portrait and name, the stars it has been served at, the dish across the
   middle and its two `NEED` rows. ONE shared cursor any joined seat may drive (the menu scheme of `game/menuinput.js`),

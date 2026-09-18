@@ -103,6 +103,12 @@ export interface CritterSpec {
   boots?: string;
   /** false = no apron. */
   apron?: boolean;
+  /**
+   * Upper-arm colour, for a cast member in a jacket (the head chef's whites): the forearm below the elbow stays
+   * `skin`, which is the one material crossing an arm may carry (ART_STYLE 0.8). Default the fur, so a critter's
+   * arms are fur from shoulder to paw as art-check expects.
+   */
+  sleeveHex?: string;
   /** Face options, merged over the critter defaults (eyeY -2, big, brows in `hair`). */
   face?: CritterFaceOpts;
   /** Tone-ramp overrides, merged over the matte storybook ramp. */
@@ -363,7 +369,8 @@ function drawCritterMouth(ctx: CanvasRenderingContext2D, rig: CritterRig, r: num
 }
 
 // ---------------------------------------------------------------- body (torso space: origin hip centre, y up)
-function eggPath(ctx: CanvasRenderingContext2D, hw: number, H: number): void {
+/** The round belly's contour: an egg `hw` wide at the hip and `H` tall, the one silhouette every torso is cut from. */
+export function eggPath(ctx: CanvasRenderingContext2D, hw: number, H: number): void {
   ctx.beginPath();
   ctx.moveTo(-hw * 0.7, -H);
   ctx.quadraticCurveTo(-hw * 1.15, -H * 0.55, -hw, -H * 0.15); ctx.quadraticCurveTo(-hw * 0.9, 4, -hw * 0.5, 4);
@@ -383,21 +390,28 @@ export function makeTorso(spec: CritterSpec): CritterHook {
       ctx.beginPath(); ctx.ellipse(R(hw * 0.3), R(-H * 0.32), R(hw * 0.6), R(H * 0.5), 0, 0, TAU); ctx.fill();
       ctx.restore();
     }
-    if (apron) {
-      // THE APRON IS THE PLAYER SPOT (ART_STYLE section 4): it has to be the biggest single mark on the body at 1x,
-      // so the bib is as wide as the silhouette can carry (0.80 W is the egg's own half-width at the bib's top row,
-      // 0.8 H up) and runs from just under the collar to under the hip block. It is centred, not nudged aside: with
-      // the shoulders out at 0.33 W (CHIBI.shoulderX) both arms now hang down the torso's outer edges instead of
-      // across the bib, so the seat colour reads as ONE block rather than a sliver either side of a forearm.
-      const aw = R(W * 0.8), ax = -R(aw / 2), ay = R(-H * 0.8), ah = 4 - ay;
-      band(ctx, rig, ax + 2, -H + 1, 4, ay + H + 3, pal.primary);   // straps first (under the bib), 4 px inked bands
-      band(ctx, rig, ax + aw - 6, -H + 1, 4, ay + H + 3, pal.primary);
-      pathRR(ctx, ax, ay, aw, ah, 3);
-      celPath(ctx, rig, pal.primary, ax + aw / 2, ay + ah / 2, R(Math.max(aw, ah) / 2), 0.36, 0.25);
-      if (!rig.override) { ctx.fillStyle = tones(rig, pal.primary).sh; ctx.fillRect(ax + 3, R(-H * 0.42), aw - 6, 2); } // one pocket seam, 2 px
-    }
+    if (apron) drawApron(ctx, rig, W, H);
     if (spec.chest) spec.chest(ctx, rig, pose, inf);
   };
+}
+/**
+ * The apron over a torso `W` wide and `H` tall (torso space), straps first and then the bib: the one garment every
+ * cast member wears, whatever body it goes over (the critters' fur bellies, the head chef's jacket).
+ *
+ * THE APRON IS THE PLAYER SPOT (ART_STYLE section 4): it has to be the biggest single mark on the body at 1x,
+ * so the bib is as wide as the silhouette can carry (0.80 W is the egg's own half-width at the bib's top row,
+ * 0.8 H up) and runs from just under the collar to under the hip block. It is centred, not nudged aside: with
+ * the shoulders out at 0.33 W (CHIBI.shoulderX) both arms now hang down the torso's outer edges instead of
+ * across the bib, so the seat colour reads as ONE block rather than a sliver either side of a forearm.
+ */
+export function drawApron(ctx: CanvasRenderingContext2D, rig: CritterRig, W: number, H: number): void {
+  const pal = rig.palette;
+  const aw = R(W * 0.8), ax = -R(aw / 2), ay = R(-H * 0.8), ah = 4 - ay;
+  band(ctx, rig, ax + 2, -H + 1, 4, ay + H + 3, pal.primary);   // straps first (under the bib), 4 px inked bands
+  band(ctx, rig, ax + aw - 6, -H + 1, 4, ay + H + 3, pal.primary);
+  pathRR(ctx, ax, ay, aw, ah, 3);
+  celPath(ctx, rig, pal.primary, ax + aw / 2, ay + ah / 2, R(Math.max(aw, ah) / 2), 0.36, 0.25);
+  if (!rig.override) { ctx.fillStyle = tones(rig, pal.primary).sh; ctx.fillRect(ax + 3, R(-H * 0.42), aw - 6, 2); } // one pocket seam, 2 px
 }
 /** Short trousers: a rounded block over the leg roots, so the near leg emerges from inside it rather than sitting on it. */
 export function makeHips(spec: CritterSpec): CritterHook {
@@ -473,7 +487,8 @@ export function makeTail(kind: TailKind, hex: string | null = null): RigAccessor
 }
 
 // ---------------------------------------------------------------- accessories
-const TOQUE = '#F4F0E6';
+/** Chef's whites: the toque, and the head chef's jacket, so the two never drift a shade apart. */
+export const TOQUE = '#F4F0E6';
 /**
  * Chef's toque: a 4 px inked band in `bandHex` (null = white) on the hairline and one puffed white mass above it,
  * drawn as ONE path (a rounded block with two balls on top) so the puff carries a single scalloped outline.
@@ -550,11 +565,11 @@ export function cap(hex: string): RigAccessory {
  * { palette, ears: 'round'|'point'|'long'|'small'|'droop'|'dome'|'none', earTip, earR (round ear radius / headR, 0.4),
  *   earPos { near: {x,y}, far: {x,y} } (fractions of headR), earSlot ('skin' | 'hair': what colours the ear),
  *   muzzle (size 0.8..1.2), nose (false = none), markings (fn), tail: 'stub'|'puff'|'bushy'|'ring'|'thin'|'none', tailHex,
- *   apron (false = none), boots (hex), proportions, scale, accessories: [], parts: {} (overrides), face: {} }
+ *   apron (false = none), boots (hex), sleeveHex, proportions, scale, accessories: [], parts: {} (overrides), face: {} }
  */
 export function critterBuild(spec: CritterSpec): CritterBuild {
   const palette = { ...DEFAULT_PALETTE, ...(spec.palette || {}) };
-  palette.sleeve = palette.skin;
+  palette.sleeve = spec.sleeveHex || palette.skin;
   if (!palette.shorts) palette.shorts = palette.secondary;
   return {
     scale: spec.scale || 1,

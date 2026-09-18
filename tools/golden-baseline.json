@@ -1,10 +1,11 @@
 {
   "pure": "42c9f06c",
-  "total": "bf26ce2b",
+  "total": "ac136381",
   "subjects": {
     "critter:barley": "5f54d7fb",
     "critter:chicory": "a7bdedba",
     "critter:cress": "bd92c585",
+    "critter:rowan": "b22076ef",
     "critter:sorrel": "643bc564",
     "customer:goat": "9c957aad",
     "customer:otter": "9085aa41",

@@ -1,4 +1,4 @@
-// CRITTER SELECT (docs/GDD.md section 10): four recipe cards on the dimmed lane, one jam-jar-lid cursor per
+// CHARACTER SELECT (docs/GDD.md section 10): five recipe cards on the dimmed lane, one jam-jar-lid cursor per
 // JOINED seat, a beetroot READY stamp when a seat locks in, and the run starts the moment every joined seat
 // has stamped - on the order board (game/screens/stage.js), where the party picks the customer and the dish.
 //
@@ -18,13 +18,22 @@ import { AnimPlayer } from '../../lib/art/animation.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import type { PartialPose } from '../../lib/art/poses.ts';
 import { startRun } from '../run.ts';
-import { CARD_W, CARD_H, RING_POS, cardX, drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.ts';
+import { CARD_H, BUST_H, drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.ts';
 import { drawLane, drawPorthole, PORT_R } from '../../art/logo.ts';
 import { TRUCK } from '../../art/truck.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
-/** Card row: 4 x 140 with 12 px gaps is 596 of the 640, centred by ui.cardX. */
-const CARD_Y = 52;
+/**
+ * Card row: 5 x 116 with 8 px gaps is 612 of the 640, centred by cardX. The kit's 140 px card (game/ui.ts
+ * CARD_W, which the order board still pins up seven of) fitted four across; the fifth cast member does not, so
+ * this screen cuts its own recipe cards a little narrower - the porthole (94 px with its doily) and the pip bars
+ * still fit with room either side - and keeps the kit's height.
+ */
+const CARD_W = 116, CARD_GAP = 8, CARD_Y = 52;
+/** Left edge of card `i` in a centred row of `n`. */
+function cardX(i: number, n: number): number { const total = n * CARD_W + (n - 1) * CARD_GAP; return R((VIEW_W - total) / 2) + i * (CARD_W + CARD_GAP); }
+/** Where each seat's cursor ring sits on a card, in card space: four corners, so four seats fit on one card. */
+const RING_POS = Object.freeze([[16, 18], [CARD_W - 16, 18], [16, BUST_H - 10], [CARD_W - 16, BUST_H - 10]]);
 /**
  * The doily porthole the bust sits in, in card space. The scale is set by the two limiting rigs: Chicory's 16 px
  * upright ears and Sorrel's toque are the species cues (docs/ART_STYLE.md section 0), so the rig has to clear the
@@ -34,9 +43,9 @@ const PORT_CY = 58, BUST_SCALE = 1.28, BUST_MARGIN = 4;
 /** Text rows in card space. */
 const NAME_Y = 104, ROLE_Y = 124, RULE_Y = 136, STAT_Y = 148, STAT_PITCH = 15;
 /** Five pips per stat, 6 px each at a 9 px pitch: 42 px of bar, right-aligned in the card. */
-const PIP_X = 82, PIP_N = 5, PIP_W = 6, PIP_PITCH = 9;
+const PIP_X = 66, PIP_N = 5, PIP_W = 6, PIP_PITCH = 9;
 /**
- * The index-card furniture that makes these four read as RECIPE CARDS rather than stat blocks: a torn top edge
+ * The index-card furniture that makes these five read as RECIPE CARDS rather than stat blocks: a torn top edge
  * (the same 2x2 ink notches every 6 px as the paper ticket in game/ui.js), a beetroot margin rule down the left
  * and a ruled line under every written row. Beetroot is the truck's own body tone, not the orchard's apple red.
  */
@@ -45,9 +54,10 @@ const STAT_LABELS = ['SPEED', 'KITCHEN', 'FORAGE'];
 /**
  * Role flavour as five-pip bars (docs/GDD.md section 2: roles are flavour and small differences, never gates).
  * The hungry one carries, the chef cooks, the forager is fastest in the mini-games (GDD section 2 puts SPEED on
- * the forager, not the driver) - and every bar is 2..5 so no card reads as the wrong pick.
+ * the forager, not the driver), the head chef is steady everywhere and best at the pass - and every bar is 2..5
+ * so no card reads as the wrong pick.
  */
-const STATS = { barley: [2, 3, 4], sorrel: [3, 5, 2], chicory: [4, 2, 3], cress: [5, 3, 5] };
+const STATS = { barley: [2, 3, 4], sorrel: [3, 5, 2], chicory: [4, 2, 3], cress: [5, 3, 5], rowan: [3, 5, 3] };
 const STATS_DEFAULT = [3, 3, 3];
 /** Slot numbers as strings, so the cursor's disc never builds one per frame. */
 const SLOT_TEXT = ['1', '2', '3', '4'];
@@ -67,7 +77,7 @@ const STAMP_ROW = 142;
  * is the orchard's signal colour, and a signal colour is banned as decor on another screen.
  */
 const STAMP_OPTS = { size: 3, color: TRUCK.body, light: TRUCK.bodyHi };
-const HEAD_TEXT = 'CHOOSE YOUR CRITTER';
+const HEAD_TEXT = 'CHOOSE YOUR CHARACTER';
 /** The bio strip under the cards: a torn-off order pad with whoever P1 is standing on written on it. */
 const BIO = { x: 150, y: 284, w: 340, h: 30 };
 const JOIN_Y = CARD_Y + CARD_H + 10;
@@ -100,7 +110,7 @@ export interface SelectCard {
   def: CritterDef;
   /** Rigs by seat, offset by one: `rigs[0]` is the off-duty apron, `rigs[s + 1]` is slot `s`'s. */
   rigs: Rig[];
-  /** Idling from a per-card offset (i * 11 ticks), so four busts in a row do not breathe in lockstep. */
+  /** Idling from a per-card offset (i * 11 ticks), so five busts in a row do not breathe in lockstep. */
   player: AnimPlayer;
   /** The first idle frame's pose, which art/portraits.ts anchors the bust's head on; null for a rig without one. */
   anchor: PartialPose | null;

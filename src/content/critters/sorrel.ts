@@ -1,5 +1,6 @@
-// SORREL the field mouse: the chef (CHOP / MIX). The smallest body in the cast under the tallest hat: a white toque
-// with a blackberry band, two big round ears that flank the head, a thin rose tail that never settles, and a quick
+// SORREL the field mouse: the chef (CHOP / MIX). The smallest body in the cast under a puffed white toque with a
+// blackberry band (the head chef, rowan.ts, wears the tall straight one), two big round ears that flank the head,
+// a thin rose tail that never settles, and a quick
 // pattering walk on 3-frame keys. Lilac-grey fur, so the value ladder (not hue) carries every player colour.
 import { critterBuild, makeCritterAnims, toque, F } from './common.ts';
 

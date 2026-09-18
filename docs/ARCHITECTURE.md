@@ -152,13 +152,17 @@ Part hooks `(ctx, rig, pose, info)` in local spaces (see `docs/ART_STYLE.md` sec
 `critterBuild(spec)` assembles a build with animal hooks (head with muzzle + ears, critter face, belly + apron,
 shorts, paws, tail); `critterRig(def, slot)` builds it with the seat's player colour as the apron;
 `makeCritterAnims(over)` gives the shared table: `idle walk run carry carryWalk reach catch cheer sad eat chop stir
-bump hop wave sit`. Ear kinds: `round point small long droop dome none`; tails `stub puff bushy ring thin none`.
+bump hop wave sit` (signature keys one member authors on top: `sneak`, `honk`, `cast`, `taste`). Ear kinds:
+`round point small long droop dome none`; tails `stub puff bushy ring thin none`.
 Accessories are part factories: `toque(bandHex)` (`chefHat` = `toque(null)`), `bandana(hex)`, `scarf(hex)`,
 `scarfTail(hex)`, `cap(hex)`; helpers `hatY(rig)`, `muzzleGeom(r, size)`, `DOME`, `PLUM_STRAP` place things on the
-skull. `content/critters/items.js` `ITEMS.<name>` are held items — `basket` (`rig.basketFill`, `rig.basketIcon`),
+skull; `eggPath` and `drawApron` are the shared body and player spot a `parts.torso` override draws with (the
+human head chef, `rowan.ts`, whose head, face, torso and hand are its own hooks on the same rig). `content/critters/items.js` `ITEMS.<name>` are held items — `basket` (`rig.basketFill`, `rig.basketIcon`),
 `rod`, `spoon`, `knife`, `food` (`rig.heldIcon`, `rig.heldHex`), `plate`, `horn` — set as `rig.weapon`. Every cast
 file exports `{ id, name, fullName, role, species, colour, bio, build, anims }` and is listed in
-`content/critters/index.js` `CRITTERS` (order = cast index); `content/critters/customers.js` holds the NPC diners.
+`content/critters/index.js` `CRITTERS` (order = cast index: append, never reorder — the index crosses the wire in
+the START packet, which is why `PROTOCOL_VERSION` moved when the cast grew); `content/critters/customers.js`
+holds the NPC diners.
 
 ### `art/layers.js`
 Offscreen pre-render: `makeLayer(w, h, paint(g, w, h, rnd), seed)`, `blitTiled`, `blitAt`, `blitWorld(ctx, L, camX,

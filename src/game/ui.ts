@@ -11,7 +11,10 @@ import type { Run } from './game.ts';
 const R = Math.round;
 /** Size-1 rows sit on the ticket's ruled lines: this pitch (docs/ART_PRINCIPLES.md 30). */
 export const ROW = 11;
-/** Card geometry shared by select and lobby (carried from the sibling: four corner cursors fit on one card). */
+/**
+ * Card geometry (carried from the sibling: four corner cursors fit on one card). The order board pins up seven
+ * of these; the character select shares the height and bust box but cuts its own narrower cards, five across.
+ */
 export const CARD_W = 140, CARD_H = 200, CARD_GAP = 12, BUST_H = 96, BUST_SCALE = 2.5;
 export const RING_POS = Object.freeze([[16, 18], [CARD_W - 16, 18], [16, BUST_H - 10], [CARD_W - 16, BUST_H - 10]]);
 
