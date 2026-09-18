@@ -17,7 +17,7 @@
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.ts';
 import { LANES } from '../../src/art/backgrounds/map.ts';
-import { walkTo, chopOnce } from './kitchen.js';
+import { walkTo, chopOnce, pullAll } from './kitchen.js';
 
 // ---------------------------------------------------------------- driving
 
@@ -230,18 +230,19 @@ async function pluckEggs(api) {
 // ---------------------------------------------------------------- the kitchen, cooked
 
 /** Station index per step name (game/screens/kitchen.js STATION_IDX). */
-const STATION = { chop: 0, mix: 1, stove: 2, oven: 3, plate: 4 };
+const STATION = { fridge: 0, chop: 1, mix: 2, stove: 3, oven: 4, plate: 5 };
 
 /**
- * Cook whatever steps the order carries, each with the input its station asks for: ten taps on the board, a hold
- * on the bowl, a hold on the stove, a hold on the oven, and the bell. Every hold is kept down until the step
- * advances, which is what a player does. Leaves the kitchen on the hand-over to results.
+ * Cook whatever steps the order carries, each with the input its station asks for: a tap per item at the fridge,
+ * ten taps on the board, a hold on the bowl, a hold on the stove, a hold on the oven, and the bell. Every hold is
+ * kept down until the step advances, which is what a player does. Leaves the kitchen on the hand-over to results.
  */
 async function cook(api) {
   let s = await api.summary();
   const steps = s.top.steps.map((n) => n.toLowerCase());
   for (let k = 0; k < steps.length; k++) {
     const name = steps[k];
+    if (name === 'fridge') { s = await pullAll(api); continue; }
     s = await walkTo(api, STATION[name]);
     if (name === 'chop') { for (let i = 0; i < 10; i++) s = await chopOnce(api); }
     else if (name === 'plate') await api.press(0, { action: true }, 1, 0);

@@ -156,13 +156,15 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
 
 ## 6. The kitchen
 
-The truck interior, side-on, camera locked. Stations left to right (`content/places.js STATIONS`): CHOP, MIX, STOVE,
-OVEN, PLATE. A critter stands at one station at a time (within 40 px of its spot, so any overlap counts) and walks
-between them (left/right). The HOW TO PLAY card is raised again for every new step with that station's verb. The order's `steps`
-are worked in order; the recipe card shows them with checks. Interactions:
+The truck interior, side-on, camera locked. Stations left to right (`content/places.js STATIONS`): FRIDGE, CHOP,
+MIX, STOVE, OVEN, PLATE. A critter stands at one station at a time (within 40 px of its spot, so any overlap
+counts) and walks between them (left/right). The HOW TO PLAY card is raised again for every new step with that
+station's verb. The order's `steps` are worked in order - **every recipe opens at the FRIDGE**, so a dish is never
+cooked out of thin air - and the recipe card shows them with checks. Interactions:
 
 | Station | Verb | Rule |
 |---|---|---|
+| FRIDGE | tap | one `action` press per item the order wants (four apples and two eggs is six taps), any rhythm; each tap swings the door open and the next ingredient, in the order's own order, flies along the counter to the station that uses it next (the board for a recipe that chops, else the bowl) and piles up there until that step is done. Nothing to choose: the fridge holds exactly the order |
 | CHOP | tap | ten `action` presses, any rhythm; the pips on the card light one per chop |
 | MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it |
 | STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way |

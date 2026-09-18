@@ -20,6 +20,7 @@ export const PLACES = Object.freeze([
 
 /** Kitchen stations, left to right along the truck's counter. `verb` is the interaction the station asks for. */
 export const STATIONS = Object.freeze([
+  { id: 'fridge', name: 'FRIDGE', verb: 'tap' },
   { id: 'chop', name: 'CHOP', verb: 'tap' },
   { id: 'mix', name: 'MIX', verb: 'stir' },
   { id: 'stove', name: 'STOVE', verb: 'hold' },

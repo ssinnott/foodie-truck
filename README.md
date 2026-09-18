@@ -32,7 +32,7 @@ so the repository stays reviewable in a diff.
 | **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, arriving at a landmark with a line opens the queue. |
 | **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows, hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, and tap to pull carrots out of the market garden. Everyone seated plays at once and the party's total counts. |
 | **The line** | `line` | The truck pulled up at a queue: the customer at its front steps up and says what they want. Take the order into the kitchen. |
-| **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to chop; hold to mix, cook and bake; ring the bell to plate), serve, and watch the customer eat. The next in line steps up; when the line is empty, the truck drives to the next one. |
+| **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to pull each ingredient out of the fridge; tap to chop; hold to mix, cook and bake; ring the bell to plate), serve, and watch the customer eat. The next in line steps up; when the line is empty, the truck drives to the next one. |
 
 ## Play
 

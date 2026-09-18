@@ -227,7 +227,8 @@ title -> lobby (host key) -> select (shared) -> stage ...  (online: the host's S
   card instead and its confirm leaves the room (if any) for the title.
 - `screens/line.js`: the queue at `run.lines[run.line]` from `run.customer` on; confirm (or 600 frames) fades to
   the kitchen.
-- `screens/kitchen.js`: one critter per seat, stations from `content/places.js STATIONS`, steps from `run.order.steps`;
+- `screens/kitchen.js`: one critter per seat, stations from `content/places.js STATIONS` (fridge, chop, mix, stove, oven,
+  plate), steps from `run.order.steps` (every recipe's first is the fridge);
   finishes with `game.replace('results')`. `screens/results.js` calls `run.serve(stars)` then replaces itself with
   `line` (`!run.lineDone()`), `stage` (`run.dayComplete()`) or `map`.
 - Screens read input by SEAT: `run.party[i].slot` is the input slot to poll for party member i. Online, every
