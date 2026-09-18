@@ -30,6 +30,9 @@ export const MAP = Object.freeze({
   roof: '#A65A48', roofShade: '#7A4034', plum: PLUM.shadow, skyTop: '#FBE3C4', skyLow: '#F4C9A0', hillFar: '#8E8A78',
   hillNear: '#B4A48C', wood: '#9A6234', woodDark: '#5E3A1B', trunk: '#6B4E3A', rose: '#C96B7A', mustard: '#E2B44A',
   board: '#55665A', boardShade: '#465549', brass: '#B8873A', churn: '#B8C4C9', slate: '#2F4B3C', window: '#D9C9A8', cobble: '#C9B58E',
+  // the second pass's two landmarks: the cove's sand is the lane's own buff and its water the river's; the bramble
+  // bank's blueberries are the ingredient's hex a value down, so the one new colour on the plane is still muted
+  sand: '#D9C393', rock: '#8E9AA0', blueberry: '#4A5BA8',
 });
 
 export const CHUNK_W = VIEW_W, CHUNK_H = VIEW_H, CHUNKS_X = WORLD_W / VIEW_W, CHUNKS_Y = WORLD_H / VIEW_H;
@@ -51,6 +54,9 @@ export const LANES = Object.freeze([
   [960, 200, 1200, 200, 1280, 280, 1500, 280],
   [960, 700, 1240, 700, 1400, 700, 1400, 760, 1480, 760],
   [1500, 520, 1560, 580, 1560, 760, 1480, 760],
+  // the second pass: the market lane carries on east to the cove; a spur drops off the pond lane to the berry bank
+  [1500, 520, 1760, 520],
+  [1150, 700, 1150, 850, 1180, 880],
 ]);
 /** The river's centreline, top to bottom, splitting the coop and pond off on the east bank. */
 export const RIVER = Object.freeze([1340, HORIZON_H - 10, 1340, 120, 1370, 220, 1340, 340, 1330, 470, 1370, 600, 1350, 720, 1360, 860, 1330, WORLD_H + 10]);
@@ -97,6 +103,7 @@ export function riverBlocked(px, py) { return riverDist(px, py) < RIVER_BLOCK &&
 // ---------------------------------------------------------------- authored world content
 const place = (id) => PLACES.find((p) => p.id === id);
 const HOME = place('home'), ORCHARD = place('orchard'), POND = place('pond'), COOP = place('coop'), DAIRY = place('dairy'), MILL = place('mill'), HIVE = place('hive'), MARKET = place('garden');
+const SHORE = place('shore'), BRAMBLE = place('bramble');
 /** Wheat fields (hand-placed so no landmark sits in one); lanes cut gates through their hedges. */
 const WHEAT = [[1020, 130, 260, 120], [110, 420, 230, 160], [1580, 860, 280, 180], [60, 960, 200, 90]];
 /** The animated bits the map screen draws per frame, in world coordinates. */
@@ -107,6 +114,8 @@ export const SPOTS = Object.freeze({
   hiveCentre: { x: HIVE.x, y: HIVE.y - 46 },
   hens: [{ x: COOP.x - 18, y: COOP.y - 34 }, { x: COOP.x + 16, y: COOP.y - 42 }],
   pond: { x: POND.x, y: POND.y - 56, rx: 50, ry: 28 },
+  /** The cove's water, east of its door and inside the border hedge (DRIVE_MAX_X is 1896; the water is paint, not a block). */
+  cove: { x: SHORE.x + 70, y: SHORE.y - 30, rx: 56, ry: 34 },
 });
 /**
  * Signpost base points (world): beside each door, off the lane, and a few rows above the door line so a truck parked
@@ -117,6 +126,7 @@ export const SIGN_AT = Object.freeze({
   home: { x: HOME.x + 76, y: HOME.y - 4 }, orchard: { x: ORCHARD.x + 30, y: ORCHARD.y - 18 }, pond: { x: POND.x + 56, y: POND.y - 28 },
   coop: { x: COOP.x + 52, y: COOP.y - 18 }, dairy: { x: DAIRY.x - 52, y: DAIRY.y - 18 }, mill: { x: MILL.x - 40, y: MILL.y - 18 },
   hive: { x: HIVE.x - 30, y: HIVE.y - 18 }, garden: { x: MARKET.x, y: MARKET.y - 28 },
+  shore: { x: SHORE.x - 34, y: SHORE.y - 26 }, bramble: { x: BRAMBLE.x + 40, y: BRAMBLE.y - 18 },
 });
 /** Every signpost clears this much lane: LANE_HALF plus half a truck, so nothing is driven through (scenarios/map.js). */
 export const SIGN_CLEAR = LANE_HALF + 8;
@@ -171,6 +181,8 @@ export const GLINTS = (() => {
   }
   const p = SPOTS.pond;
   for (let i = 0; i < 8; i++) out.push([R(p.x + r.int(-30, 30)), R(p.y + r.int(-14, 14))]);
+  const c = SPOTS.cove;
+  for (let i = 0; i < 8; i++) out.push([R(c.x + r.int(-34, 34)), R(c.y + r.int(-18, 18))]);
   return out;
 })();
 
@@ -287,6 +299,39 @@ function paintLandmarks(g) {
   g.fillStyle = MAP.cobble; pathRR(g, MARKET.x - 24, MARKET.y - 84, 48, 48, 4); g.fill();
   g.fillStyle = MAP.laneEdge; for (let y = MARKET.y - 80; y < MARKET.y - 40; y += 4) for (let x = MARKET.x - 21 + ((y >> 2) & 1) * 2; x < MARKET.x + 22; x += 5) g.fillRect(x, y, 2, 2);
   stall(g, MARKET.x - 62, MARKET.y - 44, MAP.rose); stall(g, MARKET.x + 34, MARKET.y - 44, MAP.shade); stall(g, MARKET.x - 14, MARKET.y - 92, MAP.mustard);
+  // cove: a bite of sand out of the meadow with the sea in it, foam along its edge, rocks, two crab pots on the
+  // sand and a rowing boat pulled up by the door
+  const C = SPOTS.cove;
+  ellipse(g, C.x - 36, C.y + 12, 96, 50, MAP.sand);
+  ellipse(g, C.x + 3, C.y + 3, C.rx + 3, C.ry + 3, INK); ellipse(g, C.x, C.y, C.rx, C.ry, MAP.river); ellipse(g, C.x + 12, C.y + 2, R(C.rx * 0.6), R(C.ry * 0.55), MAP.deep);
+  g.fillStyle = MAP.wall; for (let k = 0; k < 8; k++) g.fillRect(C.x - C.rx + 4 + (k & 1) * 4 + ((k - 3) * (k - 3)) / 2, C.y - 26 + k * 7, 5, 2);
+  for (const rk of [[C.x - 70, C.y + 34, 7], [C.x - 58, C.y + 40, 5], [C.x + 14, C.y + 42, 6]]) { groundShade(g, rk[0], rk[1] + rk[2] - 1, rk[2] * 2); discShaded(g, rk[0], rk[1], rk[2], MAP.churn, MAP.rock); }
+  for (const px of [SHORE.x - 32, SHORE.x - 16]) {
+    groundShade(g, px + 6, SHORE.y - 34, 14, 0.2, 2);
+    boxOutlined(g, px, SHORE.y - 44, 12, 9, MAP.wood);
+    g.fillStyle = MAP.woodDark; g.fillRect(px + 3, SHORE.y - 44, 1, 9); g.fillRect(px + 7, SHORE.y - 44, 1, 9); g.fillRect(px, SHORE.y - 40, 12, 1);
+  }
+  groundShade(g, SHORE.x + 26, SHORE.y - 22, 44, 0.16, 3);
+  polyOutlined(g, [SHORE.x + 4, SHORE.y - 36, SHORE.x + 48, SHORE.y - 36, SHORE.x + 42, SHORE.y - 24, SHORE.x + 10, SHORE.y - 24], MAP.roof, INK, 1);
+  g.fillStyle = MAP.roofShade; g.fillRect(SHORE.x + 8, SHORE.y - 28, 34, 3);
+  g.fillStyle = MAP.wood; g.fillRect(SHORE.x + 22, SHORE.y - 35, 8, 3);
+  // bramble bank: a low turf bank hedged with six berry bushes, a wattle fence with a gap for the gate, and two
+  // punnets on a bench beside it (one red, one blue: what the bank is for)
+  groundShade(g, BRAMBLE.x, BRAMBLE.y - 30, 128, 0.1, 4);
+  g.fillStyle = MAP.shade; pathRR(g, BRAMBLE.x - 66, BRAMBLE.y - 54, 132, 24, 8); g.fill();
+  for (let i = 0; i < 6; i++) {
+    const bx = BRAMBLE.x - 55 + i * 22, by = BRAMBLE.y - 46 - (i & 1) * 6;
+    discShaded(g, bx, by, 11, MAP.hedge, '#4A4F3E');
+    g.strokeStyle = INK; g.lineWidth = 2; g.beginPath(); g.arc(bx, by, 11, 0, TAU); g.stroke();
+    g.fillStyle = i & 1 ? MAP.blueberry : SIGNAL.orchard;
+    for (let k = 0; k < 4; k++) { const a = k * 1.7 + i; g.fillRect(R(bx + Math.cos(a) * 5) - 1, R(by + Math.sin(a) * 5) - 1, 3, 3); }
+  }
+  g.fillStyle = MAP.woodDark;
+  for (let px = BRAMBLE.x - 66; px <= BRAMBLE.x + 64; px += 8) if (px < BRAMBLE.x - 12 || px > BRAMBLE.x + 12) g.fillRect(px, BRAMBLE.y - 36, 2, 8);
+  g.fillRect(BRAMBLE.x - 66, BRAMBLE.y - 33, 54, 2); g.fillRect(BRAMBLE.x + 12, BRAMBLE.y - 33, 54, 2);
+  boxShaded(g, BRAMBLE.x - 50, BRAMBLE.y - 24, 28, 6, MAP.wood, MAP.woodDark);   // the bench is on the gate's far side from the signpost
+  boxOutlined(g, BRAMBLE.x - 48, BRAMBLE.y - 31, 9, 7, MAP.wall); g.fillStyle = SIGNAL.orchard; g.fillRect(BRAMBLE.x - 46, BRAMBLE.y - 33, 5, 3);
+  boxOutlined(g, BRAMBLE.x - 35, BRAMBLE.y - 31, 9, 7, MAP.wall); g.fillStyle = MAP.blueberry; g.fillRect(BRAMBLE.x - 33, BRAMBLE.y - 33, 5, 3);
 }
 
 function paintHorizon(g, rnd) {

@@ -25,7 +25,9 @@ const SHOPPING_TITLE = 'SHOPPING LIST', LINES_TITLE = 'THE LINES', NO_HEAD = Obj
 const LINE_TEXT = { size: 1, color: UI.ink, shadow: false }, LINE_DONE_TEXT = { size: 1, color: UI.paperLine, shadow: false };
 
 /** The shopping list, top-left: one row per ingredient the day asks for, ticked as its line fills. */
-export function drawShoppingHud(ctx, run) { drawNeedsTicket(ctx, 8, 8, 120, SHOPPING_TITLE, NO_HEAD, run.needs, drawFood, TICKET_OPTS); }
+/** 132 wide: the longest ingredient id (STRAWBERRY) and a two-digit count on one row (game/ui.js drawNeedsTicket). */
+export const SHOPPING_W = 132;
+export function drawShoppingHud(ctx, run) { drawNeedsTicket(ctx, 8, 8, SHOPPING_W, SHOPPING_TITLE, NO_HEAD, run.needs, drawFood, TICKET_OPTS); }
 
 /**
  * The lines, top-left, once the pantry is full: one row per queue - `rows[i]` is the caller's own wording of where
@@ -100,7 +102,8 @@ export function drawWheel(ctx, pushMask, turn) {
 }
 
 /** The arrow rides this far inside the view edge, and slides ALONG that edge past each HUD corner's keep-out. */
-const ARROW_INSET = 14, TICKET_R = 152, TICKET_B = 108, CREW_L = VIEW_W - 104, CREW_B = 76, WHEEL_R = 46;
+/** TICKET_B is the tallest shopping list's bottom edge: nine rows (three recipes of three ingredients, none shared) at ui.js ROW under a 16 px head, plus its margins. */
+const ARROW_INSET = 14, TICKET_R = 164, TICKET_B = 128, CREW_L = VIEW_W - 104, CREW_B = 76, WHEEL_R = 46;
 const WHEEL_T = VIEW_H - 58, HINT_L = 200, HINT_R = 440;
 
 /**

@@ -28,6 +28,9 @@ import { particles } from '../../engine/particles.ts';
 import { blitAt } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt, burstCrumbs, burstSparkle } from '../../art/fx.ts';
 import { drawFood } from '../../art/food.ts';
+import { INGREDIENTS } from '../../content/recipes.ts';
+import { PLACES } from '../../content/places.ts';
+import { gatherTarget } from '../run.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import type { Rig, RigWeapon } from '../../lib/art/rig.ts';
 import type { Point } from '../../lib/art/rigParts.ts';
@@ -122,9 +125,8 @@ const SWAY = Int8Array.of(0, 1, 0, -1);
 const BARROW_X = 586, BARROW_Y = 280;
 
 const PLUS_ONE = '+1';
-const TITLE = 'SATURDAY MARKET', SIGN_PREFIX = 'CARROTS: ', FALLBACK_TARGET = 4;
+const TITLE = 'SATURDAY MARKET', FALLBACK_TARGET = 4;
 
-function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'carrot', x, y, 4); }
 /** The ground-contact ellipse every sprite draws before the sorted pass. */
 function drawSeatShadow(ctx: CanvasRenderingContext2D, seat: GardenSeat): void { drawShadow(ctx, seat.x, seat.y, seat.rig.width + 6, 0.4, 0); }
 
@@ -242,6 +244,17 @@ export class GardenScreen extends Screen {
   declare seats: GardenSeat[];
   /** The crop: a fixed pool of MAX_TOPS slots, built in enter() and never grown. */
   declare tops: CropTop[];
+  /**
+   * What the bed grows this visit (game/run.js gatherTarget): the carrot or one of the market's other six rows,
+   * or a berry when the bramble bank borrows this screen. `icon`/`hex` are its glyph, the sign prefix its name,
+   * the title the landmark's.
+   */
+  declare ing: string;
+  declare icon: string;
+  declare hex: string;
+  declare signPrefix: string;
+  declare title: string;
+  declare clockIcon: (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
   /** The backdrop, pre-rendered once (art/backgrounds/garden.js gardenLayers) and blitted per frame. */
   declare layers: GardenBackdrop;
   /** The cosmetic stream's own generator (DOWN_SEED): thistledown only, never the sim. */
@@ -288,6 +301,16 @@ export class GardenScreen extends Screen {
     this.vis = makeRng(DOWN_SEED);
     this.downOpts = { color: DOWN_PALE, color2: CROP.leafHi, size: 3, life: 150, vx: -0.25, vy: 0.3, screen: true };
 
+    // what the bed grows this visit: the market's carrot (or one of its six other rows), or the berries when the
+    // bramble bank borrows this screen (game/run.js gatherTarget)
+    const place = PLACES.find((p) => p.id === params.place && p.screen === 'garden');
+    this.ing = gatherTarget(run, place ? place.id : undefined, 'garden');
+    const ing = INGREDIENTS[this.ing] || INGREDIENTS.carrot;
+    this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
+    this.title = place ? place.name : TITLE;
+    const icon = this.icon, hex = this.hex;
+    this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
+
     this.seats = makeSeats<GardenSeat>(game, (i) => LANE_Y0 - i * LANE_GAP);
     const n = this.seats.length, pitch = Math.min(120, R((X_MAX - X_MIN) / (n + 1)));
     for (let i = 0; i < n; i++) {
@@ -299,6 +322,7 @@ export class GardenScreen extends Screen {
       // these keys back off it - so the assertion says what gardenProps.js cannot yet (kitchen.ts carries the same
       // note over ITEMS).
       s.rig.weapon = GARDEN_TRUG as RigWeapon; s.rig.trugCount = 0;
+      s.rig.basketIcon = this.icon; s.rig.basketHex = this.hex;
       s.player.setOverlay(GARDEN_ANIMS);
       s.state = IDLE; s.t = 0; s.top = -1; s.grip = 0; s.pull = 0; s.gripX = s.x;
       s.trugPt = { x: s.x, y: s.y - 18 };
@@ -320,7 +344,7 @@ export class GardenScreen extends Screen {
     for (let i = 0; i < MAX_FLIGHTS; i++) this.flights.push({ t: FLIGHT_FRAMES, x0: 0, y0: 0, seat: 0 });
     this.flightCursor = 0;
 
-    const need = run ? run.need('carrot') : null;
+    const need = run ? run.need(this.ing) : null;
     // the REMAINDER, not the whole line: the map may already have banked some (the other six mini-games agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;
@@ -382,7 +406,7 @@ export class GardenScreen extends Screen {
       // the sign hangs: the crew holds its last beat, nothing is stepped, no input counts
       for (let i = 0; i < this.seats.length; i++) this.seats[i].player.tick();
       if (roundOver(clock)) {
-        if (game.run) game.run.gather('carrot', this.total);
+        if (game.run) game.run.gather(this.ing, this.total);
         game.replace('map');
         return;
       }
@@ -502,7 +526,7 @@ export class GardenScreen extends Screen {
   /** The round is over: drop the sign; a seat with roots in its trug cheers, one without sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, SIGN_PREFIX + this.total);
+    endRound(this.clock, this.signPrefix + this.total);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.top >= 0) this.tops[s.top].held = 0;
@@ -519,7 +543,7 @@ export class GardenScreen extends Screen {
     particles.draw(ctx, null, 'back');
     // the barrow stands on the path behind every lane, so it draws before the cast and never covers a critter
     drawShadow(ctx, BARROW_X - 10, BARROW_Y, 46, 0.35, 0);
-    drawBarrow(ctx, BARROW_X, BARROW_Y, this.total);
+    drawBarrow(ctx, BARROW_X, BARROW_Y, this.total, this.icon, this.hex);
     // ground contact first, then the cast back lane to front lane
     for (let i = 0; i < this.seats.length; i++) drawSeatShadow(ctx, this.seats[i]);
     for (let i = this.seats.length - 1; i >= 0; i--) this.drawSeat(ctx, this.seats[i]);
@@ -531,7 +555,7 @@ export class GardenScreen extends Screen {
     for (let i = 0; i < this.flights.length; i++) this.drawFlight(ctx, this.flights[i]);
     particles.draw(ctx, null, 'front');
     this.drawPlates(ctx);
-    drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawClock(ctx, this.clock, this.countStr, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -562,7 +586,7 @@ export class GardenScreen extends Screen {
     if (fl.t >= FLIGHT_FRAMES) return;
     const s = this.seats[fl.seat], k = fl.t / FLIGHT_FRAMES;
     const tx = s.trugPt.x, ty = s.trugPt.y + 10;
-    drawPulledCarrot(ctx, R(fl.x0 + (tx - fl.x0) * k), R(fl.y0 + (ty - fl.y0) * k - Math.sin(k * Math.PI) * FLIGHT_LIFT));
+    drawPulledCarrot(ctx, R(fl.x0 + (tx - fl.x0) * k), R(fl.y0 + (ty - fl.y0) * k - Math.sin(k * Math.PI) * FLIGHT_LIFT), this.icon, this.hex);
   }
 
   /**

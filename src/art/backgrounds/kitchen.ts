@@ -62,7 +62,7 @@ export const WINDOW = Object.freeze({ x: 196, y: 44, w: 80, h: 50 });
 /** The order ticket is PINNED flush under the rail at its left end, full width, with its perforated top: it is the
  *  screen's one big paper. The recipe card is the smaller checklist and HANGS below the rail on two visible pegs at
  *  the other end, narrower and un-perforated, so the two papers never read as a symmetric pair of UI slabs. */
-export const TICKET = Object.freeze({ x: 8, y: 12, w: 112 });
+export const TICKET = Object.freeze({ x: 8, y: 12, w: 124 });   // wide enough for STRAWBERRY and its count on one row
 export const RECIPE = Object.freeze({ x: 396, y: 16, w: 92 });
 /** Where each station's critter stands (feet centre) for STATIONS fridge / chop / mix / stove / oven / plate, left
  *  to right: six spots, every pair at least 86 px apart so no x is "at" two of them (AT_RANGE). */

@@ -163,7 +163,7 @@ export function drawHole(ctx, x, y, step) {
  * the shape is the one the ticket and the kitchen use; the three fronds on top are added here because a root with
  * its leaves still on is the whole difference between "pulled" and "an ingredient icon flying past".
  */
-export function drawPulledCarrot(ctx, x, y) {
+export function drawPulledCarrot(ctx, x, y, icon = 'carrot', hex = ROOT_HEX) {
   x = R(x); y = R(y);
   ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.lineCap = 'round';
   ctx.beginPath();
@@ -172,7 +172,7 @@ export function drawPulledCarrot(ctx, x, y) {
   ctx.moveTo(x + 1, y - 4); ctx.lineTo(x + 6, y - 12);
   ctx.stroke();
   ctx.strokeStyle = CROP.leaf; ctx.lineWidth = 2; ctx.stroke();
-  drawFood(ctx, 'carrot', x, y, 6, ROOT_HEX);
+  drawFood(ctx, icon, x, y, 6, hex);
 }
 
 // ---------------------------------------------------------------- the pull gauge
@@ -238,8 +238,9 @@ export const GARDEN_TRUG = { attach: 'handR', length: 12, draw(ctx, rig) {
   celPoly(ctx, rig, TRUG_BODY, CROP.willow, 0.36, 0.2);
   if (rig.override) { ctx.restore(); return; }
   ctx.fillStyle = rig.col(rig.palette.primary); ctx.fillRect(-9, 10, 18, 3);   // the one band, below the root line
+  // the roots in it are whatever the bed grows this visit: the screen sets rig.basketIcon/basketHex (game/minigame.js)
   const n = rig.trugCount > 4 ? 4 : (rig.trugCount | 0);
-  for (let i = 0; i < n; i++) drawFood(ctx, 'carrot', -6 + i * 4, 7, 3.5, ROOT_HEX);
+  for (let i = 0; i < n; i++) drawFood(ctx, rig.basketIcon || 'carrot', -6 + i * 4, 7, 3.5, rig.basketHex || ROOT_HEX);
   ctx.restore();
 } };
 
@@ -248,7 +249,7 @@ export const GARDEN_TRUG = { attach: 'handR', length: 12, draw(ctx, rig) {
  * party's TOTAL made physical - the clock ticket says "3/4" and this says the same thing in roots - so it fills
  * from everybody's pulls and never from one seat's. Five roots are drawn, then it is a heap.
  */
-export function drawBarrow(ctx, x, y, n) {
+export function drawBarrow(ctx, x, y, n, icon = 'carrot', hex = ROOT_HEX) {
   x = R(x); y = R(y);
   ctx.save(); ctx.translate(x, y);
   // the two shafts and the handles, behind the tray
@@ -269,8 +270,8 @@ export function drawBarrow(ctx, x, y, n) {
   ctx.restore();
   // the roots in it, drawn before the wheel so the wheel's ink reads over the tray's front edge
   const k = n > 5 ? 5 : n;
-  for (let i = 0; i < k; i++) drawFood(ctx, 'carrot', -20 + i * 8, -26, 5, ROOT_HEX);
-  if (n > 5) { ctx.fillStyle = INK; ctx.fillRect(-24, -38, 42, 5); ctx.fillStyle = ROOT_HEX; ctx.fillRect(-23, -37, 40, 3); }
+  for (let i = 0; i < k; i++) drawFood(ctx, icon, -20 + i * 8, -26, 5, hex);
+  if (n > 5) { ctx.fillStyle = INK; ctx.fillRect(-24, -38, 42, 5); ctx.fillStyle = hex; ctx.fillRect(-23, -37, 40, 3); }
   // the wheel
   ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(-16, -8, 9, 0, TAU); ctx.fill();
   ctx.fillStyle = BARROW_DARK; ctx.beginPath(); ctx.arc(-16, -8, 7, 0, TAU); ctx.fill();

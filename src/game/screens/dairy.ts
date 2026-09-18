@@ -19,6 +19,7 @@ import { drawFood } from '../../art/food.ts';
 import { drawRig } from '../../lib/art/rig.ts';
 import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
+import { gatherTarget } from '../run.ts';
 import { ROWS, SEAT_X, SEAT_PITCH, CHURN_X, dairyLayers } from '../../art/backgrounds/dairy.ts';
 import { drawCow, drawStool, drawPail, drawJet, drawChevrons, drawChurn, drawSwallow, TEAT_DX, TEAT_DY, PAIL_H } from '../../art/dairyProps.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
@@ -76,10 +77,8 @@ const SIT_ROOT_Y = 4;
 /** The chibi's hip is only 11..16 px off the ground, so a milking stool is a low one; each seat's is cut to its rig. */
 const STOOL_MIN = 6;
 const FALLBACK_TARGET = 3;
-const PLUS_ONE = '+1', TITLE = 'BUTTERCUP DAIRY', SIGN_PREFIX = 'MILK: ';
-const MILK_HEX = INGREDIENTS.milk.hex;
+const PLUS_ONE = '+1', TITLE = 'BUTTERCUP DAIRY';
 
-function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'milk', x, y, 4, MILK_HEX); }
 
 /**
  * The scene's own beats, an AnimPlayer overlay on top of the shared table (the pond's POND_ANIMS pattern). Every
@@ -216,6 +215,14 @@ export class DairyScreen extends Screen {
 
   /** One seat per party member, in party order (not slot order); empty until enter() builds the stalls. */
   declare seats: DairySeat[];
+  /**
+   * What this visit gathers (game/run.js gatherTarget): milk by the pail, or the butter the same pails go on to the churn rack for. `icon`/`hex` are its glyph, the sign prefix its name.
+   */
+  declare ing: string;
+  declare icon: string;
+  declare hex: string;
+  declare signPrefix: string;
+  declare clockIcon: (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
   /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
   declare fields: number[];
   /** The backdrop, pre-rendered once (art/backgrounds/dairy.ts dairyLayers) and blitted per frame. */
@@ -279,7 +286,12 @@ export class DairyScreen extends Screen {
     this.hops = [];
     for (let i = 0; i < MAX_HOPS; i++) this.hops.push({ t: HOP_FRAMES, x0: 0, y0: 0, tx: 0, ty: 0, slot: 0 });
     this.hopCursor = 0;
-    const need = run ? run.need('milk') : null;
+    this.ing = gatherTarget(run, params.place, 'dairy');
+    const ing = INGREDIENTS[this.ing] || INGREDIENTS.milk;
+    this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
+    const icon = this.icon, hex = this.hex;
+    this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
+    const need = run ? run.need(this.ing) : null;
     // the remainder, not the whole order: the map may already have banked some (the orchard, pond and coop agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;
@@ -306,7 +318,7 @@ export class DairyScreen extends Screen {
       // the sign hangs: the crew holds its last beat and no press counts
       for (let i = 0; i < this.seats.length; i++) this.seats[i].player.tick();
       if (roundOver(clock)) {
-        if (game.run) game.run.gather('milk', this.total);
+        if (game.run) game.run.gather(this.ing, this.total);
         game.replace('map');
         return;
       }
@@ -363,7 +375,7 @@ export class DairyScreen extends Screen {
   /** The round is over: drop the sign; a seat that banked anything cheers, one that did not sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, SIGN_PREFIX + this.total);
+    endRound(this.clock, this.signPrefix + this.total);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.bumpT = 0; s.squirtT = 0;
@@ -398,7 +410,7 @@ export class DairyScreen extends Screen {
     }
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
-    drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawClock(ctx, this.clock, this.countStr, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);

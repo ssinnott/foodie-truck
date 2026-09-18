@@ -152,15 +152,15 @@ export function drawTrout(ctx: CanvasRenderingContext2D, cx: number, cy: number,
 }
 
 /**
- * The bucket at a seat's feet: 14x12 dark willow with a 3 px slot band, and a 2 px silver tail tip per fish (up to
- * 5). `squash` above 1 widens and squats it about its base for the few frames after a trout drops in, so the
+ * The bucket at a seat's feet: 14x12 dark willow with a 3 px slot band, and a 2 px tail tip per catch (up to 5) -
+ * silver for a trout, or `tip`, the catch's own hex, when the jetty is the cove's and the bucket holds crabs. `squash` above 1 widens and squats it about its base for the few frames after a trout drops in, so the
  * landing has a contact beat instead of the count simply ticking over.
  */
-export function drawBucket(ctx: CanvasRenderingContext2D, x: number, y: number, slot: number, fish: number, squash = 1): void {
+export function drawBucket(ctx: CanvasRenderingContext2D, x: number, y: number, slot: number, fish: number, squash = 1, tip: string = BUCKET.tip): void {
   const col = PLAYER_COLORS[slot] || UI.paperDark;
   const n = fish > 5 ? 5 : fish;
   if (squash !== 1) { ctx.save(); ctx.translate(x + 7, y); ctx.scale(squash, 1 / squash); ctx.translate(-(x + 7), -y); }
-  for (let i = 0; i < n; i++) { ctx.fillStyle = INK; ctx.fillRect(x + 1 + i * 3, y - 16, 3, 5); ctx.fillStyle = BUCKET.tip; ctx.fillRect(x + 2 + i * 3, y - 15, 2, 3); }
+  for (let i = 0; i < n; i++) { ctx.fillStyle = INK; ctx.fillRect(x + 1 + i * 3, y - 16, 3, 5); ctx.fillStyle = tip; ctx.fillRect(x + 2 + i * 3, y - 15, 2, 3); }
   ctx.beginPath(); ctx.moveTo(x - 1, y - 12); ctx.lineTo(x + 15, y - 12); ctx.lineTo(x + 13, y); ctx.lineTo(x + 1, y); ctx.closePath();
   ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = BUCKET.willow; ctx.fill();
   ctx.fillStyle = col; ctx.fillRect(x, y - 10, 14, 3);

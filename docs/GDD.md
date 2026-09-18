@@ -59,9 +59,19 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   peer lays the same day out from the START packet, and it never touches the gameplay rng.
 - **The day board** (`stage`) pins the plan up before the truck opens: the three lines and the **shopping list**
   — every ingredient of every order in every line, summed. Confirm opens the truck.
-- **A recipe** (`ORDERS`) names a dish, a phone line, 2 ingredients with amounts, and the kitchen steps in order.
-  Seven ship — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup, griddle cakes — between
-  them asking for all seven ingredients, so every landmark on the map is somewhere a day can send the truck.
+- **A recipe** (`ORDERS`) names a dish, a phone line, 2–3 ingredients with amounts, and the kitchen steps in order.
+  Twenty-two ship. The first seven — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup,
+  griddle cakes — ask for the first seven ingredients (apples, trout, eggs, milk, flour, honey, carrots); the
+  fifteen after them each carry one of the sixteen newer ones — pears, peaches, avocados, butter, rice, potatoes,
+  onions, leeks, beetroot, pumpkins, cabbages, crabs, seaweed, sea salt, strawberries, blueberries — so every
+  ingredient is somewhere a day can send the truck. Recipes are only ever appended, because `?order=N` and the
+  scenarios name them by index.
+- **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
+  orchard drops pears, peaches and avocados as well as apples; the market garden pulls six vegetables besides the
+  carrot; the dairy's pails go on to butter; the mill's chutes fill rice sacks. A mini-game gathers whichever of
+  its landmark's ingredients the list is still short of (`run.js gatherTarget`: the first short one in
+  `INGREDIENTS` order, else the first the list asks for, else the landmark's first — so a bare dev jump still
+  catches apples), and draws that ingredient's glyph and colour on the clock, in the basket and on the end sign.
 - **Gathering.** The map is where the shopping list is read and the truck is driven. Arriving at a landmark that
   supplies an ingredient the list is still *short of* opens its mini-game; the round's target is that line's
   remainder, and a round that runs out of time banks what it got and the landmark can be visited again. Arriving
@@ -82,11 +92,15 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 
 - World `1920 x 1080` px (`content/places.js WORLD_W/H`), one flat plane in 3/4 storybook view, y-sorted sprites
   with ground-contact shadows. Camera follows the truck (0.1 lerp, integer snap, clamped to the world).
-- **Landmarks** (`PLACES`): home (the truck stop), orchard (apples), pond (fish), coop (eggs), dairy (milk), mill
-  (flour), hives (honey), market garden (carrots). **All seven supply landmarks open a mini-game** while the list
-  is short of what they supply, and **any of them can hold a line** once it is full; arriving where there is
-  nothing to do shows a sign instead (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`,
-  `THIS LINE IS SERVED`, `THE LINES ARE WAITING` at home).
+- **Landmarks** (`PLACES`): home (the truck stop), orchard (apples, pears, peaches, avocados), pond (trout), coop
+  (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), market garden (carrots, potatoes, onions, leeks,
+  beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
+  south lane (strawberries, blueberries). **All nine supply landmarks open a mini-game** while the list is short
+  of what they supply — the cove opens the pond's (crab lines off the jetty) and the bank opens the market's
+  (berries pulled from the beds), each screen reading the landmark it stands at off its `place` param — and **any
+  of them can hold a line** once it is full; arriving where there is nothing to do shows a sign instead
+  (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
+  `THE LINES ARE WAITING` at home).
 - **The truck** is one shared vehicle. Every seated player's stick is a vector; they are summed (the driver's ×1.5),
   quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it,
   turning at most 1 heading step per 4 frames. Roads are the fast path; fields are drivable but slow and dusty;
@@ -105,6 +119,13 @@ Common rules: side view, feet on a scene-specific floor line, one critter per se
 drawn as a paper timer, the target count from the shopping list (that ingredient's remainder, so a list that asks
 for twelve eggs may take two visits); the scene ends with a sign dropping in (`APPLES: 12`)
 and a 60-frame hold, then `run.gather` and back to the map. All randomness through `rng` inside `update()`.
+
+A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the market garden) and a
+screen two landmarks share (the pond's jetty is the cove's, the market's bed is the bank's) asks `run.js
+gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the clock and in the basket,
+its name on the end sign, and the landmark's own name on the clock ticket. The mechanic never changes — a pear is
+caught like an apple, a crab reeled in like a trout — and the backdrop is the borrowed screen's (the cove's crabs
+come off the millpond's boardwalk until it has a jetty of its own).
 
 **Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
 kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
@@ -150,7 +171,7 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   that skep is empty for 150 frames, so the party is pushed along the bench. Letting go early costs nothing. The
   bees drone over the bench and never turn.
 - **Market garden — PULL** (*move + tap*). Leafy tops stand in the bed (seven at the start, more every 70–120
-  frames up to eight, never closer than 42 px); every one is a carrot. `action` with a top anywhere under the critter (34 px either side) grips it and opens
+  frames up to eight, never closer than 42 px); every one is whatever the visit gathers (a carrot by default). `action` with a top anywhere under the critter (34 px either side) grips it and opens
   a pull gauge above that seat; each further `action` press fills it a twelfth, and the twelfth brings the root out
   (+1 carrot, a 14-frame pull). 150 frames without a press lets go at no cost.
 

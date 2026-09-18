@@ -25,6 +25,8 @@ import { particles } from '../../engine/particles.ts';
 import { blitAt } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt } from '../../art/fx.ts';
 import { drawFood, foodTones } from '../../art/food.ts';
+import { INGREDIENTS } from '../../content/recipes.ts';
+import { gatherTarget } from '../run.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import type { Point } from '../../lib/art/rigParts.ts';
@@ -98,11 +100,9 @@ const CATCH_FRAMES = 3, BUMP_FRAMES = 21;
 /** Splats: a missed apple as one inked flat ellipse stepping down a size every 5 frames, gone in 20. */
 const SPLAT_FRAMES = 20, SPLAT_STEP = 5, MAX_SPLATS = 8;
 const SPLAT_RX = Int8Array.of(8, 6, 4, 3), SPLAT_RY = Int8Array.of(3, 3, 2, 2);
-/** The splat's shade band: the ripe apple's own shadow tone, taken once. */
-const SPLAT_SH = foodTones(SIGNAL.orchard).sh;
 /** Petals: a cosmetic stream (seed from the orchard block), one every few frames so about two dozen are in the air. */
 const PETAL_EVERY = 6, PETAL_SEED = 105, PETAL_PALE = '#F1E4C8';
-const PLUS_ONE = '+1', BOOM = 'BOOM!', TITLE = 'PIPPIN ORCHARD', SIGN_PREFIX = 'APPLES: ';
+const PLUS_ONE = '+1', BOOM = 'BOOM!', TITLE = 'PIPPIN ORCHARD';
 /** The bang's particles, built once. */
 const SMOKE_OPTS = { speed: 2.2, up: 1.2, sizeJitter: 2, screen: true }, EMBER_OPTS = { speed: 3, up: 1.6, screen: true };
 const PUFF_OPTS = { speed: 0.5, up: 0.9, sizeJitter: 1, screen: true };
@@ -130,7 +130,6 @@ const PAW_PT: Point = { x: 0, y: 0 };
 /** The shared anim keys the boxes are built from (content/critters/common.js CARRY / catch frame 0). */
 const CATCH_POSE = { torso: -4, upper: 72, lower: 48 }, WALK_POSE = { torso: 6, upper: 60, lower: 50 };
 
-function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'apple', x, y, 4); }
 /**
  * The orchard's backdrop: the five layers makeOrchardLayers pre-renders (far, mid, ground, near, eaves), each
  * blitted at its own parallax factor. Taken off the painter rather than restated here, so a layer added there is
@@ -239,6 +238,14 @@ export class OrchardScreen extends Screen {
   declare seats: OrchardSeat[];
   /** The apple pool: MAX_APPLES slots, reused in place, never reallocated. */
   declare apples: Apple[];
+  /**
+   * What this visit gathers (game/run.js gatherTarget): apples, or the pears, peaches or avocados the orchard's other trees drop, all caught the same way. `icon`/`hex` are its glyph, the sign prefix its name.
+   */
+  declare ing: string;
+  declare icon: string;
+  declare hex: string;
+  declare signPrefix: string;
+  declare clockIcon: (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
   /** The splat pool (cosmetic): MAX_SPLATS slots handed out in turn. */
   declare splats: Splat[];
   /** The next splat slot to reuse. */
@@ -270,6 +277,11 @@ export class OrchardScreen extends Screen {
     particles.clear();
     this.vis = makeRng(PETAL_SEED);
     this.petalOpts = { color: PETAL_PALE, color2: ORCHARD.fallen, size: 4, life: 130, vx: -0.3, vy: 0.5, screen: true };
+    this.ing = gatherTarget(run, params.place, 'orchard');
+    const ing = INGREDIENTS[this.ing] || INGREDIENTS.apple;
+    this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
+    const icon = this.icon, hex = this.hex;
+    this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
     this.seats = makeSeats<OrchardSeat>(game, (i) => LANE_Y0 - i * LANE_GAP);
     const n = this.seats.length, pitch = Math.min(120, R((X_MAX - X_MIN) / (n + 1)));
     for (let i = 0; i < n; i++) {
@@ -281,6 +293,7 @@ export class OrchardScreen extends Screen {
       const w = pawRoot(s.rig, WALK_POSE.torso, WALK_POSE.upper, WALK_POSE.lower);
       s.boxWalkX = R(w.x * s.rig.scale); s.boxWalkY = R((w.y + RIM_BELOW_PAW) * s.rig.scale);
       s.boomT = 0;
+      s.rig.basketIcon = this.icon; s.rig.basketHex = this.hex;
       s.player.setOverlay(ORCHARD_ANIMS);
       seatAnim(s, 'catch');
     }
@@ -290,7 +303,7 @@ export class OrchardScreen extends Screen {
     for (let i = 0; i < MAX_SPLATS; i++) this.splats.push({ t: SPLAT_FRAMES, x: 0, y: 0 });
     this.splatCursor = 0;
     this.nextSpawn = SPAWN_MIN;
-    const need = run ? run.need('apple') : null;
+    const need = run ? run.need(this.ing) : null;
     this.target = need ? Math.max(1, need.amount - need.have) : 4;
     this.total = 0;
     this.booms = 0;
@@ -315,7 +328,7 @@ export class OrchardScreen extends Screen {
     } else {
       for (let i = 0; i < this.seats.length; i++) this.seats[i].player.tick();
       if (roundOver(clock)) {
-        if (game.run) game.run.gather('apple', this.total);
+        if (game.run) game.run.gather(this.ing, this.total);
         game.replace('map');
         return;
       }
@@ -430,7 +443,7 @@ export class OrchardScreen extends Screen {
   /** The round is over: drop the sign, and every seat with something in its basket cheers. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, SIGN_PREFIX + this.total);
+    endRound(this.clock, this.signPrefix + this.total);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.moving = false; s.bumpT = 0;
@@ -459,7 +472,7 @@ export class OrchardScreen extends Screen {
     // plates front lane first, each one stacked clear of the ones already down: ragged row, no buried name
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
-    drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawClock(ctx, this.clock, this.countStr, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawEndSign(ctx, this.clock, this.frame);
     if (this.game.options.debug) this.drawBoxes(ctx);
@@ -483,7 +496,7 @@ export class OrchardScreen extends Screen {
     // stem up into the leaves, so a hanging apple reads as fruit ON the tree and not fruit stuck in mid-air
     if (a.hang > 0) { ctx.fillStyle = UI.ink; ctx.fillRect(x - 1, y - APPLE_S - HANG_STEM, 2, HANG_STEM + 2); }
     if (a.kind === WORMY) {
-      drawFood(ctx, 'apple', x, y, APPLE_S, ORCHARD.wormy);
+      drawFood(ctx, this.icon, x, y, APPLE_S, ORCHARD.wormy);
       ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.arc(x + 3, y - 2, 3, 0, TAU); ctx.fill();          // the bite hole
       ctx.beginPath(); ctx.arc(x + 3, y - 4, 3, 0, TAU); ctx.fill();                                  // the grub, inked...
       ctx.beginPath(); ctx.arc(x + 6, y - 7, 3, 0, TAU); ctx.fill();
@@ -492,7 +505,7 @@ export class OrchardScreen extends Screen {
       ctx.beginPath(); ctx.arc(x + 6, y - 7, 2, 0, TAU); ctx.fill();
       return;
     }
-    drawFood(ctx, 'apple', x, y, APPLE_S);
+    drawFood(ctx, this.icon, x, y, APPLE_S, this.hex);
     ctx.fillStyle = UI.cream; ctx.fillRect(x - 4, y - 4, 3, 3);
     if (a.kind === BOMB) this.drawFuse(ctx, x, y - APPLE_S, FUSE_H, f);
   }
@@ -517,7 +530,7 @@ export class OrchardScreen extends Screen {
     if (s.boomT <= 0) return;
     const p = jointScreen(s.rig, 'handN', PAW_PT), x = R(p.x), y = R(p.y) - 2;
     if (s.boomT > SINGED_FRAMES) {
-      drawFood(ctx, 'apple', x, y, APPLE_S);
+      drawFood(ctx, this.icon, x, y, APPLE_S, this.hex);
       ctx.fillStyle = UI.cream; ctx.fillRect(x - 4, y - 4, 3, 3);
       const left = s.boomT - SINGED_FRAMES;
       this.drawFuse(ctx, x, y - APPLE_S, Math.ceil(FUSE_H * left / HOLD_FRAMES), this.frame);
@@ -540,7 +553,7 @@ export class OrchardScreen extends Screen {
     const k = (sp.t / SPLAT_STEP) | 0, rx = SPLAT_RX[k], ry = SPLAT_RY[k];
     ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx + 1, ry + 1, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = SIGNAL.orchard; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = SPLAT_SH;
+    ctx.fillStyle = foodTones(this.hex).sh;   // the splat's shade band: the fruit's own shadow tone (cached per hex)
     ctx.beginPath(); ctx.ellipse(sp.x + 1, sp.y + 1, rx - 1, ry - 1, 0, 0, TAU); ctx.fill();
   }
 

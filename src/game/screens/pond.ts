@@ -24,6 +24,8 @@ import { blitAt } from '../../art/layers.ts';
 import { F } from '../../content/critters/common.ts';
 import { ITEMS } from '../../content/critters/items.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
+import { PLACES } from '../../content/places.ts';
+import { gatherTarget } from '../run.ts';
 import { drawHint, drawBar } from '../ui.ts';
 import { drawFood } from '../../art/food.ts';
 import { POND, ROWS, SEAT_X, SEAT_PITCH, FLOAT_DX, FLOAT_Y, GLINTS, SUN_GLINTS, pondLayers } from '../../art/backgrounds/pond.ts';
@@ -63,8 +65,9 @@ const CATCH_LIFT = 0.8;
 const SHADOW_W = 24;
 /** The reel gauge over a biting float: a small paper bar that fills a step per press. */
 const REEL_W = 30, REEL_H = 5, REEL_ABOVE = 22;
-const TITLE = 'MILLPOND', SIGN_PREFIX = 'FISH: ';
-const FISH_HEX = INGREDIENTS.fish.hex;
+const TITLE = 'MILLPOND';
+/** The catch's glyph at the size a landed one flies at (the trout keeps its own sprite, art/fishing.js drawTrout). */
+const CATCH_S = 7;
 const PLUS_ONE = '+1', BITE_TXT = 'BITE!';
 const REEL_BAR = { color: SIGNAL.pond };
 
@@ -82,7 +85,6 @@ const REEL_ANIMS = Object.freeze({
   ] },
 });
 
-function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'fish', x, y, 4, FISH_HEX); }
 
 /**
  * One seat on the jetty: the shared mini-game seat plus this screen's own state, which is the little machine at the
@@ -140,6 +142,17 @@ export class PondScreen extends Screen {
   declare target: number;
   /** "0/3" for the clock ticket, rebuilt by hook() as the count changes. */
   declare countStr: string;
+  /**
+   * What this visit reels in (game/run.js gatherTarget): trout off the millpond, or a crab, a rake of seaweed or a
+   * pan of sea salt off the cove's jetty, which borrows this screen. `icon`/`hex` are that ingredient's glyph, the
+   * sign prefix is its name, and the title is the landmark's.
+   */
+  declare ing: string;
+  declare icon: string;
+  declare hex: string;
+  declare signPrefix: string;
+  declare title: string;
+  declare clockIcon: (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
   /** The one-line control prompt under the panel, built once in enter() off seat 0's key. */
   declare hint: string;
   /** What the action key is called on seat 0's device, for the HOW TO PLAY card. */
@@ -154,7 +167,14 @@ export class PondScreen extends Screen {
     pondLayers();
     this.total = 0;
     this.clock = makeClock();
-    const need = run ? run.need('fish') : null;
+    const place = PLACES.find((p) => p.id === params.place && p.screen === 'pond');
+    this.ing = gatherTarget(run, place ? place.id : undefined, 'pond');
+    const ing = INGREDIENTS[this.ing] || INGREDIENTS.fish;
+    this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
+    this.title = place ? place.name : TITLE;
+    const icon = this.icon, hex = this.hex;
+    this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
+    const need = run ? run.need(this.ing) : null;
     // the remainder, not the whole order: the map may already have banked some (the orchard and the coop agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.countStr = '0/' + this.target;
@@ -200,7 +220,7 @@ export class PondScreen extends Screen {
       // the sign hangs: the crew holds its last beat, nothing is stepped, no input counts
       for (let i = 0; i < this.seats.length; i++) this.seats[i].player.tick();
       if (roundOver(clock)) {
-        if (game.run) game.run.gather('fish', this.total);
+        if (game.run) game.run.gather(this.ing, this.total);
         game.replace('map');
         return;
       }
@@ -275,7 +295,7 @@ export class PondScreen extends Screen {
 
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, SIGN_PREFIX + this.total);
+    endRound(this.clock, this.signPrefix + this.total);
     // everyone holds one pose under the sign: rod up for a full bucket, rod low for an empty one
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.state = IDLE; s.t = 0; s.reel = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; seatAnim(s, s.count > 0 ? 'pull' : 'rodIdle', true); }
   }
@@ -300,7 +320,7 @@ export class PondScreen extends Screen {
       const s = this.seats[i], o = s.opts;
       // the fish is still in the air on the arc's frames, so the bucket holds one behind until it lands
       const flying = s.state === HOOKED && RESULT_FRAMES - s.t < FISH_ARC;
-      drawBucket(ctx, s.x + BUCKET_DX, ROWS.feet, s.slot, flying ? s.count - 1 : s.count, s.landT > 0 ? 1 + s.landT * LAND_K : 1);
+      drawBucket(ctx, s.x + BUCKET_DX, ROWS.feet, s.slot, flying ? s.count - 1 : s.count, s.landT > 0 ? 1 + s.landT * LAND_K : 1, this.ing === 'fish' ? undefined : this.hex);
       o.x = s.x; o.y = ROWS.feet; o.facing = 1;
       drawRig(ctx, s.rig, s.player.pose, o);
       jointScreen(s.rig, 'weaponTip', s.tip);
@@ -314,7 +334,7 @@ export class PondScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === HOOKED) this.drawCatch(ctx, this.seats[i]);
     // the reel gauges over the biting floats, after everything: the one thing a tapping player is watching
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === BITE) this.drawReel(ctx, this.seats[i]);
-    drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawClock(ctx, this.clock, this.countStr, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -367,7 +387,7 @@ export class PondScreen extends Screen {
     const k = RESULT_FRAMES - s.t;
     if (k >= FISH_ARC) return;
     const p = catchPoint(s, k);
-    drawTrout(ctx, p.x, p.y, 1);
+    if (this.ing === 'fish') drawTrout(ctx, p.x, p.y, 1); else drawFood(ctx, this.icon, p.x, p.y, CATCH_S, this.hex);
   }
 
   override summary() {
