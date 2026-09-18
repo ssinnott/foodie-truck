@@ -9,7 +9,8 @@
 //   PLATE a press at the hatch plates the dish and rings the bell: ORDER UP!, then results
 // Every step completed is worth its full 2 (there is no way to burn, miss or spoil anything), so a served dish is
 // always three stars: stars = max(1, round(total / (2 * steps) * 3)). Barley's gag: on every completed step, a
-// seeded one-in-six chance he eats an ingredient (crumbs, NOM, no score change).
+// seeded one-in-six chance he eats an ingredient (crumbs, NOM, no score change) - and the first push of his stick
+// or press of his button ends it, so the joke never holds a player up.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): every sim field is an integer or a px/frame sum driven by seat input;
 // the only random call is the gag, through `rng`; the steam, glow, rings and float text are cosmetic and stay out of
@@ -111,7 +112,7 @@ export interface Seat {
   anim: string;
   /** Frames left of the current reach / chop / stir beat. */
   actT: number;
-  /** Frames left of the eat gag; the seat is locked while this runs. */
+  /** Frames left of the eat gag; any input from the seat ends it early. */
   eatT: number;
   /** Which ITEMS entry is in its paws ('knife' | 'spoon' | 'plate' | 'food'), '' for empty paws. */
   weapon: string;
@@ -263,11 +264,16 @@ export class KitchenScreen extends Screen {
       const s = this.seats[i];
       s.player.tick();
       if (s.actT > 0) s.actT--;
-      // the gag locks the seat; on its last frame the ITEM goes with the state, or the reconcile below (guarded
-      // by `want !== s.weapon`) leaves the apple in his paw for ever at any spot that suggests no item
-      if (s.eatT > 0) { s.eatT--; s.moving = false; if (s.eatT === 0) this.clearItem(s); continue; }
       const ax = inp.axisX(s.slot);
       s.moving = ax !== 0;
+      // the gag plays out on its own unless the seat does anything at all, in which case it is over this frame: a
+      // joke that held a player still was the one thing left in the game that could get in a player's way. On its
+      // last frame the ITEM goes with the state, or the reconcile below (guarded by `want !== s.weapon`) leaves the
+      // apple in his paw for ever at any spot that suggests no item
+      if (s.eatT > 0) {
+        if (s.moving || inp.pressed(s.slot, 'action')) { s.eatT = 0; this.clearItem(s); }
+        else { s.eatT--; if (s.eatT === 0) this.clearItem(s); continue; }
+      }
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
         s.x += ax * SPEED;
@@ -347,7 +353,7 @@ export class KitchenScreen extends Screen {
       const b = this.seats[i];
       if (b.def.id !== 'barley' || b.eatT > 0) continue;
       if (!rng.chance(GAG_CHANCE)) continue;
-      b.eatT = EAT_FRAMES; b.moving = false; b.weapon = 'food';
+      b.eatT = EAT_FRAMES; b.weapon = 'food';
       b.rig.weapon = ITEMS.food as RigWeapon; b.rig.heldIcon = this.icons[0]; b.rig.heldHex = this.hexes[0];   // `as` for the same reason as in updateSeats
       this.playAnim(b, 'eat', true);
       burstCrumbs(b.x + b.facing * 8, ROWS.feet - 40, ROWS.feet, this.hexes[0], 6, true);

@@ -11,7 +11,8 @@
 //   kitchenPause - `start` from a seat pushes the pause overlay, `cancel` pops it and the kitchen underneath is
 //             exactly as it was left (step, scores, owners, seat positions); online the push is refused.
 //   kitchenGag - Barley's eat gag hands him an apple and TAKES IT BACK: the rig's held item is cleared with the
-//             state, at a spot where no station suggests one. Writes tools/screens/kitchen-gag.png.
+//             state, at a spot where no station suggests one; and a push of the stick ends the gag at once, so
+//             the joke never holds a player still. Writes tools/screens/kitchen-gag.png.
 //   results - opens straight onto results and returns to the order board on action, with the stage banked; and the party
 //             is IN the room, one rig per seat facing the hatch, every one of them cheering on a stagger once the
 //             stars have landed. Writes tools/screens/results-crew.png.
@@ -224,6 +225,21 @@ export const SCENARIOS = {
       assert(s.top.seats[0][4] === 0, `the gag is over (eatT ${s.top.seats[0][4]})`);
       assert(s.top.seats[0][5] === 0, `the rig's held item went with it (item ${s.top.seats[0][5]})`);
       assert(s.top.seats[0][3] === 'idle', `and he is idling again (${s.top.seats[0][3]})`);
+
+      // the gag never holds a player still: roll it again and push the stick, and it is over on that frame
+      const again = await page.evaluate(() => {
+        const g = window.__game.game, k = g.screens[g.screens.length - 1];
+        for (let i = 0; i < 200 && k.seats[0].eatT === 0; i++) { k.completeStep(1, null); k.stepIdx = 0; }
+        return k.seats[0].eatT;
+      });
+      assert(again > 0, `the gag fires a second time (eatT ${again})`);
+      const x0 = (await api.summary()).top.seats[0][1];
+      await api.hold(0, { left: true });
+      await api.step(3);
+      await api.release(0);
+      s = await api.summary();
+      assert(s.top.seats[0][4] === 0 && s.top.seats[0][5] === 0, `a push of the stick ends the gag at once and takes the apple back (eatT ${s.top.seats[0][4]}, item ${s.top.seats[0][5]})`);
+      assert(s.top.seats[0][1] < x0, `and he walked on that same push (${x0} -> ${s.top.seats[0][1]})`);
     });
   },
 
