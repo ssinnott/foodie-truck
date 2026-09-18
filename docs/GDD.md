@@ -25,7 +25,7 @@ differences, never gates: anyone can do any job.
 | Role | Verb | What the role changes |
 |---|---|---|
 | **The hungry one** | EAT / CARRY | Biggest basket; slowest; in the kitchen a random `bite` beat now and then that costs nothing but makes everyone laugh |
-| **The chef** | CHOP / MIX | Widest timing windows at the stations; smallest basket |
+| **The chef** | CHOP / MIX | Smallest basket; the one who plates with a flourish |
 | **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks |
 | **The forager** | GATHER / CAST | Fastest in the mini-games; longest fishing cast |
 | **The head chef** | TASTE / ORDER | Owns the truck and runs the crew; steady everywhere, best at the pass; tastes from the spoon |
@@ -95,58 +95,71 @@ Common rules: side view, feet on a scene-specific floor line, one critter per se
 drawn as a paper timer, the target count from the order; the scene ends with a sign dropping in (`APPLES: 12`)
 and a 60-frame hold, then `run.gather` and back to the map. All randomness through `rng` inside `update()`.
 
-- **Orchard — CATCH.** Move left/right with a basket held in front. Apples spawn above the canopy every 30–60 frames at
-  a seeded x and fall at 1.4–2.4 px/frame with a small sway; caught at the basket's top edge. One in eight is a
-  wormy apple that costs one. Four seats use four depth lanes 8 px apart so bodies stack instead of fusing.
-- **Pond — FISH.** Fixed standing spots on a jetty, one float column per seat. `action` casts; the float bobs; after
-  a seeded 90–240 frames a nibble telegraph (two 2 px dips, 30 frames), then the bite: the float drops and an 18-frame
-  window opens; `action` inside it lands the fish, too early pops the float, too late loses it.
-- **Coop — COLLECT.** Walk in 8 directions across a deep floor band; eggs appear in nests and on the floor every
-  90–150 frames; `action` over an egg plucks it (12-frame crouch). Five hens wander on seeded waypoints; touching
-  one is a bump that drops the last egg (it cracks into a yolk puddle). One rooster charges every ~600 frames with a
-  20-frame telegraph.
-- **Dairy — PUMP.** A stool and a cow per seat, nobody moves. `action` and `alt` **alternate**: after an `action`
-  the next accepted press is `alt` and back again, and the wrong button is refused for 10 frames at no cost. Six
-  accepted pumps fill a pail — +1 milk, the pail hops to the churn rack, a fresh one slides under the cow. Each cow
-  independently runs a seeded 150–260 frame patience timer, then telegraphs for 24 frames (ear back, tail up, a
-  `SIGNAL.hot` mark) and kicks for 30: **any** press inside that window spills the pail (the part-filled pail is
-  lost and one banked milk with it) and the seat takes the bump. Sitting still through it is free.
-- **Mill — FILL.** Four chutes along the back wall wake on a seeded 70–130 frame timer, at most two at once:
-  24 frames of telegraph, then 110 frames of pouring. Seats walk left and right on their own depth lanes; standing
-  within 18 px of a pouring chute with `action` **held** fills the sack at 1/54 per frame (about 0.9 s from empty).
-  Releasing at or above full ties it off (+1 flour, an 18-frame tie beat); releasing below full **keeps** the part
-  sack to top up at the next chute; holding to 1.5 bursts it — a flour cloud, the critter whitened for 8 frames,
-  the sack's contents gone and one banked flour with them.
-- **Hives — CREEP.** Five straw skeps on a bench; `action` within 16 px of one dips it (16-frame reach, +1 honey)
-  and that skep is empty for 150 frames, so the party is pushed along the bench. One shared swarm cycles
-  **calm** (180–300 frames, the round opens on a fixed 300 so nobody is punished first) → **wary** (36 frames: the
-  telegraph — the cloud rears, a hot crest, the band reads STEADY) → **alert** (70–120 frames: FREEZE). During
-  alert any movement or `action` from a seat stings it — the bump, a 10 px shove, one banked honey lost and a
-  60-frame grace. Standing still is completely safe, and a dip already begun finishes safely. A three-state band
-  across the top of the play area carries the swarm's state as colour *and* silhouette (flat / spiked up / spiked
-  down), so it survives the squint.
-- **Market garden — PULL.** Leafy tops stand in the bed (seven at the start, more every 70–120 frames up to eight,
-  never closer than 42 px). One in five is a **thistle**. `action` within 16 px grips a top and opens a tug gauge
-  above that seat: a needle sweeping the bar in 40 frames each way with a band 26 units wide. `action` again inside
-  the band brings the root out (+1 carrot, a 14-frame pull); outside it the top snaps off at no cost and that root
-  grows a new one in 90 frames. 150 frames without a press lets go. Pulling a thistle costs one banked carrot, takes
-  the full bump and throws the weed over the critter's shoulder.
+**Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
+kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
+part of the critter overlaps the thing, the seat can use it. Nobody has to find an exact spot.
+
+**Every round opens on a HOW TO PLAY card** (`game/controlcard.ts`): a paper ticket under the clock for 210
+frames, then it slides away, showing the round's controls as animated keycaps rather than words — two arrow keys
+pressed by turns (MOVE), the action key pressed once (TAP), pressed over and over with motion marks (TAP TAP TAP)
+or held down with a bar filling under it (HOLD). The key is labelled with the seat's own binding.
+
+The whole game is built on **three inputs and nothing else**: move left and right, tap ACTION over and over, and
+hold ACTION down. There are no timing windows, no beats to hit and no wrong buttons — a young player can never lose
+what they have gathered, and the 40-second clock is a backstop rather than an opponent. The only hazards left are
+jokes (the orchard's wormy apple and its bomb), and they cost nothing but a moment.
+
+- **Orchard — CATCH** (*move*). Move left/right with a basket held in front. Apples (14 px, so they read from
+  across a room) spawn above the canopy every 30–60 frames at a seeded x and fall at 1.4–2.4 px/frame with a small
+  sway; caught the moment it overlaps the critter's body (the ring and the +1 are drawn at the basket's rim). A missed
+  apple splats on the grass and costs nothing. One in ten is a
+  **wormy** apple: catching it is the bump beat and nothing more. One in ten is a **bomb** — a ripe apple with a
+  burning fuse — and catching it is the scene's joke: the critter holds it up and watches the fuse burn for 40
+  frames, it goes off in smoke and embers, and the critter stands blackened and dazed for 90 frames before shaking
+  it off. Nothing is lost but the time. Four seats use four depth lanes 8 px apart so bodies stack instead of
+  fusing.
+- **Pond — FISH** (*tap*). Fixed standing spots on a jetty, one float column per seat. `action` casts; the float
+  bobs; after a seeded 60–150 frames the fish bites (the float drops, a mint ring) and stays on. Tapping `action`
+  twelve times reels it in: every press is one turn of the reel, drawn as a bar over the float. A press during the wait
+  does nothing.
+- **Coop — COLLECT** (*move + tap*). Walk left/right along a depth lane; eggs appear in nests and on the floor in
+  front of the lanes every 90–150 frames; `action` with the egg anywhere under the critter (34 px either side) plucks one (a 12-frame reach up into
+  a nest from the gold ring on the floor under it, a 12-frame crouch to a floor egg). Five hens potter about the
+  back of the floor and touch nobody.
+- **Dairy — PUMP** (*tap*). A stool and a cow per seat, nobody moves. Every `action` press is a squirt; twelve fill a
+  pail — +1 milk, the pail hops to the churn rack, a fresh one slides under the cow. Any rhythm works, and the cows
+  never kick.
+- **Mill — FILL** (*move + hold*). Four chutes along the back wall wake on a seeded 70–130 frame timer, at most two
+  at once: 24 frames of telegraph, then 110 frames of pouring. Seats walk left and right on their own depth lanes;
+  standing anywhere under a pouring chute (36 px either side) with `action` **held** fills the sack at 1/90 per frame (1.5 s from
+  empty). The moment it reaches the brim it ties itself off (+1 flour, an 18-frame tie beat, a fresh sack);
+  letting go early **keeps** the part sack to top up at the next chute. Nothing bursts.
+- **Hives — CREEP** (*move + hold*). Five straw skeps on a bench; **holding** `action` anywhere over a full one (36 px either side)
+  for 60 frames dips it — a strand of honey climbs the dipper and a bar fills over the skep — then +1 honey, and
+  that skep is empty for 150 frames, so the party is pushed along the bench. Letting go early costs nothing. The
+  bees drone over the bench and never turn.
+- **Market garden — PULL** (*move + tap*). Leafy tops stand in the bed (seven at the start, more every 70–120
+  frames up to eight, never closer than 42 px); every one is a carrot. `action` with a top anywhere under the critter (34 px either side) grips it and opens
+  a pull gauge above that seat; each further `action` press fills it a twelfth, and the twelfth brings the root out
+  (+1 carrot, a 14-frame pull). 150 frames without a press lets go at no cost.
 
 ## 6. The kitchen
 
 The truck interior, side-on, camera locked. Stations left to right (`content/places.js STATIONS`): CHOP, MIX, STOVE,
-OVEN, PLATE. A critter stands at one station at a time and walks between them (left/right). The order's `steps`
+OVEN, PLATE. A critter stands at one station at a time (within 40 px of its spot, so any overlap counts) and walks
+between them (left/right). The HOW TO PLAY card is raised again for every new step with that station's verb. The order's `steps`
 are worked in order; the recipe card shows them with checks. Interactions:
 
 | Station | Verb | Rule |
 |---|---|---|
-| CHOP | tap | five `action` presses on the beat of a sliding bar; off-beat presses do not count |
-| MIX | stir | hold `action` for 180 frames while a dial fills; releasing pauses it |
-| STOVE | hold | hold `action`; a bar fills and turns hot in its last 20 %; release inside the hot band; over-time burns it |
-| OVEN | time | `action` loads the tray; a timer runs 300 frames; `action` inside the last 40 frames is perfect, later burns |
+| CHOP | tap | ten `action` presses, any rhythm; the pips on the card light one per chop |
+| MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it |
+| STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way |
+| OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way |
 | PLATE | tap | `action` plates the dish and rings the bell; the customer eats |
 
-Each step scores 0–2 (missed / done / perfect); stars = round(total / max × 3), minimum 1 if the dish was served.
+Nothing can burn or be missed: every completed step scores its full 2, so stars = round(total / max × 3) is always
+3 for a served dish (minimum 1 by the formula).
 The hungry one, when seated, gets a `bite` beat on a seeded 1-in-6 chance each time a step completes: a crumb burst
 and a laugh, no score change.
 

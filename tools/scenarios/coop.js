@@ -1,27 +1,19 @@
 // Playtest scenarios for the coop work (registered in tools/scenarios/index.js). Each export is
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
-//   coop - four seats in the coop: seat 0 is driven to the nearest egg (polling summary() for its reach point and
-//          holding the stick toward it), presses action and has one egg in its basket; then seat 0 is walked into
-//          the nearest hen so a bump is caught on camera with the popped shell still in the air
-//          (tools/screens/coop-bump.png, when one lands); then the
-//          clock is forced to its last frames: the EGGS sign drops, is held, and the screen returns to the map with
-//          the order's egg line updated by the party's total. Also writes tools/screens/coop-pluck.png and, from a
-//          forced charge down seat 0's lane, tools/screens/coop-charge.png.
+//   coop - four seats in the coop: seat 0 is driven along its lane to the nearest egg (polling summary() for its
+//          reach x and holding the stick toward it), presses action and has one egg in its basket; up and down
+//          move nobody (the lanes are the whole depth a seat gets); the five hens potter at the back and touch
+//          nothing; then the clock is forced to its last frames: the EGGS sign drops, is held, and the screen
+//          returns to the map with the order's egg line updated by the party's total. Also writes
+//          tools/screens/coop-pluck.png and coop-sign.png.
 import { withPage, assert } from '../playtest.js';
 
 const SLAM = 6, HOLD = 60;
-/** The stick to hold toward (dx, dy): only axes still more than a step away. */
-function toward(dx, dy) {
-  const k = {};
-  if (dx > 2) k.right = true; else if (dx < -2) k.left = true;
-  if (dy > 1) k.down = true; else if (dy < -1) k.up = true;
-  return k;
-}
-/** Nearest [x, y, ...] of `list` to (x, y) by manhattan distance, or null. */
-function nearest(list, x, y) {
+/** Nearest [x, fy, nest] of `list` to x along the lane, or null. */
+function nearest(list, x) {
   let best = null, bd = 1e9;
-  for (const p of list) { const d = Math.abs(p[0] - x) + Math.abs(p[1] - y); if (d < bd) { bd = d; best = p; } }
+  for (const p of list) { const d = Math.abs(p[0] - x); if (d < bd) { bd = d; best = p; } }
   return best;
 }
 
@@ -33,22 +25,30 @@ export const SCENARIOS = {
       assert(s0.screen === 'coop', `the coop is up with a run started (on ${s0.screen})`);
       assert(s0.top.seats.length === 4 && s0.top.target > 0, `four seats and a target from the order (${s0.top.seats.length} seats, target ${s0.top.target})`);
       assert(s0.top.hens.length === 5, `five hens on the floor (${s0.top.hens.length})`);
+      const lanes = s0.top.seats.map((s) => s[2]);
+      assert(lanes.every((y, i) => i === 0 || y === lanes[i - 1] - 8), `the seats stand on four lanes 8 px apart (${lanes.join()})`);
       const others0 = JSON.stringify(s0.top.seats.slice(1).map((s) => [s[1], s[2]]));
 
-      // wait for an egg, then drive seat 0 onto its reach point and pluck it; a hen may bump us on the way, so the
-      // drive re-aims every four frames and gives up after a generous budget rather than asserting the path
-      let plucked = false, bumpShot = false, last = s0;
+      // up and down are not directions in this coop: 30 frames of `up` leaves seat 0 exactly where it was
+      await api.hold(0, { up: true });
+      await api.step(30);
+      await api.release(0);
+      const up = await api.summary();
+      assert(up.top.seats[0][1] === s0.top.seats[0][1] && up.top.seats[0][2] === s0.top.seats[0][2], `up moves nobody (${s0.top.seats[0][1]},${s0.top.seats[0][2]} -> ${up.top.seats[0][1]},${up.top.seats[0][2]})`);
+
+      // wait for an egg, then drive seat 0 along the lane to its reach x and pluck it
+      let plucked = false, last = up;
       for (let attempt = 0; attempt < 4 && !plucked; attempt++) {
         let egg = null;
-        for (let i = 0; i < 60 && !egg; i++) { await api.step(4); last = await api.summary(); egg = nearest(last.top.eggs, last.top.seats[0][1], last.top.seats[0][2]); }
+        for (let i = 0; i < 60 && !egg; i++) { await api.step(4); last = await api.summary(); egg = nearest(last.top.eggs, last.top.seats[0][1]); }
         if (!egg) break;
         for (let i = 0; i < 150; i++) {
-          const me = last.top.seats[0], dx = egg[0] - me[1], dy = egg[1] - me[2];
-          if (Math.abs(dx) <= 3 && Math.abs(dy) <= 3) break;
-          await api.hold(0, toward(dx, dy));
+          const dx = egg[0] - last.top.seats[0][1];
+          if (Math.abs(dx) <= 3) break;
+          await api.hold(0, dx > 0 ? { right: true } : { left: true });
           await api.step(4);
           last = await api.summary();
-          if (!last.top.eggs.some((e) => e[0] === egg[0] && e[1] === egg[1])) break;   // the egg went (a bump does not remove eggs, but be safe)
+          if (!last.top.eggs.some((e) => e[0] === egg[0] && e[1] === egg[1])) break;
         }
         await api.release(0);
         await api.step(2);
@@ -61,39 +61,9 @@ export const SCENARIOS = {
       assert(plucked, 'seat 0 walked to an egg, pressed action and has it in the basket (count 1)');
       const p = await api.summary();
       assert(p.top.count >= 1 && p.top.seats[0][3] >= 1, `the party total counts the egg (total ${p.top.count}, seat 0 ${p.top.seats[0][3]})`);
-      // the other seats never move on their own, but a wandering hen may shove one 8 px: only their baskets are held to
       assert(p.top.seats.slice(1).every((s) => s[3] === 0), 'the other seats, with no input, plucked nothing');
-      assert(p.top.bumps > 0 || JSON.stringify(p.top.seats.slice(1).map((s) => [s[1], s[2]])) === others0, 'with no bump yet, the other seats stayed put');
-
-      // hunt a hen so seat 0's bump beat lands on camera: the egg pops out of the basket and cracks
-      let b = p;
-      for (let i = 0; i < 250 && !bumpShot && b.screen === 'coop' && b.top.phase === 0; i++) {
-        const me = b.top.seats[0], hen = nearest(b.top.hens, me[1], me[2]);
-        await api.hold(0, toward(hen[0] - me[1], hen[1] - me[2]));
-        await api.step(2);
-        const s = await api.summary();
-        // shoot four frames into the 12-frame arc, where the shell is clear of the critter's own body: coop-bump.png
-        // is the shot the popped shell's readability is judged from, and the old 3-frame poll landed it late
-        if (s.screen === 'coop' && s.top.seats[0][3] < b.top.seats[0][3]) { bumpShot = true; await api.release(0); await api.step(3); await api.shot('coop-bump'); }
-        b = s;
-      }
-      await api.release(0);
-      assert(bumpShot, `seat 0 walked into a hen and lost its egg to the bump (${b.top.bumps} bumps so far)`);
-
-      // the rooster: drop the next charge into seat 0's lane and catch it mid-run (tools/screens/coop-charge.png -
-      // the comb has to be HOT for the whole charge, not just the telegraph) and check the toss lands
-      const preCharge = (await api.summary()).top;
-      if (preCharge.phase === 0) {
-        await page.evaluate(() => {
-          const sc = window.__game.game.screen, seat = sc.seats[0], r = sc.rooster;
-          r.state = 2; r.dir = 1; r.y = seat.y; r.x = seat.x - 60;   // mid-charge, 20 frames short of the seat
-        });
-        await api.step(8);
-        await api.shot('coop-charge');
-        await api.step(24);
-        const ch = await api.summary();
-        assert(ch.top.bumps > preCharge.bumps, `the rooster's charge tossed seat 0 (${preCharge.bumps} -> ${ch.top.bumps} bumps)`);
-      }
+      assert(JSON.stringify(p.top.seats.slice(1).map((s) => [s[1], s[2]])) === others0, 'the other seats stayed put: no hen shoves anyone');
+      assert(p.top.hens.every((h) => h[1] <= 290), `the hens keep to the back of the floor (${p.top.hens.map((h) => h[1]).join()})`);
 
       // force the clock to its end (or watch the early ending) and expect the sign, then the map
       let s2 = await api.summary();
@@ -105,7 +75,7 @@ export const SCENARIOS = {
         await api.shot('coop-sign');
         await api.step(HOLD);
       } else if (s2.screen === 'coop') await api.step(SLAM + HOLD);
-      const lastCoop = s2.screen === 'coop' ? s2 : b;
+      const lastCoop = s2.screen === 'coop' ? s2 : p;
       const s3 = await api.summary();
       assert(s3.screen === 'map', `after the sign's hold the coop hands back to the map (on ${s3.screen})`);
       const count = lastCoop.top.count, target = lastCoop.top.target;

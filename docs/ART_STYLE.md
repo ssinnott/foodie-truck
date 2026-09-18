@@ -112,29 +112,29 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   scatter) with a `#B99A6A` edge, river `#6F9FB0` over `#4E7A8C`, hedges `#4F6B3A`, cottage walls `#F1E4C8`, roofs
   `#A65A48`, plum tree-line `#4A3038`, a dusk-peach horizon strip `#F4C9A0`; signal: lantern gold on the next sign.
 - **Orchard**: daytime warm sky `#FBE3C4`→`#F4C9A0`, canopy `#4F6B3A` with `#6E8A48` caps, grass `#5E7A3E` (L .42),
-  four depth lanes 8 px apart; signal: ripe apple red `#D9463B`.
+  four depth lanes 8 px apart; signal: ripe apple red `#D9463B`; HOT on a bomb apple's fuse spark.
 - **Pond**: golden-hour sky, a plum tree-line `#4A3038` behind the torsos, bank turf `#6E7A5A`, water `#4E7A8C` with a
   `#6F9FB0` surface band, jetty `#9A6234`; signal: bite ring mint `#5FD3C0`; floats white with a slot-colour cap and an
   8×5 slot tag above.
 - **Coop**: grey-green boards `#55665A`, nest straw `#C9A05C` (darker than the eggs), packed-earth floor `#48526A`
-  (cool, L .32), hens rust `#A8623A` and speckled grey; signal: fresh-egg gold sparkle `#F2C14E`; HOT on the rooster's comb.
+  (cool, L .32), hens rust `#A8623A` and speckled grey; signal: fresh-egg gold sparkle `#F2C14E`.
 - **Dairy**: a dim stone byre, slate eave `#453F4C`, lime-washed stone `#806A4B`, oak beams `#5C3E22`, byre floor
   `#5E4C33` under straw `#A07C42`, one bright hay hatch of `#FBE3C4` sky; cows `#A8724A` with cream patches, four
-  stalls on a 126 px pitch; signal: mint `#5FD3C0` on the pump chevron and the full pail, HOT on the cow's kick.
+  stalls on a 126 px pitch; signal: mint `#5FD3C0` on the pump chevron and the full pail.
 - **Mill**: a dark timber tower, boarded wall `#4A3A2C` (the plane the whole cast reads against), oak frame
   `#6B543A`, plank floor `#7A6144` (L .40, so dark hooves keep their contact), hessian `#8A7350`; the flour and the
-  sacks are the lightest things in the room; signal: gold `#F2C14E` at a pouring chute's mouth, HOT on a bursting sack.
+  sacks are the lightest things in the room; signal: gold `#F2C14E` at a pouring chute's mouth.
 - **Hives**: late-afternoon clover meadow, sky `#F9DDB8`→`#F2C39A`, downs `#B3AE7E`, clipped hedge `#3F5A34` (darker
   than the orchard's canopy so the two green scenes never twin), meadow cooler and lighter than the orchard's grass,
-  five straw skeps on a bench; signal: gold on a skep with honey left in it, HOT on the swarm's wary/alert crest.
+  five straw skeps on a bench; signal: gold on a skep with honey left in it.
 - **Market garden**: a walled kitchen garden, straw sky `#E9DCBE`→`#F4C9A0`, lime-washed wall `#8A8478`
   (deliberately near-colourless: brick sat 19° from P2's marmalade apron across 70 rows of frame), tilled beds
-  `#4A3C32` (L .25), crop green `#7FA850`, thistle `#68705E` with a `#6B5E78` head; signal: gold on a ripe root's
+  `#4A3C32` (L .25), crop green `#7FA850`; signal: gold on a ripe root's
   sparkle — and no HOT anywhere, because nothing in a market garden can hurt you.
 - **Kitchen**: plum wall `#4A3038`, slate counter top `#4F5A62` (rows 200–206), steel counter front `#3E4A55`
   (rows 206–246), floor checker `#4E4450` / `#5A4E5C` (rows 246–340), feet line y 252 so torsos read on the counter
   front and heads on the wall; a floor-standing oven that breaks the counter line; copper pot `#B87333`; paper and
-  brass are the warm things; signal: HOT `#E23A2E` (burner, boil-over, burnt); a slot-colour tag above each owned station.
+  brass are the warm things; signal: HOT `#E23A2E` on the burner; a slot-colour tag above each owned station.
 
 ## 2. Proportions
 
@@ -179,7 +179,7 @@ pocket included, set by `critterRig(def, slot)`. Every fur must clear all four h
 only as small emitters and banned as decor elsewhere: map `#F2C14E` lantern gold (the next destination), orchard
 `#D9463B` ripe apple (= `UI.red`, the stamp ink too), pond `#5FD3C0` bite ring, coop `#F2C14E` fresh-egg sparkle
 (shared with the map by exemption: both mean "the thing you want"), kitchen `#E23A2E` HOT (also the game-wide
-reserved heat/danger colour: burner, boil-over, burnt, the rooster's comb). "Good timing" on paper UI is
+reserved heat/danger colour: the burner). "Nearly there" on paper UI is
 `UI.green` with an ink outline, never gold on paper (0.17) and never lime.
 
 The four mini-games finished last **reuse those hexes instead of inventing four more**, and the reason is the
@@ -191,11 +191,10 @@ picks the one it needs:
 | meaning | hex | where |
 |---|---|---|
 | **the thing you want / go here** | `#F2C14E` gold | map's next sign, coop's fresh egg, **mill**'s pouring chute, **hive**'s full skep, **garden**'s ripe root |
-| **press on this beat** | `#5FD3C0` mint | pond's bite ring, **dairy**'s pump chevron and full pail |
-| **heat and danger** | `#E23A2E` HOT | burner, boil-over, burnt, the rooster's comb, the cow about to kick, the swarm on the turn |
+| **keep tapping** | `#5FD3C0` mint | pond's bite ring and reel bar, **dairy**'s pump chevron and full pail |
+| **heat** | `#E23A2E` HOT | the burner, and the spark on the orchard's bomb apple: the one warning left in the game, and it is a joke |
 
-One scene still shows one signal: a scene that needs a danger telegraph draws it in HOT and its *own* signal for
-the thing the player is after, exactly as the coop has always paired the gold egg with the hot comb. Backdrops are built from 6–8 muted
+One scene still shows one signal: its *own* signal for the thing the player is after. Backdrops are built from 6–8 muted
 constants each, exported by the scene's backdrop module; `ENV` in `palettes.js` is the shared base ladder.
 
 ## 5. Authoring parts, accessories and items
@@ -257,7 +256,7 @@ effort and success keys. The shared table (`makeCritterAnims`) every critter shi
 | hop | 4 | crouch `in` 5f squash 1.1 → air 14f stretch 1.06 → land 5f squash 1.1 → settle |
 | sad / sit | 2 loop | head down / seated, `hurt` / `closed` |
 
-Timing windows (a chop's beat, the bite window) belong to `docs/GDD.md`; the art fits inside them.
+The lengths of the holds and the tap counts belong to `docs/GDD.md`; the art fits inside them.
 
 ## 9. Performance
 

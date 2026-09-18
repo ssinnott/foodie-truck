@@ -5,7 +5,9 @@ crew of a countryside food truck is missing an ingredient, so they drive out to 
 short mini-game, drive home and cook the dish step by step. The customer eats. The phone rings again.
 
 Seven orders, seven ingredients, seven landmarks, and **a different mini-game at every one of them** — each with its
-own verb: catch, fish, collect, pump, fill, creep, pull.
+own verb: catch, fish, collect, pump, fill, creep, pull. Every one of them is played with the same three inputs —
+move left and right, tap the action button over and over, or hold it down — with no timing windows and nothing to
+lose, so a small child can play the whole game.
 
 The seven orders are the game's **stages**, pinned up on an order board: pick a customer and their recipe, serve it,
 and it comes back stamped with its stars. Serve all seven and the truck closes for the night — the day ends, the
@@ -25,8 +27,8 @@ so the repository stays reviewable in a diff.
 |---|---|---|
 | **Order board** | `stage` | The day's seven stages on paper: a customer, their dish and what it needs. Take one off the board to start it; it comes back stamped SERVED with its stars. The last one closes the day. |
 | **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. Arriving where a missing ingredient comes from opens its mini-game. Arriving home with everything opens the kitchen. |
-| **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden` | Catch apples under the trees, fish the millpond, collect eggs from the hens, milk the cows on a two-handed rhythm, fill flour sacks under the mill's chutes, creep to the hives and freeze when the bees turn, and pull carrots out of the market garden without grabbing a thistle. Everyone seated plays at once and the party's total counts. |
-| **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (chop, mix, stove, oven, plate), serve, and watch the customer eat for a star rating. |
+| **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows, hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, and tap to pull carrots out of the market garden. Everyone seated plays at once and the party's total counts. |
+| **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to chop; hold to mix, cook and bake; ring the bell to plate), serve, and watch the customer eat. |
 
 ## Play
 
@@ -37,7 +39,8 @@ npm run dev        # http://localhost:8080
 
 **Four players on one couch.** The keyboard seats two, and a gamepad takes the lowest seat nobody is already on
 the keys for the moment it is pressed — so four pads fill the truck, or two pads either side of the keyboard pair.
-Pick up a controller on the title screen and press A.
+Pick up a controller on the title screen and press A. Every round opens on a HOW TO PLAY card that shows its
+controls as animated keys, so nobody has to read the hint line to know what to do.
 
 | Action | P1 keys | P2 keys | Any seat, on a gamepad |
 |---|---|---|---|

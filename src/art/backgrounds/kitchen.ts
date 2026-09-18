@@ -70,8 +70,8 @@ export const STATION_X = Object.freeze([80, 190, 300, 410, 490]);
 export const PROP_DX = Object.freeze([46, 52, 56, 34, 26]);
 /** Prop centres on the counter (and, for the plate, on the hatch shelf). */
 export const PROP_X = Object.freeze(STATION_X.map((x, i) => x + PROP_DX[i]));
-/** A seat is "at" a station within this many px of its standing spot. */
-export const AT_RANGE = 24;
+/** A seat is "at" a station within this many px of its standing spot: 40, so any part of the critter over the station counts (the closest two spots are 80 apart). */
+export const AT_RANGE = 40;
 /** The walk lane's ends: half a body in from the edges. */
 export const X_MIN = 30, X_MAX = 606;
 /** The hand-lettered paper sign over each station - 36x15, wide enough for the station's NAME in ink at size 1, so

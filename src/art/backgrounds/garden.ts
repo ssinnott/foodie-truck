@@ -13,7 +13,7 @@
 // carry no bleed and no parallax factors, the way the coop's interior does. Adding a second screen of garden is a
 // one-line change (widen LW, blit at -BLEED_X) and until something asks for it the machinery stays out.
 //
-// Nothing in here animates: the crop, the crew, the tug gauges, the thistledown and the flying soil are the
+// Nothing in here animates: the crop, the crew, the pull gauges, the thistledown and the flying soil are the
 // screen's per-frame marks (game/screens/garden.js, art/gardenProps.js).
 import { makeLayer, vGradient, boxShaded, boxOutlined, INK, VIEW_W, VIEW_H } from '../layers.ts';
 import { mix } from '../palettes.ts';
@@ -283,7 +283,7 @@ function paintMid(g, w, h, rnd) {
  *             or shadow lands on.
  *   322..360  the CROP RIDGE: dark tilled earth, combed left-to-right, with clods and a woven hazel hurdle along
  *             the very bottom. Every leafy top the screen plants stands on ROWS.root, in this band, in front of the
- *             whole cast - which is what stops a critter ever hiding the thistle that is about to cost it a carrot.
+ *             whole cast - which is what stops a critter ever hiding the top the player is walking toward.
  */
 function paintGround(g, w, h, rnd) {
   const top = ROWS.ground;
