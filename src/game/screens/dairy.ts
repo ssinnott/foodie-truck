@@ -279,7 +279,7 @@ export class DairyScreen extends Screen {
     this.hops = [];
     for (let i = 0; i < MAX_HOPS; i++) this.hops.push({ t: HOP_FRAMES, x0: 0, y0: 0, tx: 0, ty: 0, slot: 0 });
     this.hopCursor = 0;
-    const need = run ? run.order.needs.find((x) => x.id === 'milk') : null;
+    const need = run ? run.need('milk') : null;
     // the remainder, not the whole order: the map may already have banked some (the orchard, pond and coop agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;

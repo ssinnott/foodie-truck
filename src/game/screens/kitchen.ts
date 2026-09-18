@@ -165,6 +165,8 @@ export class KitchenScreen extends Screen {
   declare hexes: string[];
   /** Per-ingredient glyph and hex tables for the order ticket (game/ui.ts drawOrderTicket). */
   declare ticketOpts: OrderTicketOpts;
+  /** The ticket's two head rows, worded once: whose order it is and the dish. */
+  declare ticketHead: string[];
   /** Which stations this order uses, indexed by station: the stations that draw their per-frame marks. */
   declare has: boolean[];
   /** The step being worked: an index into `steps`, `steps.length` once every step is done. */
@@ -218,6 +220,7 @@ export class KitchenScreen extends Screen {
     this.icons = order.needs.map((n) => (INGREDIENTS[n.id] || INGREDIENTS.apple).icon);
     this.hexes = order.needs.map((n) => (INGREDIENTS[n.id] || INGREDIENTS.apple).hex);
     this.ticketOpts = { icons: {}, hexes: {} };
+    this.ticketHead = [`FOR ${getCustomer(order.customer).name}`, order.dish];
     for (const n of order.needs) { const ing = INGREDIENTS[n.id]; if (ing) { this.ticketOpts.icons[n.id] = ing.icon; this.ticketOpts.hexes[n.id] = ing.hex; } }
     this.has = [false, false, false, false, false];
     for (const s of this.steps) this.has[s] = true;
@@ -485,7 +488,7 @@ export class KitchenScreen extends Screen {
 
   drawHud(ctx: CanvasRenderingContext2D, f: number): void {
     const run = this.game.run;
-    drawOrderTicket(ctx, run, TICKET.x, TICKET.y, TICKET.w, drawFood, this.ticketOpts);
+    drawOrderTicket(ctx, run, TICKET.x, TICKET.y, TICKET.w, this.ticketHead, drawFood, this.ticketOpts);
     // the recipe card: one row per step, the owner's 6x6 slot ring at the left, an ink tick when done, '>' on the current
     const n = this.steps.length, h = 16 + ROW * n + 6;
     const top = drawTicket(ctx, CARD_X, CARD_Y, CARD_W, h, CARD_OPTS);

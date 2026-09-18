@@ -1,11 +1,12 @@
 // Playtest scenarios for the kitchen work (registered in tools/scenarios/index.js). Each export is
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
-//   kitchen - four seats in the kitchen with the first order (APPLE PIE: chop, mix, oven, plate). Seat 0 is walked
+//   kitchen - four seats in the kitchen with the APPLE PIE at the hatch (?order=1: chop, mix, oven, plate). Seat 0 is walked
 //             to each station in turn and given the right input: ten taps on the board in any rhythm, a 240-frame
 //             hold on the bowl (with a pause in the middle that costs nothing), a 240-frame hold on the oven, and
-//             the bell. The screen must reach results with three stars, then the order board with run.served 1 on
-//             confirm. A second pass runs the FISH CAKES order (chop, mix, stove, plate) for the stove's hold and
+//             the bell. The screen must reach results with three stars, then - the line still having someone in
+//             it - the line screen with run.served 1 on confirm and the next customer at the hatch. A second pass
+//             runs the FISH CAKES order (chop, mix, stove, plate) for the stove's hold and
 //             writes tools/screens/kitchen-stove.png with the pot lit mid-hold. The tags are shot as they come up
 //             (kitchen-chop / -mix / -oven / -plate / -stove): each carries its owner's colour across its head.
 //   kitchenPause - `start` from a seat pushes the pause overlay, `cancel` pops it and the kitchen underneath is
@@ -13,7 +14,7 @@
 //   kitchenGag - Barley's eat gag hands him an apple and TAKES IT BACK: the rig's held item is cleared with the
 //             state, at a spot where no station suggests one; and a push of the stick ends the gag at once, so
 //             the joke never holds a player still. Writes tools/screens/kitchen-gag.png.
-//   results - opens straight onto results and returns to the order board on action, with the stage banked; and the party
+//   results - opens straight onto results and calls the next in line on action, with the customer banked; and the party
 //             is IN the room, one rig per seat facing the hatch, every one of them cheering on a stagger once the
 //             stars have landed. Writes tools/screens/results-crew.png.
 import { withPage, assert } from '../playtest.js';
@@ -54,10 +55,11 @@ async function chopAndMix(api) {
 
 export const SCENARIOS = {
   async kitchen(server) {
-    await withPage(server, 'skipTo=kitchen&critters=0,1,2,3', async (api) => {
+    await withPage(server, 'skipTo=kitchen&critters=0,1,2,3&order=1', async (api) => {
       await api.step(2);
       const s0 = await api.summary();
       assert(s0.screen === 'kitchen' && s0.top.seats.length === 4, `the kitchen is up with four seats (${s0.screen}, ${s0.top.seats.length})`);
+      assert(s0.run.dish === 'APPLE PIE' && s0.run.line === 0 && s0.run.customer === 0, `the first customer of the first line has ordered the pie (${s0.run.dish}, line ${s0.run.line}, customer ${s0.run.customer})`);
       assert(s0.top.steps.join() === 'CHOP,MIX,OVEN,PLATE', `the first order's steps are chop, mix, oven, plate (${s0.top.steps.join()})`);
       assert(s0.top.step === 0 && !s0.top.served, 'the first step is up and nothing is served');
 
@@ -121,8 +123,10 @@ export const SCENARIOS = {
       await api.shot('results-stamp');
       await api.press(0, { action: true }, 1, 2);
       s = await api.summary();
-      assert(s.screen === 'stage' && s.run.served === 1 && s.run.score === 300, `confirm banks the order and returns to the board (on ${s.screen}, served ${s.run.served}, score ${s.run.score})`);
-      assert(s.run.stars[0] === 3, `...with the stage stamped at the stars it was served at (${s.run.stars.join()})`);
+      assert(s.screen === 'line' && s.run.served === 1 && s.run.score === 300, `confirm banks the order and calls the next in line (on ${s.screen}, served ${s.run.served}, score ${s.run.score})`);
+      assert(s.run.lines[0].customers[0].endsWith(':3') && s.run.customer === 1, `...with the customer stamped at the stars they gave (${s.run.lines[0].customers.join()}, customer ${s.run.customer})`);
+      const used = s.run.needs.map((n, i) => Number(n.split(':')[1].split('/')[0]) - Number(s.run.stock[i].split(':')[1]));
+      assert(used.some((u) => u > 0), `the dish came out of the pantry (used ${used.join()})`);
     });
 
     // the second order has the STOVE in it: a hold that pauses and picks up again, like the bowl
@@ -266,7 +270,7 @@ export const SCENARIOS = {
 
       await api.press(0, { action: true }, 1, 2);
       const s1 = await api.summary();
-      assert(s1.screen === 'stage' && s1.run.served === 1, `action returns to the order board with the stage served (on ${s1.screen}, served ${s1.run.served})`);
+      assert(s1.screen === 'line' && s1.run.served === 1 && s1.run.customer === 1, `action calls the next in line with the customer served (on ${s1.screen}, served ${s1.run.served}, customer ${s1.run.customer})`);
     });
   },
 };

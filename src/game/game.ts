@@ -19,20 +19,22 @@ import type { RigBuild } from '../lib/art/rig.ts';
  */
 export type Input = typeof import('../engine/input.ts')['input'];
 
-/** One line of an order: an ingredient (content/recipes.js INGREDIENTS), how many are wanted, how many are in. */
+/** One line of an order or of the shopping list: an ingredient (content/recipes.js INGREDIENTS), how many are wanted, how many are in. */
 export interface OrderNeed {
   id: string;
   amount: number;
   have: number;
+  /** What the kitchen has taken back out of the pantry (the shopping list only; an order's own lines never move). */
+  used: number;
 }
 
-/** The order the truck is working on: one stage of content/recipes.js ORDERS, with the gathered counts on it. */
+/** What the customer at the hatch ordered: one content/recipes.js ORDERS recipe, with their name on it. */
 export interface Order {
   id: string;
   dish: string;
-  /** The cast-adjacent NPC who phoned it in ('owl'). */
+  /** The village diner who ordered it ('owl', content/critters/customers.js). */
   customer: string;
-  /** What they said on the phone. */
+  /** What they said at the hatch. */
   line: string;
   /** Kitchen stations in order (content/places.js STATIONS). */
   steps: string[];
@@ -48,11 +50,36 @@ export interface PartySeat {
   score: number;
 }
 
-/** One stage of the day's card: an ORDERS entry and the best night it has had. */
-export interface RunStage {
-  id: string;
-  /** 0 until the stage has been served. */
+/** One customer in a line: who they are, what they ordered, and the stars they gave it (0 until served). */
+export interface RunCustomer {
+  /** Diner id ('owl', content/critters/customers.js). */
+  customer: string;
+  /** ORDERS id ('applePie'). */
+  recipe: string;
+  /** 0 until served, then 1..3. */
   stars: number;
+}
+
+/** One queue of the day: the landmark it waits at, who is in it, and whether the truck has served it. */
+export interface RunLine {
+  /** Landmark id (content/places.js PLACES, never 'home'). */
+  place: string;
+  customers: RunCustomer[];
+  /** True once the last customer in it has been served. */
+  served: boolean;
+}
+
+/** One line as `planDay` lays it out, before the run adds the served state. */
+export interface DayPlanLine {
+  place: string;
+  customers: { customer: string; recipe: string }[];
+}
+
+/** What `planDay` draws from a seed: the menu and the lines. */
+export interface DayPlan {
+  /** ORDERS ids on the day's menu. */
+  recipes: string[];
+  lines: DayPlanLine[];
 }
 
 /** Where the truck is on the world map, kept between visits to the map screen. */
@@ -66,50 +93,63 @@ export interface TruckState {
 }
 
 /**
- * The current run (game/run.js startRun): the day's card, the party, the order and what has been gathered. The
- * ONLY state shared between screens, and deliberately plain data so netplay can hash it and every peer can
- * rebuild it from the START packet.
+ * The current run (game/run.js startRun): the day's plan, the party, the shopping list and what has been gathered,
+ * the line being served. The ONLY state shared between screens, and deliberately plain data so netplay can hash
+ * it and every peer can rebuild it from the START packet.
  */
 export interface Run {
   seed: number;
   party: PartySeat[];
-  /** The day's card, one entry per ORDERS stage in that order. */
-  stages: RunStage[];
-  /** Which stage the truck is working on (an index into ORDERS): what the order board last chose. */
-  stage: number;
+  /** The day's menu: ORDERS ids, in the order the board prints them. */
+  recipes: string[];
+  /** The queues, one per landmark that has one. */
+  lines: RunLine[];
+  /** The shopping list: every order's ingredients summed; `have` gathered, `used` cooked. */
+  needs: OrderNeed[];
+  /** The line the truck is serving (an index into `lines`): the last one it pulled up at. */
+  line: number;
+  /** The customer at the hatch (an index into that line's customers). */
+  customer: number;
+  /** What that customer ordered. */
   order: Order;
-  /** How many dishes the truck has served this session (a stage played twice counts twice). */
+  /** How many dishes the truck has served today. */
   served: number;
-  /** The stage `serve()` banked last; -1 before the first one. */
+  /** The line `serve()` finished last; -1 before the first one. */
   lastServed: number;
   score: number;
   truck: TruckState;
   /** Frames spent in the run. */
   frame: number;
-  /** How many of `id` are in the truck. */
+  /** The shopping-list line for an ingredient, or null when the day never asks for it. */
+  need(id: string): OrderNeed | null;
+  /** How many of `id` have been gathered. */
   have(id: string): number;
-  /** Add `amount` of an ingredient (clamped to what the order needs). Returns true when that line is complete. */
+  /** What is left in the pantry: gathered, less what the kitchen has cooked with. */
+  stock(id: string): number;
+  /** Add `amount` of an ingredient (clamped to what the day needs). Returns true when that line is complete. */
   gather(id: string, amount?: number): boolean;
-  /** True when every ingredient of the order is in the truck. */
+  /** True when the whole shopping list is in the truck. */
   complete(): boolean;
-  /** The ingredients still missing, in order. */
+  /** The shopping-list lines still short, in order. */
   missing(): OrderNeed[];
   /** The landmark that supplies an ingredient id, or ''. */
   placeFor(id: string): string;
-  /** Which screen a landmark opens: its mini-game if it supplies a missing ingredient, else ''. */
+  /** The line still waiting at a landmark (an index into `lines`), or -1. */
+  lineAt(placeId: string): number;
+  /** Which screen a landmark opens: a mini-game while the pantry is short, the line once it is full, else ''. */
   screenForPlace(placeId: string): string;
-  /** Take stage `i` off the board with a fresh, empty order and the truck at home. */
-  setStage(i: number): Order;
-  /** Bank the stars against the stage that was cooked and hand the board back. */
+  /** Pull up at line `i`: its first customer comes to the hatch. */
+  startLine(i: number): Order;
+  /** Bank the stars against the customer at the hatch, cook their dish out of the pantry, call the next. */
   serve(stars: number): void;
-  /** How many stages carry stars. */
-  cleared(): number;
+  /** True once everyone in the line the truck stands at has been served. */
+  lineDone(): boolean;
+  /** How many lines have been served. */
+  linesServed(): number;
   /** The day's star total. */
   stars(): number;
-  /** The day is done when every stage on the board has been served at least once. */
+  /** The day is done when every line has been served. */
   dayComplete(): boolean;
-  /** The next stage still to be served, starting after `from`, or -1 when the day is complete. */
-  nextStage(from?: number): number;
   /** The run as plain data for window.__game.summary() and the playtest; keys are run.js's own. */
   summary(): Record<string, unknown>;
 }
@@ -185,8 +225,10 @@ export interface GameOptions {
   critters?: number[];
   /** ?place=orchard: the landmark a skipTo mini-game opens at. */
   place?: string;
-  /** ?order=N: the order a skipTo run stands on. */
+  /** ?order=N: the recipe (1-based ORDERS index) forced onto the day's menu and into the first customer's paws. */
   order?: number;
+  /** ?recipes=0,2: the ORDERS indices the day's menu is made of, instead of the seeded draw. */
+  recipes?: number[];
   /** ?netrelay=1: the netplay relay debug view. */
   netrelay?: boolean;
 }
@@ -259,7 +301,7 @@ export class Game {
    * handed. net/session.js owns that shape; the shell only ever holds it and passes it on.
    */
   declare net: any;
-  /** The current run (game/run.js): the order, the party, what has been gathered. Null between runs. */
+  /** The current run (game/run.js): the day's plan, the party, what has been gathered. Null between runs. */
   declare run: Run | null;
   /** Fixed steps since boot. */
   declare frame: number;

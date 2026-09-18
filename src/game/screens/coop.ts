@@ -262,7 +262,7 @@ export class CoopScreen extends Screen {
     this.hops = [];
     for (let i = 0; i < MAX_HOPS; i++) this.hops.push({ t: HOP_FRAMES, x0: 0, y0: 0, seat: 0 });
     this.hopCursor = 0;
-    const need = run ? run.order.needs.find((x) => x.id === 'egg') : null;
+    const need = run ? run.need('egg') : null;
     this.target = need ? Math.max(1, need.amount - need.have) : 3;
     this.total = 0;
     this.countStr = '0/' + this.target;

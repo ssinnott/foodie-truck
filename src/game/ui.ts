@@ -6,13 +6,13 @@ import { VIEW_W, UI, PLAYER_COLORS, PLAYER_LABELS, SIGNAL } from '../constants.t
 import { drawText, drawTextOutlined, measureText } from '../engine/text.ts';
 import { pathRR } from '../lib/art/shading.ts';
 import { pathStar } from '../lib/art/shapes.ts';
-import type { Run } from './game.ts';
+import type { OrderNeed, Run } from './game.ts';
 
 const R = Math.round;
 /** Size-1 rows sit on the ticket's ruled lines: this pitch (docs/ART_PRINCIPLES.md 30). */
 export const ROW = 11;
 /**
- * Card geometry (carried from the sibling: four corner cursors fit on one card). The order board pins up seven
+ * Card geometry (carried from the sibling: four corner cursors fit on one card). The day board pins up three
  * of these; the character select shares the height and bust box but cuts its own narrower cards, five across.
  */
 export const CARD_W = 140, CARD_H = 200, CARD_GAP = 12, BUST_H = 96, BUST_SCALE = 2.5;
@@ -206,7 +206,7 @@ export type DrawFood = (ctx: CanvasRenderingContext2D, icon: string, cx: number,
 
 /** ORDER TICKET options. */
 export interface OrderTicketOpts {
-  /** Header band text; the STAGE the order board pinned up by default. */
+  /** Header band text; by default the number of the day's dish this is. */
   title?: string;
   /** Ingredient id -> glyph id for the row icons; without it the ingredient id is the glyph id. */
   icons?: Record<string, string>;
@@ -215,24 +215,38 @@ export interface OrderTicketOpts {
 }
 
 /**
- * The ORDER TICKET (docs/GDD.md section 4): customer, dish, one `NEED` row per ingredient with an ink tick when
- * gathered, and a gold arrow on the first missing one. Shared by the map HUD and the kitchen rail. The header is
- * the STAGE the order board pinned up (game/run.js `stage`), so the ticket and the board's card say the same number.
- * Returns the ticket's height. `foods` is art/food.js drawFood (passed in so this module stays free of it).
+ * A NEEDS TICKET: a header band, `head` rows of plain text, then one row per ingredient line with its glyph, its
+ * count and an ink tick when the line is full - and a gold arrow on the first line that is not. The shape the
+ * map's shopping list, the kitchen rail's order and the day board's list all share. Returns the ticket's height.
+ * `drawFood` is art/food.js drawFood (passed in so this module stays free of it); `head` is built by the caller in
+ * enter(), never here, so nothing on this path allocates per frame.
  */
-export function drawOrderTicket(ctx: CanvasRenderingContext2D, run: Run, x: number, y: number, w: number, drawFood: DrawFood | null, o: OrderTicketOpts = {}): number {
-  const order = run.order, rows = order.needs.length;
-  const h = 16 + ROW * (2 + rows) + 4;
-  const top = drawTicket(ctx, x, y, w, h, { title: o.title || `ORDER ${String((run.stage | 0) + 1).padStart(2, '0')}` });
-  drawText(ctx, `FOR ${order.customer.toUpperCase()}`, x + 6, top + 2, { size: 1, color: UI.ink, shadow: false });
-  drawText(ctx, order.dish, x + 6, top + 2 + ROW, { size: 1, color: UI.ink, shadow: false });
+export function drawNeedsTicket(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, title: string, head: readonly string[], needs: readonly OrderNeed[], drawFood: DrawFood | null, o: OrderTicketOpts = {}): number {
+  const rows = needs.length;
+  const h = 16 + ROW * (head.length + rows) + 4;
+  const top = drawTicket(ctx, x, y, w, h, { title });
+  for (let i = 0; i < head.length; i++) drawText(ctx, head[i], x + 6, top + 2 + ROW * i, { size: 1, color: UI.ink, shadow: false });
   let arrow = false;
   for (let i = 0; i < rows; i++) {
-    const n = order.needs[i], ry = top + 2 + ROW * (2 + i), done = n.have >= n.amount;
+    const n = needs[i], ry = top + 2 + ROW * (head.length + i), done = n.have >= n.amount;
     if (drawFood) drawFood(ctx, o.icons ? o.icons[n.id] : n.id, x + 11, ry + 4, 4, o.hexes ? o.hexes[n.id] : undefined);
-    drawText(ctx, `${n.id.toUpperCase()} ${n.have}/${n.amount}`, x + 20, ry, { size: 1, color: UI.ink, shadow: false });
+    drawText(ctx, n.id.toUpperCase(), x + 20, ry, { size: 1, color: UI.ink, shadow: false });
+    drawText(ctx, String(n.have), x + w - 40, ry, { size: 1, color: UI.ink, shadow: false, align: 'right' });
+    drawText(ctx, '/', x + w - 37, ry, { size: 1, color: UI.ink, shadow: false });
+    drawText(ctx, String(n.amount), x + w - 31, ry, { size: 1, color: UI.ink, shadow: false });
     if (done) { ctx.fillStyle = UI.ink; ctx.fillRect(x + w - 14, ry + 3, 2, 3); ctx.fillRect(x + w - 12, ry + 1, 2, 5); ctx.fillRect(x + w - 10, ry - 1, 2, 3); }
     else if (!arrow) { arrow = true; ctx.fillStyle = UI.ink; ctx.fillRect(x + w - 15, ry, 7, 7); ctx.fillStyle = SIGNAL.map; ctx.fillRect(x + w - 14, ry + 2, 2, 3); ctx.fillRect(x + w - 12, ry + 1, 2, 5); ctx.fillRect(x + w - 10, ry + 2, 2, 3); }
   }
   return h;
 }
+
+/**
+ * The ORDER TICKET on the kitchen rail: whose order this is and the dish, over its ingredient lines (all of them
+ * ticked: the pantry was filled before the lines opened). The header counts the day's dishes, so the ticket and
+ * the receipt say the same number. `head` is the two rows the caller built in enter(). Returns the ticket's height.
+ */
+export function drawOrderTicket(ctx: CanvasRenderingContext2D, run: Run, x: number, y: number, w: number, head: readonly string[], drawFood: DrawFood | null, o: OrderTicketOpts = {}): number {
+  return drawNeedsTicket(ctx, x, y, w, o.title || ORDER_TITLES[Math.min(ORDER_TITLES.length - 1, run.served | 0)], head, run.order.needs, drawFood, o);
+}
+/** 'ORDER 01' .. 'ORDER 12': built once, so the header never costs a template string per frame. */
+const ORDER_TITLES = Object.freeze(Array.from({ length: 12 }, (_, i) => `ORDER ${String(i + 1).padStart(2, '0')}`));

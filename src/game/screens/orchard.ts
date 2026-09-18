@@ -290,7 +290,7 @@ export class OrchardScreen extends Screen {
     for (let i = 0; i < MAX_SPLATS; i++) this.splats.push({ t: SPLAT_FRAMES, x: 0, y: 0 });
     this.splatCursor = 0;
     this.nextSpawn = SPAWN_MIN;
-    const need = run ? run.order.needs.find((x) => x.id === 'apple') : null;
+    const need = run ? run.need('apple') : null;
     this.target = need ? Math.max(1, need.amount - need.have) : 4;
     this.total = 0;
     this.booms = 0;

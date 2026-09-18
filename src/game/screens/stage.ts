@@ -1,67 +1,72 @@
-// THE ORDER BOARD (docs/GDD.md sections 3 and 10): the day's seven stages pinned up on paper, each one a CUSTOMER
-// and the RECIPE they phone in. The party picks which one the truck works on; when the last one has been served the
-// board closes the truck for the night, which is where the game ends.
+// THE DAY BOARD (docs/GDD.md sections 3 and 10): the day's plan pinned up on paper before the truck opens - the
+// three LINES that will form (where each waits, who is in it and what they will order), and under them the
+// SHOPPING LIST every one of those orders adds up to. Confirm OPENS THE TRUCK and fades to the map; the truck then
+// drives round the landmarks until the pantry holds the whole list, and only then do the lines open.
 //
-// `select` hands over to it once a crew is stamped, and `results` hands back to it after every dish, with the stage
-// just cooked stamped SERVED and the stars it earned printed on its ticket. The board is a
-// MENU in the sense of game/menuinput.js - any joined seat drives the one shared cursor - so a couch P2 or an
-// online guest can pick the next order, and everything it simulates is three numbers (`checksumFields`).
+// `select` hands over to it once a crew is stamped, and `results` hands back to it after the LAST line has been
+// served: the board then opens CLOSED - every line stamped SERVED with each customer's stars printed on the card,
+// and a CLOSING TIME slate over it totting the day up - and the one press left goes back to the title, which is
+// where the game ends. There is no cursor: nothing on the board is picked, so everything it simulates is two
+// numbers (`checksumFields`), and any joined seat's confirm counts (game/menuinput.js).
 //
 // Nothing here is random and nothing reads the clock: the cards, the rigs and every string are built in enter().
 import { VIEW_W, UI, PLUM } from '../../constants.ts';
 import { Screen } from '../game.ts';
-import type { CritterDef, Game, Run, ScreenParams } from '../game.ts';
-import { drawText, drawTextOutlined, measureText } from '../../engine/text.ts';
+import type { CritterDef, Game, ScreenParams } from '../game.ts';
+import { drawText, measureText } from '../../engine/text.ts';
 import { drawHeadPortrait, idlePoseOf } from '../../art/portraits.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import type { PartialPose } from '../../lib/art/poses.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { getCustomer } from '../../content/critters/customers.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
-import { ORDERS, INGREDIENTS } from '../../content/recipes.ts';
+import { INGREDIENTS } from '../../content/recipes.ts';
 import { PLACES } from '../../content/places.ts';
 import { drawFood } from '../../art/food.ts';
 import { drawTicket, drawSign, drawSlate, drawStamp, drawStars, drawHint, drawDim, cardX, CARD_W } from '../ui.ts';
-import { confirmPressed, cancelPressed, navX, navY } from '../menuinput.ts';
+import { confirmPressed, cancelPressed } from '../menuinput.ts';
 import { drawLane } from '../../art/logo.ts';
 import { TRUCK } from '../../art/truck.ts';
+import { recipeOf } from '../run.ts';
 
-/** Four tickets on the top row, the rest under them: seven cards of the select screen's own width and gap. */
-const COLS = 4, CARD_H = 124, ROW_Y = [46, 178];
+/** One card per line across the top: three of the select screen's own card width and gap. */
+const CARD_Y = 46, CARD_H = 124;
 /**
- * Inside a card: the header band, the customer's portrait box with their name and the night's stars beside it, the
- * dish across the middle in the card's largest type, and one NEED row per ingredient under a rule. The dish WRAPS
- * at its space rather than dropping to a smaller size, so all seven headlines are the same size 2 and the board
- * reads as one menu instead of four shouted names and three whispered ones.
+ * Inside a card: the header band, the landmark the line waits at, a rule, then one CUSTOMER block per person in
+ * the queue - their portrait in a plum window, their name beside it and the dish they will order under that, over
+ * one or two rows (a name that fits whole stays whole). A served customer gives the dish rows up to their stars.
  */
-const PORT_X = 8, PORT_Y = 20, PORT_S = 40;
-const TEXT_X = PORT_X + PORT_S + 6, NAME_Y = 26, STARS_X = TEXT_X + 40, STARS_Y = 46, STAR_R = 5;
-const DISH_Y = 66, DISH_ROW = 14, RULE_Y = 98, NEED_Y = 102, NEED_ROW = 11, NEED_X = 14, NEED_TEXT_X = 22;
-/**
- * A served card keeps its dish, its customer and its stars and gives the NEED rows up to the stamp: what a stage
- * wants gathered stops being news once it has been cooked, and a SERVED slammed across the headline would take
- * the one line that says which stage this is with it.
- */
+const PLACE_Y = 20, RULE_Y = 30, CUST_Y = 34, CUST_PITCH = 44, PORT_X = 8, PORT_S = 28;
+const TEXT_X = PORT_X + PORT_S + 6, NAME_DY = 2, DISH_DY = 13, DISH_ROW = 10, STARS_DX = 22, STARS_DY = 20, STAR_R = 4;
+/** A served line keeps its customers and their stars and takes a SERVED stamp across its foot. */
 const STAMP_Y = 112;
-/** The stamp lands over the card's blank foot, in the truck's own beetroot - the select screen's READY ink. */
+/** The stamp lands in the truck's own beetroot - the select screen's READY ink. */
 const STAMP_OPTS = { size: 2, color: TRUCK.body, light: TRUCK.bodyHi };
 const STAMP_FRAMES = 24, SERVED_TEXT = 'SERVED';
-/** The order pad under the board: the customer's phone line, who said it, and where that order sends the truck. */
-const PAD = { x: 60, y: 306, w: 520, h: 30 };
-/** A served card is paper that has been handled: UI.paperDark at 45 % over the whole ticket, so the open ones lead. */
+/** A served card is paper that has been handled: UI.paperDark at 45 % over the whole ticket. */
 const DONE_WASH = 'rgba(216,192,147,0.45)';
-const HEAD_TEXT = 'THE ORDER BOARD';
+/**
+ * The shopping list under the cards: one wide ticket, the ingredients across it in LIST_COLS columns of
+ * LIST_COL_W, so seven of them take two rows and the whole day's gathering reads at a glance.
+ */
+const LIST = { x: 60, y: 182, w: 520 }, LIST_COLS = 4, LIST_COL_W = 128, LIST_ROW = 12, LIST_TOP = 20, LIST_PAD = 8;
+/** The pad under the list (PAD_GAP below it): the day's menu on one row and how the day goes on the other. */
+const PAD = { x: 60, w: 520, h: 30 }, PAD_GAP = 8;
+const HOW_TEXT = 'FILL THE PANTRY, THEN SERVE THE LINES';
+const HEAD_TEXT = 'TODAY AT THE TRUCK', LIST_TITLE = 'SHOPPING LIST', MENU_LABEL = 'ON THE MENU: ';
 /** Closing time: the slate that ends the day, and the rows printed on it. */
-const SLATE = { x: 176, y: 106, w: 288, h: 124 };
-const CLOSE_TITLE = 'CLOSING TIME', CLOSE_ROW = 18, CLOSE_Y = 46, CLOSED_TEXT = 'THE TRUCK IS CLOSED FOR THE NIGHT';
+const SLATE = { x: 176, y: 100, w: 288, h: 136 };
+const CLOSE_TITLE = 'CLOSING TIME', CLOSE_ROW = 16, CLOSE_Y = 44, CLOSED_TEXT = 'THE TRUCK IS CLOSED FOR THE NIGHT';
 const BLINK_PERIOD = 60, BLINK_ON = 40;
+/** The card's inner width a dish name has to fit in, right of the portrait. */
+const DISH_W = CARD_W - TEXT_X - 6;
 
 /**
  * A dish name over at most two rows: it breaks at the space nearest the middle, so 'APPLE OMELETTE' is two words
  * on two rows rather than one row clipped by the card. A name that fits whole stays whole.
  */
 function wrapDish(dish: string): string[] {
-  if (measureText(dish, 2) <= CARD_W - 12) return [dish];
+  if (measureText(dish, 1) <= DISH_W) return [dish];
   const words = dish.split(' ');
   if (words.length < 2) return [dish];
   let best = 1, bd = Infinity;
@@ -78,44 +83,29 @@ function wrapDish(dish: string): string[] {
  */
 export type CustomerDef = Omit<CritterDef, 'bio'>;
 
-/** One NEED row of a card: an order line worded once in enter() and only drawn after. */
-export interface StageNeed {
-  /** The ingredient's food glyph id (art/food.ts). */
-  icon: string;
-  /** Its base hex, the one the map sign and the kitchen item share. */
-  hex: string;
-  /** 'APPLES 4': the ingredient's name and how many the order wants. */
-  text: string;
-  /** The landmark that supplies it ('PIPPIN ORCHARD'), or the bare place id for an ingredient no landmark carries. */
-  place: string;
-}
-
-/** One ticket pinned to the board: an ORDERS entry, laid out and worded once in enter(). */
-export interface StageCard {
-  /** Index into `busts`: the customer who phoned this order in (three of them serve seven orders). */
+/** One customer block on a card, worded once in enter(). */
+export interface StageCustomer {
+  /** Index into `busts`: the diner's portrait. */
   bust: number;
-  /** The card's top-left corner; the selected one is drawn 2px higher, which does not move this. */
-  x: number;
-  y: number;
-  /** 0 = the top row of four, 1 = the rest. */
-  row: number;
-  /** Column within that row. */
-  col: number;
-  /** Header band text ('ORDER 01'). */
-  title: string;
-  /** The customer's name plate text. */
+  /** Their name plate text. */
   name: string;
-  dish: string;
   /** The dish over one or two rows (wrapDish). */
   lines: string[];
-  needs: StageNeed[];
-  /** What the customer said on the phone: the pad's first row. */
-  line: string;
-  /** The pad's second row: who said it and where the order sends the truck. */
-  who: string;
 }
 
-/** One customer, built once per DISTINCT customer in enter() and drawn on every card that phoned an order in. */
+/** One line's ticket, laid out and worded once in enter(). */
+export interface StageCard {
+  /** The card's top-left corner. */
+  x: number;
+  y: number;
+  /** Header band text ('LINE 01'). */
+  title: string;
+  /** Where the line waits ('WINDLE MILL'). */
+  place: string;
+  customers: StageCustomer[];
+}
+
+/** One diner, built once per DISTINCT diner in enter() and drawn on every card they queue on. */
 export interface StageBust {
   def: CustomerDef;
   /** Built once in enter(), never in draw(): slot -1, the off-duty apron. */
@@ -124,6 +114,13 @@ export interface StageBust {
   player: AnimPlayer;
   /** The first idle frame's pose, which art/portraits.ts anchors the portrait on; null for a rig without one. */
   anchor: PartialPose | null;
+}
+
+/** One entry of the shopping list on the board: the glyph, its colour and 'APPLES 12'. */
+export interface StageListRow {
+  icon: string;
+  hex: string;
+  text: string;
 }
 
 /** The options object handed to art/portraits.ts drawHeadPortrait; one per screen, reused by every card. */
@@ -143,95 +140,90 @@ export class StageScreen extends Screen {
   // and this screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild
   // (tools/build.js, tools/server.js) and under Node's type stripping alike, so the emitted class is the original.
 
-  /** The day's tickets, one per ORDERS stage in that order. */
+  /** The day's line tickets, one per run.lines entry in that order. */
   declare cards: StageCard[];
-  /** One entry per distinct customer, in the order the cards first ask for them; a card keeps its index. */
+  /** One entry per distinct diner, in the order the cards first ask for them; a customer block keeps its index. */
   declare busts: StageBust[];
+  /** The shopping list's entries, in run.needs order. */
+  declare list: StageListRow[];
   /** The closing slate's rows, rebuilt (in place) by enter(). */
   declare rows: string[];
   /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
   declare fields: number[];
-  /** True once every stage has been served: the board closes the truck for the night instead of taking an order. */
+  /** True once every line has been served: the board closes the truck for the night instead of opening it. */
   declare closed: boolean;
-  /** The stage results just banked (run.lastServed), whose stamp is still slamming; -1 before the first one. */
+  /** The line results just finished (run.lastServed), whose stamp is still slamming; -1 before the first one. */
   declare justServed: number;
-  /** The one shared cursor any joined seat drives: an index into `cards`. */
-  declare sel: number;
-  /** The card confirmed: the pick is made and the fade is running. -1 until one is. */
+  /** 1 once confirm has opened the truck and the fade is running; 0 until then. */
   declare chosen: number;
   /** Frames into the SERVED stamp on `justServed`'s card, 0..STAMP_FRAMES; every other served card is stamped whole. */
   declare stampT: number;
-  /** The closing slate's first row: how many of the day's stages carry stars. */
-  declare servedText: string;
-  /** Its second row: the day's star total out of three a stage. */
-  declare starsText: string;
-  /** Its third row: what the day took. */
-  declare takingsText: string;
+  /** The pad's first row: the day's menu. */
+  declare menuText: string;
   /** The hint line under the board, which the closed truck replaces with the way out. */
   declare hint: string;
+  /** The list ticket's height, from how many rows the day's ingredients take, and the pad's top under it. */
+  declare listH: number;
+  declare padY: number;
   /** The drawHeadPortrait options, reused by every card (this file allocates nothing in draw()). */
   declare portOpts: PortraitDrawOpts;
 
-  constructor(game: Game) { super(game, 'stage'); this.cards = []; this.busts = []; this.rows = []; this.fields = []; }
+  constructor(game: Game) { super(game, 'stage'); this.cards = []; this.busts = []; this.list = []; this.rows = []; this.fields = []; }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
-    // one rig and one idle beat per DISTINCT customer (three of them serve seven orders), phased apart so the
-    // board does not breathe in lockstep; a card keeps the index of the bust it draws
+    // one rig and one idle beat per DISTINCT diner (three of them fill six seats), phased apart so the board does
+    // not breathe in lockstep; a customer block keeps the index of the bust it draws
     this.busts.length = 0;
     const byId = new Map();
-    this.cards = ORDERS.map((o, i) => {
-      let bi = byId.get(o.customer);
+    const bustOf = (id: string): number => {
+      let bi = byId.get(id);
       if (bi == null) {
-        const def = getCustomer(o.customer), player = new AnimPlayer(def.anims);
+        const def = getCustomer(id), player = new AnimPlayer(def.anims);
         player.play('idle');
         for (let k = 0; k < this.busts.length * 13; k++) player.tick();
         bi = this.busts.length;
         this.busts.push({ def, rig: critterRig(def, -1), player, anchor: idlePoseOf(def) });
-        byId.set(o.customer, bi);
+        byId.set(id, bi);
       }
-      const def = this.busts[bi].def;
-      const row = i < COLS ? 0 : 1, col = i < COLS ? i : i - COLS;
-      const inRow = row === 0 ? Math.min(COLS, ORDERS.length) : ORDERS.length - COLS;
-      const needs = o.needs.map((n) => {
-        const ing = INGREDIENTS[n.id] || INGREDIENTS.apple;
-        const place = PLACES.find((p) => p.id === ing.place);
-        return { icon: ing.icon, hex: ing.hex, text: `${ing.name} ${n.amount}`, place: place ? place.name : ing.place.toUpperCase() };
-      });
+      return bi;
+    };
+    const n = run.lines.length;
+    this.cards = run.lines.map((ln, i) => {
+      const place = PLACES.find((p) => p.id === ln.place);
       return {
-        bust: bi, x: cardX(col, inRow), y: ROW_Y[row], row, col,
-        title: `ORDER ${String(i + 1).padStart(2, '0')}`,
-        name: def.name, dish: o.dish, lines: wrapDish(o.dish),
-        needs, line: o.line, who: `${def.role}    STOPS: ${needs.map((n) => n.place).join(', ')}`,
+        x: cardX(i, n), y: CARD_Y,
+        title: `LINE ${String(i + 1).padStart(2, '0')}`,
+        place: place ? place.name : ln.place.toUpperCase(),
+        customers: ln.customers.map((c) => {
+          const bi = bustOf(c.customer);
+          return { bust: bi, name: this.busts[bi].def.name, lines: wrapDish(recipeOf(c.recipe).dish) };
+        }),
       };
     });
+    this.list = run.needs.map((need) => {
+      const ing = INGREDIENTS[need.id] || INGREDIENTS.apple;
+      return { icon: ing.icon, hex: ing.hex, text: `${ing.name} ${need.amount}` };
+    });
+    this.listH = LIST_TOP + LIST_ROW * Math.max(1, Math.ceil(this.list.length / LIST_COLS)) + LIST_PAD;
+    this.padY = LIST.y + this.listH + PAD_GAP;
+    this.menuText = MENU_LABEL + run.recipes.map((id) => recipeOf(id).dish).join(', ');
     this.closed = run.dayComplete();
     this.justServed = run.lastServed;
-    this.sel = this.firstOpen(run, run.lastServed >= 0 ? run.lastServed + 1 : run.stage);
-    this.chosen = -1;
+    this.chosen = 0;
     this.stampT = 0;
-    this.servedText = `SERVED ${run.cleared()} OF ${run.stages.length}`;
-    this.starsText = `STARS ${run.stars()} OF ${run.stages.length * 3}`;
-    this.takingsText = `TAKINGS ${run.score}`;
     this.rows.length = 0;
-    this.rows.push(this.servedText, this.starsText, this.takingsText);
+    this.rows.push(`LINES SERVED ${run.linesServed()} OF ${n}`, `DISHES ${run.served}`, `STARS ${run.stars()} OF ${run.lines.reduce((t, l) => t + l.customers.length * 3, 0)}`, `TAKINGS ${run.score}`);
     this.hint = this.closed
       ? `${game.input.keyText(0, 'action')}: TITLE`
-      : `${game.input.keyText(0, 'action')}: TAKE THE ORDER    ${game.input.keyText(0, 'cancel')}: BACK`;
+      : `${game.input.keyText(0, 'action')}: OPEN THE TRUCK    ${game.input.keyText(0, 'cancel')}: BACK`;
     this.portOpts = { bg: PLUM.shadow, fill: 0.6, facing: 1 };
-  }
-
-  /** The first stage still to be served, scanning from `from`; the day's last card when every one is done. */
-  firstOpen(run: Run, from: number): number {
-    const n = run.stages.length;
-    for (let k = 0; k < n; k++) { const i = (((from + k) % n) + n) % n; if (!run.stages[i].stars) return i; }
-    return (((from) % n) + n) % n;
   }
 
   override update(): void {
     super.update();
-    const game = this.game, inp = game.input, run = game.run;
+    const game = this.game, inp = game.input;
     for (const b of this.busts) { b.player.tick(); if (b.player.done) b.player.play('idle', { restart: true }); }
     if (this.stampT < STAMP_FRAMES) this.stampT++;
     // the night is over: the only thing left on the board is the way out
@@ -239,14 +231,9 @@ export class StageScreen extends Screen {
       if (confirmPressed(inp) >= 0) this.quit();
       return;
     }
-    if (this.chosen >= 0) return;                      // the pick is made, the fade is running
-    const dx = navX(inp), dy = navY(inp), n = this.cards.length;
-    if (dx) this.sel = (this.sel + dx + n) % n;
-    if (dy < 0 && this.sel >= COLS) this.sel -= COLS;
-    else if (dy > 0 && this.sel < COLS) this.sel = Math.min(n - 1, this.sel + COLS);
+    if (this.chosen) return;                            // the truck is opening, the fade is running
     if (confirmPressed(inp) >= 0) {
-      this.chosen = this.sel;
-      run.setStage(this.sel);
+      this.chosen = 1;
       game.fadeTo(() => game.replace('map'));
       return;
     }
@@ -265,53 +252,47 @@ export class StageScreen extends Screen {
   // ---- drawing ----
 
   card(ctx: CanvasRenderingContext2D, i: number): void {
-    const c = this.cards[i], run = this.game.run, st = run.stages[i];
-    const sel = i === this.sel && !this.closed, x = c.x, y = c.y - (sel ? 2 : 0);
+    const c = this.cards[i], run = this.game.run, ln = run.lines[i], x = c.x, y = c.y;
     drawTicket(ctx, x, y, CARD_W, CARD_H, { title: c.title, rules: false });
-    // the selected ticket wears the truck's beetroot on its header band and its edge, the same "this one is
-    // yours" mark the select screen puts on a picked recipe card
-    if (sel) {
-      ctx.fillStyle = TRUCK.body; ctx.fillRect(x + 1, y + 3, CARD_W - 2, 12);
-      drawText(ctx, c.title, x + CARD_W / 2, y + 6, { size: 1, color: UI.cream, align: 'center', shadow: false });
-      ctx.fillStyle = TRUCK.body;
-      ctx.fillRect(x + 1, y + 16, 2, CARD_H - 18); ctx.fillRect(x + CARD_W - 3, y + 16, 2, CARD_H - 18);
-      ctx.fillRect(x + 1, y + CARD_H - 3, CARD_W - 2, 2);
-    }
-    // the customer, in a plum window: the three village furs are muted and two of them would sit pale on paper
-    const b = this.busts[c.bust];
-    ctx.fillStyle = UI.ink; ctx.fillRect(x + PORT_X - 1, y + PORT_Y - 1, PORT_S + 2, PORT_S + 2);
-    drawHeadPortrait(ctx, b.rig, b.player.pose, x + PORT_X, y + PORT_Y, PORT_S, this.portOpts);
-    drawText(ctx, c.name, x + TEXT_X, y + NAME_Y, { size: 1, color: UI.ink, shadow: false });
-    // the stars this stage was served at, empty until it has been (the promise the board is filled in against)
-    drawStars(ctx, x + STARS_X, y + STARS_Y, st.stars, 3, STAR_R);
-    // the dish, centred over one or two rows: the card's headline and the only size-2 type on it
-    const top = y + DISH_Y + (c.lines.length === 1 ? DISH_ROW / 2 : 0);
-    for (let k = 0; k < c.lines.length; k++) {
-      drawTextOutlined(ctx, c.lines[k], x + CARD_W / 2, top + k * DISH_ROW, { size: 2, color: UI.ink, outline: UI.paperDark, thickness: 1, align: 'center', shadow: false });
-    }
+    drawText(ctx, c.place, x + CARD_W / 2, y + PLACE_Y, { size: 1, color: UI.wood, align: 'center', shadow: false });
     ctx.fillStyle = UI.paperLine; ctx.fillRect(x + 8, y + RULE_Y, CARD_W - 16, 1);
-    if (st.stars > 0) {
+    for (let k = 0; k < c.customers.length; k++) {
+      const cu = c.customers[k], b = this.busts[cu.bust], cy = y + CUST_Y + k * CUST_PITCH, stars = ln.customers[k] ? ln.customers[k].stars : 0;
+      // the diner, in a plum window: the three village furs are muted and two of them would sit pale on paper
+      ctx.fillStyle = UI.ink; ctx.fillRect(x + PORT_X - 1, cy - 1, PORT_S + 2, PORT_S + 2);
+      drawHeadPortrait(ctx, b.rig, b.player.pose, x + PORT_X, cy, PORT_S, this.portOpts);
+      drawText(ctx, cu.name, x + TEXT_X, cy + NAME_DY, { size: 1, color: UI.ink, shadow: false });
+      // the dish they will order - or, once they have eaten it, the stars they gave it
+      if (stars > 0) drawStars(ctx, x + TEXT_X + STARS_DX, cy + STARS_DY, stars, 3, STAR_R);
+      else for (let r = 0; r < cu.lines.length; r++) drawText(ctx, cu.lines[r], x + TEXT_X, cy + DISH_DY + r * DISH_ROW, { size: 1, color: UI.wood, shadow: false });
+    }
+    if (ln.served) {
       ctx.fillStyle = DONE_WASH; ctx.fillRect(x + 1, y + 1, CARD_W - 2, CARD_H - 2);
       const t = i === this.justServed ? this.stampT / STAMP_FRAMES : 1;
       drawStamp(ctx, SERVED_TEXT, x + CARD_W / 2, y + STAMP_Y, Math.min(1, t), STAMP_OPTS);
-      return;
-    }
-    for (let k = 0; k < c.needs.length; k++) {
-      const n = c.needs[k], ny = y + NEED_Y + k * NEED_ROW;
-      drawFood(ctx, n.icon, x + NEED_X, ny + 4, 4, n.hex);
-      drawText(ctx, n.text, x + NEED_TEXT_X, ny, { size: 1, color: UI.ink, shadow: false });
     }
   }
 
-  /** The order pad under the board: what the selected customer said on the phone, and where it sends the truck. */
+  /** The shopping list under the cards: every ingredient of every order in every line, summed. */
+  shopping(ctx: CanvasRenderingContext2D): void {
+    const top = drawTicket(ctx, LIST.x, LIST.y, LIST.w, this.listH, { title: LIST_TITLE, rules: false });
+    for (let i = 0; i < this.list.length; i++) {
+      const e = this.list[i], col = i % LIST_COLS, row = (i / LIST_COLS) | 0;
+      const ex = LIST.x + 10 + col * LIST_COL_W, ey = top + 4 + row * LIST_ROW;
+      drawFood(ctx, e.icon, ex + 6, ey + 4, 4, e.hex);
+      drawText(ctx, e.text, ex + 16, ey, { size: 1, color: UI.ink, shadow: false });
+    }
+  }
+
+  /** The pad under the list: the day's menu, and how the day goes. */
   pad(ctx: CanvasRenderingContext2D): void {
-    const c = this.cards[this.sel];
-    drawTicket(ctx, PAD.x, PAD.y, PAD.w, PAD.h, { rules: false, header: false });
-    drawText(ctx, c.line, PAD.x + PAD.w / 2, PAD.y + 6, { size: 1, color: UI.ink, align: 'center', shadow: false });
-    drawText(ctx, c.who, PAD.x + PAD.w / 2, PAD.y + 18, { size: 1, color: UI.wood, align: 'center', shadow: false });
+    const y = this.padY;
+    drawTicket(ctx, PAD.x, y, PAD.w, PAD.h, { rules: false, header: false });
+    drawText(ctx, this.menuText, PAD.x + PAD.w / 2, y + 6, { size: 1, color: UI.ink, align: 'center', shadow: false });
+    drawText(ctx, HOW_TEXT, PAD.x + PAD.w / 2, y + 18, { size: 1, color: UI.wood, align: 'center', shadow: false });
   }
 
-  /** Closing time: the day's card, totted up on the slate the title screen writes its menu on. */
+  /** Closing time: the day, totted up on the slate the title screen writes its menu on. */
   closing(ctx: CanvasRenderingContext2D): void {
     drawDim(ctx, 0.5);
     drawSlate(ctx, SLATE.x, SLATE.y, SLATE.w, SLATE.h, { title: CLOSE_TITLE });
@@ -328,6 +309,7 @@ export class StageScreen extends Screen {
     drawDim(ctx, 0.62);
     drawSign(ctx, VIEW_W / 2, 2, measureText(HEAD_TEXT, 2) + 18, 24, HEAD_TEXT, { size: 2 });
     for (let i = 0; i < this.cards.length; i++) this.card(ctx, i);
+    this.shopping(ctx);
     if (!this.closed) this.pad(ctx);
     else this.closing(ctx);
     drawHint(ctx, this.hint);
@@ -336,15 +318,15 @@ export class StageScreen extends Screen {
   override summary() {
     const run = this.game.run;
     return {
-      sel: this.sel, dish: this.cards[this.sel].dish, customer: this.cards[this.sel].name,
-      chosen: this.chosen, closed: this.closed, stages: this.cards.length,
-      stars: run.stages.map((s) => s.stars), cleared: run.cleared(), served: run.served,
+      lines: this.cards.length, places: this.cards.map((c) => c.place), chosen: this.chosen, closed: this.closed,
+      list: this.list.map((e) => e.text), menu: run.recipes.slice(),
+      linesServed: run.linesServed(), served: run.served, stars: run.stars(),
     };
   }
-  /** Every number that could differ between two machines: the cursor, the pick and the closing card. */
+  /** Every number that could differ between two machines: the opening press and the closing card. */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.sel, this.chosen, this.closed ? 1 : 0);
+    f.push(this.chosen, this.closed ? 1 : 0);
     return f;
   }
 }

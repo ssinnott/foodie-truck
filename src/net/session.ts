@@ -340,7 +340,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
     /** Set when a peer reports a different protocol version. */
     versionMismatch: false,
     /** Lobby state. `members` is the host's roster, indexed by slot; `scene` the host's opening scene (game/run.js
-     *  SCENES), which is the ORDER BOARD by default so an online party picks the customer and the dish together. */
+     *  SCENES), which is the DAY BOARD by default so an online party reads the day's plan together and opens the truck. */
     lobby: { myCritter: 0, myReady: false, scene: START_SCENE, members: [] },
     ls: null,
     /** pid -> link record, one per pairing (roster.js createLinks). */

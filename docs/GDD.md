@@ -7,11 +7,12 @@
 
 ## 1. Premise and tone
 
-A cozy co-op cooking adventure for one to four players. A customer phones in an order. The crew of a countryside food
-truck is missing an ingredient, so they drive out to where it comes from, gather it in a short mini-game, drive home
-and cook the dish step by step. The customer eats. The phone rings again.
+A cozy co-op cooking adventure for one to four players. The crew of a countryside food truck opens for the day
+with a menu and a shopping list, drive out to where every ingredient comes from and gather it in a short mini-game
+at each landmark, and then, with the pantry full, drive to the queues of villagers waiting at three of those
+landmarks and cook for them one order at a time. When the third line has been served the truck closes.
 
-The *structure* is borrowed from the Sesame Street "Foodie Truck" segments (order → missing ingredient → go to the
+The *structure* is borrowed from the Sesame Street "Foodie Truck" segments (an order → its ingredient → go to the
 source → cook). Everything else is original: the cast are anthropomorphic countryside animals with their own names,
 silhouettes and colours, and nothing in the game may resemble a Sesame Street character, name or design. Tone:
 warm, silly, unhurried; the joke that never gets old is the big hungry one eating the ingredients.
@@ -46,53 +47,63 @@ live in `src/content/critters/`. Customers are NPC critters built with the same 
 ## 3. The loop
 
 ```
-title -> select -> stage -> map -> (mini-game -> map)* -> map(home) -> kitchen -> results -> stage -> ...
-                     ^                                                                         |
-                     +-------------------------------------------------------------------------+
-                        seven stages on the board; when the last one is served, the day closes
+title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> map -> line -> kitchen -> results -> line -> kitchen -> results -> map -> line ...
+                                                                                                                                                              |
+   the day: three recipes, three lines of two customers, one shopping list; when the third line is served -> stage (CLOSED) -> title
 ```
 
-- **A stage** is one of the seven orders, and the *stage select* (the **order board**) is where the party picks
-  which customer and which recipe the truck works on next. A day is the seven stages; each one is taken off the
-  board, driven, cooked and served, and comes back to the board stamped SERVED with the stars it earned. When every
-  stage carries stars the day is over and the board closes the truck for the night — **that is the end of the game**,
-  and the only way back from it is the title screen.
-- **An order** (`content/recipes.js ORDERS`) names a dish, a customer, a phone line, 2 ingredients with amounts, and
-  the kitchen steps in order. Seven orders ship — apple pie, fish cakes, apple omelette, honey loaf, custard tart,
-  carrot soup, griddle cakes — between them asking for all seven ingredients, so every landmark on the map is
-  somewhere the truck is actually sent, and every one of them is a stage on the board. `run.setStage(i)` takes one
-  off the board with an empty ticket; `run.serve(stars)` banks its stars against that stage and hands the board back.
-- **The map** is where the order is read and the truck is driven. Arriving at a landmark that supplies a *missing*
-  ingredient opens its mini-game; arriving home with everything opens the kitchen. Arriving anywhere else does
-  nothing but show the sign.
-- **A mini-game** lasts up to 40 seconds (2400 frames) or until the order's amount is gathered; it ends by calling
-  `run.gather(id, amount)` and returning to the map. Every seated player plays at once; the party's total counts.
+- **A day** is planned from the run's seed (`game/run.js planDay`): `RECIPES_PER_DAY` (3) recipes drawn from
+  `content/recipes.js ORDERS`, and `LINES_PER_DAY` (3) **lines** of `LINE_LENGTH` (2) customers, each line waiting at
+  a different supply landmark (never home) and each customer ordering one of the day's recipes — the menu is dealt
+  round so every recipe is ordered at least once. The plan is drawn from its own seeded stream, so every online
+  peer lays the same day out from the START packet, and it never touches the gameplay rng.
+- **The day board** (`stage`) pins the plan up before the truck opens: the three lines and the **shopping list**
+  — every ingredient of every order in every line, summed. Confirm opens the truck.
+- **A recipe** (`ORDERS`) names a dish, a phone line, 2 ingredients with amounts, and the kitchen steps in order.
+  Seven ship — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup, griddle cakes — between
+  them asking for all seven ingredients, so every landmark on the map is somewhere a day can send the truck.
+- **Gathering.** The map is where the shopping list is read and the truck is driven. Arriving at a landmark that
+  supplies an ingredient the list is still *short of* opens its mini-game; the round's target is that line's
+  remainder, and a round that runs out of time banks what it got and the landmark can be visited again. Arriving
+  anywhere else does nothing but show a sign. `run.gather(id, n)` banks a round; `run.complete()` is the pantry
+  full.
+- **Serving.** The moment the pantry is full the lines open: the HUD swaps the list for the lines, a tag over each
+  waiting queue's signpost says how many are in it, and arriving at one opens the **line** screen — the customer at
+  its front steps up and says what they want. Confirm takes the order into the kitchen (`run.startLine(i)` on
+  arrival; `run.order` is the customer at the hatch). A landmark with no line, or one already served, shows a sign.
 - **The kitchen** walks `order.steps` in order across the stations; when the plate is served it opens results.
-- **Results** shows the customer eating and a 1–3 star rating; `run.serve(stars)` banks the score against the stage;
-  back to the order board, where that stage is stamped and the next one is picked — or, if it was the last one, the
-  day's card is totted up and the truck closes.
+- **Results** shows the customer eating and a 1–3 star rating; `run.serve(stars)` banks the stars against that
+  customer and takes the dish's ingredients back out of the pantry. While the line still has someone in it, back to
+  the line screen and the next one steps up; when it is empty, back to the map for the next line (the map says
+  `LINE SERVED! 2 TO GO`); when that was the last line, to the day board, which opens **closed** — the day's stars
+  and takings totted up — and the only way on is the title screen. **That is the end of the game.**
 
 ## 4. The world map
 
 - World `1920 x 1080` px (`content/places.js WORLD_W/H`), one flat plane in 3/4 storybook view, y-sorted sprites
   with ground-contact shadows. Camera follows the truck (0.1 lerp, integer snap, clamped to the world).
 - **Landmarks** (`PLACES`): home (the truck stop), orchard (apples), pond (fish), coop (eggs), dairy (milk), mill
-  (flour), hives (honey), market garden (carrots). **All seven supply landmarks open a mini-game**; arriving at one
-  the order does not need shows a `NOTHING NEEDED HERE` sign instead.
+  (flour), hives (honey), market garden (carrots). **All seven supply landmarks open a mini-game** while the list
+  is short of what they supply, and **any of them can hold a line** once it is full; arriving where there is
+  nothing to do shows a sign instead (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`,
+  `THIS LINE IS SERVED`, `THE LINES ARE WAITING` at home).
 - **The truck** is one shared vehicle. Every seated player's stick is a vector; they are summed (the driver's ×1.5),
   quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it,
   turning at most 1 heading step per 4 frames. Roads are the fast path; fields are drivable but slow and dusty;
   the river is not drivable (bridges are). Arrival = within 40 px of a landmark's door point.
-- **HUD**: the order ticket (customer, dish, `NEED: X` rows with checks), the steering-wheel widget with one tick per
-  seat that lights while that seat pushes, the crew's heads in the truck's windows, an off-screen destination arrow on
-  an ink plate, one hint line. `alt` honks: a `HONK!` stamp and a truck squash. The telephone at home rings when a
-  new order arrives.
+- **HUD**: the shopping list (one row per ingredient, `have/amount`, a tick when full, the gold arrow on the first
+  short one) while gathering, then the lines (`sign  N IN LINE`, washed back once served, the arrow on the one the
+  compass points at); the steering-wheel widget with one tick per seat that lights while that seat pushes; the
+  crew's heads in the truck's windows; an off-screen destination arrow (the first short line's landmark, then the
+  nearest waiting queue); a paper tag over each waiting queue's signpost; one hint line. `alt` honks: a `HONK!`
+  stamp and a truck squash. The telephone at home rings once as the truck opens.
 
 ## 5. The mini-games
 
 Common rules: side view, feet on a scene-specific floor line, one critter per seat, name plates above heads,
 `+1` float text and a ring on every success, the `bump` beat (4/10/6 frames) on every failure, a 40-second clock
-drawn as a paper timer, the target count from the order; the scene ends with a sign dropping in (`APPLES: 12`)
+drawn as a paper timer, the target count from the shopping list (that ingredient's remainder, so a list that asks
+for twelve eggs may take two visits); the scene ends with a sign dropping in (`APPLES: 12`)
 and a 60-frame hold, then `run.gather` and back to the map. All randomness through `rng` inside `update()`.
 
 **Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
@@ -166,7 +177,8 @@ and a laugh, no score change.
 ## 7. Results
 
 The customer's bust at the hatch, the plate sliding out, three chews, a stamp (`DELICIOUS` / `TASTY` / `EDIBLE`),
-1–3 stars, the tip in coins, then `PRESS Z` (auto-return after 600 frames) → `run.serve(stars)` → the order board.
+1–3 stars, the tip in coins, then `PRESS Z` (auto-return after 600 frames) → `run.serve(stars)` → the line screen
+(someone still in the queue), the map (the line is served) or the closed day board (that was the last line).
 
 ## 8. Multiplayer
 
@@ -209,19 +221,22 @@ mapped onto CANCEL is a player leaving a mini-game by leaning.
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
 - **select**: five 116×200 cards (the kit's 140 fitted four across), one cursor per joined seat, READY stamps;
   `next` = stage (starts the run).
-- **stage** (the order board): the day's seven orders pinned up as 140×124 paper tickets, four across the top row and
-  three under them — each one a customer's portrait and name, the stars it has been served at, the dish across the
-  middle and its two `NEED` rows. ONE shared cursor any joined seat may drive (the menu scheme of `game/menuinput.js`),
-  the selected ticket lifted and headed in the truck's beetroot, and a pad under the board carrying the selected
-  customer's phone line, their role and the landmarks that order sends the truck to. CONFIRM takes the order off the
-  board (`run.setStage`) and fades to the map; a served stage is washed back, gives its `NEED` rows up to a SERVED
-  stamp (slammed on arrival for the one just cooked) and keeps its stars. **When every stage has been served the
-  board opens closed**: a CLOSING TIME slate over the stamped board with the orders served, the day's stars out of
-  21 and the takings, and the one press left goes back to the title. BACK leaves for the title, and is refused
+- **stage** (the day board): the day's three lines pinned up as 140×124 paper tickets across the top — each one
+  headed `LINE 01`, the landmark it waits at, and one block per customer (portrait, name, the dish they will order)
+  — with the SHOPPING LIST on one wide ticket under them (every ingredient with the day's total, in columns) and a
+  pad carrying the menu and `FILL THE PANTRY, THEN SERVE THE LINES`. No cursor: any joined seat's CONFIRM opens the
+  truck and fades to the map. **When every line has been served the board opens closed**: each line washed back
+  under a SERVED stamp (slammed on arrival for the one just finished) with its customers' stars in place of their
+  dishes, and a CLOSING TIME slate over it with the lines and dishes served, the day's stars out of 18 and the
+  takings; the one press left goes back to the title. BACK (open board only) leaves for the title, and is refused
   online (a peer walking out of a live room stalls the rest, as with the pause overlay).
+- **line**: the truck pulled up at a queue on the dusk lane, turned so its hatch faces the diners still waiting (one
+  rig each, front first, the crew's heads in the windows); the front diner waves, a paper bubble over their head
+  carries their name and their order, and CONFIRM (or 600 frames) fades to the kitchen. The sign over the scene says
+  `LINE 1 OF 3 - WINDLE MILL`.
 - **lobby**: HOST / JOIN, the host key large, invite link, four seats with busts, ready stamps, `STARTING!`; drives
   `net/session.js`; hands off to `select`-style picking on the same screen, then the host starts the match on the
-  order board, so an online party picks the customer and the dish together.
+  day board, so an online party reads the day's plan together and opens the truck.
 - **map**, **orchard**, **pond**, **coop**, **dairy**, **mill**, **hive**, **garden**, **kitchen**, **results**:
   as above. Every one exposes `summary()` and `checksumFields()` and reads input only by seat.
 - **pause**: transparent overlay (RESUME / QUIT TO TITLE); refused while `game.net.active`.

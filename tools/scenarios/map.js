@@ -12,10 +12,11 @@
 //             every order is therefore actually completable. This is what stops a mini-game being finished and
 //             then left unreachable behind a signpost.
 //
-//   wholeOrder - the honey loaf driven end to end: the HUD ticket sends the truck to the mill, the mill screen
-//                opens, the flour is banked, the ticket re-points at the hives, the hive screen opens, the honey
-//                is banked, and only then does driving home open the kitchen. The one test that proves an order
-//                built entirely out of the newly finished landmarks can actually be served.
+//   wholeDay - the day's two phases driven end to end on a shopping list cut down to flour and honey: the HUD
+//              sends the truck to the mill, the mill screen opens, the flour is banked, the compass re-points at
+//              the hives, the hive screen opens, the honey is banked - and only then do the lines open: the
+//              compass swings to the nearest queue, driving there opens the line screen, and the order taken
+//              there opens the kitchen. The one test that proves the loop's two halves hand over.
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.ts';
 import { INGREDIENTS, ORDERS } from '../../src/content/recipes.ts';
@@ -31,7 +32,9 @@ export const SCENARIOS = {
       const s0 = await api.summary();
       assert(s0.screen === 'map', 'the map is up with a run started');
       assert(s0.top.seats === 4 && s0.run.truckAt === 'home', `four seats aboard, parked at home (${s0.top.seats} seats, at '${s0.run.truckAt}')`);
-      assert(s0.top.dest === 'orchard', `the first order sends the truck to the orchard (dest ${s0.top.dest})`);
+      const firstMissing = s0.run.needs.find((n) => !n.endsWith('/' + n.split(':')[1].split('/')[0]));
+      assert(s0.top.dest === INGREDIENTS[firstMissing.split(':')[0]].place, `the shopping list sends the truck to its first line's landmark (${firstMissing} -> dest ${s0.top.dest})`);
+      assert(s0.top.serving === false, 'the day opens in its gathering phase');
       const x0 = s0.top.truck.x;
       await api.hold(0, { right: true }); await api.step(120); await api.release(0);
       const s1 = await api.summary();
@@ -63,9 +66,10 @@ export const SCENARIOS = {
       const s3 = await api.summary();
       assert(s3.top.truck.x > b.x + 30, `the bridge carries it across (x ${s3.top.truck.x} vs ${b.x})`);
 
-      // a landmark the order does not need: order 1 is the apple pie, so the mill has nothing the truck wants and
-      // arriving there stays on the map behind a sign. (Every landmark opens a screen now, so the old COMING SOON
-      // chalk note has no landmark left to stand on - screens/map.js dropped it.)
+      // a landmark the list does not need: the shopping list is cut to apples alone, so the mill has nothing the
+      // truck wants and arriving there stays on the map behind a sign. (Every landmark opens a screen now, so the
+      // old COMING SOON chalk note has no landmark left to stand on - screens/map.js dropped it.)
+      await page.evaluate(() => { const run = window.__game.game.run; run.needs.length = 0; run.needs.push({ id: 'apple', amount: 4, have: 0, used: 0 }); });
       const mill = placeOf('mill');
       await teleport(page, mill.x, mill.y + 70, 12);
       await api.hold(0, { up: true }); await api.step(60); await api.release(0);
@@ -127,8 +131,8 @@ export const SCENARIOS = {
         await api.goto('map', {});
         await page.evaluate(([id, amount]) => {
           const run = window.__game.game.run;
-          run.order.needs.length = 0;
-          run.order.needs.push({ id, amount, have: 0 });
+          run.needs.length = 0;
+          run.needs.push({ id, amount, have: 0, used: 0 });
           run.truck.at = '';
         }, [ingId, 2]);
         await teleport(page, p.x, p.y + 60, 12);
@@ -140,17 +144,22 @@ export const SCENARIOS = {
   },
 
   /**
-   * One whole order made of the newly finished landmarks, from the phone call to the kitchen door. `?order=4` is
-   * the honey loaf (flour from the mill, honey from the hives). Each stop is driven to for real and its screen is
+   * The whole day, from the shopping list to the first order taken, on a list cut down to the two newly finished
+   * landmarks (flour from the mill, honey from the hives). Each stop is driven to for real and its screen is
    * asserted; the gathering itself is banked straight through run.gather so this scenario tests the FLOW and not
    * the mini-games' own rules - those have a scenario each.
    */
-  async wholeOrder(server) {
-    await withPage(server, 'skipTo=map&critters=0,1,2,3&order=4', async (api, page) => {
+  async wholeDay(server) {
+    await withPage(server, 'skipTo=map&critters=0,1,2,3', async (api, page) => {
+      await page.evaluate(() => {
+        const run = window.__game.game.run;
+        run.needs.length = 0;
+        run.needs.push({ id: 'flour', amount: 3, have: 0, used: 0 }, { id: 'honey', amount: 2, have: 0, used: 0 });
+        window.__game.game.reset('map');
+      });
       await api.step(5);
       const s0 = await api.summary();
-      assert(s0.run.dish === 'HONEY LOAF', `?order=4 is the honey loaf (got '${s0.run.dish}')`);
-      assert(s0.top.dest === 'mill', `the ticket sends the truck to the mill first (dest ${s0.top.dest})`);
+      assert(s0.top.dest === 'mill' && s0.top.serving === false, `the list sends the truck to the mill first (dest ${s0.top.dest})`);
 
       for (const [place, ing, screen] of [['mill', 'flour', 'mill'], ['hive', 'honey', 'hive']]) {
         const p = placeOf(place);
@@ -160,7 +169,7 @@ export const SCENARIOS = {
         assert(s.screen === screen, `the ${place} opens '${screen}' (landed on '${s.screen}')`);
         // bank the line and come back out the way a finished round does
         await page.evaluate((id) => {
-          const run = window.__game.game.run, n = run.order.needs.find((x) => x.id === id);
+          const run = window.__game.game.run, n = run.need(id);
           run.gather(id, n.amount);
           window.__game.game.reset('map');
         }, ing);
@@ -172,12 +181,30 @@ export const SCENARIOS = {
       }
 
       const done = await api.summary();
-      assert(done.run.complete === true, 'both lines are aboard, so the order is complete');
-      assert(done.top.dest === 'home', `...and the ticket now points home (dest ${done.top.dest})`);
-      const home = placeOf('home');
-      await teleport(page, home.x, home.y + 70, 12);
+      assert(done.run.complete === true && done.run.phase === 'serve', `the list is aboard, so the lines open (${done.run.phase})`);
+      assert(done.top.serving === true && done.top.destLine >= 0, `...and the compass swings to a queue (dest ${done.top.dest}, line ${done.top.destLine})`);
+      const lineAt = done.run.lines[done.top.destLine].place;
+      assert(done.top.dest === lineAt, `the compass points at that line's landmark (${done.top.dest} vs ${lineAt})`);
+      // a landmark with no queue stays on the map behind a sign
+      const idle = PLACES.find((p) => p.id !== 'home' && !done.run.lines.some((l) => l.place === p.id));
+      await teleport(page, idle.x, idle.y + 60, 12);
+      await api.hold(0, { up: true }); await api.step(60); await api.release(0);
+      const s1 = await api.summary();
+      assert(s1.screen === 'map' && s1.top.sign === 'NO LINE HERE', `${idle.id} has no queue: the truck stays on the map behind a NO LINE HERE sign (on ${s1.screen}, '${s1.top.sign}')`);
+      // the queue itself opens the line screen with its first customer at the hatch
+      const q = placeOf(lineAt);
+      await teleport(page, q.x, q.y + 60, 12);
       await api.hold(0, { up: true }); await api.step(150); await api.release(0);
-      assert((await api.screen()) === 'kitchen', `driving home with a full order opens the kitchen (now on ${await api.screen()})`);
+      const s2 = await api.summary();
+      assert(s2.screen === 'line', `driving to the queue opens the line screen (now on ${s2.screen})`);
+      assert(s2.run.line === done.top.destLine && s2.run.customer === 0 && s2.top.waiting === 2, `the run stands on that line with its first customer at the hatch (line ${s2.run.line}, customer ${s2.run.customer}, ${s2.top.waiting} waiting)`);
+      await api.step(40);
+      const s3 = await api.summary();
+      assert(s3.top.bubble.length > 0 && s3.top.dish === s3.run.dish, `the customer says their order (${s3.top.bubble})`);
+      await api.shot('line-queue');
+      await api.press(0, { action: true }, 2, 4);
+      await api.step(60);
+      assert((await api.screen()) === 'kitchen', `taking the order opens the kitchen (now on ${await api.screen()})`);
     });
   },
 };

@@ -1,6 +1,6 @@
 // CHARACTER SELECT (docs/GDD.md section 10): five recipe cards on the dimmed lane, one jam-jar-lid cursor per
 // JOINED seat, a beetroot READY stamp when a seat locks in, and the run starts the moment every joined seat
-// has stamped - on the order board (game/screens/stage.js), where the party picks the customer and the dish.
+// has stamped - on the day board (game/screens/stage.js), where the party reads the day's plan and opens the truck.
 //
 // Seats are read ONLY by slot through engine/input.js, so a couch P2 dropping in mid-screen - on the keys or on a
 // pad, seats 3 and 4 being pad-only - is the same code path as P1. Everything the screen simulates is two numbers
@@ -25,7 +25,7 @@ import { TRUCK } from '../../art/truck.ts';
 const R = Math.round, TAU = Math.PI * 2;
 /**
  * Card row: 5 x 116 with 8 px gaps is 612 of the 640, centred by cardX. The kit's 140 px card (game/ui.ts
- * CARD_W, which the order board still pins up seven of) fitted four across; the fifth cast member does not, so
+ * CARD_W, which the day board still pins up three of) fitted four across; the fifth cast member does not, so
  * this screen cuts its own recipe cards a little narrower - the porthole (94 px with its doily) and the pip bars
  * still fit with room either side - and keeps the kit's height.
  */
@@ -220,7 +220,8 @@ export class SelectScreen extends Screen {
       this.started = true;
       const picks = [];
       for (const s of this.seats) if (s.on) picks.push(s.card);
-      startRun(this.game, { seed: this.game.options.seed, critters: picks });
+      // the two dev jumps ride along so a capture or a scenario that walks in through the front door still gets its day
+      startRun(this.game, { seed: this.game.options.seed, critters: picks, order: this.game.options.order, recipes: this.game.options.recipes });
       this.game.fadeTo(() => this.game.replace('stage'));
     }
   }
