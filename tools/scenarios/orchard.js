@@ -3,8 +3,10 @@
 //
 //   orchard - four seats in the orchard: 600 frames with seat 0 running left and right (no errors, a numeric
 //             caught count, seat 0 actually moved and stayed inside the lane, the other seats did not), then the
-//             mini-game's one rule driven by hand - an apple aimed at seat 0's rim scores, one that misses the rim
-//             splats and costs nothing - then the clock is forced to its last frames: the APPLES
+//             mini-game's rules driven by hand - a ripe apple aimed at seat 0's rim scores, one that misses the rim
+//             splats and costs nothing, a wormy one is a flinch and nothing lost, and a bomb is the joke: held, gone
+//             off, the critter singed and then fine again, nothing lost but the time - then the clock is forced to
+//             its last frames: the APPLES
 //             sign drops, is held, and the screen returns to the map with the order's apple line updated by the
 //             party's total. Also writes tools/screens/orchard-catch.png (the catch beat, with two apples left in
 //             the canopy so the shot answers "can you see one against the leaves?") and orchard-sign.png.
@@ -13,6 +15,8 @@ import { withPage, assert } from '../playtest.js';
 const SLAM = 6, HOLD = 60;
 /** Frames given to a hand-placed apple: 40 px of fall at 2 px/frame, plus the bump it may start. */
 const DROP_FRAMES = 30;
+/** The screen's own numbers, mirrored here so a change to either side shows up as a failing assert. */
+const HOLD_FRAMES = 40, SINGED_FRAMES = 90, BUMP_FRAMES = 21;
 /** The frame of that fall the catch shot is taken on: the apple is in the rim, the ring and the +1 are still up. */
 const CATCH_SHOT = 22;
 
@@ -21,8 +25,8 @@ const CATCH_SHOT = 22;
  * else is switched off first (every other apple parked, the spawner pushed out of reach) so the beat is the only
  * thing that can move the count.
  */
-async function dropOnSeat0(page, aimed, homeX) {
-  return page.evaluate(([hit, hx]) => {
+async function dropOnSeat0(page, aimed, homeX, kind = 0) {
+  return page.evaluate(([hit, hx, k]) => {
     const sc = window.__game.game.screen, s = sc.seats[0];
     sc.nextSpawn = 100000;
     // back to the lane position it was given in enter(): 600 frames of running left leaves seat 0 standing on top
@@ -37,7 +41,7 @@ async function dropOnSeat0(page, aimed, homeX) {
     // hang 0: this one is already off the branch, so DROP_FRAMES is 40 px of fall and nothing else; a miss is the
     // same apple started a basket's width to the side, so it falls past the rim and onto the grass
     const ax = hit ? bx : bx + 30;
-    a.active = true; a.t = 0; a.vy = 2; a.x0 = ax; a.x = ax; a.y = by - 40; a.hang = 0;
+    a.active = true; a.kind = k; a.t = 0; a.vy = 2; a.x0 = ax; a.x = ax; a.y = by - 40; a.hang = 0;
     // two more apples held ON their branches for the picture, at the far ends of the lane where no rim can reach
     // them inside the beat (the whole point of the shot is a red apple against #4F6B3A leaves at 1x, hanging
     // on its stalk before it lets go)
@@ -46,18 +50,19 @@ async function dropOnSeat0(page, aimed, homeX) {
     const ends = [60, 540], rows = [66, 74];
     for (let i = 0; i < 2; i++) {
       const d = sc.apples[i + 1];
-      d.active = true; d.t = i * 20; d.vy = 1.6; d.x0 = ends[i]; d.x = ends[i]; d.y = rows[i];
+      d.active = true; d.kind = i; d.t = i * 20; d.vy = 1.6; d.x0 = ends[i]; d.x = ends[i]; d.y = rows[i];
       d.hang = 200;
     }
-    return { count: s.count, total: sc.total, target: sc.target };
-  }, [aimed, homeX]);
+    return { count: s.count, total: sc.total, target: sc.target, booms: sc.booms };
+  }, [aimed, homeX, kind]);
 }
 
 /** Seat 0 as the sim holds it (the summary only carries slot/x/count). */
 function seat0(page) {
   return page.evaluate(() => {
     const s = window.__game.game.screen.seats[0];
-    return { count: s.count, anim: s.anim, total: window.__game.game.screen.total, apples: window.__game.game.screen.apples.filter((a) => a.active).length };
+    const sc = window.__game.game.screen;
+    return { count: s.count, anim: s.anim, bumpT: s.bumpT, boomT: s.boomT, basket: s.rig.weapon ? 1 : 0, total: sc.total, booms: sc.booms };
   });
 }
 
@@ -107,6 +112,40 @@ export const SCENARIOS = {
         const missed = await seat0(page);
         assert(missed.count === beside.count && missed.total === beside.total, `a missed apple costs nothing (seat 0 still ${missed.count})`);
         assert(missed.anim !== 'bump', `and nothing bumps anyone (anim '${missed.anim}')`);
+
+        // a wormy one: the flinch, and nothing lost
+        const worm = await dropOnSeat0(page, true, x0, 1);
+        await api.step(DROP_FRAMES);
+        const flinched = await seat0(page);
+        assert(flinched.count === worm.count && flinched.total === worm.total, `a wormy apple costs nothing (seat 0 still ${flinched.count})`);
+        assert(flinched.bumpT > 0 && flinched.bumpT <= BUMP_FRAMES && flinched.anim === 'bump', `but it is a flinch (bumpT ${flinched.bumpT}, anim '${flinched.anim}')`);
+        await api.step(BUMP_FRAMES);
+
+        // a bomb: held up with the fuse burning, then the bang, then singed, then fine - and nothing lost
+        const bomb = await dropOnSeat0(page, true, x0, 2);
+        await api.step(DROP_FRAMES);
+        const held = await seat0(page);
+        assert(held.boomT > SINGED_FRAMES && held.anim === 'holdBomb' && held.basket === 0, `a bomb is held up, basket down (boomT ${held.boomT}, anim '${held.anim}', basket ${held.basket})`);
+        assert(held.count === bomb.count && held.total === bomb.total, `and it scores nothing (seat 0 still ${held.count})`);
+        await api.shot('orchard-bomb-hold');
+        // the stick does nothing through the hold
+        await api.hold(0, { right: true });
+        await api.step(4);
+        await api.release(0);
+        assert((await api.summary()).top.seats[0][1] === x0, 'the seat cannot walk off with a bomb in its paw');
+        await api.step(held.boomT - SINGED_FRAMES - 4 + 6);
+        const singed = await seat0(page);
+        assert(singed.booms === bomb.booms + 1, `the fuse burns down and it goes off (${bomb.booms} -> ${singed.booms} booms)`);
+        assert(singed.boomT > 0 && singed.boomT <= SINGED_FRAMES && singed.anim === 'singed', `the critter stands there singed (boomT ${singed.boomT}, anim '${singed.anim}')`);
+        assert(singed.count === bomb.count && singed.total === bomb.total, `and still nothing is lost (seat 0 ${singed.count})`);
+        await api.shot('orchard-bomb-singed');
+        await api.step(singed.boomT + 1);
+        const fine = await seat0(page);
+        assert(fine.boomT === 0 && fine.basket === 1 && fine.anim !== 'singed', `then it shakes it off, basket back in the paw (boomT ${fine.boomT}, basket ${fine.basket}, anim '${fine.anim}')`);
+        await api.hold(0, { right: true });
+        await api.step(4);
+        await api.release(0);
+        assert((await api.summary()).top.seats[0][1] > x0, 'and it can walk again');
         last = await api.summary();
         if (last.screen !== 'orchard') ended = true;
       }

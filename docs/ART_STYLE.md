@@ -98,7 +98,7 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   scatter) with a `#B99A6A` edge, river `#6F9FB0` over `#4E7A8C`, hedges `#4F6B3A`, cottage walls `#F1E4C8`, roofs
   `#A65A48`, plum tree-line `#4A3038`, a dusk-peach horizon strip `#F4C9A0`; signal: lantern gold on the next sign.
 - **Orchard**: daytime warm sky `#FBE3C4`→`#F4C9A0`, canopy `#4F6B3A` with `#6E8A48` caps, grass `#5E7A3E` (L .42),
-  four depth lanes 8 px apart; signal: ripe apple red `#D9463B`.
+  four depth lanes 8 px apart; signal: ripe apple red `#D9463B`; HOT on a bomb apple's fuse spark.
 - **Pond**: golden-hour sky, a plum tree-line `#4A3038` behind the torsos, bank turf `#6E7A5A`, water `#4E7A8C` with a
   `#6F9FB0` surface band, jetty `#9A6234`; signal: bite ring mint `#5FD3C0`; floats white with a slot-colour cap and an
   8×5 slot tag above.
@@ -177,7 +177,7 @@ picks the one it needs:
 |---|---|---|
 | **the thing you want / go here** | `#F2C14E` gold | map's next sign, coop's fresh egg, **mill**'s pouring chute, **hive**'s full skep, **garden**'s ripe root |
 | **keep tapping** | `#5FD3C0` mint | pond's bite ring and reel bar, **dairy**'s pump chevron and full pail |
-| **heat** | `#E23A2E` HOT | the burner, and nothing else: no mini-game has a danger to telegraph any more |
+| **heat** | `#E23A2E` HOT | the burner, and the spark on the orchard's bomb apple: the one warning left in the game, and it is a joke |
 
 One scene still shows one signal: its *own* signal for the thing the player is after. Backdrops are built from 6–8 muted
 constants each, exported by the scene's backdrop module; `ENV` in `palettes.js` is the shared base ladder.

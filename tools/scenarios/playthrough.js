@@ -126,7 +126,9 @@ async function handBack(api, from) {
 // ---------------------------------------------------------------- the orchard, played
 
 /** Orchard geometry the chase has to agree with (game/screens/orchard.js): the apple's size, the run speed, the lane. */
-const APPLE_S = 5, RUN_SPEED = 2.2, LANE_MIN = 24, LANE_MAX = 616;
+const APPLE_S = 7, RUN_SPEED = 2.2, LANE_MIN = 24, LANE_MAX = 616;
+/** A wormy or a bomb apple this close to where seat 0 is standing, and this near to landing, is stepped away from. */
+const BAD_X = 16, BAD_T = 45, DODGE = 44;
 
 /** Everything the chase reads out of the live orchard: seat 0, its catch boxes, and the fruit in the air. */
 function orchardState(page) {
@@ -137,7 +139,7 @@ function orchardState(page) {
     return {
       x: s.x, y: s.y, facing: s.facing, phase: sc.clock.phase,
       boxCatchX: s.boxCatchX, boxCatchY: s.boxCatchY,
-      apples: sc.apples.filter((a) => a.active).map((a) => [a.x, a.y, a.vy, a.hang]),
+      apples: sc.apples.filter((a) => a.active).map((a) => [a.x, a.y, a.vy, a.kind, a.hang]),
     };
   });
 }
@@ -158,25 +160,32 @@ function standFor(st, appleX) {
 }
 
 /**
- * Play one round in the orchard: chase the apples and leave when the round hands back to the map (the target
- * reached, or the 40-second clock out). Input only - nothing here touches the sim.
+ * Play one round in the orchard: chase the ripe apples, step out from under the wormy ones and the bombs, and leave
+ * when the round hands back to the map (the target reached, or the 40-second clock out). Input only - nothing here
+ * touches the sim.
  */
 async function pickApples(api, page) {
   for (let poll = 0; poll < 700; poll++) {
     const st = await orchardState(page);
     if (!st || st.phase !== 0) break;
-    const boxY = st.y + st.boxCatchY;
+    const boxY = st.y + st.boxCatchY, boxX = st.x + st.facing * st.boxCatchX;
     // fall time (frames) until an apple's bottom reaches the rim's row
     const fall = (a) => (boxY - (a[1] + APPLE_S)) / a[2];
-    let want = null, soonest = Infinity;
+    let want = null, soonest = Infinity, bad = null;
     for (const a of st.apples) {
-      if (a[3] > 0) continue;                                  // still hanging on its branch
+      if (a[4] > 0) continue;                                  // still hanging on its branch
       const t = fall(a);
       if (t < 2) continue;                                     // past the rim: nothing to do about this one
+      if (a[3] !== 0) { if (t < BAD_T && Math.abs(a[0] - boxX) < BAD_X) bad = a; continue; }
       const spot = standFor(st, a[0]);
       if (spot == null) continue;
       if (Math.abs(spot - st.x) / RUN_SPEED + 6 > t) continue; // cannot be under it in time
       if (t < soonest) { soonest = t; want = spot; }
+    }
+    // a bad one aimed at where we stand is a flinch or a two-second joke: step out from under it
+    if (bad && (want == null || Math.abs(want - st.x) < 4)) {
+      want = bad[0] > st.x ? st.x - DODGE : st.x + DODGE;
+      want = Math.max(LANE_MIN, Math.min(LANE_MAX, want));
     }
     if (want == null || Math.abs(want - st.x) <= 2) await api.release(0);
     else await api.hold(0, want > st.x ? { right: true } : { left: true });

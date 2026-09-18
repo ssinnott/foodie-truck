@@ -93,12 +93,17 @@ and a 60-frame hold, then `run.gather` and back to the map. All randomness throu
 
 The whole game is built on **three inputs and nothing else**: move left and right, tap ACTION over and over, and
 hold ACTION down. There are no timing windows, no beats to hit and no wrong buttons — a young player can never lose
-what they have gathered, and the 40-second clock is a backstop rather than an opponent.
+what they have gathered, and the 40-second clock is a backstop rather than an opponent. The only hazards left are
+jokes (the orchard's wormy apple and its bomb), and they cost nothing but a moment.
 
-- **Orchard — CATCH** (*move*). Move left/right with a basket held in front. Apples spawn above the canopy every
-  30–60 frames at a seeded x and fall at 1.4–2.4 px/frame with a small sway; caught at the basket's top edge. A
-  missed apple splats on the grass and costs nothing. Four seats use four depth lanes 8 px apart so bodies stack
-  instead of fusing.
+- **Orchard — CATCH** (*move*). Move left/right with a basket held in front. Apples (14 px, so they read from
+  across a room) spawn above the canopy every 30–60 frames at a seeded x and fall at 1.4–2.4 px/frame with a small
+  sway; caught at the basket's top edge. A missed apple splats on the grass and costs nothing. One in ten is a
+  **wormy** apple: catching it is the bump beat and nothing more. One in ten is a **bomb** — a ripe apple with a
+  burning fuse — and catching it is the scene's joke: the critter holds it up and watches the fuse burn for 40
+  frames, it goes off in smoke and embers, and the critter stands blackened and dazed for 90 frames before shaking
+  it off. Nothing is lost but the time. Four seats use four depth lanes 8 px apart so bodies stack instead of
+  fusing.
 - **Pond — FISH** (*tap*). Fixed standing spots on a jetty, one float column per seat. `action` casts; the float
   bobs; after a seeded 60–150 frames the fish bites (the float drops, a mint ring) and stays on. Tapping `action`
   twelve times reels it in: every press is one turn of the reel, drawn as a bar over the float. A press during the wait
