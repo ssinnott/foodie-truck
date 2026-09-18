@@ -2,8 +2,10 @@
 // contact sheet (docs/ART_PRINCIPLES.md 42). Left/right picks the animation, up/down the zoom, cancel leaves.
 import { VIEW_W, VIEW_H, UI, PLUM } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { CritterDef, Game, ScreenParams } from '../game.ts';
 import { drawText, drawTextOutlined } from '../../engine/text.ts';
 import { drawRig } from '../../lib/art/rig.ts';
+import type { Rig } from '../../lib/art/rig.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { ITEMS } from '../../content/critters/items.ts';
@@ -22,7 +24,7 @@ const CARD_TOP_PAD = 10;
 /** Paper mount inside a dark critter's frame, in px. */
 const MAT = 3;
 /** Relative luminance of a #rrggbb, 0..1 (docs/ART_STYLE.md section 0 judges contrast by value). */
-function lum(hex) {
+function lum(hex: string): number {
   const n = parseInt(hex.slice(1), 16);
   return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
 }
@@ -30,16 +32,45 @@ function lum(hex) {
 const SHADOW = 'rgba(20,12,16,0.35)';
 const R = Math.round;
 
+/**
+ * One card of the contact sheet: the cast entry, the rig built for it and the player walking it through the
+ * shared animation table. Built ONCE in enter(), one per cast member in cast order; `apply()` re-aims every one
+ * of them at whichever animation the row is standing on.
+ */
+export interface GallerySlot {
+  /** The cast entry (game.critters, in cast order). */
+  def: CritterDef;
+  /** The rig built for that entry: it carries the pose's prop and is drawn at the row's zoom. */
+  rig: Rig;
+  /** Playing the selected animation - or idle, where this critter authors no key for it. */
+  player: AnimPlayer;
+}
+
 export class GalleryScreen extends Screen {
-  constructor(game) { super(game, 'gallery'); }
-  enter(params) {
+  // The fields, for the checker only, in the order enter() assigns them. `declare`, not plain declarations, for
+  // the reason game/game.ts states over its own block: a plain field declaration emits a class field per name
+  // (es2022 defines them before the constructor body runs, and a screen's own declaration would also define a
+  // base field back to undefined), which would change the runtime this screen shipped with. `declare` erases
+  // under tsc, under esbuild and under Node's type stripping alike, so the emitted class is the original.
+
+  /** Index into ANIMS of the animation the whole row is playing; left/right walks it, wrapping. */
+  declare anim: number;
+  /** Rig scale, 1..4 (up/down steps it), and the contact shadow's ellipse with it. */
+  declare zoom: number;
+  /** 1 = the row faces right, -1 = left; X flips it. */
+  declare facing: number;
+  /** One card per cast member, in cast order. */
+  declare slots: GallerySlot[];
+
+  constructor(game: Game) { super(game, 'gallery'); }
+  override enter(params: ScreenParams): void {
     super.enter(params);
     this.anim = 0; this.zoom = 2; this.facing = 1;
     this.slots = (this.game.critters || []).map((c, i) => ({ def: c, rig: critterRig(c, i), player: new AnimPlayer(c.anims) }));
     for (const s of this.slots) s.player.play(ANIMS[this.anim]);
     this.apply();
   }
-  apply() {
+  apply(): void {
     const name = ANIMS[this.anim], item = ITEM_FOR[name] || null;
     for (const s of this.slots) {
       const owns = !!(s.def.anims && s.def.anims[name]);
@@ -48,7 +79,7 @@ export class GalleryScreen extends Screen {
       s.rig.basketFill = 0.6;
     }
   }
-  update() {
+  override update(): void {
     super.update();
     const inp = this.game.input;
     const dx = navX(inp), dy = navY(inp);
@@ -58,7 +89,7 @@ export class GalleryScreen extends Screen {
     for (const s of this.slots) { s.player.tick(); if (s.player.done) s.player.play(ANIMS[this.anim], { restart: true }); }
     if (cancelPressed(inp) >= 0) this.game.reset('title');
   }
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     // A pinboard in the truck: paper wall, plum dado, wooden shelf floor (docs/ART_STYLE.md section 1).
     ctx.fillStyle = UI.paper; ctx.fillRect(0, 0, VIEW_W, FLOOR_Y + 1);
     ctx.fillStyle = UI.paperDark;
@@ -96,5 +127,5 @@ export class GalleryScreen extends Screen {
     drawText(ctx, `< ${ANIMS[this.anim].toUpperCase()} >${sig}   ZOOM ${this.zoom}X   X: FLIP`, VIEW_W / 2, 46, { size: 1, color: UI.ink, align: 'center', shadow: false });
     drawHint(ctx, 'C: BACK');
   }
-  summary() { return { anim: ANIMS[this.anim], critters: this.slots.length }; }
+  override summary() { return { anim: ANIMS[this.anim], critters: this.slots.length }; }
 }

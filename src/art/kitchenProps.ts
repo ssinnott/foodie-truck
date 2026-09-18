@@ -10,6 +10,7 @@ import { drawFood, foodTones } from './food.ts';
 import { steamPuff } from './fx.ts';
 import { pathRR } from '../lib/art/shading.ts';
 import { drawText } from '../engine/text.ts';
+import type { DrawTextOptions } from '../engine/text.ts';
 import { KITCHEN, ROWS, HATCH, PROP_X, TAG_POS, TAG_W, TAG_H, TAG_NAME, WIDGET_POS } from './backgrounds/kitchen.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
@@ -318,7 +319,9 @@ export function drawBellRing(ctx, ringT) {
 }
 
 // ---------------------------------------------------------------- the paper timing widgets
-const WIDGET_TEXT = { size: 1, color: UI.ink, shadow: false, align: 'center' };
+// Typed as the library's own options rather than left to widen: a bare literal infers `align: string`, and
+// lib/engine/text.ts takes the 'left' | 'right' | 'center' union.
+const WIDGET_TEXT: DrawTextOptions = { size: 1, color: UI.ink, shadow: false, align: 'center' };
 /**
  * A small paper card behind a widget (the same ticket recipe at 1 px: paper, ink, r2) with an owner strip across
  * its head. The live timing card used to be the fifth identical cream rectangle on a screen that already carried

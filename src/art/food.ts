@@ -79,7 +79,7 @@ export const FOOD = {
 };
 
 /** Draw an ingredient by icon id; unknown ids get a plain ball. */
-export function drawFood(ctx, icon, cx, cy, s, hex) {
+export function drawFood(ctx, icon, cx, cy, s, hex?) {
   const f = FOOD[icon];
   if (f) f(ctx, cx, cy, s, hex); else ball(ctx, cx, cy, s, hex || '#C8C0B0');
 }

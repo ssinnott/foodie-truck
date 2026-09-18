@@ -6,8 +6,10 @@
 // four critters are the only per-frame drawing, each on its own beat of the shared animation table.
 import { VIEW_W, UI, REPO_URL, REPO_LABEL } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { Game, ScreenParams } from '../game.ts';
 import { drawTextOutlined } from '../../engine/text.ts';
 import { drawRig } from '../../lib/art/rig.ts';
+import type { Rig, RigWeapon } from '../../lib/art/rig.ts';
 import { drawShadow } from '../../art/fx.ts';
 import { drawTruck } from '../../art/truck.ts';
 import { critterRig } from '../../content/critters/common.ts';
@@ -50,12 +52,34 @@ const CREW_SCALE = 1.35;
  * `drawFood` apple at s 8, big enough to clear the paw at every angle of the chew. The counter-rotation is
  * `items.js upright()`: the apple stays the right way up whatever the arm is doing.
  */
-const APPLE = { attach: 'handR', length: 12, draw(ctx, rig) {
+const APPLE: RigWeapon = { attach: 'handR', length: 12, draw(ctx, rig) {
   const a = Math.atan2(rig.light.y, rig.light.x) - Math.atan2(LIGHT_Y, LIGHT_X);
   ctx.save(); ctx.rotate(a); drawFood(ctx, 'apple', 1, 2, 8, UI.red); ctx.restore();
 } };
 /** The chopping block stands where the blade comes down, with a clear strip of lane either side of it. */
 const BLOCK_X = 313, BLOCK_Y = 294;
+
+/** One seat's turn on the lane: the beat it plays, the prop it plays it with, and how it is timed. */
+export interface CrewAct {
+  /** Which beat of the shared table this seat plays (content/critters/common.ts makeCritterAnims). */
+  anim: string;
+  /**
+   * The prop the beat is authored around, or null for empty paws. The ITEMS entries carry `as RigWeapon`:
+   * content/critters/items.ts is not typed yet, so its `attach: 'handR'` widens to `string` and its entries miss
+   * RigWeapon's `attach?: HandName` by that one field. The table IS a table of rig weapons - rig.ts reads exactly
+   * these keys back off it - so the assertion says what items.ts cannot yet.
+   */
+  item: RigWeapon | null;
+  /** 1 = facing right, -1 = facing left: two of the four turn in toward the others. */
+  facing: number;
+  /** px off the others' baseline, so the row is a group standing about rather than a rank. */
+  dy: number;
+  /** Frames a finished one-shot sits on its last key before it goes again (a repeated action, not a stutter). */
+  hold: number;
+  /** Frames into its own beat the screen opens this seat on. */
+  phase: number;
+}
+
 /**
  * The lineup is STAGED, not ranked. Four critters shoulder to shoulder in the same neutral `idle`, empty-pawed,
  * every eye on the lens, was a passport photo: the silhouettes differed by costume and by nothing else, and the
@@ -67,11 +91,11 @@ const BLOCK_X = 313, BLOCK_Y = 294;
  * a one-shot beat sits on its last key before it goes again (a repeated action, not a stutter), and `phase` opens
  * the screen with all four on different beats. Pose, prop, facing and footing only - no new rig art, no new anims.
  */
-const CREW_ACT = [
+const CREW_ACT: CrewAct[] = [
   { anim: 'eat', item: APPLE, facing: 1, dy: 0, hold: 0, phase: 12 },
-  { anim: 'chop', item: ITEMS.knife, facing: 1, dy: -5, hold: 30, phase: 20 },
+  { anim: 'chop', item: ITEMS.knife as RigWeapon, facing: 1, dy: -5, hold: 30, phase: 20 },
   { anim: 'wave', item: null, facing: -1, dy: -2, hold: 0, phase: 5 },
-  { anim: 'carry', item: ITEMS.basket, facing: -1, dy: 1, hold: 0, phase: 31 },
+  { anim: 'carry', item: ITEMS.basket as RigWeapon, facing: -1, dy: 1, hold: 0, phase: 31 },
 ];
 /** The sign swings +-0.02 rad about its top centre, slowly enough to read as weight. */
 const SWING = 0.02, SWING_RATE = 0.045;
@@ -81,10 +105,36 @@ const START_Y = 314;
 const TRUCK_OPTS = { scale: 2, wheel: 0 };
 const START_TEXT = 'PRESS START';
 
-export class TitleScreen extends Screen {
-  constructor(game) { super(game, 'title'); this.crew = []; this.sel = 0; }
+/**
+ * One seat of the lineup: the rig, the player walking that seat's own beat, the beat itself and where the beat has
+ * got to. Built ONCE in enter(), one per cast member in cast order; only `wait` moves after that.
+ */
+export interface TitleSeat {
+  /** The rig built for this cast entry, in the off-duty apron: nobody is seated on the title. */
+  rig: Rig;
+  /** Walking this seat's own beat off the critter's shared animation table. */
+  player: AnimPlayer;
+  /** The beat, prop, facing and footing this seat plays (CREW_ACT, by cast index). */
+  act: CrewAct;
+  /** Frames the finished one-shot has sat on its last key, counted against `act.hold`. */
+  wait: number;
+}
 
-  enter(params) {
+export class TitleScreen extends Screen {
+  // The fields, for the checker only, in constructor order. `declare`, not plain declarations, for the reason
+  // game/game.ts states over its own block: a plain field declaration emits a class field per name (es2022
+  // defines them before the constructor body runs, and a screen's own declaration would also define a base
+  // field back to undefined), which would change the runtime this screen shipped with. `declare` erases under
+  // tsc, under esbuild and under Node's type stripping alike, so the emitted class is the original's.
+
+  /** The lineup, in cast order: built by enter(), ticked by update(), drawn by draw(). */
+  declare crew: TitleSeat[];
+  /** Which ROWS row the slate stands on; the one number this screen can diverge on. */
+  declare sel: number;
+
+  constructor(game: Game) { super(game, 'title'); this.crew = []; this.sel = 0; }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     // Back at the front door: forget which pad claimed which couch seat and let P2 drop in again from scratch.
     this.game.input.resetClaims();
@@ -93,7 +143,7 @@ export class TitleScreen extends Screen {
       // nobody is seated on the title, so the crew wears the off-duty apron: the four player colours mean "this
       // seat is taken" everywhere else (constants.js OFF_DUTY_APRON, docs/ART_STYLE.md section 4)
       const act = CREW_ACT[i % CREW_ACT.length];
-      const seat = { rig: critterRig(def, -1), player: new AnimPlayer(def.anims), act, wait: 0 };
+      const seat: TitleSeat = { rig: critterRig(def, -1), player: new AnimPlayer(def.anims), act, wait: 0 };
       seat.rig.weapon = act.item;
       seat.rig.basketFill = 0.5;
       seat.player.play(act.anim);
@@ -104,7 +154,7 @@ export class TitleScreen extends Screen {
     });
   }
 
-  update() {
+  override update(): void {
     super.update();
     const inp = this.game.input;
     const dy = navY(inp);
@@ -114,7 +164,7 @@ export class TitleScreen extends Screen {
   }
 
   /** One seat, one step: a one-shot beat sits on its last key for `hold` frames and then goes again. */
-  tickSeat(s) {
+  tickSeat(s: TitleSeat): void {
     s.player.tick();
     if (!s.player.done) return;
     if (s.wait < s.act.hold) { s.wait++; return; }
@@ -123,7 +173,7 @@ export class TitleScreen extends Screen {
   }
 
   /** Open the selected row. SOURCE leaves the game, so it is the one row guarded against a blocked popup. */
-  choose() {
+  choose(): void {
     const row = ROWS[this.sel];
     if (row === 'PLAY') this.game.replace('select');
     else if (row === 'ONLINE') this.game.replace('lobby');
@@ -131,7 +181,7 @@ export class TitleScreen extends Screen {
     else if (row === 'SOURCE') { try { window.open(REPO_URL, '_blank'); } catch { /* popups blocked: stay put */ } }
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     drawLane(ctx);
     // the parked truck, then the crew beside it: a y-sort of two rows, each on its own contact shadow
     drawShadow(ctx, TRUCK_X, TRUCK_Y, 112, 0.28);
@@ -164,9 +214,9 @@ export class TitleScreen extends Screen {
     drawHint(ctx, REPO_LABEL);
   }
 
-  summary() { return { row: ROWS[this.sel], sel: this.sel, rows: ROWS.length, crew: this.crew.length }; }
+  override summary() { return { row: ROWS[this.sel], sel: this.sel, rows: ROWS.length, crew: this.crew.length }; }
   /** The only thing on this screen that could differ between two machines. */
-  checksumFields() { return [this.sel]; }
+  override checksumFields(): number[] { return [this.sel]; }
 }
 
 export { ROWS as TITLE_ROWS };

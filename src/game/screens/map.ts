@@ -9,6 +9,7 @@
 // The camera, the animation players, the sails, the bees, the smoke and the particles are visual and never hashed.
 import { VIEW_W, VIEW_H, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { Game, Run, ScreenParams, TruckState } from '../game.ts';
 import { dcos, dsin } from '../../lib/engine/trig.ts';
 import { approach } from '../../lib/engine/math.ts';
 import { particles } from '../../engine/particles.ts';
@@ -18,6 +19,8 @@ import { measureText } from '../../engine/text.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { getCritter } from '../../content/critters/index.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
+import type { Pose } from '../../lib/art/poses.ts';
+import type { Rig } from '../../lib/art/rig.ts';
 import { WORLD_W, WORLD_H, PLACES } from '../../content/places.ts';
 import { drawTruck } from '../../art/truck.ts';
 import {
@@ -44,24 +47,177 @@ const NOTHING = 'NOTHING NEEDED HERE', GATHER = 'GATHER THE ORDER FIRST';
 const CLOUDS = [[200, 260], [900, 700], [1500, 420]];
 /** The phone rings once per order taken off the board: remembered per run so a revisit stays quiet until the
  *  stage (or the count of dishes served, when the same stage is played again) changes. */
-let rungRun = null, rungOrder = '';
+let rungRun: Run | null = null, rungOrder = '';
 
 /** Rough relative luminance of a #rrggbb fur, used once in enter() to seat the crew by value. */
-function lum(hex) {
+function lum(hex: string): number {
   const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
   return 0.2126 * r * r + 0.7152 * g * g + 0.0722 * b * b;
 }
-function placeIndex(id) { for (let i = 0; i < PLACES.length; i++) if (PLACES[i].id === id) return i; return -1; }
+function placeIndex(id: string): number { for (let i = 0; i < PLACES.length; i++) if (PLACES[i].id === id) return i; return -1; }
 /** The heading whose unit vector is most aligned with (vx, vy): a dot-product argmax, so no atan2 in the sim. */
-function bestHeading(vx, vy) {
+function bestHeading(vx: number, vy: number): number {
   let best = 0, bd = -Infinity;
   for (let h = 0; h < HEADINGS; h++) { const d = vx * COS[h] + vy * SIN[h]; if (d > bd) { bd = d; best = h; } }
   return best;
 }
 
+/**
+ * A pre-rendered offscreen sprite: exactly what art/layers.ts `makeLayer` hands back (`treeSprite`, `signSprite`,
+ * `cloudShadowSprite`, `destGlowSprite` all return one). Stated here rather than imported because art/layers.ts is
+ * still untyped; when its turn comes this becomes an import of the shape that file owns.
+ */
+export interface MapLayer {
+  canvas: HTMLCanvasElement;
+  /** The layer's own pixel size (its canvas width / height). */
+  w: number;
+  h: number;
+}
+
+/** A point in world coordinates: the signpost bases of art/backgrounds/map.ts SIGN_AT are these. */
+export interface WorldPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * One entry of the y-sorted pass. Trees and signposts carry a baked layer; the mill's sails and the truck draw
+ * themselves, so their `L` is null and `w`/`h` exist only to cull them.
+ */
+export interface MapSprite {
+  /** KIND_TREE, KIND_SIGN, KIND_SAILS or KIND_TRUCK. */
+  kind: number;
+  /** World position of the anchor: bottom centre of the sprite. */
+  x: number;
+  y: number;
+  /** The baked sprite to blit, or null for the two that are drawn by hand. */
+  L: MapLayer | null;
+  /** Bounding size used to cull against the camera. */
+  w: number;
+  h: number;
+  /** Width of the ground shadow drawn under it; 0 draws none. */
+  shadow: number;
+}
+
+/** One party member on the map: the rig in the seat's apron colour, its player and its name plate. */
+export interface MapSeat {
+  /** Player slot 0..3: the seat's colour and the sticks it reads. */
+  slot: number;
+  /** Cast id ('barley'). */
+  critter: string;
+  rig: Rig;
+  player: AnimPlayer;
+  /** Name plate text ('P1 BARLEY'). */
+  plateText: string;
+  /** Measured plate width, so the HUD card is sized once in enter() and not per frame. */
+  plateW: number;
+  /** True for the seat carrying the x1.5 steering weight; exactly one seat has it. */
+  isDriver: boolean;
+}
+
+/** A head riding in the truck's hatch, in hatch order (driver first). */
+export interface MapHead {
+  rig: Rig;
+  /** The seat player's live pose object: the player rewrites it in place, so this reference stays current. */
+  pose: Pose;
+}
+
+/** The map camera: the eased fractional follow and the integer origin draw() blits against. */
+export interface MapCamera {
+  /** Camera origin in world space, rounded: what every blit subtracts. */
+  x: number;
+  y: number;
+  /** The unrounded follow, eased toward the truck (see `snapCamera`). */
+  fx: number;
+  fy: number;
+}
+
+/** The options object handed to art/truck.js drawTruck; one per screen, mutated rather than reallocated. */
+export interface TruckDrawOpts {
+  /** Token scale on the map (TOKEN_SCALE). */
+  scale: number;
+  /** 1 = facing right, -1 = facing left. */
+  facing: number;
+  /** Bob phase, 0 or 1. */
+  bob: number;
+  /** Wheel phase 0..3. */
+  wheel: number;
+  /** Vertical scale about the tyre line; 1 at rest. */
+  squash: number;
+  heads: MapHead[];
+}
+
 export class MapScreen extends Screen {
-  constructor(game) { super(game, 'map'); this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.sum = [0, 0, 0, 0, 0]; }
-  enter(params) {
+  // The fields, for the checker only, in the order the constructor and then enter() assign them. `declare`, not
+  // plain declarations, for the reason game.ts's Screen and Game state at length: a plain field declaration emits
+  // a class field per name (es2022 defines them before the constructor body runs), which would define every one
+  // of these back to undefined over what the constructor has just written. `declare` erases under tsc, under
+  // esbuild and under Node's type stripping alike, so the emitted class is the one that shipped.
+
+  /** The y-sorted cast of the map, rebuilt by enter(): roadside trees, signposts, the mill's sails, the truck. */
+  declare sprites: MapSprite[];
+  /** Indices into `sprites`, reused by the per-frame y-sort (it is nearly sorted every frame). */
+  declare order: number[];
+  /** One entry per party member, in party order. */
+  declare seats: MapSeat[];
+  /** The heads in the hatch: the driver, then the rest in the order that keeps two pale furs apart. */
+  declare heads: MapHead[];
+  /** The checksum scratch array `checksumFields()` fills and hands back; never reallocated. */
+  declare sum: number[];
+
+  /** run.truck itself (game.ts Run): the state that survives between visits to this screen. */
+  declare truck: TruckState;
+  /** Current speed in px/frame along the heading, eased toward the lane or field speed. */
+  declare speed: number;
+  /** The heading the summed sticks are asking for (0..15), or -1 when nobody is pushing. */
+  declare want: number;
+  /** Frames until the truck may step its heading again (TURN_EVERY between steps). */
+  declare turnCd: number;
+  /** Which way the token is drawn: 1 = right, -1 = left. */
+  declare facing: number;
+  /** Frames left of the honk bubble. */
+  declare honk: number;
+  /** Frames left of the honk's squash beat. */
+  declare squashT: number;
+  /** Frames left of the wooden sign plate. */
+  declare signTimer: number;
+  /** What the sign says (NOTHING / GATHER). */
+  declare signText: string;
+  /** Measured width of the sign plate, taken once when the sign is raised. */
+  declare signW: number;
+  /** Frames left of the phone ringing at home. */
+  declare ring: number;
+  /** Frames until another river splash may spawn. */
+  declare splashCd: number;
+  /** Distance rolled since the last wheel step, accumulated for `wheelStep`. */
+  declare wheelAcc: number;
+  /** Wheel phase 0..3. */
+  declare wheelStep: number;
+  /** Steering-wheel lean, eased toward +-0.45 while turning. */
+  declare lean: number;
+  /** Bitmask of the player slots pushing a stick this frame, for the wheel widget. */
+  declare pushMask: number;
+  /** True while the truck is held by the river or a wall this frame. */
+  declare blocked: boolean;
+  /** Landmark id the order is pointing at ('home' when everything is aboard). */
+  declare destId: string;
+  /** The signpost base of `destId`: where the lantern glow and the compass arrow sit. */
+  declare destSign: WorldPoint;
+  /** The one entry of `sprites` that moves: the truck, whose x/y are rewritten every update. */
+  declare truckSprite: MapSprite;
+  /** The lantern glow over the destination's sign. */
+  declare glow: MapLayer;
+  /** The drifting cloud shadow, blitted three times. */
+  declare cloud: MapLayer;
+  /** Dev-only: frames of the east nudge on seat 0 (0 outside an autotest capture). */
+  declare devDrive: number;
+  /** The camera following the truck. */
+  declare cam: MapCamera;
+  /** The reused drawTruck options object; built on the first draw (see `truckOpts`). */
+  declare _to?: TruckDrawOpts;
+
+  constructor(game: Game) { super(game, 'map'); this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.sum = [0, 0, 0, 0, 0]; }
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const run = this.game.run, truck = run.truck;
     particles.clear();
@@ -124,14 +280,14 @@ export class MapScreen extends Screen {
       for (let c = Math.floor(this.cam.x / CHUNK_W); c <= Math.min(CHUNKS_X - 1, Math.floor((this.cam.x + VIEW_W - 1) / CHUNK_W)); c++) chunkLayer(r * CHUNKS_X + c);
     }
   }
-  snapCamera(hard) {
+  snapCamera(hard: boolean): void {
     const c = this.cam, tx = this.truck.x - VIEW_W / 2, ty = this.truck.y - VIEW_H / 2;
     if (hard) { c.fx = tx; c.fy = ty; } else { c.fx += (tx - c.fx) * 0.1; c.fy += (ty - c.fy) * 0.1; }
     c.fx = Math.max(0, Math.min(WORLD_W - VIEW_W, c.fx)); c.fy = Math.max(0, Math.min(WORLD_H - VIEW_H, c.fy));
     c.x = Math.round(c.fx); c.y = Math.round(c.fy);
   }
 
-  update() {
+  override update(): void {
     super.update();
     const inp = this.game.input, game = this.game, truck = this.truck;
     if (inp.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
@@ -192,7 +348,7 @@ export class MapScreen extends Screen {
     this.truckSprite.x = truck.x; this.truckSprite.y = truck.y;
     this.snapCamera(false);
   }
-  arrive(i) {
+  arrive(i: number): void {
     const run = this.game.run, id = PLACES[i].id, screen = run.screenForPlace(id);
     if (screen) { this.game.fadeTo(() => this.game.replace(screen, { place: id })); return; }
     this.signText = id === 'home' ? GATHER : NOTHING;
@@ -200,7 +356,7 @@ export class MapScreen extends Screen {
     this.signTimer = SIGN_FRAMES;
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     const cam = this.cam, truck = this.truck, f = this.frame;
     const c0 = Math.floor(cam.x / CHUNK_W), c1 = Math.min(CHUNKS_X - 1, Math.floor((cam.x + VIEW_W - 1) / CHUNK_W));
     const r0 = Math.floor(cam.y / CHUNK_H), r1 = Math.min(CHUNKS_Y - 1, Math.floor((cam.y + VIEW_H - 1) / CHUNK_H));
@@ -251,24 +407,24 @@ export class MapScreen extends Screen {
     if (this.signTimer > 0) drawSignPlate(ctx, this.signText, this.signW, SIGN_FRAMES - this.signTimer);
     drawMapHint(ctx);
   }
-  inView(wx, wy, m) { const c = this.cam; return wx >= c.x - m && wx <= c.x + VIEW_W + m && wy >= c.y - m && wy <= c.y + VIEW_H + m; }
-  drawTruck(ctx, sx, sy) {
+  inView(wx: number, wy: number, m: number): boolean { const c = this.cam; return wx >= c.x - m && wx <= c.x + VIEW_W + m && wy >= c.y - m && wy <= c.y + VIEW_H + m; }
+  drawTruck(ctx: CanvasRenderingContext2D, sx: number, sy: number): void {
     const moving = this.speed > 0.2;
     drawTruck(ctx, sx, sy, this.truckOpts(moving ? ((this.frame >> 2) & 1) : 0));
   }
   /** Reuse one options object for drawTruck (zero allocation in draw). */
-  truckOpts(bob) {
+  truckOpts(bob: number): TruckDrawOpts {
     const o = this._to || (this._to = { scale: TOKEN_SCALE, facing: 1, bob: 0, wheel: 0, squash: 1, heads: this.heads });
     o.facing = this.facing; o.bob = bob; o.wheel = this.wheelStep; o.squash = this.squashT > 0 ? 1.1 : 1; o.heads = this.heads;
     return o;
   }
 
-  summary() {
+  override summary() {
     const t = this.truck;
     return { truck: { x: Math.round(t.x), y: Math.round(t.y), heading: t.heading, at: t.at }, speed: Math.round(this.speed * 100) / 100, dest: this.destId, sign: this.signTimer > 0 ? this.signText : '', honk: this.honk > 0, blocked: this.blocked, seats: this.seats.length };
   }
   /** Every field that could diverge between peers (net/checksum.js). */
-  checksumFields() {
+  override checksumFields(): number[] {
     const t = this.truck, s = this.sum;
     s[0] = t.x; s[1] = t.y; s[2] = t.heading; s[3] = this.speed; s[4] = placeIndex(t.at);
     return s;

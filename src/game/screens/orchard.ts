@@ -10,15 +10,20 @@
 // splats, rings and float text are cosmetic and stay out of checksumFields().
 import { VIEW_W, UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { Game, Input, ScreenParams } from '../game.ts';
 import { rng, makeRng } from '../../lib/engine/rng.ts';
+import type { RngInstance } from '../../lib/engine/rng.ts';
 import { dsin, dcos } from '../../lib/engine/trig.ts';
 import { particles } from '../../engine/particles.ts';
 import { blitAt } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt } from '../../art/fx.ts';
 import { drawFood, foodTones } from '../../art/food.ts';
 import { drawRig } from '../../lib/art/rig.ts';
+import type { Rig } from '../../lib/art/rig.ts';
+import type { Point } from '../../lib/art/rigParts.ts';
 import { makeOrchardLayers, ORCHARD, GRASS_Y, FENCE_Y, BLEED_X, PARALLAX } from '../../art/backgrounds/orchard.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import type { Clock, Seat } from '../minigame.ts';
 
 const R = Math.round, TAU = Math.PI * 2, DEG = Math.PI / 180;
 /** Movement: px/frame, and the lane's ends (a basket's width in from each edge). */
@@ -61,11 +66,18 @@ const PLUS_ONE = '+1', MINUS_ONE = '-1', TITLE = 'PIPPIN ORCHARD', SIGN_PREFIX =
 /** The shared anim keys the boxes are built from (content/critters/common.js CARRY / catch frame 0). */
 const CATCH_POSE = { torso: -4, upper: 72, lower: 48 }, WALK_POSE = { torso: 6, upper: 60, lower: 50 };
 
-function clockIcon(ctx, x, y) { drawFood(ctx, 'apple', x, y, 4); }
+function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'apple', x, y, 4); }
+/**
+ * The orchard's backdrop: the five layers makeOrchardLayers pre-renders (far, mid, ground, near, eaves), each
+ * blitted at its own parallax factor. Taken off the painter rather than restated here, so a layer added there is
+ * a layer this screen can blit without a second edit.
+ */
+export type OrchardLayers = ReturnType<typeof makeOrchardLayers>;
+
 /** The backdrop is a pure function of its seeds: painted on the first visit, kept for every visit after. */
-let LAYERS = null;
+let LAYERS: OrchardLayers | null = null;
 /** Reused by pawRoot so the catch-box maths allocates nothing (it runs four times, in enter()). */
-const PAW = { x: 0, y: 0 };
+const PAW: Point = { x: 0, y: 0 };
 
 /**
  * Root-space position of the near paw for a torso lean and arm angles (degrees): the same chain as
@@ -75,7 +87,7 @@ const PAW = { x: 0, y: 0 };
  * This lives here, not in game/minigame.js, because the coop does not catch anything: minigame.js is shared with
  * another owner's screen now, and only furniture BOTH screens use belongs in it.
  */
-function pawRoot(rig, torsoRot, upper, lower) {
+function pawRoot(rig: Rig, torsoRot: number, upper: number, lower: number): Point {
   const p = rig.p, hipY = rig.hipY;
   const c = dcos(torsoRot * DEG), s = dsin(torsoRot * DEG), shY = -(p.torsoH - 5);
   const sx = p.shoulderX * c - shY * s, sy = hipY + p.shoulderX * s + shY * c;
@@ -87,20 +99,99 @@ function pawRoot(rig, torsoRot, upper, lower) {
 }
 
 /** The ground-contact ellipse every sprite draws before the sorted pass. */
-function drawSeatShadow(ctx, seat) { drawShadow(ctx, seat.x, seat.y, seat.rig.width + 6, 0.4, 0); }
+function drawSeatShadow(ctx: CanvasRenderingContext2D, seat: OrchardSeat): void { drawShadow(ctx, seat.x, seat.y, seat.rig.width + 6, 0.4, 0); }
 
 /** Draw one seat's critter at its feet position with its held basket state. */
-function drawSeat(ctx, seat, fill) {
+function drawSeat(ctx: CanvasRenderingContext2D, seat: OrchardSeat, fill: number): void {
   const rig = seat.rig, o = seat.opts;
   rig.basketFill = fill; rig.basketSquash = seat.catchT > 0 ? 1.15 : 1;
   o.x = seat.x; o.y = seat.y; o.facing = seat.facing;
   drawRig(ctx, rig, seat.player.pose, o);
 }
 
-export class OrchardScreen extends Screen {
-  constructor(game) { super(game, 'orchard'); }
+/**
+ * One seat catching in its own lane: the shared mini-game seat plus the two catch boxes enter() builds for it out
+ * of the rig's proportions. These are the extra fields `Seat` documents a screen keeping more per seat should
+ * declare for itself, and `makeSeats` is generic so enter() gets them back typed.
+ */
+export interface OrchardSeat extends Seat {
+  /** Rim x offset from the feet in the catch pose, in screen px; `facing` mirrors it. */
+  boxCatchX: number;
+  /** Rim y offset from the feet in that pose (negative = above the feet). */
+  boxCatchY: number;
+  /** Rim x offset while the seat is walking, whose arms hold the basket further out. */
+  boxWalkX: number;
+  /** Rim y offset in that pose. */
+  boxWalkY: number;
+}
 
-  enter(params) {
+/** One apple of the fixed pool: on its branch, then falling, then free for the next spawn. */
+export interface Apple {
+  /** False while the slot is free for the next spawn. */
+  active: boolean;
+  /** Where it is drawn: `x0` plus the sway, or plus the 1 px shiver while it still hangs. */
+  x: number;
+  /** The seeded x it hangs on and sways about. */
+  x0: number;
+  /** The row its centre is drawn on, from APPLE_Y0 down. */
+  y: number;
+  /** Fall speed in px/frame (VY_MIN..VY_MAX). */
+  vy: number;
+  /** 0 = ripe, 1 = wormy. */
+  kind: number;
+  /** The sway phase: seeded at spawn, held while it hangs, counted up once it falls. */
+  t: number;
+  /** Frames left on the branch; 0 once it has let go. */
+  hang: number;
+}
+
+/** A missed apple's mark on the grass: a slot of the cosmetic pool, stepping down a size every SPLAT_STEP. */
+export interface Splat {
+  /** Frames into the splat; SPLAT_FRAMES means the slot is free. */
+  t: number;
+  x: number;
+  y: number;
+  /** Ripe red or wormy brown, taken from the apple that made it. */
+  hex: string;
+}
+
+export class OrchardScreen extends Screen {
+  // The fields, for the checker only, in enter() order. `declare` for the reason game.ts gives over its own
+  // block: a plain field declaration would emit a class field per name (es2022 defines them before the
+  // constructor body runs, and a screen's own declaration would also define a base field back to undefined), and
+  // this screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild and under
+  // Node's type stripping alike, so the emitted class is the one that shipped.
+
+  /** The backdrop, pre-rendered once (art/backgrounds/orchard.ts makeOrchardLayers) and blitted per frame. */
+  declare layers: OrchardLayers;
+  /** The petal stream's own generator (PETAL_SEED): cosmetic only, never the sim. */
+  declare vis: RngInstance;
+  /** The petal spawn options, built once in enter() and handed to particles.spawn every PETAL_EVERY frames. */
+  declare petalOpts: { color: string; color2: string; size: number; life: number; vx: number; vy: number; screen: boolean };
+  /** One seat per party member, in party order (not slot order): one depth lane each, P1 in front. */
+  declare seats: OrchardSeat[];
+  /** The apple pool: MAX_APPLES slots, reused in place, never reallocated. */
+  declare apples: Apple[];
+  /** The splat pool (cosmetic): MAX_SPLATS slots handed out in turn. */
+  declare splats: Splat[];
+  /** The next splat slot to reuse. */
+  declare splatCursor: number;
+  /** Frames until the next apple is seeded on a branch (SPAWN_MIN..SPAWN_MAX). */
+  declare nextSpawn: number;
+  /** Apples the round is played to: what the order still needs, or 4 with no run. */
+  declare target: number;
+  /** Apples in the party's baskets right now. */
+  declare total: number;
+  /** "3/4" for the clock ticket, rebuilt by setTotal() as the count changes. */
+  declare countStr: string;
+  /** The round's clock and its ending (game/minigame.ts). */
+  declare clock: Clock;
+  /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
+  declare fields: number[];
+
+  constructor(game: Game) { super(game, 'orchard'); }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
     if (!LAYERS) LAYERS = makeOrchardLayers();
@@ -108,7 +199,7 @@ export class OrchardScreen extends Screen {
     particles.clear();
     this.vis = makeRng(PETAL_SEED);
     this.petalOpts = { color: PETAL_PALE, color2: ORCHARD.fallen, size: 4, life: 130, vx: -0.3, vy: 0.5, screen: true };
-    this.seats = makeSeats(game, (i) => LANE_Y0 - i * LANE_GAP);
+    this.seats = makeSeats<OrchardSeat>(game, (i) => LANE_Y0 - i * LANE_GAP);
     const n = this.seats.length, pitch = Math.min(120, R((X_MAX - X_MIN) / (n + 1)));
     for (let i = 0; i < n; i++) {
       const s = this.seats[i];
@@ -134,7 +225,7 @@ export class OrchardScreen extends Screen {
     this.fields = [];
   }
 
-  update() {
+  override update(): void {
     super.update();
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
@@ -158,7 +249,7 @@ export class OrchardScreen extends Screen {
   }
 
   /** Every seat: read its stick, move along its lane, pick the anim, tick the beats. */
-  updateSeats(input) {
+  updateSeats(input: Input): void {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.catchT > 0) s.catchT--;
@@ -176,7 +267,7 @@ export class OrchardScreen extends Screen {
   }
 
   /** Spawn, fall, sway; then the catch test against every seat's rim, then the miss. */
-  updateApples() {
+  updateApples(): void {
     if (--this.nextSpawn <= 0) {
       this.nextSpawn = rng.int(SPAWN_MIN, SPAWN_MAX);
       for (let i = 0; i < this.apples.length; i++) {
@@ -223,16 +314,16 @@ export class OrchardScreen extends Screen {
     }
   }
 
-  setTotal(n) { this.total = n; this.countStr = n + '/' + this.target; }
+  setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
   /** The round is over: drop the sign, and every seat with something in its basket cheers. */
-  finish() {
+  finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, SIGN_PREFIX + this.total);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.moving = false; s.bumpT = 0; seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true); }
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     const L = this.layers, cam = 0;
     blitAt(ctx, L.far, -BLEED_X - R(cam * PARALLAX.far), 0);
     blitAt(ctx, L.mid, -BLEED_X - R(cam * PARALLAX.mid), 0);
@@ -267,7 +358,7 @@ export class OrchardScreen extends Screen {
    * inked cream beads climbing out of that hole and over the rim, so the silhouette breaks too. Each bead carries
    * its own 1 px ink (ART_STYLE 0.2: separate objects, separate lines) and is 3 px across, over the 2 px floor.
    */
-  drawApple(ctx, a) {
+  drawApple(ctx: CanvasRenderingContext2D, a: Apple): void {
     if (!a.active) return;
     const x = R(a.x), y = R(a.y);
     // the branch it is still holding on to: a 2 px ink stalk (the 2 px floor, ART_STYLE 0.8) from the apple's own
@@ -300,7 +391,7 @@ export class OrchardScreen extends Screen {
    * disc: a round red disc lying on the grass is an apple, and the player would go for it. It draws after the seats
    * because it lands in front of the front lane.
    */
-  drawSplat(ctx, sp) {
+  drawSplat(ctx: CanvasRenderingContext2D, sp: Splat): void {
     if (sp.t >= SPLAT_FRAMES) return;
     const k = (sp.t / SPLAT_STEP) | 0, rx = SPLAT_RX[k], ry = SPLAT_RY[k];
     ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx + 1, ry + 1, 0, 0, TAU); ctx.fill();
@@ -310,7 +401,7 @@ export class OrchardScreen extends Screen {
   }
 
   /** ?debug=1: the catch boxes. */
-  drawBoxes(ctx) {
+  drawBoxes(ctx: CanvasRenderingContext2D): void {
     ctx.strokeStyle = UI.red; ctx.lineWidth = 1;
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
@@ -319,7 +410,7 @@ export class OrchardScreen extends Screen {
     }
   }
 
-  summary() {
+  override summary() {
     return {
       caught: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
       seats: this.seats.map((s) => [s.slot, R(s.x), s.count]), apples: this.apples.filter((a) => a.active).length,
@@ -327,7 +418,7 @@ export class OrchardScreen extends Screen {
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js). */
-  checksumFields() {
+  override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.nextSpawn);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.count, s.bumpT, s.moving ? 1 : 0); }

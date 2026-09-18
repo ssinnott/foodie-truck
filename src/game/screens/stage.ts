@@ -10,8 +10,11 @@
 // Nothing here is random and nothing reads the clock: the cards, the rigs and every string are built in enter().
 import { VIEW_W, UI, PLUM } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { CritterDef, Game, Run, ScreenParams } from '../game.ts';
 import { drawText, drawTextOutlined, measureText } from '../../engine/text.ts';
 import { drawHeadPortrait, idlePoseOf } from '../../art/portraits.ts';
+import type { Rig } from '../../lib/art/rig.ts';
+import type { PartialPose } from '../../lib/art/poses.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { getCustomer } from '../../content/critters/customers.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
@@ -57,7 +60,7 @@ const BLINK_PERIOD = 60, BLINK_ON = 40;
  * A dish name over at most two rows: it breaks at the space nearest the middle, so 'APPLE OMELETTE' is two words
  * on two rows rather than one row clipped by the card. A name that fits whole stays whole.
  */
-function wrapDish(dish) {
+function wrapDish(dish: string): string[] {
   if (measureText(dish, 2) <= CARD_W - 12) return [dish];
   const words = dish.split(' ');
   if (words.length < 2) return [dish];
@@ -69,10 +72,109 @@ function wrapDish(dish) {
   return [words.slice(0, best).join(' '), words.slice(best).join(' ')];
 }
 
-export class StageScreen extends Screen {
-  constructor(game) { super(game, 'stage'); this.cards = []; this.busts = []; this.rows = []; this.fields = []; }
+/**
+ * A customer as content/critters/customers.ts holds them: a cast entry without the `bio` that only the playable
+ * critters (the gallery reads it) carry. `getCustomer` is the one way onto this board.
+ */
+export type CustomerDef = Omit<CritterDef, 'bio'>;
 
-  enter(params) {
+/** One NEED row of a card: an order line worded once in enter() and only drawn after. */
+export interface StageNeed {
+  /** The ingredient's food glyph id (art/food.ts). */
+  icon: string;
+  /** Its base hex, the one the map sign and the kitchen item share. */
+  hex: string;
+  /** 'APPLES 4': the ingredient's name and how many the order wants. */
+  text: string;
+  /** The landmark that supplies it ('PIPPIN ORCHARD'), or the bare place id for an ingredient no landmark carries. */
+  place: string;
+}
+
+/** One ticket pinned to the board: an ORDERS entry, laid out and worded once in enter(). */
+export interface StageCard {
+  /** Index into `busts`: the customer who phoned this order in (three of them serve seven orders). */
+  bust: number;
+  /** The card's top-left corner; the selected one is drawn 2px higher, which does not move this. */
+  x: number;
+  y: number;
+  /** 0 = the top row of four, 1 = the rest. */
+  row: number;
+  /** Column within that row. */
+  col: number;
+  /** Header band text ('ORDER 01'). */
+  title: string;
+  /** The customer's name plate text. */
+  name: string;
+  dish: string;
+  /** The dish over one or two rows (wrapDish). */
+  lines: string[];
+  needs: StageNeed[];
+  /** What the customer said on the phone: the pad's first row. */
+  line: string;
+  /** The pad's second row: who said it and where the order sends the truck. */
+  who: string;
+}
+
+/** One customer, built once per DISTINCT customer in enter() and drawn on every card that phoned an order in. */
+export interface StageBust {
+  def: CustomerDef;
+  /** Built once in enter(), never in draw(): slot -1, the off-duty apron. */
+  rig: Rig;
+  /** Idling from a per-bust offset (13 ticks each) so the board does not breathe in lockstep. */
+  player: AnimPlayer;
+  /** The first idle frame's pose, which art/portraits.ts anchors the portrait on; null for a rig without one. */
+  anchor: PartialPose | null;
+}
+
+/** The options object handed to art/portraits.ts drawHeadPortrait; one per screen, reused by every card. */
+export interface PortraitDrawOpts {
+  /** The window the head sits in. */
+  bg: string;
+  /** How much of the square the head fills. */
+  fill: number;
+  /** 1 = facing right, -1 = facing left. */
+  facing: number;
+}
+
+export class StageScreen extends Screen {
+  // The fields, for the checker only, in constructor then enter() order. `declare` for the reason game.ts gives
+  // over its own block: a plain field declaration would emit a class field per name (es2022 defines them before
+  // the constructor body runs, and a screen's own declaration would also define a base field back to undefined),
+  // and this screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild
+  // (tools/build.js, tools/server.js) and under Node's type stripping alike, so the emitted class is the original.
+
+  /** The day's tickets, one per ORDERS stage in that order. */
+  declare cards: StageCard[];
+  /** One entry per distinct customer, in the order the cards first ask for them; a card keeps its index. */
+  declare busts: StageBust[];
+  /** The closing slate's rows, rebuilt (in place) by enter(). */
+  declare rows: string[];
+  /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
+  declare fields: number[];
+  /** True once every stage has been served: the board closes the truck for the night instead of taking an order. */
+  declare closed: boolean;
+  /** The stage results just banked (run.lastServed), whose stamp is still slamming; -1 before the first one. */
+  declare justServed: number;
+  /** The one shared cursor any joined seat drives: an index into `cards`. */
+  declare sel: number;
+  /** The card confirmed: the pick is made and the fade is running. -1 until one is. */
+  declare chosen: number;
+  /** Frames into the SERVED stamp on `justServed`'s card, 0..STAMP_FRAMES; every other served card is stamped whole. */
+  declare stampT: number;
+  /** The closing slate's first row: how many of the day's stages carry stars. */
+  declare servedText: string;
+  /** Its second row: the day's star total out of three a stage. */
+  declare starsText: string;
+  /** Its third row: what the day took. */
+  declare takingsText: string;
+  /** The hint line under the board, which the closed truck replaces with the way out. */
+  declare hint: string;
+  /** The drawHeadPortrait options, reused by every card (this file allocates nothing in draw()). */
+  declare portOpts: PortraitDrawOpts;
+
+  constructor(game: Game) { super(game, 'stage'); this.cards = []; this.busts = []; this.rows = []; this.fields = []; }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
     // one rig and one idle beat per DISTINCT customer (three of them serve seven orders), phased apart so the
@@ -121,13 +223,13 @@ export class StageScreen extends Screen {
   }
 
   /** The first stage still to be served, scanning from `from`; the day's last card when every one is done. */
-  firstOpen(run, from) {
+  firstOpen(run: Run, from: number): number {
     const n = run.stages.length;
     for (let k = 0; k < n; k++) { const i = (((from + k) % n) + n) % n; if (!run.stages[i].stars) return i; }
     return (((from) % n) + n) % n;
   }
 
-  update() {
+  override update(): void {
     super.update();
     const game = this.game, inp = game.input, run = game.run;
     for (const b of this.busts) { b.player.tick(); if (b.player.done) b.player.play('idle', { restart: true }); }
@@ -154,7 +256,7 @@ export class StageScreen extends Screen {
   }
 
   /** Closing time, confirmed: leave the room if there is one, then back to the front door. */
-  quit() {
+  quit(): void {
     const game = this.game;
     if (game.net) { try { game.net.leave(); } catch { /* a room that is already gone */ } game.net = null; }
     game.reset('title');
@@ -162,7 +264,7 @@ export class StageScreen extends Screen {
 
   // ---- drawing ----
 
-  card(ctx, i) {
+  card(ctx: CanvasRenderingContext2D, i: number): void {
     const c = this.cards[i], run = this.game.run, st = run.stages[i];
     const sel = i === this.sel && !this.closed, x = c.x, y = c.y - (sel ? 2 : 0);
     drawTicket(ctx, x, y, CARD_W, CARD_H, { title: c.title, rules: false });
@@ -202,7 +304,7 @@ export class StageScreen extends Screen {
   }
 
   /** The order pad under the board: what the selected customer said on the phone, and where it sends the truck. */
-  pad(ctx) {
+  pad(ctx: CanvasRenderingContext2D): void {
     const c = this.cards[this.sel];
     drawTicket(ctx, PAD.x, PAD.y, PAD.w, PAD.h, { rules: false, header: false });
     drawText(ctx, c.line, PAD.x + PAD.w / 2, PAD.y + 6, { size: 1, color: UI.ink, align: 'center', shadow: false });
@@ -210,7 +312,7 @@ export class StageScreen extends Screen {
   }
 
   /** Closing time: the day's card, totted up on the slate the title screen writes its menu on. */
-  closing(ctx) {
+  closing(ctx: CanvasRenderingContext2D): void {
     drawDim(ctx, 0.5);
     drawSlate(ctx, SLATE.x, SLATE.y, SLATE.w, SLATE.h, { title: CLOSE_TITLE });
     for (let i = 0; i < this.rows.length; i++) {
@@ -221,7 +323,7 @@ export class StageScreen extends Screen {
     }
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     drawLane(ctx);
     drawDim(ctx, 0.62);
     drawSign(ctx, VIEW_W / 2, 2, measureText(HEAD_TEXT, 2) + 18, 24, HEAD_TEXT, { size: 2 });
@@ -231,7 +333,7 @@ export class StageScreen extends Screen {
     drawHint(ctx, this.hint);
   }
 
-  summary() {
+  override summary() {
     const run = this.game.run;
     return {
       sel: this.sel, dish: this.cards[this.sel].dish, customer: this.cards[this.sel].name,
@@ -240,7 +342,7 @@ export class StageScreen extends Screen {
     };
   }
   /** Every number that could differ between two machines: the cursor, the pick and the closing card. */
-  checksumFields() {
+  override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     f.push(this.sel, this.chosen, this.closed ? 1 : 0);
     return f;

@@ -34,6 +34,9 @@ import { runChecksum } from './checksum.ts';
 import { broadcastSignal, mqttSignal, makeRoomCode, createSignalMux } from './signal.ts';
 import { MSG, PROTOCOL_VERSION, encodeInput, encodeChecksum, encodeStart, encodeJson, encodePing, encodeDrop, decodeMessage } from './protocol.ts';
 import { createRoom, resetSeats, releaseSeats } from './roster.ts';
+import type { Desync, Lockstep } from '../lib/net/lockstep.ts';
+import type { Peer } from '../lib/net/peer.ts';
+import type { Game, Input, Run } from '../game/game.ts';
 
 /**
  * Wall-clock milliseconds without remote input before a silent player is given up on. Counted in real
@@ -59,18 +62,262 @@ const RTT_REPORT_GRACE_MS = 3000;
 const WATCHDOG_MS = 250;
 
 /** Turn a measured round-trip time into an input delay in frames, clamped to something playable. */
-export function delayForRtt(rttMs) {
+export function delayForRtt(rttMs: number | null): number {
   if (rttMs == null) return 3;
   const oneWay = rttMs / 2 / (1000 / 60);        // one-way latency in frames
   return Math.max(2, Math.min(10, Math.ceil(oneWay) + 1));   // must exceed one-way latency (tools/nettest.js)
+}
+
+// ---- the session's shape -------------------------------------------------------------------------
+
+/**
+ * Where a session is in its life, in the order `setState` moves it through. 'playing' is the one with
+ * a meaning beyond the lobby's status line: it is the state in which the simulation is under lockstep
+ * control, and `net.active` is exactly this test.
+ */
+export type NetState = 'idle' | 'signalling' | 'connecting' | 'lobby' | 'playing' | 'ended';
+
+/** What createNetSession is opened with: the lobby screen's `open()`, or the hooks at the foot of this file. */
+export interface NetSessionOptions {
+  /** The shell. The session seeds its rng, rebuilds its run and resets its screens through this. */
+  game: Game;
+  /** The input service: read through keyboard block 0, written one virtual seat per player. */
+  input: Input;
+  /** True on the peer that mints the room code, owns the roster and declares the drops. */
+  isHost: boolean;
+  /** The HOST KEY. A guest brings one; the host mints one when this is empty. */
+  room?: string;
+  /**
+   * 'mqtt' (room codes over a public broker) or 'broadcast' (the same-machine end-to-end test hook).
+   * A string rather than that union because it arrives from the URL through game.ts's GameOptions.
+   */
+  transport?: string;
+  /** Called on every state change, for a screen to redraw on; re-pointed later by `onStateChange`. */
+  onState?: ((s: NetState) => void) | null;
+}
+
+/**
+ * One seat of the host's roster: what net/roster.ts's makeMember builds, sortRoster copies and every
+ * peer stores indexed by slot. roster.ts owns this shape (it states the same fields in a @typedef);
+ * this file reads it for the party, the picks, the latency report and the seat a drop retires.
+ */
+export interface RosterMember {
+  /** That peer's id on the rendezvous, which is also its key in the link table. */
+  pid: string;
+  /** Seat 0..3. Seats are dense and the host is always 0 (roster.ts). */
+  slot: number;
+  /** Cast INDEX, not a cast id: compared modulo the cast length, exactly as game/run.ts seats it. */
+  critter: number;
+  ready: boolean;
+  /** True for this machine's own seat. */
+  local: boolean;
+  /** The guest's request counter, echoed back by the host so a stale roster cannot rubber-band them. */
+  seq: number;
+  /** The worst round trip that peer reported, or null until it has measured one. */
+  rtt: number | null;
+  /** True once a match has retired the seat. */
+  gone: boolean;
+}
+
+/** The lobby half of a session: this peer's own pick and stamp, the host's opening scene, the roster. */
+export interface NetLobby {
+  /** This peer's cast index. */
+  myCritter: number;
+  myReady: boolean;
+  /** The host's opening scene: an index into game/run.ts SCENES. */
+  scene: number;
+  /** The host's roster, indexed by slot. */
+  members: RosterMember[];
+}
+
+/**
+ * One seat as `net.party()` hands it over (net/roster.ts): plain data in slot order, rebuilt on every
+ * read. A lobby screen draws from these and never from the roster itself.
+ */
+export interface NetPartySeat {
+  slot: number;
+  /** Cast index, as RosterMember.critter. */
+  critter: number;
+  ready: boolean;
+  /** True for this machine's own seat. */
+  local: boolean;
+  /** True once a match has retired the seat. */
+  gone: boolean;
+  /** True while a direct link to that player is open, rather than the host's relay. */
+  direct: boolean;
+}
+
+/** The last seat a match retired: the slot and the wall clock it happened at, for a status line. */
+export interface NetDrop {
+  slot: number;
+  /** performance.now() at the moment the simulation reached the drop frame. Display only. */
+  at: number;
+}
+
+/**
+ * The host's START parameters: the one packet every peer must read identically (net/protocol.ts
+ * encodeStart, decodeMessage). Everything after applying it is lockstep.
+ */
+export interface StartParams {
+  /** The run's seed, chosen once by the host before any simulation. */
+  seed: number;
+  /** The screen the match opens on: an index into game/run.ts SCENES. */
+  scene: number;
+  /** Frames between recording input and simulating it. */
+  delay: number;
+  /** One cast index per seat, in slot order; its length IS the party size. */
+  critters: number[];
+}
+
+/**
+ * One link of the mesh, keyed by peer id: what net/roster.ts's createLinks builds around a
+ * lib/net/peer.ts connection. roster.ts owns the shape (it describes these fields in a comment over
+ * the table); this file is handed them by onPacket / onLinkClosed and holds the table on `net.links`.
+ */
+export interface NetLink {
+  /** The peer at the far end. */
+  pid: string;
+  /** True for the link to the host: the one link every guest must have, and losing it ends the session. */
+  isHost: boolean;
+  /** True once both data channels are carrying traffic. */
+  open: boolean;
+  /** The WebRTC connection under it. */
+  peer: Peer;
+  /** Date.now() when the link was created, for the formation sweep. */
+  since: number;
+  /** True while it is being torn down deliberately, so its closing is not read as a disconnect. */
+  retiring: boolean;
+}
+
+/** Everything a test or a status line wants to know about a session, as plain data (`net.summary()`). */
+export interface NetSummary {
+  state: NetState;
+  /** The HOST KEY. */
+  room: string;
+  pid: string;
+  /** Our seat, or -1 before the host has seated us. */
+  slot: number;
+  players: number;
+  delay: number;
+  rtt: number | null;
+  rttReady: boolean;
+  waiting: boolean;
+  /** Slots the current frame is waiting for. */
+  missing: number[];
+  /** Frames simulated so far, or -1 when no match is on. */
+  frame: number;
+  desync: Desync | null;
+  /** `endReason`. */
+  reason: string;
+  error: string;
+  /** The host's opening scene (an index into game/run.ts SCENES). */
+  scene: number;
+  myCritter: number;
+  myReady: boolean;
+  party: NetPartySeat[];
+  /** The slots a match has retired, in slot order. */
+  dropped: number[];
+  lastDrop: NetDrop | null;
+}
+
+/**
+ * The session object: the state the literal in createNetSession starts with, the methods that function
+ * assigns under it, and the lobby API net/roster.ts installs onto it (remoteSlots, party, critterTaken,
+ * setCritter, setReady). Nothing here is optional - all of it is in place by the time createNetSession
+ * returns - and the split below is only about where each member is written.
+ */
+export interface NetSession {
+  // ---- state, from the literal ----
+  /** True on the peer that mints the room code, owns the roster and declares the drops. */
+  isHost: boolean;
+  /** The HOST KEY: minted by the host, typed in (or taken from ?room=) by a guest. */
+  room: string;
+  /** 'mqtt' or 'broadcast', as NetSessionOptions describes them. */
+  transport: string;
+  /** This peer's id on the rendezvous. Unique per page load, and nothing but an address. */
+  pid: string;
+  state: NetState;
+  /** Why a session could not be opened, for the lobby's error line. */
+  error: string;
+  /** The reason `end()` was given, for the same line. */
+  endReason: string;
+  /** Our seat in the party. The host is always 0; a guest has -1 until the host seats them. */
+  localSlot: number;
+  /** Party size, which is simply how many people are in the room until the match starts. */
+  players: number;
+  /** Frames between recording input and simulating it, fixed for the match by the START packet. */
+  delay: number;
+  /** Worst round-trip time to anyone in the party, which is what the delay has to cover. */
+  rtt: number | null;
+  /** True once a ping measurement exists; the match will not auto-start before this. */
+  rttReady: boolean;
+  /** Set when a peer reports a different protocol version. */
+  versionMismatch: boolean;
+  lobby: NetLobby;
+  /** The frame bookkeeping, for as long as a match is on, and null at every other moment. */
+  ls: Lockstep | null;
+  /** pid -> link record, one per pairing (roster.ts createLinks). */
+  links: Map<string, NetLink> | null;
+  /** The room's rendezvous. `any`: net/signal.ts is not typed yet, and its two strategies (broadcastSignal, mqttSignal) return different shapes. */
+  signal: any;
+  /** That rendezvous split into one channel per pairing (signal.ts createSignalMux). `any` for the reason `signal` is. */
+  mux: any;
+  /** True while the simulation is under lockstep control. */
+  readonly active: boolean;
+  /** True while waiting on somebody (a gameplay screen draws an overlay on this). */
+  waiting: boolean;
+  /** Slots the current frame is waiting for, for that overlay. */
+  missing: number[];
+  /** The last seat retired mid-match (wall clock, display only). */
+  lastDrop: NetDrop | null;
+  /** The checksum disagreement that ended the match, if one did. */
+  desync: Desync | null;
+  /** The frame a seat was retired on, or -1 while they are still playing. */
+  dropFrameOf(slot: number): number;
+  /** Re-point the state callback: a session outlives the screen that opened it. */
+  onStateChange(fn: ((s: NetState) => void) | null): void;
+
+  // ---- the session's own API, assigned under the literal ----
+  /** Begin connecting. Resolves once signalling is up; the other players arrive asynchronously. */
+  start(): Promise<boolean>;
+  /** Host only: fix the session parameters and tell the party. False when the party is not startable. */
+  beginMatch(scene?: number): boolean;
+  /** Come off lockstep and put the party back in the lobby, keeping every link and every pick. */
+  matchOver(): boolean;
+  /** Gate for createLoop's canUpdate: false while somebody's input for this frame has not arrived. */
+  canStep(): boolean;
+  /** Sample, share and inject this frame's input. False - injecting nothing - when the frame cannot be simulated. */
+  beforeStep(): boolean;
+  /** Exchange a checksum periodically, for a frame beforeStep actually prepared. */
+  afterStep(): void;
+  /** Tear the session down, with the reason the lobby shows. */
+  end(reason?: string): void;
+  /** Leave the room for good: end the session and hand every seat back to the real devices. */
+  leave(): void;
+  summary(): NetSummary;
+
+  // ---- the lobby API, installed by net/roster.ts createRoom ----
+  /** Everyone but us, by slot, in seat order. */
+  remoteSlots(): number[];
+  /** The seated party, in slot order, for a lobby screen to draw. */
+  party(): NetPartySeat[];
+  /** True when another seat holds critter `i` (modulo the cast), so this player may not take it. */
+  critterTaken(i: number): boolean;
+  /** Pick a critter. A pick that collides with somebody else's is refused; the host arbitrates. */
+  setCritter(i: number): boolean;
+  /** Stamp (or un-stamp) this peer's seat READY. */
+  setReady(on: boolean): boolean;
 }
 
 /**
  * @param {{ game: any, input: any, isHost: boolean, room?: string, transport?: 'mqtt'|'broadcast',
  *           onState?: ((s: string) => void) | null }} o
  */
-export function createNetSession({ game, input, isHost, room: roomCode = '', transport = 'mqtt', onState = null }) {
-  const net = {
+export function createNetSession({ game, input, isHost, room: roomCode = '', transport = 'mqtt', onState = null }: NetSessionOptions): NetSession {
+  // The literal is the session's STATE. Its methods are assigned under it and the room installs the
+  // lobby API onto the same object, so it is ASSERTED to the full interface rather than annotated with
+  // it: an annotation alone would demand members that do not exist for another few hundred lines.
+  const net: NetSession = {
     isHost,
     /** The HOST KEY: minted by the host, typed in (or taken from ?room=) by a guest. */
     room: roomCode || (isHost ? makeRoomCode() : ''),
@@ -114,19 +361,19 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
     dropFrameOf(slot) { return net.ls ? net.ls.dropFrameOf(slot) : -1; },
     /** Re-point the state callback: a session outlives the screen that opened it. */
     onStateChange(fn) { onState = typeof fn === 'function' ? fn : null; },
-  };
+  } as NetSession;
 
-  const setState = (s) => { if (net.state !== s) { net.state = s; if (onState) onState(s); } };
-  const stateIs = (s) => net.state === s;        // through a call, so TypeScript does not narrow across awaits
+  const setState = (s: NetState) => { if (net.state !== s) { net.state = s; if (onState) onState(s); } };
+  const stateIs = (s: NetState) => net.state === s;        // through a call, so TypeScript does not narrow across awaits
   let resendTick = 0;
   let stallStart = 0, waitShownAt = 0, watchdog = 0, announcer = 0, allReadyAt = 0;
   /** Slots whose DROP frame the simulation has already reached, so each is noted once. */
-  const dropped = new Set();
+  const dropped = new Set<number>();
   /** Set by beforeStep, cleared by afterStep: the two must always pair on the same frame. */
   let stepped = false;
   /** After the session ends mid-run, keep the survivor's own seat on their own keyboard (see pumpEnded). */
   let endedPump = false;
-  let ourRun = null;
+  let ourRun: Run | null = null;
 
   const room = createRoom({ net, game, setState, maybeStart, onPacket, onLinkClosed });
   const { links, sendToSlot, broadcast, lostLinks } = room;   // the room also installs net.remoteSlots/party/critterTaken/setCritter/setReady
@@ -168,7 +415,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
     }, ANNOUNCE_MS);
   }
 
-  function onLinkClosed(link, reason) {
+  function onLinkClosed(link: NetLink, reason: string) {
     if (stateIs('ended') || link.retiring) return;
     const m = room.memberByPid(link.pid);
     if (link.isHost && !isHost) { net.end(reason || 'the host left'); return; }
@@ -225,7 +472,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
   };
 
   /** Every peer runs this with byte-identical parameters. Everything after it is lockstep. */
-  function applyStart({ seed, scene, delay, critters }) {
+  function applyStart({ seed, scene, delay, critters }: StartParams) {
     const players = Math.max(NET_MIN_PLAYERS, Math.min(NET_PLAYERS, critters.length));
     net.players = players;
     net.delay = Math.max(1, delay | 0);
@@ -290,7 +537,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
    * slot, by which time the tails peers forward for each other (resendWindow) have brought everyone
    * to the same frame.
    */
-  function declareDrop(slot) {
+  function declareDrop(slot: number) {
     if (!isHost || !net.active || !net.ls) return;
     if (slot === net.localSlot || net.ls.dropFrameOf(slot) >= 0) return;
     const at = net.ls.frame;
@@ -299,7 +546,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
   }
 
   /** Retire a slot at `frame` on this machine: it reads as neutral from there on (lockstep.js). */
-  function applyDrop(slot, frame) {
+  function applyDrop(slot: number, frame: number) {
     if (!net.ls || !net.ls.dropSlot(slot, frame)) return;
     const m = net.lobby.members[slot];
     if (m) { m.gone = true; links.drop(m.pid); }
@@ -343,7 +590,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
 
   // ---- packets ---------------------------------------------------------------------------------
 
-  function onPacket(bytes, link) {
+  function onPacket(bytes: Uint8Array, link: NetLink) {
     const m = decodeMessage(bytes);
     if (!m) return;
     switch (m.type) {
@@ -535,12 +782,13 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
  * Debug/test hooks on window.__game (docs/ARCHITECTURE.md section 6): how tests drive a room until the
  * lobby screen exists. Hosting or joining replaces any live session; the new session is stored in
  * game.net and started at once.
- * @param {any} hooks window.__game
- * @param {any} game
- * @param {any} input
+ *
+ * `hooks` is `any` because it IS window.__game, which types/globals.d.ts already declares `any`: an open bag
+ * the boot path and the tools (playtest.js, tools/scenarios/*) both write into, keyed by whatever a test needs
+ * that day. This function only ever `Object.assign`s onto it, so there is no shape here to describe.
  */
-export function installNetHooks(hooks, game, input) {
-  const open = (o) => {
+export function installNetHooks(hooks: any, game: Game, input: Input): void {
+  const open = (o: { isHost: boolean, room?: string, transport?: string }) => {
     if (game.net && game.net.state !== 'ended') game.net.leave();
     const s = createNetSession({ game, input, ...o });
     game.net = s;
@@ -555,7 +803,7 @@ export function installNetHooks(hooks, game, input) {
     /** Host a room; returns its code. */
     netHost: ({ transport = game.options.transport } = {}) => open({ isHost: true, transport }),
     /** Join a room by code. */
-    netJoin: (code, { transport = game.options.transport } = {}) => open({ isHost: false, room: String(code || '').toUpperCase(), transport }),
+    netJoin: (code: string, { transport = game.options.transport } = {}) => open({ isHost: false, room: String(code || '').toUpperCase(), transport }),
     netSetCritter: (i) => !!(game.net && game.net.setCritter(i)),
     netReady: (on = true) => !!(game.net && game.net.setReady(on)),
     netBegin: (scene = 0) => !!(game.net && game.net.beginMatch(scene)),

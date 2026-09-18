@@ -8,7 +8,7 @@
 // OBJECT (an ear is an object, a muzzle patch is a colour change inside the head's own ink), two tones on
 // narrow parts, colours through rig.col() so the hit flash still works, nothing under 2 px, no allocation.
 import { celPath, celBall, celRect, celCapsule, celTaper, celPoly, tones, makeTones, pathRR, pathCap, band, wantSh } from '../../lib/art/shading.ts';
-import { hexToRgb, rgbToHex } from '../../art/palettes.ts';
+import { hexToRgb, rgbToHex, PALETTES } from '../../art/palettes.ts';
 import { pathTaperedCapsule } from '../../lib/art/shapes.ts';
 import { getChain } from '../../lib/art/secondary.ts';
 import { P, FACE } from '../../lib/art/poses.ts';
@@ -16,11 +16,138 @@ import { brow } from '../../lib/art/rigParts.ts';
 import { rad } from '../../lib/engine/math.ts';
 import { PLAYER_COLORS, OFF_DUTY_APRON } from '../../constants.ts';
 import { buildRig } from '../../lib/art/rig.ts';
+import type { Ramp, Tones } from '../../lib/art/shading.ts';
+import type { Palette } from '../../lib/art/palettes.ts';
+import type { Pose, PoseSpec } from '../../lib/art/poses.ts';
+import type { FaceOpts, Info, PartHook, Point } from '../../lib/art/rigParts.ts';
+import type { AnimSet, Frame } from '../../lib/art/animation.ts';
+import type { Proportions, Rig, RigAccessory, RigBuild, RigParts } from '../../lib/art/rig.ts';
 
 const R = Math.round;
 const TAU = Math.PI * 2;
 /** Every critter's outline: warm near-black (docs/ART_STYLE.md section 3). */
 export const INK = '#2A1F1A';
+
+// ---------------------------------------------------------------- the authoring surface
+/** The ear a species wears. 'dome' is the frog's pair of eye balls on the crown; 'none' draws no ear at all. */
+export type EarKind = 'round' | 'point' | 'long' | 'small' | 'droop' | 'dome' | 'none';
+/** The tail a species wears (makeTail). */
+export type TailKind = 'stub' | 'puff' | 'bushy' | 'ring' | 'thin' | 'none';
+/** Which palette slot the ear is furred in: the fur, or the dark fur / markings. */
+export type EarSlot = 'skin' | 'hair';
+/** Where the two ears sit behind the skull, as fractions of headR (`near` is the viewer's side). */
+export interface EarPos {
+  near: Point;
+  far: Point;
+}
+/** The muzzle ellipse in head space: centre (mx, my), radii (rx, ry). One shared object (see muzzleGeom). */
+export interface MuzzleGeom {
+  mx: number;
+  my: number;
+  rx: number;
+  ry: number;
+}
+/**
+ * The face options a critter build carries: the library's (lib/art/rigParts.ts FaceOpts, of which critterFace
+ * reads `eyeY`) plus the three this game's own face renderer adds.
+ */
+export interface CritterFaceOpts extends FaceOpts {
+  /** Keep the whites under a blink or a dazed cross: an ink arc is invisible on dark fur (Barley). */
+  whitesAlways?: boolean;
+  /** The whites ARE the two eye domes on the crown (ears: 'dome'), so the eye row moves up onto them (Cress). */
+  domeEyes?: boolean;
+  /** One long 2 px mouth line across the muzzle instead of the small curl (Cress). */
+  wideMouth?: boolean;
+}
+/** A critter part hook: a rig part renderer that may read the critter's own build and face options back off the rig. */
+export type CritterHook = PartHook<CritterRig>;
+
+/**
+ * A species spec: the authoring surface a cast file hands critterBuild, and the one thing in this file the rest
+ * of the game writes. Every field is optional - `critterBuild({})` is a complete, drawable critter (the neutral
+ * warm-brown one DEFAULT_PALETTE describes). Closed on purpose, like the library's RigBuild it feeds: a
+ * misspelled `earTip` should be an error in the cast file, not a species cue silently missing from the character.
+ */
+export interface CritterSpec {
+  /** Palette overrides, merged over DEFAULT_PALETTE (see it for what each slot means on a critter). */
+  palette?: Partial<Palette>;
+  /** Proportion overrides, merged over CHIBI. */
+  proportions?: Partial<Proportions>;
+  /** Rig scale (default 1). */
+  scale?: number;
+  /** Ear shape (default 'round'). */
+  ears?: EarKind;
+  /** Dark ear tips in `hair`, for the ears that carry one (point, long). */
+  earTip?: boolean;
+  /** Round-ear radius as a fraction of headR (default 0.4). */
+  earR?: number;
+  /** Ear placement in fractions of headR (default EAR_NEAR / EAR_FAR). */
+  earPos?: EarPos;
+  /** Which palette slot the ear is furred in (default 'skin'). */
+  earSlot?: EarSlot;
+  /** Muzzle size, 0.8..1.2 (default 1). */
+  muzzle?: number;
+  /** Muzzle-patch colour, for a species whose light fur is needed elsewhere at full brightness (default `belly`). */
+  muzzleHex?: string;
+  /** false = no nose, for a species that draws its own (a beak) or wears none (a frog). */
+  nose?: boolean;
+  /** Extra head art, drawn inside the skull's own ink after the muzzle patch and before the nose. */
+  markings?: CritterHook;
+  /** Extra torso art, drawn after the apron (Barley's bell strap). */
+  chest?: CritterHook;
+  /** Tail shape (default 'stub'). */
+  tail?: TailKind;
+  /** Tail colour (default the fur). */
+  tailHex?: string;
+  /** Clogs / boots in this colour instead of paw feet. */
+  boots?: string;
+  /** false = no apron. */
+  apron?: boolean;
+  /** Face options, merged over the critter defaults (eyeY -2, big, brows in `hair`). */
+  face?: CritterFaceOpts;
+  /** Tone-ramp overrides, merged over the matte storybook ramp. */
+  ramp?: Partial<Ramp>;
+  /** Far-limb brightness factor (default 0.52). */
+  farShade?: number;
+  /** Far-limb desaturation, 0..1 (default 0.42). */
+  farDesat?: number;
+  /** Part-hook overrides, merged over the critter parts (Barley's wool cap goes in as `hair`). */
+  parts?: RigParts;
+  /** Accessories, drawn after the tail: hats, bandanas, scarves, a bell, a basket. */
+  accessories?: RigAccessory[];
+}
+
+/**
+ * What critterBuild returns: a library rig build plus the two spec fields the critter's own hooks read back off
+ * `rig.build` - exactly the extension lib/art/rig.ts's RigBuild documents for a game that carries its own data.
+ */
+export interface CritterBuild extends RigBuild {
+  /** The resolved palette: DEFAULT_PALETTE with the spec's own merged over it, `sleeve` filled from `skin`. */
+  palette: Palette;
+  /** The resolved proportions: CHIBI with the spec's own merged over it. */
+  proportions: Proportions;
+  scale: number;
+  outline: string;
+  /** Dark ear tips (spec.earTip). */
+  earTip: boolean;
+  /** Muzzle size (spec.muzzle): the markings hooks and the mouth re-measure the muzzle from it. */
+  muzzle: number;
+  /** The critter face options (spec.face over the critter defaults). */
+  face: CritterFaceOpts;
+  parts: RigParts;
+  accessories: RigAccessory[];
+}
+
+/** A rig built from a CritterBuild: the library's rig, narrowed to the build and the face options a critter has. */
+export interface CritterRig extends Rig {
+  build: CritterBuild;
+  faceOpts: CritterFaceOpts;
+}
+
+/** What critterRig reads off a cast entry: game/game.ts's CritterDef and the customers both satisfy it. */
+export interface CritterSource {
+  build: RigBuild;
+}
 
 /**
  * Reference proportions: about 2.3 heads tall, 56 px standing at scale 1.
@@ -30,7 +157,7 @@ export const INK = '#2A1F1A';
  * given. Rooted out at the shoulder the same near-vertical arm falls down the torso's OUTER edge and the seat
  * colour keeps one unbroken block. Each cast member sets its own (0.33 torsoW) in its proportions.
  */
-export const CHIBI = Object.freeze({
+export const CHIBI: Readonly<Proportions> = Object.freeze({
   headR: 12, neck: 1, torsoW: 24, torsoH: 18, hip: 20, upperArm: 8, lowerArm: 7, handR: 4.5,
   upperLeg: 6, lowerLeg: 6, footL: 9, footH: 5, armR: 3.5, legR: 4, bulge: 0.15, shoulderX: 6, hipX: 4, neckR: 4,
 });
@@ -42,15 +169,15 @@ export const CHIBI = Object.freeze({
  *   sleeve = fur (set for you). The defaults are a neutral warm-brown critter so a half-written species file still
  *   passes the ladder; every cast member overrides all of skin/hair/belly/secondary/shorts (art-check holds it).
  */
-export const DEFAULT_PALETTE = Object.freeze({
+export const DEFAULT_PALETTE: Readonly<Palette> = Object.freeze({
   skin: '#B07A4A', hair: '#6B4326', belly: '#F3E5CF', primary: OFF_DUTY_APRON, secondary: '#5E3A1B', shorts: '#5E3A1B', accent: '#F2C14E', metal: '#C8C0B0', dark: '#2A1F1A', glow: '#FFE28A',
 });
 
 // ---------------------------------------------------------------- ears (head space, behind the skull)
-const EAR_NEAR = { x: 0.42, y: -0.8 }, EAR_FAR = { x: -0.5, y: -0.72 };
+const EAR_NEAR: Point = { x: 0.42, y: -0.8 }, EAR_FAR: Point = { x: -0.5, y: -0.72 };
 /** Plum for straps and hat bands: the world's shadow colour, so a strap never reads as a fifth player colour. */
 export const PLUM_STRAP = '#5A3A46';
-function drawEar(ctx, rig, kind, x, y, r, fur, light, tip, isFar, ang, earR) {
+function drawEar(ctx: CanvasRenderingContext2D, rig: CritterRig, kind: EarKind, x: number, y: number, r: number, fur: string, light: string, tip: string | null, isFar: boolean, ang: number, earR: number): void {
   ctx.save(); ctx.translate(x, y); if (ang) ctx.rotate(rad(ang));
   const er = R(r * earR);
   if (kind === 'round') {
@@ -85,7 +212,7 @@ function drawEar(ctx, rig, kind, x, y, r, fur, light, tip, isFar, ang, earR) {
   ctx.restore();
 }
 /** Both ears; long ears lag on a two-segment chain, drooping ones on one, so they flop when the head moves. */
-function drawEars(ctx, rig, r, kind, spec) {
+function drawEars(ctx: CanvasRenderingContext2D, rig: CritterRig, r: number, kind: EarKind, spec: CritterSpec): void {
   if (kind === 'none' || kind === 'dome') return;   // domes are eyes: drawn over the skull by makeHead
   const pal = rig.palette, far = rig.paletteFar;
   const tip = rig.build.earTip ? rig.col(pal.hair) : null;
@@ -106,16 +233,16 @@ function drawEars(ctx, rig, r, kind, spec) {
 }
 
 // ---------------------------------------------------------------- head (head space, faces +x)
-const MUZZLE = { mx: 0, my: 0, rx: 0, ry: 0 };
+const MUZZLE: MuzzleGeom = { mx: 0, my: 0, rx: 0, ry: 0 };
 /** Muzzle ellipse in head space for a head of radius r (one shared object: hooks never retain it). */
-export function muzzleGeom(r, size) { MUZZLE.mx = R(r * 0.5); MUZZLE.my = R(r * 0.4); MUZZLE.rx = R(r * 0.62 * size); MUZZLE.ry = R(r * 0.4 * size); return MUZZLE; }
+export function muzzleGeom(r: number, size: number): MuzzleGeom { MUZZLE.mx = R(r * 0.5); MUZZLE.my = R(r * 0.4); MUZZLE.rx = R(r * 0.62 * size); MUZZLE.ry = R(r * 0.4 * size); return MUZZLE; }
 /**
  * A frog's eye domes (ears: 'dome'): two light balls that sit ON the crown, drawn after the skull so they bulge
  * out of it; critterFace puts the pupils at their centres. Fractions of headR; the near one is drawn last.
  */
 export const DOME = Object.freeze({ nearX: 0.44, farX: -0.34, y: -0.86, r: 0.4 });
 /** Animal head: ears, then skull + muzzle as ONE inked contour, a lighter muzzle patch inside it, markings, nose. */
-export function makeHead(spec) {
+export function makeHead(spec: CritterSpec): CritterHook {
   const ears = spec.ears || 'round', size = spec.muzzle != null ? spec.muzzle : 1, nose = spec.nose !== false;
   // `muzzleHex` colours the patch on its own, for a species whose light fur is needed elsewhere at full brightness
   // (Cress: `belly` is the two eye domes, which must stay the whites, so the mouth patch takes a darker green).
@@ -152,9 +279,9 @@ export function makeHead(spec) {
  * almost no forehead, so a hat placed at a fixed fraction of r lands on the brows of one critter and floats over
  * the skull of the next; a critter that wears a hat lowers its eyes a little (face.eyeY) to make room.
  */
-export function hatY(rig) { const fo = rig.faceOpts || {}; return R(-rig.p.headR * 0.42) + (fo.eyeY || 0) - 5; }
+export function hatY(rig: Rig): number { const fo = rig.faceOpts || {}; return R(-rig.p.headR * 0.42) + (fo.eyeY || 0) - 5; }
 /** Raccoon-style mask: a dark band across the eye row, drawn before the face so the eyes sit on it. */
-export function maskMarking(ctx, rig, pose, inf) {
+export function maskMarking(ctx: CanvasRenderingContext2D, rig: CritterRig, pose: Pose, inf: Info): void {
   const r = inf.r;
   ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r - 1, 0, TAU); ctx.clip();
   ctx.fillStyle = rig.col(rig.palette.hair);
@@ -162,7 +289,7 @@ export function maskMarking(ctx, rig, pose, inf) {
   ctx.restore();
 }
 /** Cheek patch: a lighter oval behind the eye (a fox's white cheek, a hamster's pouch). */
-export function cheekMarking(ctx, rig, pose, inf) {
+export function cheekMarking(ctx: CanvasRenderingContext2D, rig: CritterRig, pose: Pose, inf: Info): void {
   const r = inf.r;
   ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r - 1, 0, TAU); ctx.clip();
   ctx.fillStyle = rig.col(rig.palette.belly);
@@ -177,7 +304,7 @@ export function cheekMarking(ctx, rig, pose, inf) {
  * neutral | happy (lifted brows, smile) | hurt (sad brows, frown) | shout (open mouth) | dazed (x eyes) | closed (blink)
  * | angry / grit (brows down). Pupils are 3 px so the 2 px floor never eats them; whites are 6x5 at headR 12.
  */
-export function critterFace(ctx, rig, pose, inf) {
+export function critterFace(ctx: CanvasRenderingContext2D, rig: CritterRig, pose: Pose, inf: Info): void {
   const r = inf.r, pal = rig.palette, face = pose.face | 0, fo = rig.faceOpts || {};
   const ink = rig.col(rig.outline), white = rig.col('#FFF8EC'), pupil = rig.col('#1E1512');
   // dome eyes (ears: 'dome'): the whites are the domes on the crown, so the eye row moves up onto them
@@ -216,7 +343,7 @@ export function critterFace(ctx, rig, pose, inf) {
   drawCritterMouth(ctx, rig, r, face, ink);
 }
 /** The mouth, on the muzzle under the nose. */
-function drawCritterMouth(ctx, rig, r, face, ink) {
+function drawCritterMouth(ctx: CanvasRenderingContext2D, rig: CritterRig, r: number, face: number, ink: string): void {
   const shout = face === FACE.shout, hurt = face === FACE.hurt, happy = face === FACE.happy, angry = face === FACE.angry || face === FACE.grit;
   const g = muzzleGeom(r, rig.build.muzzle != null ? rig.build.muzzle : 1);
   const mx = g.mx + R(g.rx * 0.2), my = g.my + R(g.ry * 0.45);
@@ -236,7 +363,7 @@ function drawCritterMouth(ctx, rig, r, face, ink) {
 }
 
 // ---------------------------------------------------------------- body (torso space: origin hip centre, y up)
-function eggPath(ctx, hw, H) {
+function eggPath(ctx: CanvasRenderingContext2D, hw: number, H: number): void {
   ctx.beginPath();
   ctx.moveTo(-hw * 0.7, -H);
   ctx.quadraticCurveTo(-hw * 1.15, -H * 0.55, -hw, -H * 0.15); ctx.quadraticCurveTo(-hw * 0.9, 4, -hw * 0.5, 4);
@@ -244,7 +371,7 @@ function eggPath(ctx, hw, H) {
   ctx.closePath();
 }
 /** Round belly in fur with a lighter front, then the apron (a separate garment: its own ink) and its straps. */
-export function makeTorso(spec) {
+export function makeTorso(spec: CritterSpec): CritterHook {
   const apron = spec.apron !== false;
   return function torso(ctx, rig, pose, inf) {
     const W = inf.w, H = inf.h, pal = rig.palette, hw = R(W / 2);
@@ -273,7 +400,7 @@ export function makeTorso(spec) {
   };
 }
 /** Short trousers: a rounded block over the leg roots, so the near leg emerges from inside it rather than sitting on it. */
-export function makeHips(spec) {
+export function makeHips(spec: CritterSpec): CritterHook {
   return function hips(ctx, rig, pose, inf) {
     // the block scales with the torso (6..8 px) so a 16 px mouse torso is not half shorts — and every pixel the
     // shorts give back is a pixel of the apron above them, which is the player's own colour (ART_STYLE section 4)
@@ -284,14 +411,14 @@ export function makeHips(spec) {
 
 // ---------------------------------------------------------------- paws
 /** Mitt paw (hand space: +x along the forearm, origin at the wrist). */
-export function pawHand(ctx, rig, pose, inf) {
+export function pawHand(ctx: CanvasRenderingContext2D, rig: CritterRig, pose: Pose, inf: Info): void {
   const r = inf.r, fur = inf.pal.skin;
   celBall(ctx, rig, R(r * 0.5), 0, r, fur, false);
   if (rig.override) return;
   ctx.fillStyle = rig.col(inf.pal.belly); ctx.fillRect(R(r * 0.5) - 1, -1, 3, 3);   // one pad
 }
 /** Paw foot (ankle space: origin at the ankle, toe toward +x, y down). */
-export function pawFoot(ctx, rig, pose, inf) {
+export function pawFoot(ctx: CanvasRenderingContext2D, rig: CritterRig, pose: Pose, inf: Info): void {
   const L = inf.w, H = inf.h, fur = inf.pal.skin;
   pathRR(ctx, R(-L * 0.4), -H, R(L * 1.05), R(H * 1.5), R(H * 0.7));
   celPath(ctx, rig, fur, R(L * 0.12), R(-H * 0.25), R(L * 0.55), 0.35, 0);
@@ -301,7 +428,7 @@ export function pawFoot(ctx, rig, pose, inf) {
   ctx.fillStyle = rig.col(inf.pal.hair); ctx.fillRect(R(L * 0.52), -2, 2, 3); ctx.fillRect(R(L * 0.22), -2, 2, 3);   // two toes
 }
 /** Clog / boot in `dark` with a light sole band, for the critter who wears shoes. */
-export function makeBoot(hex) {
+export function makeBoot(hex: string): CritterHook {
   return function boot(ctx, rig, pose, inf) {
     const L = inf.w, H = inf.h;
     pathRR(ctx, R(-L * 0.4), -H, R(L * 1.05), R(H * 1.5), 2);
@@ -312,7 +439,7 @@ export function makeBoot(hex) {
 }
 
 // ---------------------------------------------------------------- tail (hip space, back layer, +x forward)
-export function makeTail(kind, hex = null) {
+export function makeTail(kind: TailKind, hex: string | null = null): RigAccessory {
   return { attach: 'hip', layer: 'back', draw(ctx, rig, pose) {
     if (kind === 'none') return;   // a frog
     const pal = rig.palette, fur = hex || pal.skin, hw = R(rig.p.hip / 2);
@@ -351,7 +478,7 @@ const TOQUE = '#F4F0E6';
  * Chef's toque: a 4 px inked band in `bandHex` (null = white) on the hairline and one puffed white mass above it,
  * drawn as ONE path (a rounded block with two balls on top) so the puff carries a single scalloped outline.
  */
-export function toque(bandHex = null) {
+export function toque(bandHex: string | null = null): RigAccessory {
   return { attach: 'head', draw(ctx, rig) {
     const r = rig.p.headR, y = hatY(rig), w = R(r * 1.3), hw = R(w / 2), h = R(r * 0.8);
     const top = y - 4 - h;
@@ -364,9 +491,9 @@ export function toque(bandHex = null) {
   } };
 }
 /** Chef hat with a white band (the pre-toque export; kept so nothing built against it moves). */
-export const chefHat = toque(null);
+export const chefHat: RigAccessory = toque(null);
 /** Bandana: a triangle of `hex` tied round the head, knot at the back (head space). */
-export function bandana(hex) {
+export function bandana(hex: string): RigAccessory {
   return { attach: 'head', draw(ctx, rig) {
     const r = rig.p.headR;
     celPoly(ctx, rig, [-R(r * 0.95), -R(r * 0.35), R(r * 0.95), -R(r * 0.35), R(r * 0.8), -R(r * 0.72), -R(r * 0.8), -R(r * 0.72)], hex, 0.35, 0);
@@ -374,9 +501,9 @@ export function bandana(hex) {
   } };
 }
 /** The knot's three points, refilled per draw: a hook allocates nothing (ART_STYLE section 9). */
-const KNOT = [0, 0, 0, 0, 0, 0];
+const KNOT: number[] = [0, 0, 0, 0, 0, 0];
 /** Neckerchief: a knotted triangle at the collar (torso space). Pair with scarfTail for the streaming end. */
-export function scarf(hex) {
+export function scarf(hex: string): RigAccessory {
   return { attach: 'torso', draw(ctx, rig) {
     const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2);
     // a small knot: at hw*1.2 wide it covered the top third of the apron, the player spot
@@ -390,7 +517,7 @@ export function scarf(hex) {
  * ONE tapered path. Two equal 5 px capsules at 45 degrees read as a bone lying against the fur — the cream stick the
  * art director called a far arm — so the end now tapers 6 px to 2 px, is a third shorter, and rests further back.
  */
-export function scarfTail(hex) {
+export function scarfTail(hex: string): RigAccessory {
   return { attach: 'torso', layer: 'back', draw(ctx, rig) {
     const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2), L = R(hw * 0.45);
     const ch = getChain(rig, 'scarf', 2, { joint: 'torso', rest: [-1, 0.45], stiffness: 0.14, damping: 0.7, gain: 2.6, maxAng: 45 });
@@ -409,7 +536,7 @@ export function scarfTail(hex) {
   } };
 }
 /** Flat cap: a low dome on the hairline with a 4 px peak forward (head space). */
-export function cap(hex) {
+export function cap(hex: string): RigAccessory {
   return { attach: 'head', draw(ctx, rig) {
     const r = rig.p.headR, y = hatY(rig);
     ctx.beginPath(); ctx.ellipse(0, y, R(r * 0.98), R(r * 0.62), 0, Math.PI, 0); ctx.closePath();
@@ -425,7 +552,7 @@ export function cap(hex) {
  *   muzzle (size 0.8..1.2), nose (false = none), markings (fn), tail: 'stub'|'puff'|'bushy'|'ring'|'thin'|'none', tailHex,
  *   apron (false = none), boots (hex), proportions, scale, accessories: [], parts: {} (overrides), face: {} }
  */
-export function critterBuild(spec) {
+export function critterBuild(spec: CritterSpec): CritterBuild {
   const palette = { ...DEFAULT_PALETTE, ...(spec.palette || {}) };
   palette.sleeve = palette.skin;
   if (!palette.shorts) palette.shorts = palette.secondary;
@@ -457,7 +584,7 @@ export function critterBuild(spec) {
  * and paw pad in the cast. Drifting the blue by `0.12 * f * chroma` keeps the fur's own hue in its shadow
  * (#F1E4C8 -> #AEAB94, chroma 26) and leaves a saturated colour's band exactly where it was.
  */
-function warmShade(hex, f) {
+function warmShade(hex: string, f: number): string {
   const [r, g, b] = hexToRgb(hex);
   const c = Math.max(r, g, b) - Math.min(r, g, b);
   return rgbToHex(r * f, g * (f + 0.03), b * f + 0.12 * f * c);
@@ -467,11 +594,19 @@ function warmShade(hex, f) {
  * use of a colour: the highlight and rim tones are the shared ramp's, untouched. One ramp per colour per rig,
  * allocated on first use exactly as before, so a draw hook still allocates nothing.
  */
-class CritterTones extends Map {
-  /** @param {{hi:number,sh:number,rim:number}} ramp */
-  constructor(ramp) { super(); this.ramp = ramp; }
-  /** @param {string} hex */
-  get(hex) {
+class CritterTones extends Map<string, Tones> {
+  /** The rig's own ramp factors: every shadow band below is re-warmed from its `sh`. */
+  declare ramp: Ramp;
+  constructor(ramp: Ramp) { super(); this.ramp = ramp; }
+  /**
+   * The cache read art/shading.js `tones` goes through: a miss fills the entry, so a colour is ramped once.
+   *
+   * Returns `undefined` for a key that is not a '#rrggbb' string, because the guard below hands back the miss
+   * rather than ramping something that is not a colour. The signature says so. It would be tidier to promise a
+   * Tones and throw instead, but a caller may rely on the undefined path and changing the guard would be a
+   * behaviour change; the honest type is the one that describes what the code does.
+   */
+  override get(hex: string): Tones | undefined {
     let t = super.get(hex);
     if (t || typeof hex !== 'string' || hex[0] !== '#') return t;
     t = makeTones(hex, this.ramp);
@@ -486,9 +621,14 @@ class CritterTones extends Map {
  * off-duty apron for slot -1 (gallery, customers, the title's idle crew). Tones are cached per rig per colour, so
  * build this ONCE when the seat is assigned (in enter()), never in draw().
  */
-export function critterRig(def, slot = -1) {
+export function critterRig(def: CritterSource, slot = -1): Rig {
   const apron = slot >= 0 && slot < PLAYER_COLORS.length ? PLAYER_COLORS[slot] : OFF_DUTY_APRON;
-  const rig = buildRig({ ...def.build, palette: { ...def.build.palette, primary: apron } });
+  // `basePalette` restores what the library's rig.ts used to do for itself: before the extraction it merged
+  // every build over PALETTES.hero, which it can no longer reach because the values are per-game. Every cast
+  // member already spreads DEFAULT_PALETTE so this fills nothing today (the golden fingerprint is unchanged
+  // either way) -- it is here so a half-written species file still inherits a full set of slots, which is the
+  // fallback ART_PRINCIPLES lesson 49 relies on.
+  const rig = buildRig({ ...def.build, basePalette: PALETTES.hero, palette: { ...def.build.palette, primary: apron } });
   rig.tones = new CritterTones(rig.ramp);
   // `farShade` (art/palettes.js, not this owner's file) ends on a flat `+ 6` of blue, which is most of what is
   // left of a far limb's chroma once it has been darkened and pulled toward grey: it turned Barley's far paw
@@ -504,7 +644,7 @@ export function critterRig(def, slot = -1) {
 
 // ---------------------------------------------------------------- the base animation set
 /** Keyframe shorthand: F(dur, spec, extra) -> { dur, pose: P(spec), ...extra }. */
-export const F = (dur, spec, extra) => ({ dur, pose: P(spec), ...(extra || {}) });
+export const F = (dur: number, spec: PoseSpec, extra?: Partial<Frame>): Frame => ({ dur, pose: P(spec), ...(extra || {}) });
 // REST: both arms HANG, near vertical, with a soft elbow, down the outside of the torso. At [40, 8] the near arm
 // lay across the belly as a horizontal bar and split the apron - the player's own colour - into two slivers; the
 // arm root itself is now out at the shoulder (CHIBI.shoulderX), so 14 degrees of upper and 12 of elbow is all it
@@ -520,8 +660,8 @@ const CARRY = { armR: [60, 50], armL: [-18, 8], weapon: 90 };
  * Every critter's animation table (docs/ART_STYLE.md section 5). Screens play these by name:
  * idle walk run carry carryWalk reach catch cheer sad eat chop stir bump hop wave sit
  */
-export function makeCritterAnims(over = {}) {
-  const anims = {
+export function makeCritterAnims(over: AnimSet = {}): AnimSet {
+  const anims: AnimSet = {
     // RESTING IS WARM: both breath keys carry `happy`, so the default face of a cozy game is a soft smile and
     // `neutral` becomes the face of concentration (the effort, damage and blink keys set their own face and are
     // unchanged). `face` is STEPPED, not lerped (art/poses.js), so a smile on one key only would flip the mouth

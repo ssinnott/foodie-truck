@@ -16,11 +16,15 @@
 // checksumFields(). Rigs are built once in enter(), never in draw().
 import { VIEW_W, UI, SIGNAL, PLAYER_COLORS } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { CritterDef, Game, Input, ScreenParams } from '../game.ts';
 import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
 import { blitAt } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt, burstCrumbs, burstSparkle } from '../../art/fx.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
+import type { DrawRigOpts, Rig, RigWeapon } from '../../lib/art/rig.ts';
+import type { Point } from '../../lib/art/rigParts.ts';
+import type { PartialPose } from '../../lib/art/poses.ts';
 import { drawBust, idlePoseOf } from '../../art/portraits.ts';
 import { drawFood } from '../../art/food.ts';
 import { critterRig } from '../../content/critters/common.ts';
@@ -31,6 +35,7 @@ import { STATIONS } from '../../content/places.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawTicket, drawOrderTicket, drawNamePlate, drawHint, drawStamp, ROW } from '../ui.ts';
+import type { OrderTicketOpts } from '../ui.ts';
 import { drawText } from '../../engine/text.ts';
 import { kitchenLayer, ROWS, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.ts';
 import {
@@ -69,10 +74,134 @@ const CARD_X = RECIPE.x, CARD_Y = RECIPE.y, CARD_W = RECIPE.w;
 // it never reads as the order ticket's twin at the other end of the same rail (the two papers used to match)
 const CARD_TEXT = { size: 1, color: UI.ink, shadow: false }, CARD_OPTS = { title: 'RECIPE', perforated: false };
 
-export class KitchenScreen extends Screen {
-  constructor(game) { super(game, 'kitchen'); this.seats = []; this.fields = []; }
+/**
+ * A critter's rig as this game hands it round: art/rig.ts's own rig plus the two fields the food item reads back
+ * off it (content/critters/items.ts `ITEMS.food` draws `rig.heldIcon` in `rig.heldHex`). Optional because
+ * `buildRig` never writes them - a rig carries them only while its owner is holding something.
+ */
+export interface CritterRig extends Rig {
+  /** Food glyph id (art/food.ts) in the paw, or null. */
+  heldIcon?: string | null;
+  /** That glyph's base hex, or null. */
+  heldHex?: string | null;
+}
 
-  enter(params) {
+/** One party member working the counter: what `enter()` builds per `run.party` seat, in party order. */
+export interface Seat {
+  /** Player slot 0..3: its colour, its keys, and the id written into `owners` when it claims a step. */
+  slot: number;
+  /** The cast entry this seat plays (content/critters/index.ts). */
+  def: CritterDef;
+  /** Built once in enter(), never in draw(): the apron carries the slot colour. */
+  rig: CritterRig;
+  player: AnimPlayer;
+  /** Name plate text. */
+  name: string;
+  /** Rows its tallest head part reaches above the skull (CROWN), for the name plate. */
+  crown: number;
+  /** px along the counter: the feet centre, clamped to X_MIN..X_MAX. */
+  x: number;
+  /** 1 = facing right, -1 = facing left. */
+  facing: number;
+  /** True on any frame its stick is off centre. */
+  moving: boolean;
+  /** The station it stands at (CHOP..PLATE_S), or -1 between them. */
+  station: number;
+  /** The animation name `pickAnim` last played. */
+  anim: string;
+  /** Frames left of the current reach / chop / stir beat. */
+  actT: number;
+  /** Frames left of the eat gag; the seat is locked while this runs. */
+  eatT: number;
+  /** Which ITEMS entry is in its paws ('knife' | 'spoon' | 'plate' | 'food'), '' for empty paws. */
+  weapon: string;
+  /** The drawRig options, reused every frame (this file allocates nothing in draw()). */
+  opts: DrawRigOpts;
+  /** Scratch for the screen-space head joint, refilled by jointScreen() every draw. */
+  head: Point;
+}
+
+/** The current step's timing state (`st`), zeroed by completeStep() as the next step comes up. */
+export interface StepState {
+  /** 0 = waiting, 1 = the MIX / STOVE hold or the OVEN bake is running. */
+  phase: number;
+  /** Frames into the step: the CHOP sweep (0..CHOP_SWEEP), the MIX / STOVE hold, the OVEN countdown. */
+  t: number;
+  /** Chops landed on the beat. */
+  count: number;
+  /** Missed beats and pauses: any miss at all caps the step at DONE. */
+  miss: number;
+}
+
+export class KitchenScreen extends Screen {
+  // The fields, for the checker only, in constructor then enter() order. `declare` for the reason game.ts gives
+  // over its own block: a plain field declaration would emit a class field per name (es2022 defines them before
+  // the constructor body runs, and a screen's own declaration would also define a base field back to undefined),
+  // and this screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild and under
+  // Node's type stripping alike, so the emitted class is the original.
+
+  /** One seat per party member, in party order (not slot order). */
+  declare seats: Seat[];
+  /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
+  declare fields: number[];
+  /** The room, pre-rendered once (art/backgrounds/kitchen.ts kitchenLayer) and blitted per frame. */
+  declare layer: { canvas: HTMLCanvasElement; w: number; h: number };
+  /** The order's steps as station indices (CHOP..PLATE_S), worked in this order. */
+  declare steps: number[];
+  /** Those steps' station names, one recipe-card row each. */
+  declare stepNames: string[];
+  /** 0..2 per step, -1 until the step has been scored. */
+  declare scores: number[];
+  /** The slot that owns each step, -1 until one claims it. */
+  declare owners: number[];
+  /** The order's ingredients as food glyph ids (art/food.ts), in order. */
+  declare icons: string[];
+  /** Those ingredients' base hexes, in the same order. */
+  declare hexes: string[];
+  /** Per-ingredient glyph and hex tables for the order ticket (game/ui.ts drawOrderTicket). */
+  declare ticketOpts: OrderTicketOpts;
+  /** Which stations this order uses, indexed by station: the stations that draw their per-frame marks. */
+  declare has: boolean[];
+  /** The step being worked: an index into `steps`, `steps.length` once every step is done. */
+  declare stepIdx: number;
+  /** The score banked so far, 0..2 per completed step. */
+  declare total: number;
+  /** The current step's timing state. */
+  declare st: StepState;
+  /** True from the bell to the results screen. */
+  declare served: boolean;
+  /** Frames since the bell (the components land, then the stamp slams). */
+  declare serveT: number;
+  /** 1..3, set by serve() from `total`. */
+  declare stars: number;
+  /** 1 once the pot has boiled dry: the burnt look on the stove and its steam. */
+  declare stoveBurnt: number;
+  /** 1 once the tray has burnt in the oven. */
+  declare ovenBurnt: number;
+  /** Frames of oven afterglow left, 0..60 (cosmetic). */
+  declare ovenGlow: number;
+  /** Frames left of the board's knife flash (cosmetic). */
+  declare tak: number;
+  /** Frames left of the board's miss wobble (cosmetic). */
+  declare wobbleT: number;
+  /** Frames into the bell's ring, 0..60; -1 before it has rung (cosmetic). */
+  declare ringT: number;
+  /** The action key's label for the hint line (engine/input.ts keyText). */
+  declare keyName: string;
+  /** The customer leaning into the hatch: their rig, ... */
+  declare custRig: Rig;
+  /** ... the player driving their idle, ... */
+  declare custPlayer: AnimPlayer;
+  /** ... the pose the bust is anchored on (their idle's first frame), ... */
+  declare custPose: PartialPose | null;
+  /** ... and the drawBust options that face and inset them. */
+  declare custOpts: { facing: number; margin: number };
+  /** The hint line under the counter, rebuilt by setHint() as each step comes up. */
+  declare hint: string;
+
+  constructor(game: Game) { super(game, 'kitchen'); this.seats = []; this.fields = []; }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
     this.layer = kitchenLayer(paintStations);
@@ -114,12 +243,12 @@ export class KitchenScreen extends Screen {
     this.fields.length = 0;
   }
 
-  setHint() {
+  setHint(): void {
     const id = this.stepIdx < this.steps.length ? STATIONS[this.steps[this.stepIdx]].id : 'plate';
     this.hint = `${HINTS[id]}   (${this.keyName})   WALK: ← →`;
   }
 
-  update() {
+  override update(): void {
     super.update();
     const game = this.game, inp = game.input;
     if (inp.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
@@ -135,10 +264,10 @@ export class KitchenScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) this.pickAnim(this.seats[i]);
   }
 
-  currentStation() { return this.stepIdx < this.steps.length ? this.steps[this.stepIdx] : -1; }
+  currentStation(): number { return this.stepIdx < this.steps.length ? this.steps[this.stepIdx] : -1; }
 
   /** Every seat: read its stick, walk the lane, find the station it stands at, hold the item that station suggests. */
-  updateSeats(inp) {
+  updateSeats(inp: Input): void {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.player.tick();
@@ -156,15 +285,18 @@ export class KitchenScreen extends Screen {
       s.station = -1;
       for (let k = 0; k < STATION_X.length; k++) { const d = s.x - STATION_X[k]; if (d >= -AT_RANGE && d <= AT_RANGE) { s.station = k; break; } }
       const want = s.station === CHOP ? 'knife' : s.station === MIX || s.station === STOVE ? 'spoon' : s.station === PLATE_S ? 'plate' : '';
-      if (want !== s.weapon) { if (!want) this.clearItem(s); else { s.weapon = want; s.rig.weapon = ITEMS[want]; } }
+      // `as RigWeapon`: content/critters/items.ts is not typed yet, so its `attach: 'handR'` widens to `string`
+      // and its entries miss RigWeapon's `attach?: HandName` by that one field. The table IS a table of rig
+      // weapons - rig.ts reads exactly these keys back off it - so the assertion says what items.ts cannot yet.
+      if (want !== s.weapon) { if (!want) this.clearItem(s); else { s.weapon = want; s.rig.weapon = ITEMS[want] as RigWeapon; } }
     }
   }
 
   /** Empty a seat's paws: the state and the rig always go together (an item left on a rig never comes off). */
-  clearItem(s) { s.weapon = ''; s.rig.weapon = null; s.rig.heldIcon = null; s.rig.heldHex = null; }
+  clearItem(s: Seat): void { s.weapon = ''; s.rig.weapon = null; s.rig.heldIcon = null; s.rig.heldHex = null; }
 
   /** The seat driving the current step: its owner if it is at the station, else the first seat there that acts (and claims it). */
-  actor(inp, station, hold) {
+  actor(inp: Input, station: number, hold: boolean): Seat | null {
     const idx = this.stepIdx, owner = this.owners[idx];
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
@@ -176,7 +308,7 @@ export class KitchenScreen extends Screen {
   }
 
   /** Advance the current step by the GDD's rules for its station. */
-  stepStation(inp) {
+  stepStation(inp: Input): void {
     const station = this.currentStation(), st = this.st;
     if (station < 0) { this.serve(null); return; }
     const s = this.actor(inp, station, station === MIX || station === STOVE);
@@ -223,7 +355,7 @@ export class KitchenScreen extends Screen {
   }
 
   /** Bank a step's score, say so over the station, roll the gag, move on. */
-  completeStep(score, s) {
+  completeStep(score: number, s: Seat | null): void {
     const idx = this.stepIdx, station = this.steps[idx];
     this.scores[idx] = score; this.total += score;
     const px = PROP_X[station], py = ROWS.counterTop - 40;
@@ -239,7 +371,7 @@ export class KitchenScreen extends Screen {
       if (b.def.id !== 'barley' || b.eatT > 0) continue;
       if (!rng.chance(GAG_CHANCE)) continue;
       b.eatT = EAT_FRAMES; b.moving = false; b.weapon = 'food';
-      b.rig.weapon = ITEMS.food; b.rig.heldIcon = this.icons[0]; b.rig.heldHex = this.hexes[0];
+      b.rig.weapon = ITEMS.food as RigWeapon; b.rig.heldIcon = this.icons[0]; b.rig.heldHex = this.hexes[0];   // `as` for the same reason as in updateSeats
       this.playAnim(b, 'eat', true);
       burstCrumbs(b.x + b.facing * 8, ROWS.feet - 40, ROWS.feet, this.hexes[0], 6, true);
       floatText(b.x, ROWS.feet - 70, NOM, UI.cream, 1, true);
@@ -248,7 +380,7 @@ export class KitchenScreen extends Screen {
   }
 
   /** The bell: the dish is served, the stamp slams, results follow after the components have landed. */
-  serve(s) {
+  serve(s: Seat | null): void {
     if (this.served) return;
     this.served = true; this.serveT = 0; this.ringT = 0;
     const n = Math.max(1, this.steps.length);
@@ -258,12 +390,12 @@ export class KitchenScreen extends Screen {
   }
 
   /** Burnt: four dark puffs off the pot or the oven window (cosmetic). */
-  smoke(x, y) { particles.burst('smoke', x, y, 4, { speed: 0.8, up: 1.6, sizeJitter: 1.5, screen: true }); }
+  smoke(x: number, y: number): void { particles.burst('smoke', x, y, 4, { speed: 0.8, up: 1.6, sizeJitter: 1.5, screen: true }); }
 
-  playAnim(s, name, restart) { s.anim = name; s.player.play(name, { restart, fallback: 'idle' }); }
+  playAnim(s: Seat, name: string, restart: boolean): void { s.anim = name; s.player.play(name, { restart, fallback: 'idle' }); }
 
   /** idle / walk / stir / reach / chop / eat by what the seat is doing; loops keep their phase, beats play out. */
-  pickAnim(s) {
+  pickAnim(s: Seat): void {
     if (s.eatT > 0) return;
     let name = 'idle';
     if (s.moving) name = 'walk';
@@ -275,7 +407,7 @@ export class KitchenScreen extends Screen {
     if (name !== s.anim) this.playAnim(s, name, false);
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     const f = this.frame, st = this.st, station = this.currentStation();
     blitAt(ctx, this.layer, 0, 0);
     // the customer leans into the RIGHT half of the hatch, clipped to the opening so the shelf stays in front of
@@ -305,9 +437,9 @@ export class KitchenScreen extends Screen {
 
   /** The per-frame marks on the stations: only the ones this order uses. */
   /** True once the step that uses station `k` has been scored. */
-  done(k) { for (let i = 0; i < this.steps.length; i++) if (this.steps[i] === k) return this.scores[i] >= 0; return false; }
+  done(k: number): boolean { for (let i = 0; i < this.steps.length; i++) if (this.steps[i] === k) return this.scores[i] >= 0; return false; }
 
-  drawStations(ctx, f, st, station) {
+  drawStations(ctx: CanvasRenderingContext2D, f: number, st: StepState, station: number): void {
     if (this.has[CHOP]) {
       const cut = this.done(CHOP) ? 2 : station === CHOP ? (st.count < 2 ? 0 : st.count < 4 ? 1 : 2) : 0;
       drawChopItem(ctx, this.icons[0], this.hexes[0], cut, this.wobbleT > 0 ? ((this.wobbleT & 2) ? 2 : -2) : 0, this.tak > 0);
@@ -327,7 +459,7 @@ export class KitchenScreen extends Screen {
    * Whose colour the live timing tag wears: the seat that has claimed the step, or - before anyone has - the seat
    * standing at its station, so the card the player must act on carries a player colour from the first frame.
    */
-  liveSlot(station) {
+  liveSlot(station: number): number {
     const o = this.stepIdx < this.owners.length ? this.owners[this.stepIdx] : -1;
     if (o >= 0) return o;
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].station === station) return this.seats[i].slot;
@@ -335,7 +467,7 @@ export class KitchenScreen extends Screen {
   }
 
   /** How many of a step's tag segments are lit: all when done, its progress while current, none before. */
-  tagFill(i) {
+  tagFill(i: number): number {
     const k = this.steps[i], segs = SEGS[k];
     if (this.scores[i] >= 0) return segs;
     if (i !== this.stepIdx) return 0;
@@ -347,7 +479,7 @@ export class KitchenScreen extends Screen {
     return 0;
   }
 
-  drawWidget(ctx, st, station) {
+  drawWidget(ctx: CanvasRenderingContext2D, st: StepState, station: number): void {
     const slot = this.liveSlot(station);
     if (station === CHOP) drawChopBar(ctx, st.t, CHOP_SWEEP, st.count, CHOP_HITS, slot);
     else if (station === MIX) drawDial(ctx, st.t / MIX_FRAMES, st.phase === 0 && st.t > 0, slot);
@@ -356,7 +488,7 @@ export class KitchenScreen extends Screen {
     else if (station === PLATE_S) drawPlatePrompt(ctx, RING, slot);
   }
 
-  drawHud(ctx, f) {
+  drawHud(ctx: CanvasRenderingContext2D, f: number): void {
     const run = this.game.run;
     drawOrderTicket(ctx, run, TICKET.x, TICKET.y, TICKET.w, drawFood, this.ticketOpts);
     // the recipe card: one row per step, the owner's 6x6 slot ring at the left, an ink tick when done, '>' on the current
@@ -373,7 +505,7 @@ export class KitchenScreen extends Screen {
     if (this.served && this.serveT >= STAMP_AT) drawStamp(ctx, ORDER_UP, VIEW_W / 2, STAMP_Y, (this.serveT - STAMP_AT) / 24);
   }
 
-  summary() {
+  override summary() {
     return {
       step: this.stepIdx, steps: this.stepNames, scores: this.scores.slice(), owners: this.owners.slice(), total: this.total, stars: this.stars, served: this.served,
       phase: this.st.phase, t: this.st.t, count: this.st.count, miss: this.st.miss,
@@ -382,7 +514,7 @@ export class KitchenScreen extends Screen {
   }
 
   /** Every field that could diverge between peers (net/checksum.js). */
-  checksumFields() {
+  override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     f.push(this.stepIdx, this.total, this.st.phase, this.st.t, this.st.count, this.st.miss, this.served ? 1 : 0, this.serveT, this.stars, this.stoveBurnt, this.ovenBurnt);
     for (let i = 0; i < this.steps.length; i++) f.push(this.scores[i], this.owners[i]);

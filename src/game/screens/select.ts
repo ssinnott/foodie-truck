@@ -8,12 +8,15 @@
 // moving to a card changes which pre-built rig is drawn rather than building one in draw().
 import { VIEW_W, UI, PLAYER_COLORS, MAX_PLAYERS } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { CritterDef, Game, ScreenParams } from '../game.ts';
 import { drawText, drawTextOutlined, measureText } from '../../engine/text.ts';
 import { pathRR } from '../../lib/art/shading.ts';
 import { drawBust, idlePoseOf } from '../../art/portraits.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { CRITTERS } from '../../content/critters/index.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
+import type { Rig } from '../../lib/art/rig.ts';
+import type { PartialPose } from '../../lib/art/poses.ts';
 import { startRun } from '../run.ts';
 import { CARD_W, CARD_H, RING_POS, cardX, drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.ts';
 import { drawLane, drawPorthole, PORT_R } from '../../art/logo.ts';
@@ -69,10 +72,68 @@ const HEAD_TEXT = 'CHOOSE YOUR CRITTER';
 const BIO = { x: 150, y: 284, w: 340, h: 30 };
 const JOIN_Y = CARD_Y + CARD_H + 10;
 
-export class SelectScreen extends Screen {
-  constructor(game) { super(game, 'select'); this.seats = []; this.cards = []; this.starting = -1; this.started = false; }
+/**
+ * One seat of the room, one per SLOT and not per joined player: seats 1..3 exist from enter() and sit unjoined
+ * until their first key, which is what makes a couch drop-in the same code path as P1. The two numbers that can
+ * diverge between machines are `card` and `ready` - `checksumFields` hashes exactly those, plus `on`.
+ */
+export interface SelectSeat {
+  /** Player slot 0..3: the seat's colour, its keys, its cursor and its ring position. */
+  slot: number;
+  /** True once engine/input.ts reports the seat joined; an unjoined seat draws no cursor and reads no keys. */
+  on: boolean;
+  /** Index into `cards` of the card this seat is standing on. */
+  card: number;
+  /** True once the seat has stamped READY. */
+  ready: boolean;
+  /** Frames since the stamp landed, which drives the stamp's slam (STAMP_FRAMES); reset by a cancel. */
+  t: number;
+}
 
-  enter(params) {
+/**
+ * One recipe card as the screen holds it: the cast entry, one rig per possible seat, the player that idles it
+ * and the pose its bust is anchored on. Built ONCE in enter() - a cursor moving to a card changes which
+ * pre-built rig is drawn rather than building one in draw().
+ */
+export interface SelectCard {
+  /** The cast entry (content/critters/index.ts CRITTERS), in cast order. */
+  def: CritterDef;
+  /** Rigs by seat, offset by one: `rigs[0]` is the off-duty apron, `rigs[s + 1]` is slot `s`'s. */
+  rigs: Rig[];
+  /** Idling from a per-card offset (i * 11 ticks), so four busts in a row do not breathe in lockstep. */
+  player: AnimPlayer;
+  /** The first idle frame's pose, which art/portraits.ts anchors the bust's head on; null for a rig without one. */
+  anchor: PartialPose | null;
+  /** The three pip counts in STAT_LABELS order (STATS, or STATS_DEFAULT for a card with no entry). */
+  stats: number[];
+}
+
+export class SelectScreen extends Screen {
+  // The fields, for the checker only, in the order the constructor and then enter() assign them. `declare`, not
+  // plain declarations, for the reason game/game.ts states over its own block: a plain field declaration emits a
+  // class field per name (es2022 defines them before the constructor body runs, and a screen's own declaration
+  // would also define a base field back to undefined), which would wipe what the constructor has just written.
+  // `declare` erases under tsc, under esbuild and under Node's type stripping alike, so the emitted class is the
+  // one that shipped.
+
+  /** One seat per SLOT, in slot order; `joinedCount()` is how many of them are actually in the room. */
+  declare seats: SelectSeat[];
+  /** The recipe cards, one per cast member in cast order. */
+  declare cards: SelectCard[];
+  /** The frame the run starts on, set once every joined seat has stamped; -1 whenever the countdown is off. */
+  declare starting: number;
+  /** True once the run has been started and the fade is running: the seats stop taking input. */
+  declare started: boolean;
+  /** The drop-in prompt, joined once in enter() because it names P2's own key. */
+  declare joinHint: string;
+  /** The hint strip under the cards, likewise. */
+  declare hint: string;
+  /** The drawBust options, reused every frame (draw() allocates nothing). */
+  declare bustOpts: { margin: number; facing: number };
+
+  constructor(game: Game) { super(game, 'select'); this.seats = []; this.cards = []; this.starting = -1; this.started = false; }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const inp = this.game.input;
     // One rig per card per seat, plus an off-duty one for a card nobody is standing on: the apron is the seat's
@@ -94,16 +155,16 @@ export class SelectScreen extends Screen {
   }
 
   /** Seats that are actually in the room (P1 always; P2 after a drop-in; 2 and 3 are online seats). */
-  joinedCount() { let n = 0; for (const s of this.seats) if (s.on) n++; return n; }
+  joinedCount(): number { let n = 0; for (const s of this.seats) if (s.on) n++; return n; }
 
   /** Somebody is here and every seat that is here has stamped. A plain loop: update() allocates nothing. */
-  allReady() {
+  allReady(): boolean {
     let on = 0;
     for (const s of this.seats) { if (!s.on) continue; if (!s.ready) return false; on++; }
     return on > 0;
   }
 
-  update() {
+  override update(): void {
     super.update();
     const inp = this.game.input;
     for (const seat of this.seats) {
@@ -141,7 +202,7 @@ export class SelectScreen extends Screen {
   // ---- drawing ----
 
   /** The jam-jar lid: a slot-coloured ring with a clip notch and a paper disc carrying the seat number. */
-  cursor(ctx, seat) {
+  cursor(ctx: CanvasRenderingContext2D, seat: SelectSeat): void {
     const card = cardX(seat.card, this.cards.length), pos = RING_POS[seat.slot] || RING_POS[0];
     const x = card + pos[0], y = CARD_Y + pos[1], col = PLAYER_COLORS[seat.slot];
     ctx.save();
@@ -159,9 +220,9 @@ export class SelectScreen extends Screen {
   }
 
   /** Which seat is standing on card `i` (the first one, if two share it), or -1. */
-  pickerOf(i) { for (const s of this.seats) if (s.on && s.card === i) return s.slot; return -1; }
+  pickerOf(i: number): number { for (const s of this.seats) if (s.on && s.card === i) return s.slot; return -1; }
 
-  card(ctx, i) {
+  card(ctx: CanvasRenderingContext2D, i: number): void {
     const c = this.cards[i], x = cardX(i, this.cards.length), y = CARD_Y, slot = this.pickerOf(i);
     // paper, one ink line, a torn top edge, and a header band in the picking seat's colour
     ctx.fillStyle = 'rgba(47,35,56,0.35)'; pathRR(ctx, x + 3, y + 4, CARD_W, CARD_H, 3); ctx.fill();
@@ -208,7 +269,7 @@ export class SelectScreen extends Screen {
     }
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     drawLane(ctx);
     drawDim(ctx, 0.62);
     drawSign(ctx, VIEW_W / 2, 2, measureText(HEAD_TEXT, 2) + 18, 26, HEAD_TEXT, { size: 2 });
@@ -228,14 +289,14 @@ export class SelectScreen extends Screen {
     drawHint(ctx, this.hint);
   }
 
-  summary() {
+  override summary() {
     return {
       seats: this.seats.filter((s) => s.on).map((s) => ({ slot: s.slot, critter: this.cards[s.card].def.id, ready: s.ready })),
       starting: this.starting >= 0, started: this.started,
     };
   }
   /** Every number that could differ between two machines: the cursor and the lock of each seat. */
-  checksumFields() {
+  override checksumFields(): number[] {
     const out = [];
     for (const s of this.seats) out.push(s.on ? 1 : 0, s.card, s.ready ? 1 : 0);
     out.push(this.started ? 1 : 0);

@@ -12,10 +12,13 @@
 // state, timer, float position and count plus the clock feed the desync canary.
 import { UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { Game, ScreenParams } from '../game.ts';
 import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
 import { drawShadow, ringAt, floatText, burstDrops } from '../../art/fx.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
+import type { RigWeapon } from '../../lib/art/rig.ts';
+import type { Point } from '../../lib/art/rigParts.ts';
 import { blitAt } from '../../art/layers.ts';
 import { ITEMS } from '../../content/critters/items.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
@@ -26,6 +29,7 @@ import { PARA_N, PARA_T, PARA_H, BOB, NIBBLE, POND_ANIMS_CAST, CAST_LAUNCH, draw
 import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
+import type { Clock, Seat } from '../minigame.ts';
 
 const R = Math.round;
 const IDLE = 0, CAST = 1, WAIT = 2, NIBBLE_S = 3, BITE = 4, HOOKED = 5, MISSED = 6;
@@ -63,11 +67,38 @@ const TITLE = 'MILLPOND', SIGN_PREFIX = 'FISH: ';
 const FISH_HEX = INGREDIENTS.fish.hex;
 const PLOP = 'PLOP', GONE = 'GONE', PLUS_ONE = '+1';
 
-function clockIcon(ctx, x, y) { drawFood(ctx, 'fish', x, y, 4, FISH_HEX); }
+function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'fish', x, y, 4, FISH_HEX); }
+
+/**
+ * One seat on the jetty: the shared mini-game seat plus this screen's own state, which is the little machine at the
+ * top of this file. Every field is written in enter() and stepped by stepSeat() - none is optional, and the five
+ * that checksumFields() hashes (`state`, `t`, `fx`, `fy`, plus the shared `count`) are all plain integers.
+ */
+export interface PondSeat extends Seat {
+  /** Where this seat's cast lands: the head of its own float column, FLOAT_DX px right of its feet. */
+  tx: number;
+  /** The waterline that column sits on (FLOAT_Y), which is the row a landed float rests at. */
+  sy: number;
+  /** IDLE | CAST | WAIT | NIBBLE_S | BITE | HOOKED | MISSED. */
+  state: number;
+  /** Frames left of the current state - or frames INTO it while casting, where `t` counts up to the parabola. */
+  t: number;
+  /** Which miss is playing out: true = pressed early (PLOP), false = let the window close (GONE). */
+  early: boolean;
+  /** Frames left of the bucket rim's squash after a trout drops in. */
+  landT: number;
+  /** The float in screen space: on the water, on the parabola, or dangling at the rod tip. */
+  fx: number;
+  fy: number;
+  /** The row this seat's float rests on between casts (REST_Y, odd seats REST_STEP deeper). */
+  restY: number;
+  /** The rod tip in screen space, read off the rig by each draw; one point per seat, written in place. */
+  tip: Point;
+}
 
 /** Where the caught trout is on frame `k` of its arc; one shared point so the two draw passes allocate nothing. */
 const CATCH_P = { x: 0, y: 0 };
-function catchPoint(s, k) {
+function catchPoint(s: PondSeat, k: number): Point {
   const i = R(k * (PARA_N - 1) / (FISH_ARC - 1));
   const bx = s.x + BUCKET_DX + 7, by = ROWS.feet - BUCKET_TOP;
   CATCH_P.x = R(s.fx + (bx - s.fx) * PARA_T[i]);
@@ -76,9 +107,30 @@ function catchPoint(s, k) {
 }
 
 export class PondScreen extends Screen {
-  constructor(game) { super(game, 'pond'); this.seats = []; this.sum = []; }
+  // The fields, for the checker only, in the order enter() writes them. `declare` for the reason game.ts gives
+  // over its own block: a plain field declaration would emit a class field per name (es2022 defines them before
+  // the constructor body runs, so a declaration here would also define a base field back to undefined), and this
+  // screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild (tools/build.js,
+  // tools/server.js) and under Node's type stripping alike, so the emitted class is the one that shipped.
 
-  enter(params) {
+  /** One seat per party member, in party order (not slot order): one float column each. */
+  declare seats: PondSeat[];
+  /** The checksum scratch array, sized in enter() and refilled by checksumFields(); never reallocated. */
+  declare sum: number[];
+  /** Trout in the party's buckets right now. */
+  declare total: number;
+  /** The round's clock and its ending (game/minigame.ts). */
+  declare clock: Clock;
+  /** Trout the round is played to: what the order still needs, or FALLBACK_TARGET with no run. */
+  declare target: number;
+  /** "0/3" for the clock ticket, rebuilt by hook() as the count changes. */
+  declare countStr: string;
+  /** The one-line control prompt under the panel, built once in enter() off seat 0's key. */
+  declare hint: string;
+
+  constructor(game: Game) { super(game, 'pond'); this.seats = []; this.sum = []; }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
     particles.clear();
@@ -90,11 +142,14 @@ export class PondScreen extends Screen {
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.countStr = '0/' + this.target;
     this.hint = `CAST / HOOK: ${game.input.keyText(0, 'action')}`;
-    this.seats = makeSeats(game, () => ROWS.feet);
+    this.seats = makeSeats<PondSeat>(game, () => ROWS.feet);
     const shift = R((SEAT_X.length - this.seats.length) * SEAT_PITCH / 2);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      s.rig.weapon = ITEMS.rod;
+      // `as RigWeapon`: content/critters/items.ts is not typed yet, so its `attach: 'handR'` widens to `string`
+      // and its entries miss RigWeapon's `attach?: HandName` by that one field. The table IS a table of rig
+      // weapons - rig.ts reads exactly these keys back off it - so the assertion says what items.ts cannot yet.
+      s.rig.weapon = ITEMS.rod as RigWeapon;
       // every seat casts with the pond's own whip, authored for a rod and ending on the rodWait pose
       s.player.setOverlay(POND_ANIMS_CAST);
       // SEAT_X is the four-seat layout; a smaller party keeps the same pitch and slides to the middle of the bank
@@ -113,7 +168,7 @@ export class PondScreen extends Screen {
     this.sum.length = 3 + this.seats.length * 5;
   }
 
-  update() {
+  override update(): void {
     super.update();
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
@@ -134,7 +189,7 @@ export class PondScreen extends Screen {
     if (tickClock(clock)) this.finish();
   }
 
-  stepSeat(s, pressed) {
+  stepSeat(s: PondSeat, pressed: boolean): void {
     if (s.landT > 0) s.landT--;
     switch (s.state) {
       case IDLE:
@@ -182,9 +237,9 @@ export class PondScreen extends Screen {
   }
 
   /** Back to the rod-low stance with the float dangling under the tip. */
-  rest(s) { s.state = IDLE; s.t = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; seatAnim(s, 'rodIdle', true); }
+  rest(s: PondSeat): void { s.state = IDLE; s.t = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; seatAnim(s, 'rodIdle', true); }
 
-  hook(s) {
+  hook(s: PondSeat): void {
     s.state = HOOKED; s.t = RESULT_FRAMES; s.count++;
     this.total++; this.countStr = this.total + '/' + this.target;
     seatAnim(s, 'pull', true);
@@ -192,7 +247,7 @@ export class PondScreen extends Screen {
     floatText(s.fx, s.fy - 24, PLUS_ONE, UI.cream, 1, true);
   }
 
-  miss(s, early) {
+  miss(s: PondSeat, early: boolean): void {
     s.state = MISSED; s.t = RESULT_FRAMES; s.early = early;
     seatAnim(s, 'bump', true);
     if (early) { floatText(s.fx, s.fy - 26, PLOP, UI.cream, 1, true); burstDrops(s.fx, s.fy, 2, true); }
@@ -203,14 +258,14 @@ export class PondScreen extends Screen {
     }
   }
 
-  finish() {
+  finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, SIGN_PREFIX + this.total);
     // everyone holds one pose under the sign: rod up for a full bucket, rod low for an empty one
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.state = IDLE; s.t = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; seatAnim(s, s.count > 0 ? 'pull' : 'rodIdle', true); }
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     const L = pondLayers(), f = this.frame;
     blitAt(ctx, L.far.L, 0, L.far.y); blitAt(ctx, L.mid.L, 0, L.mid.y); blitAt(ctx, L.ground.L, 0, L.ground.y);
     // the water's twinkle: 2x1 cream glints, index-hashed so a quarter of them are lit on any frame
@@ -248,7 +303,7 @@ export class PondScreen extends Screen {
   }
 
   /** The line, the float (with its bob / dips / drop by state) and, on a miss, the reel back to the rod tip. */
-  drawTackle(ctx, s, f) {
+  drawTackle(ctx: CanvasRenderingContext2D, s: PondSeat, f: number): void {
     const tx = R(s.tip.x), ty = R(s.tip.y), st = s.state;
     const k = RESULT_FRAMES - s.t;
     // The rod is up in the `pull` stance (the catch, and the hold under the end sign): a bare line, no float on the
@@ -289,7 +344,7 @@ export class PondScreen extends Screen {
    * The float at rest, sitting on the water below the rod tip with the line running the whole way down to it: no
    * slot tag down here (the cap carries the colour), and `k` reels it back up to the tip through the cast's wind-up.
    */
-  drawDangle(ctx, s, tx, ty, k, f) {
+  drawDangle(ctx: CanvasRenderingContext2D, s: PondSeat, tx: number, ty: number, k: number, f: number): void {
     // once it is down on the water it rides the same bob as a cast float, each seat on its own phase
     const fy = R(ty + (s.restY - ty) * k) + (k === 1 ? BOB[((f + s.slot * 9) >> 1) & 31] : 0);
     drawLine(ctx, tx, ty, tx, fy - 5);
@@ -297,14 +352,14 @@ export class PondScreen extends Screen {
   }
 
   /** The hooked trout: float to the bucket's rim on the cast parabola, nose first toward the bucket it is flying to. */
-  drawCatch(ctx, s) {
+  drawCatch(ctx: CanvasRenderingContext2D, s: PondSeat): void {
     const k = RESULT_FRAMES - s.t;
     if (k >= FISH_ARC) return;
     const p = catchPoint(s, k);
     drawTrout(ctx, p.x, p.y, 1);
   }
 
-  summary() {
+  override summary() {
     return {
       timer: this.clock.timer, total: this.total, target: this.target, ending: this.clock.phase !== 0, sign: this.clock.signText,
       seats: this.seats.map((s) => ({ slot: s.slot, state: STATE_NAMES[s.state], t: s.t, count: s.count, fx: s.fx, fy: s.fy })),
@@ -312,7 +367,7 @@ export class PondScreen extends Screen {
   }
 
   /** Every field that could diverge between peers (net/checksum.js). */
-  checksumFields() {
+  override checksumFields(): number[] {
     const o = this.sum;
     o[0] = this.clock.timer; o[1] = this.clock.phase; o[2] = this.total;
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i], k = 3 + i * 5; o[k] = s.state; o[k + 1] = s.t; o[k + 2] = s.fx; o[k + 3] = s.fy; o[k + 4] = s.count; }

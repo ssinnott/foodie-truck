@@ -18,6 +18,7 @@
 //   * the invite link and the address bar come from window.location, which no simulation ever sees.
 import { VIEW_W, UI, NET_MIN_PLAYERS, NET_PLAYERS, PLAYER_COLORS } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { CritterDef, Game, Input, ScreenParams } from '../game.ts';
 import { drawText, drawTextOutlined, measureText } from '../../engine/text.ts';
 import { drawShadow } from '../../art/fx.ts';
 import { drawTruck, TRUCK } from '../../art/truck.ts';
@@ -25,6 +26,8 @@ import { drawBust, idlePoseOf } from '../../art/portraits.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { CRITTERS } from '../../content/critters/index.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
+import type { Rig } from '../../lib/art/rig.ts';
+import type { PartialPose } from '../../lib/art/poses.ts';
 import { createNetSession } from '../../net/session.ts';
 import { drawTicket, drawSlate, drawMenuRows, drawStamp, drawNamePlate, drawHint, drawDim, ROW } from '../ui.ts';
 import { confirmPressed, cancelPressed, navY } from '../menuinput.ts';
@@ -39,7 +42,7 @@ const MAX_CODE = 8;
 /**
  * KeyboardEvent.code -> the character it types, for A-Z and 0-9 only.
  */
-function codeChar(code) {
+function codeChar(code: string): string {
   if (code.length === 4 && code.startsWith('Key')) return code[3];
   if (code.length === 6 && code.startsWith('Digit')) return code[5];
   return '';
@@ -100,13 +103,119 @@ const STAMP_FRAMES = 24;
  */
 const STAMP_OPTS = { size: 2, color: TRUCK.body, light: TRUCK.bodyHi, angle: DOCKET_TILT };
 
+/**
+ * The live session (net/session.ts createNetSession), or null before one is opened.
+ *
+ * `any`, for the reason game.ts gives over `Game.net`: the session grows its own API after the literal that
+ * file returns (`net.start`, `net.leave`, `net.summary`, and the roster's party / critterTaken / setCritter /
+ * setReady, all installed onto it), so no type written here would describe the thing a screen is handed.
+ * net/session.ts owns that shape; this alias is the one place to point at it once it has one.
+ */
+type NetSession = any;
+
+/** role | code | connecting | lobby | starting | error - the flow at the top of this file, in that order. */
+export type LobbyPhase = 'role' | 'code' | 'connecting' | 'lobby' | 'starting' | 'error';
+
+/**
+ * One cast member as the lobby holds it: the cast entry, one rig per SEAT (the apron colour belongs to the
+ * stool, not the critter, so a pick that moves seats changes rig rather than tint), the player that idles it,
+ * and the pose its bust is anchored on. Built once in enter(); draw() never builds a rig.
+ */
+export interface LobbyCritter {
+  /** The cast entry (content/critters/index.ts CRITTERS), in cast order. */
+  def: CritterDef;
+  /** One rig per seat, indexed by slot: `rigs[2]` is this critter in P3's apron. */
+  rigs: Rig[];
+  /** Idling from a per-critter offset (i * 11 ticks), so four busts in a row do not breathe in lockstep. */
+  player: AnimPlayer;
+  /** The first idle frame's pose, which art/portraits.ts anchors the bust's head on; null for a rig without one. */
+  anchor: PartialPose | null;
+}
+
+/**
+ * One seat of the room, as net/roster.ts's `net.party()` hands it over: plain data in slot order, rebuilt by
+ * refresh() every step. The roster owns the members these are copied from.
+ */
+export interface LobbyMember {
+  /** Seat 0..3: its colour, its stool and its column of status text. Seats are dense (roster.js). */
+  slot: number;
+  /** Cast INDEX, not a cast id: compared modulo the cast length, exactly as game/run.js seats it. */
+  critter: number;
+  ready: boolean;
+  /** True for this machine's own seat. */
+  local: boolean;
+  /** True once a match has retired the seat; the lobby never sees one, since a dropped seat is reseated. */
+  gone: boolean;
+  /** True while a direct link to that player is open rather than the host's relay; nothing here draws it. */
+  direct: boolean;
+}
+
+/** The options object handed to art/portraits.ts drawBust; one per screen, mutated rather than reallocated. */
+export interface BustDrawOpts {
+  /** Rows of headroom above the crown inside the bust box. */
+  margin: number;
+  /** 1 = facing right, -1 = facing left. */
+  facing: number;
+}
+
 export class LobbyScreen extends Screen {
-  constructor(game) {
+  // The fields, for the checker only, in constructor then enter() order. `declare` for the reason game.ts gives
+  // over its own block: a plain field declaration would emit a class field per name (es2022 defines them before
+  // the constructor body runs, and a subclass's own declaration would define a base field back to undefined),
+  // and this screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild
+  // (tools/build.js, tools/server.js) and under Node's type stripping alike, so the emitted class is the original.
+
+  /** The session this screen drives: adopted in enter() or opened by `open()`, and null until there is one. */
+  declare net: NetSession;
+  /** The cast, one entry per CRITTERS member, in cast order. */
+  declare crit: LobbyCritter[];
+  /** The seated party in slot order, re-read from the session by refresh() every step. */
+  declare party: LobbyMember[];
+  /** Frames each seat has been stamped READY for, one per SEAT (not per party member): the stamp's slam. */
+  declare readyT: number[];
+  /** The role menu's cursor (ROLE_ROWS). */
+  declare sel: number;
+  /** True while a guest is typing a host key: the `code` phase. */
+  declare typing: boolean;
+  /** What is being typed. */
+  declare code: string;
+  /** The code actually on the ticket, one glyph per entry. */
+  declare codeChars: string[];
+  /** The code the ticket is showing, so noteCode() does its work once per room. */
+  declare shownCode: string;
+  /** Frame the code arrived, for the flip-in; -1 while there is no code. */
+  declare codeAt: number;
+  /** The invite link on the ticket, elided to LINK_MAX. */
+  declare link: string;
+  /** The status strip under the stools, rebuilt only when one of the four scalars below moves. */
+  declare statusLine: string;
+  /** The host key the status line was built from. */
+  declare sRoom: string;
+  /** The party size it was built from; -1 before the first build. */
+  declare sParty: number;
+  /** The ping it was built from: rounded milliseconds, or '--' before a measurement exists. */
+  declare sPing: string | number;
+  /** The input delay it was built from, in frames; -1 before the first build. */
+  declare sDelay: number;
+  /** Is the room full enough and every seat in it stamped? What puts STARTING! on the screen. */
+  declare allReady: boolean;
+  /** The drawBust options, reused every frame (draw() allocates nothing). */
+  declare bustOpts: BustDrawOpts;
+  /** The hint strip of each phase, joined once in enter() because they name the player's own keys. */
+  declare roleHint: string;
+  declare codeHint: string;
+  declare lobbyHint: string;
+  declare endHint: string;
+  /** The session's state callback: re-read everything the screen shows. Handed to the session, and taken back
+   *  by exit(), which is why it is held rather than written inline. */
+  declare onState: () => void;
+
+  constructor(game: Game) {
     super(game, 'lobby');
     this.net = null; this.crit = []; this.party = []; this.readyT = [0, 0, 0, 0];
   }
 
-  enter(params) {
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game;
     this.crit = CRITTERS.map((def, i) => {
@@ -146,7 +255,7 @@ export class LobbyScreen extends Screen {
     this.refresh();
   }
 
-  exit() {
+  override exit(): void {
     // The session outlives this screen (the match is about to start), so only the callback is taken back.
     if (this.net && this.net.onStateChange) this.net.onStateChange(null);
   }
@@ -154,10 +263,10 @@ export class LobbyScreen extends Screen {
   // ---- the session ----------------------------------------------------------------------------
 
   /** Open a room: the host mints a key, a guest brings one. `game.net` is the session from here on. */
-  open(isHost, room) {
+  open(isHost: boolean, room: string): void {
     const game = this.game;
     if (game.net && game.net.state !== 'ended') game.net.leave();
-    const net = createNetSession({
+    const net: NetSession = createNetSession({
       game, input: game.input, isHost, room: String(room || '').toUpperCase(),
       transport: game.options.transport, onState: this.onState,
     });
@@ -169,7 +278,7 @@ export class LobbyScreen extends Screen {
   }
 
   /** The code just became known: start its flip-in, build the invite link, and put it in the address bar. */
-  noteCode() {
+  noteCode(): void {
     const net = this.net;
     if (!net || !net.room || net.room === this.shownCode) return;
     this.shownCode = net.room;
@@ -189,7 +298,7 @@ export class LobbyScreen extends Screen {
   }
 
   /** Re-read everything the screen shows from the session. Cheap, and the only place strings are built. */
-  refresh() {
+  refresh(): void {
     const net = this.net;
     this.party = net ? net.party() : [];
     // Is the room full enough and has every seat in it stamped? draw() reads this rather than walking the roster
@@ -208,7 +317,7 @@ export class LobbyScreen extends Screen {
   }
 
   /** role | code | connecting | lobby | starting | error. STARTING! on the screen is `allReady`, not this. */
-  get phase() {
+  get phase(): LobbyPhase {
     const net = this.net;
     if (!net) return this.typing ? 'code' : 'role';
     if (net.state === 'ended') return 'error';
@@ -218,7 +327,7 @@ export class LobbyScreen extends Screen {
   }
 
   /** Step the pick one critter along, skipping every one another seat already holds. */
-  pick(dir) {
+  pick(dir: number): void {
     const net = this.net, n = this.crit.length;
     for (let k = 1; k <= n; k++) {
       const c = ((net.lobby.myCritter + dir * k) % n + n) % n;
@@ -228,7 +337,7 @@ export class LobbyScreen extends Screen {
 
   // ---- update ---------------------------------------------------------------------------------
 
-  update() {
+  override update(): void {
     super.update();
     const inp = this.game.input;
     this.refresh();
@@ -269,7 +378,7 @@ export class LobbyScreen extends Screen {
    * Code entry. Every letter of the alphabet is a bound game key, so this reads KeyboardEvent.code values
    * rather than actions; engine/input.js holds them for the step this update belongs to.
    */
-  updateCode(inp) {
+  updateCode(inp: Input): void {
     const raw = inp.typedCodes();
     for (let i = 0; i < raw.length; i++) {
       const code = raw[i];
@@ -287,7 +396,7 @@ export class LobbyScreen extends Screen {
   // ---- drawing --------------------------------------------------------------------------------
 
   /** The code glyphs, tracked at spacing 2, each flipping in over its own six frames. */
-  drawCode(ctx, chars, caret) {
+  drawCode(ctx: CanvasRenderingContext2D, chars: string[], caret: boolean): void {
     const total = chars.length * CODE_ADV - CODE_SPACING * CODE_SIZE;
     let x = R(TICKET.x + TICKET.w / 2 - total / 2);
     for (let i = 0; i < chars.length; i++) {
@@ -310,7 +419,7 @@ export class LobbyScreen extends Screen {
   }
 
   /** The pegged table ticket: header, the code, a rule, and the invite link. */
-  drawTable(ctx, chars, caret) {
+  drawTable(ctx: CanvasRenderingContext2D, chars: string[], caret: boolean): void {
     ctx.fillStyle = TRUCK.brass; ctx.fillRect(RAIL_X0, RAIL_Y, RAIL_X1 - RAIL_X0, 2);
     ctx.fillStyle = UI.ink; ctx.fillRect(RAIL_X0, RAIL_Y + 2, RAIL_X1 - RAIL_X0, 1);
     drawTicket(ctx, TICKET.x, TICKET.y, TICKET.w, TICKET.h, { title: 'TABLE', rules: false });
@@ -331,7 +440,7 @@ export class LobbyScreen extends Screen {
    *     blue welded Barley to his seat and you could not see where he ended. The colour moved to the foot
    *     ring, which touches nothing but the lane.
    */
-  drawStool(ctx, cx, colour) {
+  drawStool(ctx: CanvasRenderingContext2D, cx: number, colour: string | null): void {
     // one ink pass under the whole stool: the cushion disc, the post, the foot
     ctx.fillStyle = UI.ink;
     ctx.beginPath(); ctx.ellipse(cx, STOOL_Y, 25, 10, 0, 0, TAU); ctx.fill();
@@ -354,7 +463,7 @@ export class LobbyScreen extends Screen {
     ctx.restore();
   }
 
-  drawSeats(ctx) {
+  drawSeats(ctx: CanvasRenderingContext2D): void {
     for (let i = 0; i < SEAT_X.length; i++) {
       const cx = SEAT_X[i], m = this.party[i];
       drawShadow(ctx, cx, STOOL_Y + 36, 40, 0.32);
@@ -388,7 +497,7 @@ export class LobbyScreen extends Screen {
     }
   }
 
-  drawStatusLine(ctx) {
+  drawStatusLine(ctx: CanvasRenderingContext2D): void {
     if (!this.statusLine) return;
     const x = R(VIEW_W / 2 - STATUS_W / 2);
     ctx.fillStyle = UI.ink; ctx.fillRect(x - 1, STATUS_Y - 1, STATUS_W + 2, 14);
@@ -396,7 +505,7 @@ export class LobbyScreen extends Screen {
     drawText(ctx, this.statusLine, VIEW_W / 2, STATUS_Y + 3, { size: 1, color: UI.ink, align: 'center', shadow: false });
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     drawLane(ctx);
     drawDim(ctx, 0.52);
     drawShadow(ctx, TRUCK_X, TRUCK_Y, 118, 0.28);
@@ -441,7 +550,7 @@ export class LobbyScreen extends Screen {
     drawHint(ctx, this.lobbyHint);
   }
 
-  summary() {
+  override summary() {
     const net = this.net;
     return {
       phase: this.phase, banner: this.allReady ? STARTING_TEXT : '', code: this.shownCode || this.code, typing: this.typing,
@@ -451,5 +560,5 @@ export class LobbyScreen extends Screen {
     };
   }
   /** Nothing here runs under lockstep (the session resets us away at START), but the canary wants a list. */
-  checksumFields() { return [this.sel, this.code.length, this.party.length]; }
+  override checksumFields(): number[] { return [this.sel, this.code.length, this.party.length]; }
 }

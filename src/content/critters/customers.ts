@@ -5,6 +5,7 @@
 // They wear the off-duty apron (critterRig(def, -1)): no seat, no player colour.
 import { celPoly } from '../../lib/art/shading.ts';
 import { critterBuild, makeCritterAnims, muzzleGeom } from './common.ts';
+import type { RigAccessory } from '../../lib/art/rig.ts';
 
 const R = Math.round;
 const TAU = Math.PI * 2;
@@ -59,7 +60,7 @@ function goatBeard(ctx, rig, pose, inf) {
   celPoly(ctx, rig, [x - 3, y, x + 3, y, x, y + 7], rig.palette.hair, 0.4, 0);
 }
 /** Two short horns on the crown: small inked polygons curving back, drawn with the head so they turn with it. */
-const horns = { attach: 'head', draw(ctx, rig) {
+const horns: RigAccessory = { attach: 'head', draw(ctx, rig) {
   const r = rig.p.headR, y = R(-r * 0.86);
   celPoly(ctx, rig, [R(-r * 0.45), y, R(-r * 0.2), y, R(-r * 0.5), y - 8], HORN, 0.4, 0);
   celPoly(ctx, rig, [R(r * 0.1), y, R(r * 0.36), y, R(-r * 0.05), y - 8], HORN, 0.4, 0);

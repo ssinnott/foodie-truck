@@ -1,10 +1,11 @@
 // Boot: create services, Game, screens, loop; install window.__game debug/test hooks (docs/ARCHITECTURE.md section 6).
-import { VIEW_W, VIEW_H } from './constants.ts';
+import { VIEW_W, VIEW_H, DT, MAX_STEPS_PER_FRAME } from './constants.ts';
 import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.ts';
 import { rng } from './lib/engine/rng.ts';
 import { createCanvas } from './lib/engine/canvas.ts';
 import { Game } from './game/game.ts';
+import type { GameOptions } from './game/game.ts';
 import { startRun, SCENES } from './game/run.ts';
 import { CRITTERS } from './content/critters/index.ts';
 import { installNetHooks } from './net/session.ts';
@@ -26,7 +27,7 @@ import { GalleryScreen } from './game/screens/gallery.ts';
 import { PauseScreen } from './game/screens/pause.ts';
 
 /** Parse URL params into game options. */
-export function parseOptions(search = window.location.search) {
+export function parseOptions(search: string = window.location.search): GameOptions {
   const q = new URLSearchParams(search);
   const flag = (k) => q.has(k) && q.get(k) !== '0' && q.get(k) !== 'false';
   const autotest = flag('autotest'), debug = flag('debug');
@@ -67,7 +68,9 @@ window.addEventListener('unhandledrejection', (e) => { if (!hooks._record) hooks
 function boot() {
   const options = parseOptions();
   rng.seed(options.seed);
-  const view = createCanvas(document.getElementById('game') || document.body);
+  // The library defaults to 640x360, which is what these constants are, but pass them anyway: the
+  // resolution is this game's decision and the library should never be the place it is recorded.
+  const view = createCanvas(document.getElementById('game') || document.body, { width: VIEW_W, height: VIEW_H });
   const ctx = view.ctx;
   input.init(view.canvas);
 
@@ -91,6 +94,7 @@ function boot() {
   game.registerScreen('pause', (g) => new PauseScreen(g));
 
   const loop = createLoop({
+    dt: DT, maxSteps: MAX_STEPS_PER_FRAME,   // this game's clock, not the library's default
     update() {
       try {
         // Netplay first: beforeStep samples the local devices, records them into lockstep and injects every

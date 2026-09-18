@@ -6,6 +6,10 @@ import { celPath, celBall, tones, pathRR, band } from '../../lib/art/shading.ts'
 import { getChain } from '../../lib/art/secondary.ts';
 import { rad } from '../../lib/engine/math.ts';
 import { critterBuild, makeCritterAnims, muzzleGeom, F, PLUM_STRAP } from './common.ts';
+import type { CritterRig } from './common.ts';
+import type { Info } from '../../lib/art/rigParts.ts';
+import type { Pose } from '../../lib/art/poses.ts';
+import type { RigAccessory } from '../../lib/art/rig.ts';
 
 const R = Math.round;
 const TAU = Math.PI * 2;
@@ -17,7 +21,7 @@ const WOOL = '#F1E4C8', FACE = '#3F3A48', MUZZLE = '#8C7A86', HOOF = '#2E2A33', 
  * repainted in `belly` on top so it stays the light patch the mouth sits on. Runs after makeHead's muzzle pass,
  * which is why the muzzle is drawn twice: the second one is the one that shows.
  */
-function darkFace(ctx, rig, pose, inf) {
+function darkFace(ctx: CanvasRenderingContext2D, rig: CritterRig, pose: Pose, inf: Info): void {
   const r = inf.r, pal = rig.palette;
   ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r - 0.5, 0, TAU); ctx.clip();
   ctx.fillStyle = rig.col(pal.hair); ctx.beginPath(); ctx.ellipse(R(r * 0.65), 0, R(r * 0.95), R(r * 0.9), 0, 0, TAU); ctx.fill();
@@ -36,7 +40,7 @@ const CAP = [[-1.0, -0.15], [-0.85, -0.55], [-0.55, -0.85], [-0.2, -1.0], [0.15,
  * The wool cap (parts.hair hook, head space): six balls appended into ONE path, stroked once and filled once, so
  * the outline scallops around the mass and no line crosses inside it. Sits over the top of the dark face.
  */
-function woolCap(ctx, rig, pose, inf) {
+function woolCap(ctx: CanvasRenderingContext2D, rig: CritterRig, pose: Pose, inf: Info): void {
   const r = inf.r, br = R(r * 0.33);
   ctx.beginPath();
   for (let i = 0; i < CAP.length; i++) { const x = R(r * CAP[i][0]), y = R(r * CAP[i][1]); ctx.moveTo(x + br, y); ctx.arc(x, y, br, 0, TAU); }
@@ -48,12 +52,12 @@ function woolCap(ctx, rig, pose, inf) {
  * the FAR shoulder to the centre line only: the full-width band used to lie across both of the apron's straps and
  * paint the player's colour plum for four of its seven pixels.
  */
-function strap(ctx, rig, pose, inf) {
+function strap(ctx: CanvasRenderingContext2D, rig: CritterRig, pose: Pose, inf: Info): void {
   const H = inf.h, hw = R(inf.w / 2);
   band(ctx, rig, -R(hw * 0.68), -H + 1, R(hw * 0.75), 4, PLUM_STRAP);
 }
 /** The brass bell (front torso accessory): a 7x6 ball hanging below the collar on a one-segment chain. */
-const bell = { attach: 'torso', layer: 'front', draw(ctx, rig) {
+const bell: RigAccessory = { attach: 'torso', layer: 'front', draw(ctx, rig) {
   const H = rig.p.torsoH, hw = R(rig.p.torsoW / 2);
   const ch = getChain(rig, 'bell', 1, { joint: 'torso', rest: [0, 1], stiffness: 0.16, damping: 0.66, gain: 3, maxAng: 40 });
   // hung from the FAR end of the strap. On the near side it sat exactly where the near arm now hangs (the arm

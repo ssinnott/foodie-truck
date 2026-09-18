@@ -13,6 +13,7 @@
 // (the judges' graft: equal-y overlaps must never flicker).
 import { VIEW_W, UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { Game, Input, ScreenParams } from '../game.ts';
 import { rng } from '../../lib/engine/rng.ts';
 import { dhypot } from '../../lib/engine/trig.ts';
 import { particles } from '../../engine/particles.ts';
@@ -20,12 +21,14 @@ import { blitAt, INK } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt, burstDust } from '../../art/fx.ts';
 import { foodTones } from '../../art/food.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
+import type { Point } from '../../lib/art/rigParts.ts';
 import { pathEllipse } from '../../lib/art/shapes.ts';
 import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { coopLayers, ROWS, NEST_X, NEST_EGG_Y } from '../../art/backgrounds/coop.ts';
 import { drawHen, drawRooster, HEN } from '../../art/hens.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign } from '../minigame.ts';
+import type { Clock, Seat } from '../minigame.ts';
 import { drawHint } from '../ui.ts';
 
 const R = Math.round;
@@ -99,7 +102,7 @@ const COOP_ANIMS = Object.freeze({
 });
 
 /** The coop's egg glyph: inked oval, cream shell, one plum shadow crescent, one 2 px cap. `s` is the half-height. */
-function eggGlyph(ctx, x, y, s) {
+function eggGlyph(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
   ctx.beginPath(); ctx.ellipse(x, y, s * 0.7, s, 0, 0, Math.PI * 2);
   ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = SHELL; ctx.fill();
@@ -110,7 +113,7 @@ function eggGlyph(ctx, x, y, s) {
   ctx.fillStyle = EGG_HI; ctx.fillRect(R(x - s * 0.5), R(y - s * 0.6), 2, 2);
 }
 
-function clockIcon(ctx, x, y) { eggGlyph(ctx, x, y, 5); }
+function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { eggGlyph(ctx, x, y, 5); }
 
 /**
  * An egg in flight - popped out of a basket or hopping into one - crosses the critters' own bodies, and a cream shell
@@ -119,21 +122,170 @@ function clockIcon(ctx, x, y) { eggGlyph(ctx, x, y, 5); }
  * a big block) on top of the glyph's own, so the shell itself carries the beat. Darkening the shell instead was tried
  * and lost the egg: the scene's one bright warm object cannot also be the dark one.
  */
-function airEgg(ctx, x, y) {
+function airEgg(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   ctx.beginPath(); ctx.ellipse(x, y, EGG_S * 0.7 + 1, EGG_S + 1, 0, 0, Math.PI * 2);
   ctx.fillStyle = INK; ctx.fill();
   eggGlyph(ctx, x, y, EGG_S);
 }
 
-export class CoopScreen extends Screen {
-  constructor(game) { super(game, 'coop'); }
+/** One pre-rendered backdrop layer and the screen y it is blitted at (art/backgrounds/coop.ts coopLayers). */
+export interface CoopLayer {
+  /** The offscreen canvas art/layers.ts makeLayer painted once. */
+  L: { canvas: HTMLCanvasElement; w: number; h: number };
+  /** Screen y its top row lands on. */
+  y: number;
+}
 
-  enter(params) {
+/** The coop's backdrop: painted on the first visit, kept for every visit after. */
+export interface CoopLayers {
+  /** Back wall with the nesting boxes, down to the floor row. */
+  wall: CoopLayer;
+  /** The floor band the party walks. */
+  floor: CoopLayer;
+  /** The near lip, drawn over everything standing on the band. */
+  near: CoopLayer;
+  /** The rafters across the top of the frame. */
+  rafter: CoopLayer;
+}
+
+/**
+ * A seat at the coop: the shared mini-game seat plus the beat timers this screen keeps for it and the basket
+ * point the hop flies to. The per-screen extension minigame.ts documents, so `makeSeats<CoopSeat>` hands these
+ * back with the screen's own fields as typed as the shared ones.
+ */
+export interface CoopSeat extends Seat {
+  /** Frames left of the pluck / reachNest beat; the stick is locked while it runs. */
+  reachT: number;
+  /** Frames of bump grace left: a hen cannot chain-bump while this is up. */
+  safeT: number;
+  /** Frames left of the rooster toss's root pop (POP), a draw-only offset. */
+  popT: number;
+  /** Where the basket is on screen, refilled from the `handN` joint by every drawSeat. */
+  basketPt: Point;
+}
+
+/** One egg of the fixed pool: in a nesting box (`nest` >= 0) or on the floor. */
+export interface Egg {
+  /** False while the slot is free for the next spawn. */
+  active: boolean;
+  x: number;
+  /** The row the shell is drawn on. */
+  y: number;
+  /** The floor row it is plucked from: its own row on the floor, the feet line under a nest. */
+  fy: number;
+  /** Index into NEST_X, or -1 for a floor egg. */
+  nest: number;
+}
+
+/** One of the five hens wandering between seeded waypoints. */
+export interface Hen {
+  x: number;
+  y: number;
+  /** The waypoint it is walking to (stale while it pauses). */
+  tx: number;
+  ty: number;
+  /** 0 = pausing, 1 = walking to the waypoint. */
+  state: number;
+  /** Frames left of the pause; its bits also drive the peck while it pauses. */
+  t: number;
+  /** Which of the two hen looks to draw (art/hens.ts drawHen). */
+  kind: number;
+  /** 1 = facing right, -1 = facing left. */
+  facing: number;
+}
+
+/** The rooster: it waits off screen, telegraphs at one edge, then charges across the band. */
+export interface Rooster {
+  x: number;
+  y: number;
+  /** 0 = waiting, 1 = telegraphing at the edge, 2 = charging. */
+  state: number;
+  /** Frames left of the wait or of the telegraph. */
+  t: number;
+  /** 1 = charging right, -1 = charging left. */
+  dir: number;
+}
+
+/** A plucked egg hopping from where it lay into a seat's basket (cosmetic). */
+export interface Hop {
+  /** Frames into the hop; HOP_FRAMES means the slot is free. */
+  t: number;
+  /** Where the egg lay. */
+  x0: number;
+  y0: number;
+  /** The party index of the seat it flies to (`Seat.index`). */
+  seat: number;
+}
+
+/** An egg knocked out of a basket: the 12-frame arc, then the splat fading on the floor (cosmetic). */
+export interface Crack {
+  /** Frames into the arc and the splat; CRACK_TOTAL means the slot is free. */
+  t: number;
+  /** Where it left the basket. */
+  x: number;
+  y: number;
+  /** Which way it flies: away from whatever bumped the seat. */
+  dir: number;
+}
+
+export class CoopScreen extends Screen {
+  // The fields, for the checker only, in enter() order. `declare` for the reason game.ts gives over its own
+  // block: a plain field declaration would emit a class field per name (es2022 defines them before the
+  // constructor body runs, and a screen's own declaration would also define a base field back to undefined), and
+  // this screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild and under
+  // Node's type stripping alike, so the emitted class is the original.
+
+  /** The backdrop, pre-rendered once (art/backgrounds/coop.ts coopLayers) and blitted per frame. */
+  declare layers: CoopLayers;
+  /** One seat per party member, in party order (not slot order). */
+  declare seats: CoopSeat[];
+  /** The egg pool: MAX_EGGS slots, reused in place, never reallocated. */
+  declare eggs: Egg[];
+  /** 1 per nesting box holding an egg, indexed like NEST_X; NEST_CAP of them at once at most. */
+  declare nestFull: Int8Array;
+  /** Frames until the next egg is laid (SPAWN_MIN..SPAWN_MAX). */
+  declare nextSpawn: number;
+  /** The five hens. */
+  declare hens: Hen[];
+  /** The rooster: one object for the whole round, charge after charge. */
+  declare rooster: Rooster;
+  /** The hop pool (cosmetic): MAX_HOPS slots handed out in turn. */
+  declare hops: Hop[];
+  /** The next hop slot to reuse. */
+  declare hopCursor: number;
+  /** The crack pool (cosmetic): MAX_CRACKS slots handed out in turn. */
+  declare cracks: Crack[];
+  /** The next crack slot to reuse. */
+  declare crackCursor: number;
+  /** Bumps the party has taken this round, hens and rooster alike (the playtest reads it). */
+  declare bumps: number;
+  /** Eggs the round is played to: what the order still needs, or 3 with no run. */
+  declare target: number;
+  /** Eggs in the party's baskets right now. */
+  declare total: number;
+  /** "3/4" for the clock ticket, rebuilt by setTotal() as the count changes. */
+  declare countStr: string;
+  /** The hint line along the bottom. */
+  declare hint: string;
+  /** The round's clock and its ending (game/minigame.ts). */
+  declare clock: Clock;
+  /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
+  declare fields: number[];
+  /** The y-sort's fixed index array: seats, hens, the rooster, then the floor eggs. */
+  declare sortIdx: Int16Array;
+  /** Their sort keys (y * 16 + the tiebreak), sorted alongside `sortIdx`. */
+  declare sortKey: Float64Array;
+  /** How many entries of those two the sort filled. */
+  declare sortN: number;
+
+  constructor(game: Game) { super(game, 'coop'); }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
     this.layers = coopLayers();
     particles.clear();
-    this.seats = makeSeats(game, (i) => 300 - (i & 1) * 20);
+    this.seats = makeSeats<CoopSeat>(game, (i) => 300 - (i & 1) * 20);
     const n = this.seats.length;
     for (let i = 0; i < n; i++) {
       const s = this.seats[i];
@@ -173,7 +325,7 @@ export class CoopScreen extends Screen {
     this.sortIdx = new Int16Array(total); this.sortKey = new Float64Array(total); this.sortN = 0;
   }
 
-  update() {
+  override update(): void {
     super.update();
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
@@ -199,7 +351,7 @@ export class CoopScreen extends Screen {
   }
 
   /** Every seat: the beats first (they lock the stick), then the stick, the pluck, the anim. */
-  updateSeats(input) {
+  updateSeats(input: Input): void {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.safeT > 0) s.safeT--;
@@ -221,7 +373,7 @@ export class CoopScreen extends Screen {
   }
 
   /** The nearest egg whose reach point is within PLUCK_R on both axes goes into the basket. */
-  tryPluck(s) {
+  tryPluck(s: CoopSeat): void {
     let best = -1, bestD = 1e9;
     for (let i = 0; i < this.eggs.length; i++) {
       const e = this.eggs[i];
@@ -249,7 +401,7 @@ export class CoopScreen extends Screen {
    * Nests are capped at NEST_CAP: a nest egg costs a pool slot and can only be taken from one 14 px strip, so six of
    * them would lock the pool and stop the floor spawns a party that has not found the back row depends on.
    */
-  updateEggs() {
+  updateEggs(): void {
     if (--this.nextSpawn > 0) return;
     this.nextSpawn = rng.int(SPAWN_MIN, SPAWN_MAX);
     let slot = -1;
@@ -268,7 +420,7 @@ export class CoopScreen extends Screen {
   }
 
   /** Hens: pause, pick a waypoint, walk to it at 0.6 px/frame; a seat within 12 px takes the bump. */
-  updateHens() {
+  updateHens(): void {
     for (let i = 0; i < this.hens.length; i++) {
       const h = this.hens[i];
       if (h.state === 0) {
@@ -292,7 +444,7 @@ export class CoopScreen extends Screen {
   }
 
   /** The rooster: wait ~600 frames, telegraph at the edge (comb flashing, dust), charge across, gone off the far side. */
-  updateRooster() {
+  updateRooster(): void {
     const r = this.rooster;
     if (r.state === 0) {
       if (--r.t <= 0) { r.state = 1; r.t = TELEGRAPH; r.dir = rng.sign(); r.y = rng.int(HEN_Y_MIN, HEN_Y_MAX); r.x = r.dir > 0 ? ROOSTER_EDGE : VIEW_W - ROOSTER_EDGE; }
@@ -314,7 +466,7 @@ export class CoopScreen extends Screen {
   }
 
   /** The bump beat: pushed 8 px away from `fromX`, facing it, `loss` eggs popping out of the basket and cracking. */
-  bump(s, fromX, loss, toss) {
+  bump(s: CoopSeat, fromX: number, loss: number, toss: boolean): void {
     const dir = s.x >= fromX ? 1 : -1;
     s.bumpT = BUMP_FRAMES; s.safeT = SAFE_FRAMES; s.reachT = 0; s.moving = false;
     if (toss) s.popT = POP_N;
@@ -337,16 +489,16 @@ export class CoopScreen extends Screen {
     this.bumps++;
   }
 
-  setTotal(n) { this.total = n; this.countStr = n + '/' + this.target; }
+  setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
   /** The round is over: drop the sign; a seat with eggs cheers, one without sulks. */
-  finish() {
+  finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, SIGN_PREFIX + this.total);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.moving = false; s.bumpT = 0; s.reachT = 0; seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true); }
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     const L = this.layers, f = this.frame;
     blitAt(ctx, L.wall.L, 0, L.wall.y);
     for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; if (e.active && e.nest >= 0) this.drawEgg(ctx, e, i, f); }
@@ -377,7 +529,7 @@ export class CoopScreen extends Screen {
   }
 
   /** Insertion-sort the seats, hens, rooster and floor eggs by y (slot as the tiebreak), then draw them back to front. */
-  drawSorted(ctx, f) {
+  drawSorted(ctx: CanvasRenderingContext2D, f: number): void {
     const idx = this.sortIdx, key = this.sortKey, ns = this.seats.length, nh = this.hens.length;
     let n = 0;
     for (let i = 0; i < ns; i++) { idx[n] = i; key[n++] = this.seats[i].y * 16 + this.seats[i].slot; }
@@ -398,7 +550,7 @@ export class CoopScreen extends Screen {
     }
   }
 
-  drawSeat(ctx, s) {
+  drawSeat(ctx: CanvasRenderingContext2D, s: CoopSeat): void {
     const rig = s.rig, o = s.opts;
     rig.basketFill = this.target ? Math.min(1, s.count / this.target) : 0; rig.basketSquash = 1;
     o.x = s.x; o.y = s.y - (s.popT > 0 ? POP[POP_N - s.popT] : 0); o.facing = s.facing;
@@ -406,7 +558,7 @@ export class CoopScreen extends Screen {
     jointScreen(rig, 'handN', s.basketPt);
   }
 
-  drawRoosterAt(ctx, f) {
+  drawRoosterAt(ctx: CanvasRenderingContext2D, f: number): void {
     const r = this.rooster;
     // the comb flashes HOT through the telegraph AND the charge itself (the charge is the scene's real threat, and it
     // used to run its ~210 frames in the muted comb); the charge's tick is twice as fast, so it reads as motion
@@ -420,7 +572,7 @@ export class CoopScreen extends Screen {
    * floor the 14 px strip the pluck works from is invisible. A ring where the feet go, with the same blink as the
    * egg's own sparkle so a player joins the two.
    */
-  drawNestCue(ctx, e, i, f) {
+  drawNestCue(ctx: CanvasRenderingContext2D, e: Egg, i: number, f: number): void {
     const x = R(e.x);
     // the ring: an ink line under the gold one, so the mark holds on the cool earth and under a critter's feet
     ctx.globalAlpha = 0.5; ctx.strokeStyle = INK; ctx.lineWidth = 3;
@@ -440,14 +592,14 @@ export class CoopScreen extends Screen {
   }
 
   /** An egg at rest, with the fresh-egg sparkle blinking above it on an index hash. */
-  drawEgg(ctx, e, i, f) {
+  drawEgg(ctx: CanvasRenderingContext2D, e: Egg, i: number, f: number): void {
     const x = R(e.x), y = R(e.y);
     eggGlyph(ctx, x, y, EGG_S);
     if (((f + i * 7) >> 3) & 1) { ctx.fillStyle = SIGNAL.coop; ctx.fillRect(x + 3, y - 10, 2, 6); ctx.fillRect(x + 1, y - 8, 6, 2); }
   }
 
   /** The plucked egg hops from where it lay into the seat's basket over 12 frames. */
-  drawHop(ctx, h) {
+  drawHop(ctx: CanvasRenderingContext2D, h: Hop): void {
     if (h.t >= HOP_FRAMES) return;
     const s = this.seats[h.seat], k = h.t / HOP_FRAMES;
     const tx = s.basketPt.x, ty = s.basketPt.y + 10;
@@ -455,7 +607,7 @@ export class CoopScreen extends Screen {
   }
 
   /** The popped egg in the air: out of the basket on the 12-entry arc, away from what bumped the seat, its shadow racing along the floor under it (the read that survives a cream shell crossing cream wool). */
-  drawArc(ctx, c) {
+  drawArc(ctx: CanvasRenderingContext2D, c: Crack): void {
     if (c.t >= ARC_N) return;
     const x = R(c.x + c.dir * (ARC_X0 + c.t * ARC_VX));
     drawShadow(ctx, x, c.y, 9, 0.3, ARC[c.t]);
@@ -463,7 +615,7 @@ export class CoopScreen extends Screen {
   }
 
   /** Where it lands: three cream discs and a 3x3 yolk, no outline (the one soft mark), fading over 30 frames. */
-  drawSplat(ctx, c) {
+  drawSplat(ctx: CanvasRenderingContext2D, c: Crack): void {
     if (c.t < ARC_N || c.t >= CRACK_TOTAL) return;
     const a = ctx.globalAlpha, k = 1 - (c.t - ARC_N) / SPLAT_FRAMES, x = R(c.x + c.dir * (ARC_X0 + (ARC_N - 1) * ARC_VX)), y = R(c.y);
     ctx.globalAlpha = a * 0.9 * k;
@@ -477,7 +629,7 @@ export class CoopScreen extends Screen {
     ctx.globalAlpha = a;
   }
 
-  summary() {
+  override summary() {
     return {
       count: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText, bumps: this.bumps,
       seats: this.seats.map((s) => [s.slot, R(s.x), R(s.y), s.count]),
@@ -488,7 +640,7 @@ export class CoopScreen extends Screen {
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js). */
-  checksumFields() {
+  override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.bumps);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.y, s.facing, s.count, s.bumpT, s.reachT, s.safeT, s.moving ? 1 : 0); }

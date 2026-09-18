@@ -22,6 +22,7 @@
 // only and stay out of checksumFields().
 import { UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { Game, Input, ScreenParams } from '../game.ts';
 import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
 import { blitAt } from '../../art/layers.ts';
@@ -33,6 +34,7 @@ import { INGREDIENTS } from '../../content/recipes.ts';
 import { ROWS, SEAT_X, SEAT_PITCH, CHURN_X, dairyLayers } from '../../art/backgrounds/dairy.ts';
 import { drawCow, drawStool, drawPail, drawJet, drawChevrons, drawSplash, drawChurn, drawSwallow, TEAT_DX, TEAT_DY, PAIL_H } from '../../art/dairyProps.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import type { Clock, Seat } from '../minigame.ts';
 import { drawHint } from '../ui.ts';
 
 const R = Math.round;
@@ -114,7 +116,7 @@ const FALLBACK_TARGET = 3;
 const PLUS_ONE = '+1', MINUS_ONE = '-1', TITLE = 'BUTTERCUP DAIRY', SIGN_PREFIX = 'MILK: ';
 const MILK_HEX = INGREDIENTS.milk.hex;
 
-function clockIcon(ctx, x, y) { drawFood(ctx, 'milk', x, y, 4, MILK_HEX); }
+function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'milk', x, y, 4, MILK_HEX); }
 
 /**
  * The scene's own beats, an AnimPlayer overlay on top of the shared table (the pond's POND_ANIMS pattern). Every
@@ -195,15 +197,133 @@ const DAIRY_ANIMS = Object.freeze({
   ] },
 });
 
-export class DairyScreen extends Screen {
-  constructor(game) { super(game, 'dairy'); this.seats = []; this.fields = []; }
+/** One pre-rendered backdrop layer and the screen y it is blitted at (art/backgrounds/dairy.ts dairyLayers). */
+export interface DairyLayer {
+  /** The offscreen canvas art/layers.ts makeLayer painted once. */
+  L: { canvas: HTMLCanvasElement; w: number; h: number };
+  /** Screen y its top row lands on. */
+  y: number;
+}
 
-  enter(params) {
+/** The byre's backdrop: painted on the first visit, kept for every visit after. */
+export interface DairyLayers {
+  /** Back wall with the churn rack and the eave the swallow flies under, down to the floor row. */
+  wall: DairyLayer;
+  /** The straw floor the stalls stand on. */
+  floor: DairyLayer;
+  /** The near lip, drawn over everything standing in the byre. */
+  near: DairyLayer;
+}
+
+/** One cow's patience: the sim object enter() builds per stall and update() runs down (see stepCow). */
+export interface Cow {
+  /** Which of the two cow looks to draw (art/dairyProps.ts drawCow). */
+  kind: number;
+  /** CALM, WARN or KICK. */
+  state: number;
+  /** Frames left of the state it is in. */
+  t: number;
+}
+
+/**
+ * A seat at the dairy: the shared mini-game seat, the stall geometry enter() solves out of THIS milker's own rig,
+ * the beat timers this screen keeps for it and its cow. The per-screen extension minigame.ts documents, so
+ * `makeSeats<DairySeat>` hands these back with the screen's own fields as typed as the shared ones.
+ */
+export interface DairySeat extends Seat {
+  /** Where this seat's cow stands: placed so its teats land on this milker's paw. */
+  cowX: number;
+  cowY: number;
+  /** The teat the milking paw is on (the cow's udder point), where a squirt leaves from. */
+  teatX: number;
+  teatY: number;
+  /** The tin pail under the udder, 13 px left of it. */
+  pailX: number;
+  pailY: number;
+  /** The stool's height, cut to this rig's own hip. */
+  stoolH: number;
+  /** Which button is next: 0 = action, 1 = alt. */
+  next: number;
+  /** Accepted presses into the pail under the cow (0..PUMP_PER_PAIL). */
+  fill: number;
+  /** Frames left of the refusal beat (the wrong button). */
+  refuseT: number;
+  /** Frames left of the squirt the last accepted press started. */
+  squirtT: number;
+  /** Frames left of a fresh pail's landing squash. */
+  pailT: number;
+  /** This stall's cow. */
+  cow: Cow;
+}
+
+/** A full pail on its way to the churn rack (cosmetic). */
+export interface Hop {
+  /** Frames into the flight; HOP_FRAMES means the slot is free. */
+  t: number;
+  /** Where the pail left the stall. */
+  x0: number;
+  y0: number;
+  /** The slot on the rack it lands on. */
+  tx: number;
+  ty: number;
+  /** The player slot whose pail it is, for the tin's band. */
+  slot: number;
+}
+
+/** A kicked pail's spill, lying flat on the straw (cosmetic). */
+export interface Splash {
+  /** Frames into the spill; SPLASH_FRAMES means the slot is free. */
+  t: number;
+  x: number;
+  y: number;
+}
+
+export class DairyScreen extends Screen {
+  // The fields, for the checker only, in the order enter() fills them (the two the constructor seeds first).
+  // `declare` for the reason game.ts gives over its own block: a plain field declaration would emit a class field
+  // per name (es2022 defines them before the constructor body runs, and a screen's own declaration would also
+  // define a base field back to undefined), and this screen has to keep the runtime it shipped with. `declare`
+  // erases under tsc, under esbuild and under Node's type stripping alike, so the emitted class is the original.
+
+  /** One seat per party member, in party order (not slot order); empty until enter() builds the stalls. */
+  declare seats: DairySeat[];
+  /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
+  declare fields: number[];
+  /** The backdrop, pre-rendered once (art/backgrounds/dairy.ts dairyLayers) and blitted per frame. */
+  declare layers: DairyLayers;
+  /** The hop pool (cosmetic): MAX_HOPS slots handed out in turn. */
+  declare hops: Hop[];
+  /** The next hop slot to reuse. */
+  declare hopCursor: number;
+  /** The splash pool (cosmetic): MAX_SPLASHES slots handed out in turn. */
+  declare splashes: Splash[];
+  /** The next splash slot to reuse. */
+  declare splashCursor: number;
+  /** Milk the round is played to: what the order still needs, or FALLBACK_TARGET with no run. */
+  declare target: number;
+  /** Milk in the party's churns right now. */
+  declare total: number;
+  /** Kicks the party has taken this round (the playtest reads it). */
+  declare kicks: number;
+  /** "3/4" for the clock ticket, rebuilt by setTotal() as the count changes. */
+  declare countStr: string;
+  /** The hint line along the bottom. */
+  declare hint: string;
+  /** The round's clock and its ending (game/minigame.ts). */
+  declare clock: Clock;
+  /** The sorted pass's fixed index array: four objects per stall (the cow, its pail, the stool, the milker). */
+  declare sortIdx: Int16Array;
+  /** Their sort keys (the row * 32 + the tiebreak), sorted alongside `sortIdx`. */
+  declare sortKey: Float64Array;
+
+  constructor(game: Game) { super(game, 'dairy'); this.seats = []; this.fields = []; }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
     this.layers = dairyLayers();
     particles.clear();
-    this.seats = makeSeats(game, (i) => ROWS.feet + (i & 1) * STALL_DY);
+    this.seats = makeSeats<DairySeat>(game, (i) => ROWS.feet + (i & 1) * STALL_DY);
     const n = this.seats.length;
     // SEAT_X is the four-stall layout; a smaller party keeps the pitch and slides to the middle of the byre
     const shift = R((SEAT_X.length - n) * SEAT_PITCH / 2);
@@ -255,7 +375,7 @@ export class DairyScreen extends Screen {
     this.sortIdx = new Int16Array(total); this.sortKey = new Float64Array(total);
   }
 
-  update() {
+  override update(): void {
     super.update();
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
@@ -279,7 +399,7 @@ export class DairyScreen extends Screen {
   }
 
   /** One cow's patience: calm for a seeded 150..260, then the telegraph, then the window, then calm again. */
-  stepCow(s) {
+  stepCow(s: DairySeat): void {
     const c = s.cow;
     if (c.state === CALM) { if (--c.t <= 0) { c.state = WARN; c.t = TELEGRAPH; } return; }
     if (c.state === WARN) { if (--c.t <= 0) { c.state = KICK; c.t = KICK_FRAMES; } return; }
@@ -292,7 +412,7 @@ export class DairyScreen extends Screen {
    * button that is next is a squirt and the other one is refused. A frame that carries both buttons at once counts
    * as the one that is next - a player mashing both is pumping, not cheating, and the alternation still advances.
    */
-  stepSeat(s, input) {
+  stepSeat(s: DairySeat, input: Input): void {
     if (s.squirtT > 0) s.squirtT--;
     if (s.refuseT > 0) s.refuseT--;
     if (s.pailT > 0) s.pailT--;
@@ -313,7 +433,7 @@ export class DairyScreen extends Screen {
   }
 
   /** One accepted press: a squirt, the alternation flips, and the sixth one fills the pail. */
-  pump(s) {
+  pump(s: DairySeat): void {
     const down = s.next;
     s.next = s.next === 0 ? 1 : 0;
     s.fill++;
@@ -327,7 +447,7 @@ export class DairyScreen extends Screen {
    * A full pail: +1 milk for the PARTY, the pail flies to the next free slot on the churn rack, a fresh one slides
    * in under the cow and the alternation resets to ACTION so nobody has to remember where they were.
    */
-  bank(s) {
+  bank(s: DairySeat): void {
     s.fill = 0; s.next = 0; s.pailT = PAIL_LAND;
     s.count++; this.setTotal(this.total + 1);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
@@ -338,14 +458,14 @@ export class DairyScreen extends Screen {
   }
 
   /** The wrong button: nothing happens to the pail, and the seat says so. */
-  refuse(s) { s.refuseT = REFUSE_FRAMES; seatAnim(s, 'balk', true); }
+  refuse(s: DairySeat): void { s.refuseT = REFUSE_FRAMES; seatAnim(s, 'balk', true); }
 
   /**
    * A press inside the kick window. The pail's progress is gone and, if the seat has banked any milk, one of those
    * goes too - the wormy apple's price, and the coop's hen's, so a player who has met one mini-game knows this one.
    * The alternation resets with it: a kicked milker should be looking at the cow, not remembering a button.
    */
-  kick(s) {
+  kick(s: DairySeat): void {
     s.bumpT = BUMP_FRAMES; s.fill = 0; s.next = 0; s.refuseT = 0; s.squirtT = 0; s.pailT = 0;
     seatAnim(s, 'bump', true);
     const sp = this.splashes[this.splashCursor]; this.splashCursor = (this.splashCursor + 1) % this.splashes.length;
@@ -362,10 +482,10 @@ export class DairyScreen extends Screen {
     this.kicks++;
   }
 
-  setTotal(n) { this.total = n; this.countStr = n + '/' + this.target; }
+  setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
   /** The round is over: drop the sign; a seat that banked anything cheers, one that did not sulks. */
-  finish() {
+  finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, SIGN_PREFIX + this.total);
     for (let i = 0; i < this.seats.length; i++) {
@@ -375,7 +495,7 @@ export class DairyScreen extends Screen {
     }
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     const L = this.layers, f = this.frame;
     blitAt(ctx, L.wall.L, 0, L.wall.y);
     this.drawFlier(ctx, f);
@@ -414,7 +534,7 @@ export class DairyScreen extends Screen {
    * behind the stool, and the milker is in front of all three. Odd stalls stand five rows nearer, so this really
    * does interleave - a nearer stall's cow draws over the stall behind it where their edges meet.
    */
-  drawSorted(ctx, f) {
+  drawSorted(ctx: CanvasRenderingContext2D, f: number): void {
     const idx = this.sortIdx, key = this.sortKey, ns = this.seats.length;
     let n = 0;
     for (let i = 0; i < ns; i++) {
@@ -444,7 +564,7 @@ export class DairyScreen extends Screen {
    * same lesson the other way round: its comb had to keep flashing through the charge). The chew is a slow
    * index-hashed beat off the frame counter, one cow to the next, so a row of four never chews in unison.
    */
-  drawCowAt(ctx, s, f) {
+  drawCowAt(ctx: CanvasRenderingContext2D, s: DairySeat, f: number): void {
     const c = s.cow, warn = c.state === WARN, kickWin = c.state === KICK;
     const ear = warn || kickWin ? 1 : 0;
     const tail = kickWin ? 1 : warn ? 1 - c.t / TELEGRAPH : 0;
@@ -453,7 +573,7 @@ export class DairyScreen extends Screen {
     drawCow(ctx, s.cowX, s.cowY, c.kind, ear, tail, chew, kickWin ? 1 : 0, mark);
   }
 
-  drawPailAt(ctx, s) {
+  drawPailAt(ctx: CanvasRenderingContext2D, s: DairySeat): void {
     drawPail(ctx, s.pailX, s.pailY, s.fill / PUMP_PER_PAIL, s.slot, s.pailT > 0 ? 1 + s.pailT * PAIL_LAND_K : 1);
   }
 
@@ -463,13 +583,13 @@ export class DairyScreen extends Screen {
    * the teat, so the paw covered every pixel of it and an accepted press had no jet at all. In front, the stream
    * leaves from under the paw and still ends at the rim, so it reads as milk going INTO the tin.
    */
-  drawJetAt(ctx, s) {
+  drawJetAt(ctx: CanvasRenderingContext2D, s: DairySeat): void {
     if (s.squirtT <= 0 || s.bumpT > 0) return;
     const k = 1 - s.squirtT / SQUIRT_FRAMES;
     drawJet(ctx, s.teatX - 5, s.teatY, s.pailX + 2, s.pailY - PAIL_H + 2, SIGNAL.dairy, k);
   }
 
-  drawSeat(ctx, s) {
+  drawSeat(ctx: CanvasRenderingContext2D, s: DairySeat): void {
     const o = s.opts;
     o.x = s.x; o.y = s.y; o.facing = s.facing;
     drawRig(ctx, s.rig, s.player.pose, o);
@@ -482,7 +602,7 @@ export class DairyScreen extends Screen {
    * pail crossing four brown cows needs the ground mark to say how high it is. The 26 and the 0.32 are the seat's
    * own pail shadow, so the tin leaves the floor with the shadow it was already standing in.
    */
-  drawHop(ctx, h) {
+  drawHop(ctx: CanvasRenderingContext2D, h: Hop): void {
     if (h.t >= HOP_FRAMES) return;
     const k = h.t / HOP_FRAMES;
     const x = h.x0 + (h.tx - h.x0) * k, y = h.y0 + (h.ty - h.y0) * k - Math.sin(k * Math.PI) * HOP_LIFT;
@@ -491,7 +611,7 @@ export class DairyScreen extends Screen {
   }
 
   /** The rack is the party's score: one churn per banked milk, minus whatever is still in the air. */
-  drawChurns(ctx) {
+  drawChurns(ctx: CanvasRenderingContext2D): void {
     let flying = 0;
     for (let i = 0; i < this.hops.length; i++) if (this.hops[i].t < HOP_FRAMES) flying++;
     const n = Math.min(CHURN_X.length, Math.max(0, this.total - flying));
@@ -502,12 +622,12 @@ export class DairyScreen extends Screen {
    * The byre's swallow, flying its circuit under the eave. Draw only: it reads the screen's frame counter and
    * nothing else, never drops below the churn rack, and is the single per-frame mark on 640 px of wall.
    */
-  drawFlier(ctx, f) {
+  drawFlier(ctx: CanvasRenderingContext2D, f: number): void {
     const span = 700, t = (f * 0.9) % span;
     drawSwallow(ctx, -30 + t, 72 + Math.sin(t * 0.021) * 16, (f >> 2) & 1);
   }
 
-  summary() {
+  override summary() {
     return {
       total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText, kicks: this.kicks,
       seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), next: s.next, fill: s.fill, count: s.count, bumpT: s.bumpT, refuseT: s.refuseT })),
@@ -516,7 +636,7 @@ export class DairyScreen extends Screen {
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js). */
-  checksumFields() {
+  override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.kicks);
     for (let i = 0; i < this.seats.length; i++) {

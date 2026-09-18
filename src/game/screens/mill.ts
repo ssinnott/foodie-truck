@@ -19,13 +19,17 @@
 // window turn on an index step read from `this.frame` in draw() and touch nothing.
 import { UI } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { Game, Input, ScreenParams } from '../game.ts';
 import { rng, makeRng } from '../../lib/engine/rng.ts';
+import type { RngInstance } from '../../lib/engine/rng.ts';
 import { dsin, dcos } from '../../lib/engine/trig.ts';
 import { particles } from '../../engine/particles.ts';
 import { blitAt, VIEW_W } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt } from '../../art/fx.ts';
 import { drawFood } from '../../art/food.ts';
 import { drawRig } from '../../lib/art/rig.ts';
+import type { Rig, RigWeapon } from '../../lib/art/rig.ts';
+import type { Point } from '../../lib/art/rigParts.ts';
 import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { MILL, ROWS, CHUTE_X, CHUTE_PITCH, SHAFT, millLayers } from '../../art/backgrounds/mill.ts';
@@ -36,6 +40,7 @@ import {
 import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
+import type { Clock, PlateStack, Seat } from '../minigame.ts';
 import { drawHint } from '../ui.ts';
 
 const R = Math.round, DEG = Math.PI / 180;
@@ -155,10 +160,10 @@ const MILL_ANIMS = Object.freeze({
   ] },
 });
 
-function clockIcon(ctx, x, y) { drawFood(ctx, 'sack', x, y, 4, FLOUR_HEX); }
+function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'sack', x, y, 4, FLOUR_HEX); }
 
 /** Reused by pawRoot so the sack-offset maths allocates nothing (it runs once per seat, in enter()). */
-const PAW = { x: 0, y: 0 };
+const PAW: Point = { x: 0, y: 0 };
 /**
  * Root-space position of the near paw for a torso lean and arm angles (degrees), through the deterministic trig so
  * the offset is bit-identical on every peer. y is down-positive with the feet at 0, so the paw's y is negative.
@@ -167,7 +172,7 @@ const PAW = { x: 0, y: 0 };
  * says so) and the orchard's copy lives in the orchard because the coop does not catch anything. The mill is the
  * third screen to want it; when a fourth does, that is the integrator's cue to promote it, not ours.
  */
-function pawRoot(rig, torsoRot, upper, lower) {
+function pawRoot(rig: Rig, torsoRot: number, upper: number, lower: number): Point {
   const p = rig.p, hipY = rig.hipY;
   const c = dcos(torsoRot * DEG), s = dsin(torsoRot * DEG), shY = -(p.torsoH - 5);
   const sx = p.shoulderX * c - shY * s, sy = hipY + p.shoulderX * s + shY * c;
@@ -184,7 +189,7 @@ function pawRoot(rig, torsoRot, upper, lower) {
  * which is exactly the four name plates). Nothing a player has to read is allowed to land on anything else a player
  * has to read. It does NOT register the box: the caller decides whether the row it landed on is allowed.
  */
-function climb(stack, x, y, w, h) {
+function climb(stack: PlateStack, x: number, y: number, w: number, h: number): number {
   const v = stack.v;
   for (let pass = 0; pass < 6; pass++) {
     let hit = false;
@@ -198,13 +203,13 @@ function climb(stack, x, y, w, h) {
 }
 
 /** Register a box, so everything placed after it climbs over it. */
-function push(stack, x, y, w, h) {
+function push(stack: PlateStack, x: number, y: number, w: number, h: number): void {
   const v = stack.v;
   if (stack.n * 4 < v.length) { const k = stack.n * 4; v[k] = x; v[k + 1] = y; v[k + 2] = w; v[k + 3] = h; stack.n++; }
 }
 
 /** Reused by placeTag so the plate pass allocates nothing (draw()). */
-const TAG_AT = { x: 0, y: 0 };
+const TAG_AT: Point = { x: 0, y: 0 };
 /** The columns a tag may sit in, in the order they are tried: its seat's own, then a tag-width either side. */
 const TAG_DX = Int16Array.of(0, -TAG_STEP, TAG_STEP, -2 * TAG_STEP, 2 * TAG_STEP);
 /**
@@ -212,7 +217,7 @@ const TAG_DX = Int16Array.of(0, -TAG_STEP, TAG_STEP, -2 * TAG_STEP, 2 * TAG_STEP
  * the next column along. `y0` is the row it would like (just over its own name plate); a tag whose own plate is
  * already at the ceiling starts AT the ceiling and looks sideways from there.
  */
-function placeTag(stack, cx, y0) {
+function placeTag(stack: PlateStack, cx: number, y0: number): Point {
   const top = y0 < TAG_CEIL ? TAG_CEIL : y0, xMax = VIEW_W - TAG_W - TAG_EDGE;
   let x = 0, y = 0;
   for (let i = 0; i < TAG_DX.length; i++) {
@@ -227,10 +232,160 @@ function placeTag(stack, cx, y0) {
   return TAG_AT;
 }
 
-export class MillScreen extends Screen {
-  constructor(game) { super(game, 'mill'); this.seats = []; this.chutes = []; }
+/**
+ * A seat's rig as this scene hands it round: lib/art/rig.ts's own rig plus the three fields art/millProps.js
+ * MILL_SACK reads straight back off the rig it is handed (its header names them). Optional because `buildRig`
+ * builds a complete `Rig` without them - a rig carries a sack's fill only while its owner is on this floor.
+ */
+export interface MillRig extends Rig {
+  /** 0..BURST, the raw fill of the sack in the paw. */
+  sackFill?: number;
+  /** 0 under the brim band | 1 in the brim band | 2 over the brim, about to burst. */
+  sackZone?: number;
+  /** 0/1, the strobe the screen alternates while zone 2 is on. */
+  sackBlink?: number;
+}
 
-  enter(params) {
+/**
+ * One seat working the floor: game/minigame.ts's shared seat plus this scene's own sack state. These are the extra
+ * fields `Seat` documents a screen keeping more per seat should declare for itself, and `makeSeats` is generic so
+ * enter() gets them back typed.
+ */
+export interface MillSeat extends Seat {
+  /** The rig, carrying the mill sack whose fill this screen pushes on just before it draws. */
+  rig: MillRig;
+  /** The sack in the paw, 0..BURST: FULL is the brim and BURST is the bang. */
+  fill: number;
+  /** `action` last frame, so the release is the edge between the two (see updateSeats). */
+  wasHeld: boolean;
+  /** Index into `chutes` of the spout this seat is filling from, -1 when it is filling from none. */
+  chute: number;
+  /** Frames left of the tie beat; 0 when the stick is live again. */
+  tieT: number;
+  /** Frames left of the whitening a burst leaves on the critter (rig.override). */
+  whiteT: number;
+  /** Where this critter's sack neck hangs, in screen px from its feet: built ONCE in enter() from its own rig. */
+  sackDX: number;
+  sackDY: number;
+}
+
+/** One of the four spouts: a slot of the fixed pool enter() builds and never grows. */
+export interface Chute {
+  /** DORMANT, WAKING or POURING (art/millProps.js). */
+  state: number;
+  /** Frames left of the telegraph (WAKING) or of the pour (POURING); 0 when DORMANT. */
+  t: number;
+  /** Party index of the seat catching this pour, -1 when it is falling on the planks. Refilled every frame. */
+  seat: number;
+}
+
+/** A tied sack's hop from the paw onto the barrow. Cosmetic: a fixed pool, out of the checksum. */
+export interface Hop {
+  /** Frames since the tie started it; NEGATIVE through the heft, HOP_FRAMES means the slot is spent. */
+  t: number;
+  /** Where it left the paw. */
+  x0: number;
+  y0: number;
+  /** The tier's player slot, which is the tie band's colour on the sack in the air. */
+  slot: number;
+}
+
+/** The cloud a burst sack leaves. Cosmetic. */
+export interface BurstCloud {
+  /** Frames since it went up; CLOUD_FRAMES means it is gone. */
+  t: number;
+  /** Where the sack was. */
+  x: number;
+  y: number;
+}
+
+/**
+ * The fill tag's gauge, built once in enter() and handed to art/millProps.js drawFillTag every frame: fractions of
+ * the trough, and the fill its full width stands for.
+ */
+export interface TagZones {
+  /** Where the brim band starts, as a fraction of the trough. */
+  brim: number;
+  /** Where the brim post stands, as a fraction of the trough. */
+  full: number;
+  /** The fill the whole trough stands for (BURST). */
+  cap: number;
+}
+
+/**
+ * One pre-rendered backdrop layer and the y the screen blits it at (art/backgrounds/mill.js millLayers). `L` is
+ * exactly what art/layers.js `makeLayer` hands back; stated here rather than imported because art/layers.js is
+ * still untyped, the same way game/screens/garden.ts states its own. When its turn comes this becomes an import.
+ */
+export interface MillLayer {
+  L: { canvas: HTMLCanvasElement; w: number; h: number };
+  /** Screen y the layer is blitted at. */
+  y: number;
+}
+
+/** The tower's inside, painted once: the far wall, the plank floor and the ceiling boards, blitted in this order. */
+export interface MillBackdrop {
+  wall: MillLayer;
+  floor: MillLayer;
+  beam: MillLayer;
+}
+
+export class MillScreen extends Screen {
+  // The fields, for the checker only, in the order the constructor and then enter() assign them. `declare`, not
+  // plain declarations, for the reason game/game.ts states over its own block: a plain field declaration emits a
+  // class field per name (es2022 defines them before the constructor body runs, and a screen's own declaration
+  // would also define a base field back to undefined), which would wipe what the constructor has just written.
+  // `declare` erases under tsc, under esbuild and under Node's type stripping alike, so the emitted class is the
+  // one that shipped.
+
+  /** One seat per party member, in party order (not slot order). */
+  declare seats: MillSeat[];
+  /** The four spouts, one slot per CHUTE_X, built in enter() and never grown. */
+  declare chutes: Chute[];
+  /** The backdrop, pre-rendered once (art/backgrounds/mill.js millLayers) and blitted per frame. */
+  declare layers: MillBackdrop;
+  /** The cosmetic stream's own generator (MOTE_SEED): the motes in the light shaft only, never the sim. */
+  declare vis: RngInstance;
+  /** The mote spawn options, built once in enter() and handed to particles.spawn every MOTE_EVERY frames. */
+  declare moteOpts: { color: string; size: number; life: number; vx: number; vy: number; gravity: number; drag: number; screen: boolean };
+  /** The burst options for the dust a waking spout coughs out (engine/particles.js `burst`). */
+  declare puffOpts: { speed: number; up: number; color: string; gravity: number; screen: boolean };
+  /** The burst options for the flour a bursting sack throws. */
+  declare burstOpts: { speed: number; up: number; color: string; sizeJitter: number; screen: boolean };
+  /** The fill tag's gauge, built once and read by every drawFillTag. */
+  declare zones: TagZones;
+  /** Frames until the room's one wake timer hands its turn to a free spout (WAKE_MIN..WAKE_MAX). */
+  declare wake: number;
+  /** The tied sacks in the air: a fixed cosmetic pool, oldest slot reused first. */
+  declare hops: Hop[];
+  /** Next slot of `hops` to reuse. */
+  declare hopCursor: number;
+  /** The flour clouds of burst sacks: a fixed cosmetic pool. */
+  declare clouds: BurstCloud[];
+  /** Next slot of `clouds` to reuse. */
+  declare cloudCursor: number;
+  /** Sacks burst this round (summary / checksum only). */
+  declare bursts: number;
+  /** Sacks tied off this round. */
+  declare tied: number;
+  /** Sacks the round is played to: the order's REMAINDER, or FALLBACK_TARGET with no run. */
+  declare target: number;
+  /** Sacks the party has banked this round (a burst takes one back). */
+  declare total: number;
+  /** The clock's count, rebuilt by setTotal(): 'total/target'. */
+  declare countStr: string;
+  /** The hint line under the floor, built once in enter() with the seat's own action key. */
+  declare hint: string;
+  /** The round clock and its end sign (game/minigame.ts). */
+  declare clock: Clock;
+  /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
+  declare fields: number[];
+  /** The tags' own rect stack, seeded each frame with the four name plates so a tag lands on neither. */
+  declare tagStack: PlateStack;
+
+  constructor(game: Game) { super(game, 'mill'); this.seats = []; this.chutes = []; }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
     this.layers = millLayers();
@@ -244,7 +399,7 @@ export class MillScreen extends Screen {
     // the whole trough stands for (art/millProps.js drawFillTag)
     this.zones = { brim: BRIM_AT / BURST, full: FULL / BURST, cap: BURST };
 
-    this.seats = makeSeats(game, (i) => LANE_Y0 - i * LANE_GAP);
+    this.seats = makeSeats<MillSeat>(game, (i) => LANE_Y0 - i * LANE_GAP);
     const n = this.seats.length;
     // A small party keeps the chutes' pitch and slides to the middle of the floor, the way the pond shifts its bank
     // spots. An even party lands ON chutes (two under the middle two, four under all four); an odd one lands midway
@@ -254,7 +409,11 @@ export class MillScreen extends Screen {
     for (let i = 0; i < n; i++) {
       const s = this.seats[i];
       s.x = CHUTE_X[i % CHUTE_X.length] + shift;
-      s.rig.weapon = MILL_SACK; s.rig.sackFill = 0; s.rig.sackZone = 0; s.rig.sackBlink = 0;
+      // `as RigWeapon`: art/millProps.js is not typed yet, so its `attach: 'handR'` widens to `string` and the
+      // literal misses RigWeapon's `attach?: HandName` by that one field. It IS a rig weapon - rig.ts reads exactly
+      // these keys back off it - so the assertion says what millProps.js cannot yet (garden.ts carries the same
+      // note over its trug).
+      s.rig.weapon = MILL_SACK as RigWeapon; s.rig.sackFill = 0; s.rig.sackZone = 0; s.rig.sackBlink = 0;
       s.player.setOverlay(MILL_ANIMS);
       s.fill = 0; s.wasHeld = false; s.chute = -1; s.tieT = 0; s.whiteT = 0; s.count = 0;
       // where this critter's sack neck sits, once, from ITS proportions: the pour column bends to this point and
@@ -288,7 +447,7 @@ export class MillScreen extends Screen {
     this.tagStack = { n: 0, v: new Int16Array(8 * 4) };
   }
 
-  update() {
+  override update(): void {
     super.update();
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
@@ -313,7 +472,7 @@ export class MillScreen extends Screen {
   }
 
   /** A mote of flour somewhere in the shaft's quad: cosmetic, its own seeded stream, never in the checksum. */
-  spawnMote() {
+  spawnMote(): void {
     const t = this.vis.next();
     const y = SHAFT.yTop + (SHAFT.yBot - SHAFT.yTop) * t;
     const xa = SHAFT.x0t + (SHAFT.x0b - SHAFT.x0t) * t, xb = SHAFT.x1t + (SHAFT.x1b - SHAFT.x1t) * t;
@@ -325,7 +484,7 @@ export class MillScreen extends Screen {
    * mean would drift into four spouts opening together, and POUR_MAX would then spend the round refusing three of
    * them. One timer that hands its turn to a free spout keeps the cadence even however many are busy.
    */
-  updateChutes() {
+  updateChutes(): void {
     if (--this.wake <= 0) {
       this.wake = rng.int(WAKE_MIN, WAKE_MAX);
       let active = 0;
@@ -352,7 +511,7 @@ export class MillScreen extends Screen {
   }
 
   /** Every seat: the beats first (they lock the stick), then the stick, then the hold, the release and the anim. */
-  updateSeats(input) {
+  updateSeats(input: Input): void {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.whiteT > 0) s.whiteT--;
@@ -386,13 +545,13 @@ export class MillScreen extends Screen {
   }
 
   /** The chute a seat at `x` is standing under, or -1. */
-  chuteUnder(x) {
+  chuteUnder(x: number): number {
     for (let i = 0; i < CHUTE_X.length; i++) { const d = x - CHUTE_X[i]; if (d > -CATCH_HALF && d < CATCH_HALF) return i; }
     return -1;
   }
 
   /** Tied off at the brim: +1 flour, the sack leaves the paw on the toss key and hops onto the barrow. */
-  tie(s) {
+  tie(s: MillSeat): void {
     s.count++; this.setTotal(this.total + 1); this.tied++;
     s.fill = 0; s.tieT = TIE_FRAMES; s.moving = false;
     seatAnim(s, 'tie', true);
@@ -410,7 +569,7 @@ export class MillScreen extends Screen {
    * the orchard's wormy apple charges exactly that, and a failure that only cost the part-fill would make holding
    * the button down forever the correct play.
    */
-  burst(s) {
+  burst(s: MillSeat): void {
     s.fill = 0; s.chute = -1;
     s.bumpT = BUMP_FRAMES; s.whiteT = WHITE_FRAMES; s.moving = false;
     seatAnim(s, 'bump', true);
@@ -423,10 +582,10 @@ export class MillScreen extends Screen {
     if (s.count > 0) { s.count--; this.setTotal(this.total - 1); floatText(s.x - s.facing * 14, my - 34, MINUS_ONE, s.colour, 1, true); }
   }
 
-  setTotal(n) { this.total = n; this.countStr = n + '/' + this.target; }
+  setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
   /** The round is over: drop the sign; a seat that tied a sack cheers, one that never did sulks. */
-  finish() {
+  finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, SIGN_PREFIX + this.total);
     for (let i = 0; i < this.seats.length; i++) {
@@ -436,7 +595,7 @@ export class MillScreen extends Screen {
     }
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     const L = this.layers, f = this.frame;
     blitAt(ctx, L.wall.L, 0, L.wall.y);
     drawSail(ctx, f);                                   // clipped to the window's opening
@@ -467,7 +626,7 @@ export class MillScreen extends Screen {
    * The column is drawn FIRST and the spout over it, so the flour comes out from under the lip and the gold mouth -
    * the one mark in the frame that says which chute is live - is never crossed by the column's own 2 px ink.
    */
-  drawChutes(ctx, f) {
+  drawChutes(ctx: CanvasRenderingContext2D, f: number): void {
     for (let i = 0; i < this.chutes.length; i++) {
       const c = this.chutes[i], x = CHUTE_X[i];
       if (c.state === POURING) {
@@ -487,7 +646,7 @@ export class MillScreen extends Screen {
   }
 
   /** One seat, with the state of its sack pushed onto the rig just before it draws (never held on the rig). */
-  drawSeat(ctx, s, f) {
+  drawSeat(ctx: CanvasRenderingContext2D, s: MillSeat, f: number): void {
     const rig = s.rig, o = s.opts;
     // through the heft the sack is still full in the paw; it empties on the toss key, with the hop
     const shown = s.tieT > TIE_TOSS ? FULL : s.fill;
@@ -501,7 +660,7 @@ export class MillScreen extends Screen {
   }
 
   /** The tied sack's arc from the paw to the barrow's bed. */
-  drawHop(ctx, h) {
+  drawHop(ctx: CanvasRenderingContext2D, h: Hop): void {
     if (h.t < 0 || h.t >= HOP_FRAMES) return;
     const k = h.t / HOP_FRAMES;
     const x = R(h.x0 + (BARROW_X - h.x0) * k);
@@ -517,7 +676,7 @@ export class MillScreen extends Screen {
    * thing in the frame that is never allowed to be underneath anything - but it is not allowed to climb over a
    * spout either, so past TAG_CEIL it goes sideways instead (placeTag).
    */
-  drawPlates(ctx) {
+  drawPlates(ctx: CanvasRenderingContext2D): void {
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
     const st = this.tagStack, v = PLATES.v;
@@ -530,7 +689,7 @@ export class MillScreen extends Screen {
     }
   }
 
-  summary() {
+  override summary() {
     return {
       total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
       bursts: this.bursts, tied: this.tied, wake: this.wake,
@@ -544,7 +703,7 @@ export class MillScreen extends Screen {
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js). */
-  checksumFields() {
+  override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.wake, this.bursts, this.tied);
     for (let i = 0; i < this.seats.length; i++) {

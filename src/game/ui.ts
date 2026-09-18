@@ -6,6 +6,7 @@ import { VIEW_W, UI, PLAYER_COLORS, PLAYER_LABELS, SIGNAL } from '../constants.t
 import { drawText, drawTextOutlined, measureText } from '../engine/text.ts';
 import { pathRR } from '../lib/art/shading.ts';
 import { pathStar } from '../lib/art/shapes.ts';
+import type { Run } from './game.ts';
 
 const R = Math.round;
 /** Size-1 rows sit on the ticket's ruled lines: this pitch (docs/ART_PRINCIPLES.md 30). */
@@ -15,14 +16,28 @@ export const CARD_W = 140, CARD_H = 200, CARD_GAP = 12, BUST_H = 96, BUST_SCALE 
 export const RING_POS = Object.freeze([[16, 18], [CARD_W - 16, 18], [16, BUST_H - 10], [CARD_W - 16, BUST_H - 10]]);
 
 /** Left edge of card `i` in a centred row of `n`. */
-export function cardX(i, n) { const total = n * CARD_W + (n - 1) * CARD_GAP; return R((VIEW_W - total) / 2) + i * (CARD_W + CARD_GAP); }
+export function cardX(i: number, n: number): number { const total = n * CARD_W + (n - 1) * CARD_GAP; return R((VIEW_W - total) / 2) + i * (CARD_W + CARD_GAP); }
+
+/** PAPER TICKET options. Every flag defaults ON, so `{}` is the full recipe and a caller only ever turns things off. */
+export interface TicketOpts {
+  /** Header band text; no title, no band. */
+  title?: string;
+  /** false drops the ruled lines. */
+  rules?: boolean;
+  /** false drops the header band even with a title. */
+  header?: boolean;
+  /** false drops the perforated top edge. */
+  perforated?: boolean;
+  /** false drops the drop shadow. */
+  shadow?: boolean;
+}
 
 /**
  * PAPER TICKET: paper fill, 1 px ink, r2, a perforated top edge (2x2 ink notches every 6 px), rules every ROW px from
  * `y + 14` so size-1 text sits on them, an optional header band with a title. Returns the y of the first rule.
  * @param {{ title?: string, rules?: boolean, header?: boolean, perforated?: boolean, shadow?: boolean }} [o]
  */
-export function drawTicket(ctx, x, y, w, h, o = {}) {
+export function drawTicket(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, o: TicketOpts = {}): number {
   x = R(x); y = R(y); w = R(w); h = R(h);
   if (o.shadow !== false) { ctx.fillStyle = 'rgba(47,35,56,0.35)'; pathRR(ctx, x + 2, y + 3, w, h, 2); ctx.fill(); }
   pathRR(ctx, x, y, w, h, 2);
@@ -39,8 +54,14 @@ export function drawTicket(ctx, x, y, w, h, o = {}) {
   return top;
 }
 
+/** CHALK SLATE options. */
+export interface SlateOpts {
+  /** Chalk title, drawn with its jittered underline; no title, neither is drawn. */
+  title?: string;
+}
+
 /** CHALK SLATE: board fill in a 3 px wood frame with a 1 px dark inset; an optional chalk title with a jittered underline. */
-export function drawSlate(ctx, x, y, w, h, o = {}) {
+export function drawSlate(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, o: SlateOpts = {}): void {
   x = R(x); y = R(y); w = R(w); h = R(h);
   pathRR(ctx, x - 3, y - 3, w + 6, h + 6, 4); ctx.fillStyle = UI.woodLight; ctx.fill();
   ctx.strokeStyle = UI.woodDark; ctx.lineWidth = 2; pathRR(ctx, x - 1, y - 1, w + 2, h + 2, 3); ctx.stroke();
@@ -52,8 +73,22 @@ export function drawSlate(ctx, x, y, w, h, o = {}) {
   }
 }
 
+/** WOODEN SIGN options. */
+export interface SignOpts {
+  /** Rope length in px from the hanging point to the board's top edge (default 10). */
+  rope?: number;
+  /** Sign swing in radians about the hanging point. */
+  swing?: number;
+  /** Outline width multiplier (default 1). */
+  lw?: number;
+  /** Text size (default 2). */
+  size?: number;
+  /** Text colour (default UI.cream). */
+  color?: string;
+}
+
 /** WOODEN SIGN hanging from two ropes at (x, y) (its top centre); `swing` in radians (±0.02 looks right). Returns nothing. */
-export function drawSign(ctx, cx, top, w, h, text, o = {}) {
+export function drawSign(ctx: CanvasRenderingContext2D, cx: number, top: number, w: number, h: number, text: string, o: SignOpts = {}): void {
   cx = R(cx); top = R(top); w = R(w); h = R(h);
   const rope = o.rope != null ? o.rope : 10;
   ctx.save(); ctx.translate(cx, top); if (o.swing) ctx.rotate(o.swing);
@@ -69,11 +104,25 @@ export function drawSign(ctx, cx, top, w, h, text, o = {}) {
   ctx.restore();
 }
 
+/** RUBBER STAMP options. */
+export interface StampOpts {
+  /** Text size (default 3). */
+  size?: number;
+  /** Rotation in radians (default -0.14, the -8 degrees below). */
+  angle?: number;
+  /** Multiplied into the context's globalAlpha (default 0.9). */
+  alpha?: number;
+  /** Ink colour (default UI.red). */
+  color?: string;
+  /** The misprint offset's lighter ink (default '#F08A80'). */
+  light?: string;
+}
+
 /**
  * Rubber stamp: red ink (or `color`) text rotated -8 degrees with a 1 px lighter misprint offset. `t` in 0..1 is the
  * arrival: 0..0.25 slams from 1.6x to 1x, 0.25..0.5 shakes ±3 px, then holds (ART_PRINCIPLES 35).
  */
-export function drawStamp(ctx, text, cx, cy, t = 1, o = {}) {
+export function drawStamp(ctx: CanvasRenderingContext2D, text: string, cx: number, cy: number, t: number = 1, o: StampOpts = {}): void {
   const size = o.size || 3;
   const k = t < 0.25 ? 1 + 0.6 * (1 - t / 0.25) : 1;
   const shake = t >= 0.25 && t < 0.5 ? R(Math.sin(t * 90) * 3) : 0;
@@ -87,7 +136,7 @@ export function drawStamp(ctx, text, cx, cy, t = 1, o = {}) {
 }
 
 /** Seat name plate: ink on the slot colour, wide enough for the text, centred at (cx) with its top at y. */
-export function drawNamePlate(ctx, slot, text, cx, y) {
+export function drawNamePlate(ctx: CanvasRenderingContext2D, slot: number, text: string, cx: number, y: number): void {
   const w = measureText(text, 1) + 8, x = R(cx - w / 2); y = R(y);
   ctx.fillStyle = UI.ink; ctx.fillRect(x - 1, y - 1, w + 2, 11);
   ctx.fillStyle = PLAYER_COLORS[slot] || UI.paperDark; ctx.fillRect(x, y, w, 9);
@@ -95,7 +144,7 @@ export function drawNamePlate(ctx, slot, text, cx, y) {
 }
 
 /** Menu rows on a slate: centred, selected in chalk with a bobbing '>' marker, idle in paper-dark. */
-export function drawMenuRows(ctx, items, x, y, w, selected, frame, pitch = 14) {
+export function drawMenuRows(ctx: CanvasRenderingContext2D, items: readonly string[], x: number, y: number, w: number, selected: number, frame: number, pitch: number = 14): void {
   for (let i = 0; i < items.length; i++) {
     const sel = i === selected, ry = R(y + i * pitch);
     drawText(ctx, items[i], x + w / 2, ry, { size: 1, color: sel ? UI.chalk : UI.paperDark, align: 'center', shadow: false });
@@ -103,8 +152,22 @@ export function drawMenuRows(ctx, items, x, y, w, selected, frame, pitch = 14) {
   }
 }
 
+/** TIMER / PROGRESS BAR options. */
+export interface BarOpts {
+  /** Trough colour behind the fill (default UI.paperLine). */
+  trough?: string;
+  /** Fill colour (default SIGNAL.good). */
+  color?: string;
+  /** 0..1: where the hot band at the end starts. */
+  hotFrom?: number;
+  /** [from, to] in 0..1: the good window drawn on the trough. */
+  window?: readonly number[];
+  /** The window's colour (default SIGNAL.good). */
+  windowColor?: string;
+}
+
 /** A timing / progress bar on paper: ink-outlined trough, `good` fill, an optional hot band at the end. */
-export function drawBar(ctx, x, y, w, h, fill, o = {}) {
+export function drawBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, fill: number, o: BarOpts = {}): void {
   x = R(x); y = R(y); w = R(w); h = R(h);
   ctx.fillStyle = UI.ink; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
   ctx.fillStyle = o.trough || UI.paperLine; ctx.fillRect(x, y, w, h);
@@ -114,7 +177,7 @@ export function drawBar(ctx, x, y, w, h, fill, o = {}) {
 }
 
 /** Five stars, `n` lit in gold, on a paper plate. */
-export function drawStars(ctx, cx, y, n, max = 3, size = 7) {
+export function drawStars(ctx: CanvasRenderingContext2D, cx: number, y: number, n: number, max: number = 3, size: number = 7): void {
   const pitch = size * 2 + 4, x0 = cx - ((max - 1) * pitch) / 2;
   for (let i = 0; i < max; i++) {
     pathStar(ctx, R(x0 + i * pitch), R(y), size, size * 0.45, 5, -Math.PI / 2);
@@ -124,16 +187,29 @@ export function drawStars(ctx, cx, y, n, max = 3, size = 7) {
 }
 
 /** One-line hint on a paper strip along the bottom of the screen. */
-export function drawHint(ctx, text, y = 346) {
+export function drawHint(ctx: CanvasRenderingContext2D, text: string, y: number = 346): void {
   const w = measureText(text, 1) + 16, x = R(VIEW_W / 2 - w / 2);
   ctx.fillStyle = UI.paper; ctx.fillRect(x, y, w, 12); ctx.fillStyle = UI.ink; ctx.fillRect(x, y + 12, w, 1);
   drawText(ctx, text, VIEW_W / 2, y + 2, { size: 1, color: UI.ink, align: 'center', shadow: false });
 }
 
 /** Dim the screen under an overlay. */
-export function drawDim(ctx, alpha = 1) { const a = ctx.globalAlpha; ctx.globalAlpha = a * alpha; ctx.fillStyle = UI.dim; ctx.fillRect(0, 0, VIEW_W, 360); ctx.globalAlpha = a; }
+export function drawDim(ctx: CanvasRenderingContext2D, alpha: number = 1): void { const a = ctx.globalAlpha; ctx.globalAlpha = a * alpha; ctx.fillStyle = UI.dim; ctx.fillRect(0, 0, VIEW_W, 360); ctx.globalAlpha = a; }
 
 export { PLAYER_LABELS };
+
+/** art/food.js drawFood, passed into the order ticket so this module stays free of it. */
+export type DrawFood = (ctx: CanvasRenderingContext2D, icon: string, cx: number, cy: number, s: number, hex?: string) => void;
+
+/** ORDER TICKET options. */
+export interface OrderTicketOpts {
+  /** Header band text; the STAGE the order board pinned up by default. */
+  title?: string;
+  /** Ingredient id -> glyph id for the row icons; without it the ingredient id is the glyph id. */
+  icons?: Record<string, string>;
+  /** Ingredient id -> base hex for the row icons. */
+  hexes?: Record<string, string>;
+}
 
 /**
  * The ORDER TICKET (docs/GDD.md section 4): customer, dish, one `NEED` row per ingredient with an ink tick when
@@ -141,7 +217,7 @@ export { PLAYER_LABELS };
  * the STAGE the order board pinned up (game/run.js `stage`), so the ticket and the board's card say the same number.
  * Returns the ticket's height. `foods` is art/food.js drawFood (passed in so this module stays free of it).
  */
-export function drawOrderTicket(ctx, run, x, y, w, drawFood, o = {}) {
+export function drawOrderTicket(ctx: CanvasRenderingContext2D, run: Run, x: number, y: number, w: number, drawFood: DrawFood | null, o: OrderTicketOpts = {}): number {
   const order = run.order, rows = order.needs.length;
   const h = 16 + ROW * (2 + rows) + 4;
   const top = drawTicket(ctx, x, y, w, h, { title: o.title || `ORDER ${String((run.stage | 0) + 1).padStart(2, '0')}` });

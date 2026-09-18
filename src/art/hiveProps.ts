@@ -13,7 +13,21 @@ import { PLUM } from '../constants.ts';
 import { INK } from './layers.ts';
 import { mix } from './palettes.ts';
 import { celBall, celCapsule, tones } from '../lib/art/shading.ts';
+import type { RigWeapon } from '../lib/art/rig.ts';
 import { makeRng } from '../lib/engine/rng.ts';
+
+/**
+ * The dipper's wet flag, merged into the library's `Rig` the way game/minigame.ts merges the basket's fields
+ * rather than restating them in a wrapper type: the dipper renderer below reads it off a plain rig and the hive
+ * screen writes it, so a type only one of them knew about would be no type at all. OPTIONAL, because
+ * lib/art/rig.ts buildRig builds a complete `Rig` literal without it.
+ */
+declare module '../lib/art/rig.ts' {
+  interface Rig {
+    /** 1 for the frames after the dipper head goes into a skep: the head is re-capped in comb amber and drips. */
+    dipperWet?: number;
+  }
+}
 
 const R = Math.round, TAU = Math.PI * 2;
 
@@ -221,7 +235,7 @@ const DIPPER_WOOD = '#C48A52', DIPPER_GROOVE = '#8B5A2B';
  * stubbornly vertical through the reach. The grooves are 2 px (ART_STYLE 0.8); at 1 px they disappeared at 1x and
  * the head read as a plain bead. `rig.dipperWet` is set by the screen for the frames after the head goes in.
  */
-export const HONEY_DIPPER = { attach: 'handR', length: 18, draw(ctx, rig) {
+export const HONEY_DIPPER: RigWeapon = { attach: 'handR', length: 18, draw(ctx, rig) {
   celCapsule(ctx, rig, 1, 0, 11, 0, 1.6, DIPPER_WOOD, 0);
   celBall(ctx, rig, 14, 0, 4, DIPPER_WOOD);
   if (rig.override) return;

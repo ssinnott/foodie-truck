@@ -5,6 +5,7 @@
 import { celBall } from '../../lib/art/shading.ts';
 import { FACE } from '../../lib/art/poses.ts';
 import { critterBuild, makeCritterAnims, cap, scarf, scarfTail, hatY, F } from './common.ts';
+import type { RigAccessory } from '../../lib/art/rig.ts';
 
 const R = Math.round;
 const TAU = Math.PI * 2;
@@ -16,7 +17,7 @@ const SHORTS = '#8C6E48';
  * Driving goggles (head space): two r4 rings joined by a bridge, parked on the cap above the hairline. On a `hurt`
  * key they drop onto the eye row (a stepped offset, never a lerp): the eyes sit inside the rings.
  */
-const goggles = { attach: 'head', draw(ctx, rig, pose) {
+const goggles: RigAccessory = { attach: 'head', draw(ctx, rig, pose) {
   const r = rig.p.headR, fo = rig.faceOpts || {};
   const hurt = (pose.face | 0) === FACE.hurt;
   const y = hurt ? R(-r * 0.42) + (fo.eyeY || 0) + 3 : hatY(rig) - 5;

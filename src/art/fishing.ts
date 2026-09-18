@@ -109,7 +109,7 @@ export const CAST_LAUNCH = 12;
  * The line: three 2 px segments from the rod tip to the float with a quadratic sag (draw-only maths). Falls
  * straight down when the float dangles under the tip.
  */
-export function drawLine(ctx, x0, y0, x1, y1) {
+export function drawLine(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number): void {
   const dx = x1 - x0, dy = y1 - y0;
   const sag = Math.min(14, Math.hypot(dx, dy) * 0.06);
   ctx.strokeStyle = LINE; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -128,7 +128,7 @@ export function drawLine(ctx, x0, y0, x1, y1) {
  * `tag` is off while the float dangles under the rod tip — up there the tag would land ABOVE the tip with the shaft
  * between it and the float it labels, reading as a card stapled to the rod. `bite` lights the waterline mint.
  */
-export function drawFloat(ctx, x, y, slot, tag = true, bite = false) {
+export function drawFloat(ctx: CanvasRenderingContext2D, x: number, y: number, slot: number, tag = true, bite = false): void {
   const col = PLAYER_COLORS[slot] || UI.paperDark;
   pathRR(ctx, x - 4, y - 4, 8, 10, 4); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = FLOAT.body; ctx.fill();
   if (bite) { ctx.save(); pathRR(ctx, x - 4, y - 4, 8, 10, 4); ctx.clip(); ctx.fillStyle = FLOAT.bite; ctx.fillRect(x - 4, y + 1, 8, 5); ctx.restore(); }
@@ -140,7 +140,7 @@ export function drawFloat(ctx, x, y, slot, tag = true, bite = false) {
 }
 
 /** The trout: a 24x12 inked body facing `facing`, a darker back inside the same ink, a rose gill dot, an ink eye. */
-export function drawTrout(ctx, cx, cy, facing = 1) {
+export function drawTrout(ctx: CanvasRenderingContext2D, cx: number, cy: number, facing = 1): void {
   ctx.save(); ctx.translate(cx, cy); if (facing < 0) ctx.scale(-1, 1);
   ctx.beginPath(); ctx.ellipse(-2, 0, 9, 5, 0, 0, TAU);
   ctx.moveTo(6, 0); ctx.lineTo(12, -5); ctx.lineTo(12, 5); ctx.closePath();
@@ -156,7 +156,7 @@ export function drawTrout(ctx, cx, cy, facing = 1) {
  * 5). `squash` above 1 widens and squats it about its base for the few frames after a trout drops in, so the
  * landing has a contact beat instead of the count simply ticking over.
  */
-export function drawBucket(ctx, x, y, slot, fish, squash = 1) {
+export function drawBucket(ctx: CanvasRenderingContext2D, x: number, y: number, slot: number, fish: number, squash = 1): void {
   const col = PLAYER_COLORS[slot] || UI.paperDark;
   const n = fish > 5 ? 5 : fish;
   if (squash !== 1) { ctx.save(); ctx.translate(x + 7, y); ctx.scale(squash, 1 / squash); ctx.translate(-(x + 7), -y); }

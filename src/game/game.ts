@@ -1,10 +1,217 @@
 // Game: screen stack, shared services, the current run (docs/ARCHITECTURE.md section 5). Ported from the
 // sibling game's shell; the run object is new and is the only cross-screen state.
+//
+// THE FIELDS ARE `declare`d, NOT INITIALISED. Every field below is already assigned by its constructor, so the
+// declarations exist for the checker alone: a plain field declaration would emit a class field per name (es2022
+// defines them before the constructor body runs) and these two classes have to keep the runtime they shipped
+// with - a screen subclass's own declarations included, since a field redeclared over one a base constructor has
+// already written would define it back to undefined. `declare` erases under tsc, under esbuild (tools/build.js,
+// tools/server.js) and under Node's type stripping alike, so the emitted classes are the originals. Same
+// reasoning, and same shape, as the field block in lib/art/animation.ts's AnimPlayer.
 import { VIEW_W, VIEW_H } from '../constants.ts';
+import type { Rng } from '../lib/engine/rng.ts';
+import type { AnimSet } from '../lib/art/animation.ts';
+import type { RigBuild } from '../lib/art/rig.ts';
+
+/**
+ * The input service: engine/input.ts's singleton itself, so the shell's view of it can never drift from the
+ * module screens actually call (`game.input.pressed(slot, 'action')`).
+ */
+export type Input = typeof import('../engine/input.ts')['input'];
+
+/** One line of an order: an ingredient (content/recipes.js INGREDIENTS), how many are wanted, how many are in. */
+export interface OrderNeed {
+  id: string;
+  amount: number;
+  have: number;
+}
+
+/** The order the truck is working on: one stage of content/recipes.js ORDERS, with the gathered counts on it. */
+export interface Order {
+  id: string;
+  dish: string;
+  /** The cast-adjacent NPC who phoned it in ('owl'). */
+  customer: string;
+  /** What they said on the phone. */
+  line: string;
+  /** Kitchen stations in order (content/places.js STATIONS). */
+  steps: string[];
+  needs: OrderNeed[];
+}
+
+/** One seat of the party, in slot order. */
+export interface PartySeat {
+  /** Player slot 0..3: the seat's colour, its keys and its place in the START packet. */
+  slot: number;
+  /** Cast id ('barley'). */
+  critter: string;
+  score: number;
+}
+
+/** One stage of the day's card: an ORDERS entry and the best night it has had. */
+export interface RunStage {
+  id: string;
+  /** 0 until the stage has been served. */
+  stars: number;
+}
+
+/** Where the truck is on the world map, kept between visits to the map screen. */
+export interface TruckState {
+  x: number;
+  y: number;
+  /** Heading in radians. */
+  heading: number;
+  /** Id of the landmark it is standing at ('home', content/places.js PLACES). */
+  at: string;
+}
+
+/**
+ * The current run (game/run.js startRun): the day's card, the party, the order and what has been gathered. The
+ * ONLY state shared between screens, and deliberately plain data so netplay can hash it and every peer can
+ * rebuild it from the START packet.
+ */
+export interface Run {
+  seed: number;
+  party: PartySeat[];
+  /** The day's card, one entry per ORDERS stage in that order. */
+  stages: RunStage[];
+  /** Which stage the truck is working on (an index into ORDERS): what the order board last chose. */
+  stage: number;
+  order: Order;
+  /** How many dishes the truck has served this session (a stage played twice counts twice). */
+  served: number;
+  /** The stage `serve()` banked last; -1 before the first one. */
+  lastServed: number;
+  score: number;
+  truck: TruckState;
+  /** Frames spent in the run. */
+  frame: number;
+  /** How many of `id` are in the truck. */
+  have(id: string): number;
+  /** Add `amount` of an ingredient (clamped to what the order needs). Returns true when that line is complete. */
+  gather(id: string, amount?: number): boolean;
+  /** True when every ingredient of the order is in the truck. */
+  complete(): boolean;
+  /** The ingredients still missing, in order. */
+  missing(): OrderNeed[];
+  /** The landmark that supplies an ingredient id, or ''. */
+  placeFor(id: string): string;
+  /** Which screen a landmark opens: its mini-game if it supplies a missing ingredient, else ''. */
+  screenForPlace(placeId: string): string;
+  /** Take stage `i` off the board with a fresh, empty order and the truck at home. */
+  setStage(i: number): Order;
+  /** Bank the stars against the stage that was cooked and hand the board back. */
+  serve(stars: number): void;
+  /** How many stages carry stars. */
+  cleared(): number;
+  /** The day's star total. */
+  stars(): number;
+  /** The day is done when every stage on the board has been served at least once. */
+  dayComplete(): boolean;
+  /** The next stage still to be served, starting after `from`, or -1 when the day is complete. */
+  nextStage(from?: number): number;
+  /** The run as plain data for window.__game.summary() and the playtest; keys are run.js's own. */
+  summary(): Record<string, unknown>;
+}
+
+/** One playable cast member: the default export of a content/critters/*.ts species file. */
+export interface CritterDef {
+  /** Cast id ('barley'), the same string a run's party carries. */
+  id: string;
+  /** Name plate text ('BARLEY'). */
+  name: string;
+  fullName: string;
+  /** Role line on the select card ('THE HUNGRY ONE'). */
+  role: string;
+  species: string;
+  /** The critter's own hex, for cards and portraits. */
+  colour: string;
+  bio: string;
+  /** The rig description (content/critters/common.ts critterBuild). */
+  build: RigBuild;
+  /** The animation table (content/critters/common.ts makeCritterAnims). */
+  anims: AnimSet;
+}
+
+/**
+ * What a screen is entered with: `game.push(id, params)` hands it straight to `enter(params)`.
+ *
+ * The keys below are the ones screens read today; the index signature is there because this IS an open bag - one
+ * screen's hand-off to the next, typed by neither of them - and a screen that starts passing a new key should not
+ * have to come back and edit this shell to do it. Hence `any`: params are read, not checked.
+ */
+export interface ScreenParams {
+  /** Lobby: open the room flow at once (an invite link, or ?skipTo=lobby). */
+  autoRoom?: boolean;
+  /** Map / mini-game: the landmark a dev jump (?place=) lands on. */
+  place?: string;
+  /** Results: the stars the kitchen awarded. */
+  stars?: number;
+  /** Results: the score the kitchen banked. */
+  score?: number;
+  [key: string]: any;
+}
+
+/** A screen factory: what `registerScreen` stores and `_make` calls. */
+export type ScreenFactory = (game: Game) => Screen;
+
+/** The fade-to-black state machine (`fadeTo`). */
+export interface Fade {
+  /** 0 = clear, 1 = full black. */
+  alpha: number;
+  /** 1 = fading out, -1 = fading back in, 0 = idle. */
+  dir: number;
+  /** Alpha per fixed step. */
+  speed: number;
+  /** What to run at full black (usually a replace); cleared as it is called. */
+  then: (() => void) | null;
+}
+
+/** The options bag (main.ts parseOptions, the URL query): the defaults the shell sets, plus the dev/test jumps. */
+export interface GameOptions {
+  debug: boolean;
+  autotest: boolean;
+  /** The run's seed: every peer draws from the same one. */
+  seed: number;
+  /** ?skipTo=<screen id>: open on that screen with a run already started. */
+  skipTo: string;
+  /** ?room=CODE: the online room to join. */
+  room: string;
+  /** ?host=1: host a room instead of joining one. */
+  host: boolean;
+  /** 'mqtt' (room codes) or 'broadcast' (the same-machine end-to-end test hook). */
+  transport: string;
+  /** ?critters=0,1,2,3: cast indices to seat for a skipTo run. */
+  critters?: number[];
+  /** ?place=orchard: the landmark a skipTo mini-game opens at. */
+  place?: string;
+  /** ?order=N: the order a skipTo run stands on. */
+  order?: number;
+  /** ?netrelay=1: the netplay relay debug view. */
+  netrelay?: boolean;
+}
+
+/** What the shell is constructed with (main.ts boot). */
+export interface GameServices {
+  input: Input;
+  rng: Rng;
+  options?: Partial<GameOptions>;
+}
 
 /** Base screen. Subclasses set `id` and override enter/exit/update/draw. */
 export class Screen {
-  constructor(game, id = 'screen') {
+  /** The shell that owns the stack this screen is on. */
+  declare game: Game;
+  /** Screen id; `Game._make` fills the factory's key in when a subclass leaves it empty. */
+  declare id: string;
+  /** When true, screens below are drawn first (overlay). */
+  declare transparent: boolean;
+  /** Fixed steps since the screen was made, counted by `update()`. */
+  declare frame: number;
+  /** What the screen was entered with. */
+  declare params: ScreenParams;
+
+  constructor(game: Game, id: string = 'screen') {
     this.game = game;
     this.id = id;
     /** When true, screens below are drawn first (overlay). */
@@ -13,23 +220,56 @@ export class Screen {
     this.params = {};
   }
   /** Called when pushed / replaced onto the stack. */
-  enter(params = {}) { this.params = params; }
+  enter(params: ScreenParams = {}): void { this.params = params; }
   /** Called when popped / replaced away. */
-  exit() {}
+  exit(): void {}
   /** Fixed step. */
-  update() { this.frame++; }
+  update(): void { this.frame++; }
   /** Render. */
-  draw(ctx) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }
+  draw(ctx: CanvasRenderingContext2D): void { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }
   /** Optional: contribute to window.__game.summary(). */
   summary() { return {}; }
+  /**
+   * The numbers the netplay checksum hashes (net/checksum.js): every field of this screen's simulation that can
+   * diverge. Declared, never implemented - a screen that simulates nothing has none, and checksum.js tests for
+   * the method before it calls it, so this is a signature for the checker and not a member that exists.
+   */
+  checksumFields?(): readonly unknown[];
 }
 
 /** Game shell: owns the screen stack and the shared services (input, rng, options, net, run). */
 export class Game {
+  /** Keyboard / gamepad / netplay input (engine/input.ts). */
+  declare input: Input;
+  /** The seeded RNG every gameplay draw goes through (lib/engine/rng.ts). */
+  declare rng: Rng;
+  /** The shell's defaults with main.ts's parsed URL options over them. */
+  declare options: GameOptions;
+  /** The screen stack, lowest first; the last entry is the live screen. */
+  declare screens: Screen[];
+  /** Screen id -> factory, filled by `registerScreen` at boot. */
+  declare factories: Record<string, ScreenFactory>;
+  /** Playable cast registry [{ id, name, build, anims, ... }] (content/critters/index.js). */
+  declare critters: CritterDef[];
+  /**
+   * The live online session (net/session.js createNetSession) or null.
+   *
+   * `any` deliberately: the session object grows its own API after the literal that starts it (`net.end = ...`,
+   * `net.summary = ...`, the lockstep hooks), so no type written here would describe the thing screens are
+   * handed. net/session.js owns that shape; the shell only ever holds it and passes it on.
+   */
+  declare net: any;
+  /** The current run (game/run.js): the order, the party, what has been gathered. Null between runs. */
+  declare run: Run | null;
+  /** Fixed steps since boot. */
+  declare frame: number;
+  /** The fade-to-black state machine. */
+  declare fade: Fade;
+
   /**
    * @param {{ input: object, rng: object, options?: object }} services
    */
-  constructor({ input, rng, options = {} }) {
+  constructor({ input, rng, options = {} }: GameServices) {
     this.input = input;
     this.rng = rng;
     this.options = { debug: false, autotest: false, seed: 1, skipTo: '', room: '', host: false, transport: 'mqtt', ...options };
@@ -45,9 +285,9 @@ export class Game {
     this.fade = { alpha: 0, dir: 0, speed: 0.05, then: null };
   }
   /** Register a screen factory: id -> (game) => Screen. */
-  registerScreen(id, factory) { this.factories[id] = factory; }
-  get screenIds() { return Object.keys(this.factories); }
-  _make(id) {
+  registerScreen(id: string, factory: ScreenFactory): void { this.factories[id] = factory; }
+  get screenIds(): string[] { return Object.keys(this.factories); }
+  _make(id: string): Screen {
     const f = this.factories[id];
     if (!f) throw new Error(`Unknown screen '${id}'`);
     const s = f(this);
@@ -55,40 +295,40 @@ export class Game {
     return s;
   }
   /** Top screen or null. */
-  get screen() { return this.screens.length ? this.screens[this.screens.length - 1] : null; }
+  get screen(): Screen | null { return this.screens.length ? this.screens[this.screens.length - 1] : null; }
   /** Id of the top screen ('' when empty). */
-  screenId() { return this.screen ? this.screen.id : ''; }
+  screenId(): string { return this.screen ? this.screen.id : ''; }
   /** Push a screen on top (overlay if it declares `transparent`). */
-  push(id, params = {}) {
+  push(id: string, params: ScreenParams = {}): Screen {
     const s = this._make(id);
     this.screens.push(s);
     s.enter(params);
     return s;
   }
   /** Replace the top screen (or push when empty). */
-  replace(id, params = {}) {
+  replace(id: string, params: ScreenParams = {}): Screen {
     const top = this.screens.pop();
     if (top) top.exit();
     return this.push(id, params);
   }
   /** Replace the whole stack with one screen. */
-  reset(id, params = {}) {
+  reset(id: string, params: ScreenParams = {}): Screen {
     while (this.screens.length) this.screens.pop().exit();
     return this.push(id, params);
   }
   /** Pop the top screen. */
-  pop() {
+  pop(): Screen {
     const top = this.screens.pop();
     if (top) top.exit();
     return top;
   }
   /** Fade to black, then run `fn` (usually a replace), then fade back in. */
-  fadeTo(fn, speed = 0.06) {
+  fadeTo(fn: () => void, speed: number = 0.06): void {
     if (this.fade.dir === 1) return;
     this.fade.dir = 1; this.fade.speed = speed; this.fade.then = fn;
   }
   /** Fixed step: fade bookkeeping + top screen update. */
-  update() {
+  update(): void {
     this.frame++;
     const f = this.fade;
     if (f.dir === 1) { f.alpha = Math.min(1, f.alpha + f.speed); if (f.alpha >= 1) { f.dir = -1; const fn = f.then; f.then = null; if (fn) fn(); } }
@@ -97,7 +337,7 @@ export class Game {
     if (top && f.dir !== 1) top.update();
   }
   /** Draw the stack: from the lowest opaque screen up, then the fade overlay. */
-  draw(ctx) {
+  draw(ctx: CanvasRenderingContext2D): void {
     let start = this.screens.length - 1;
     while (start > 0 && this.screens[start].transparent) start--;
     for (let i = Math.max(0, start); i < this.screens.length; i++) this.screens[i].draw(ctx);

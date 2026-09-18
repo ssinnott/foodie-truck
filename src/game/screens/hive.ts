@@ -26,7 +26,9 @@
 // cosmetic and stay out of checksumFields().
 import { VIEW_W, UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
+import type { Game, Input, ScreenParams } from '../game.ts';
 import { rng, makeRng } from '../../lib/engine/rng.ts';
+import type { RngInstance } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
 import { blitAt } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt, burstDust, burstSparkle } from '../../art/fx.ts';
@@ -38,6 +40,7 @@ import { INGREDIENTS } from '../../content/recipes.ts';
 import { hiveLayers, HIVE, ROWS, SKEP_X, CRATE_X } from '../../art/backgrounds/hive.ts';
 import { drawSkep, drawBee, drawSwarm, drawHoneyCrate, drawHoneyStrand, HONEY_DIPPER, SWARM_SHAPE, SWARM_SPIN, SKEP_H } from '../../art/hiveProps.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import type { Clock, Seat } from '../minigame.ts';
 import { drawHint } from '../ui.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
@@ -168,7 +171,76 @@ const HIVE_ANIMS = Object.freeze({
   ] },
 });
 
-function clockIcon(ctx, x, y) { drawFood(ctx, 'jar', x, y, 4, HONEY_HEX); }
+function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'jar', x, y, 4, HONEY_HEX); }
+
+/** One pre-rendered backdrop layer and the screen y it is blitted at (art/backgrounds/hive.ts hiveLayers). */
+export interface HiveLayer {
+  /** The offscreen canvas art/layers.ts makeLayer painted once. */
+  L: { canvas: HTMLCanvasElement; w: number; h: number };
+  /** Screen y its top row lands on. */
+  y: number;
+}
+
+/** The meadow's backdrop: painted on the first visit, kept for every visit after. */
+export interface HiveLayers {
+  /** Sky, downs, hedgerow, the far meadow and the skep bench, down to the ground row. */
+  far: HiveLayer;
+  /** The clover ground, with the trodden walk band the four lanes live in. */
+  ground: HiveLayer;
+  /** The near fringe of blades, drawn over everything standing on the band. */
+  near: HiveLayer;
+}
+
+/**
+ * A seat at the hives: the shared mini-game seat plus the dip beat and the sting grace this screen keeps for it.
+ * The per-screen extension minigame.ts documents, so `makeSeats<HiveSeat>` hands these back with the screen's own
+ * fields as typed as the shared ones.
+ */
+export interface HiveSeat extends Seat {
+  /** Frames left of the dip beat; the stick is locked while it runs, and it banks on the frame it reaches 0. */
+  dipT: number;
+  /** The skep being dipped (an index into SKEP_X), or -1. */
+  dipSkep: number;
+  /** Frames of sting grace left: the swarm cannot sting this seat again while it is up. */
+  safeT: number;
+}
+
+/** One straw skep on the bench, indexed like SKEP_X. */
+export interface Skep {
+  /** Frames until it has honey again; 0 = full, and only a full skep can be dipped. */
+  refill: number;
+}
+
+/** An angry bee thrown off a sting, riding the ANGRY_DX / ANGRY_DY spiral (cosmetic). */
+export interface AngryBee {
+  /** Steps into the spiral; ANGRY_T means the slot is free. */
+  t: number;
+  /** Where it left the stung seat. */
+  x: number;
+  y: number;
+  /** Which way its spiral leans: the shove direction, or against it for every other bee of a sting. */
+  dir: number;
+}
+
+/** The shared hazard: one swarm on the CALM -> WARY -> ALERT cycle, which every seat reads. */
+export interface Swarm {
+  /** CALM, WARY or ALERT - also the SWARM_SHAPE / SWARM_SPIN index. */
+  state: number;
+  /** The state it is morphing out of. */
+  prev: number;
+  /** Frames left of the current state. */
+  t: number;
+  /** How long the current state was rolled for; the calm fuse is `t / len`. */
+  len: number;
+  /** Frames into the shape morph; MORPH_N means it has settled. */
+  mx: number;
+  /** The orbit counter, 0..31, indexed into art/hiveProps.ts's tables (no trig in the simulation). */
+  phase: number;
+  /** Where the cloud is. */
+  x: number;
+  /** The x it is drifting toward, re-rolled off the rng as it arrives. */
+  tx: number;
+}
 
 /**
  * The drawn swarm, morphed between the shape it is leaving and the shape it is in. One module-scope scratch object,
@@ -178,7 +250,7 @@ function clockIcon(ctx, x, y) { drawFood(ctx, 'jar', x, y, 4, HONEY_HEX); }
 const SHAPE = { cx: 0, cy: 0, halfW: 0, halfH: 0, rx: 0, ry: 0, stride: 0 };
 /** Where the dipper head landed in the seat being drawn, for the honey strand. Draw-only, like SHAPE (see drawStrand). */
 const TIP = { x: 0, y: 0 };
-function morphShape(sw) {
+function morphShape(sw: Swarm) {
   const a = SWARM_SHAPE[sw.prev], b = SWARM_SHAPE[sw.state], k = sw.mx / MORPH_N;
   SHAPE.cy = a.cy + (b.cy - a.cy) * k;
   SHAPE.halfW = a.halfW + (b.halfW - a.halfW) * k;
@@ -192,16 +264,53 @@ function morphShape(sw) {
 }
 
 export class HiveScreen extends Screen {
-  constructor(game) { super(game, 'hive'); this.seats = []; }
+  // The fields, for the checker only, in enter() order. `declare` for the reason game.ts gives over its own
+  // block: a plain field declaration would emit a class field per name (es2022 defines them before the
+  // constructor body runs, and a screen's own declaration would also define a base field back to undefined), and
+  // this screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild and under
+  // Node's type stripping alike, so the emitted class is the original.
 
-  enter(params) {
+  /** The backdrop, pre-rendered once (art/backgrounds/hive.ts hiveLayers) and blitted per frame. */
+  declare layers: HiveLayers;
+  /** The clover stream's own generator: cosmetic, so it never draws from the gameplay rng singleton. */
+  declare vis: RngInstance;
+  /** The clover spawn options, built once in enter() and handed to particles.spawn every CLOVER_EVERY frames. */
+  declare cloverOpts: { color: string; color2: string; size: number; life: number; vx: number; vy: number; screen: boolean };
+  /** One seat per party member, in party order (not slot order); each on its own lane. */
+  declare seats: HiveSeat[];
+  /** The five skeps, indexed like SKEP_X. */
+  declare skeps: Skep[];
+  /** The angry-bee pool (cosmetic): ANGRY_N slots handed out in turn. */
+  declare angry: AngryBee[];
+  /** The next angry-bee slot to reuse. */
+  declare angryCursor: number;
+  /** The shared hazard: one swarm for the whole round. */
+  declare swarm: Swarm;
+  /** Stings the party has taken this round (the playtest reads it). */
+  declare stings: number;
+  /** Honey the round is played to: what the order still needs, or FALLBACK_TARGET with no run. */
+  declare target: number;
+  /** Honey in the party's crate right now. */
+  declare total: number;
+  /** "3/4" for the clock ticket, rebuilt by setTotal() as the count changes. */
+  declare countStr: string;
+  /** The hint line along the bottom. */
+  declare hint: string;
+  /** The round's clock and its ending (game/minigame.ts). */
+  declare clock: Clock;
+  /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
+  declare fields: number[];
+
+  constructor(game: Game) { super(game, 'hive'); this.seats = []; }
+
+  override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
     this.layers = hiveLayers();
     particles.clear();
     this.vis = makeRng(CLOVER_SEED);
     this.cloverOpts = { color: HIVE.cloverPale, color2: HIVE.clover, size: 3, life: 150, vx: -0.25, vy: 0.4, screen: true };
-    this.seats = makeSeats(game, (i) => LANE_Y0 - i * LANE_GAP);
+    this.seats = makeSeats<HiveSeat>(game, (i) => LANE_Y0 - i * LANE_GAP);
     const n = this.seats.length;
     for (let i = 0; i < n; i++) {
       const s = this.seats[i];
@@ -232,7 +341,7 @@ export class HiveScreen extends Screen {
     this.fields = [];
   }
 
-  update() {
+  override update(): void {
     super.update();
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
@@ -258,7 +367,7 @@ export class HiveScreen extends Screen {
   }
 
   /** The shared hazard: drift, spin, and the CALM -> WARY -> ALERT -> CALM cycle. Every seat reads this one object. */
-  stepSwarm() {
+  stepSwarm(): void {
     const sw = this.swarm;
     if (sw.mx < MORPH_N) sw.mx++;
     sw.phase = (sw.phase + SWARM_SPIN[sw.state]) & 31;
@@ -275,12 +384,12 @@ export class HiveScreen extends Screen {
   }
 
   /** A dipped skep counts itself back up; at 0 it is full again and wears the sparkle. */
-  updateSkeps() {
+  updateSkeps(): void {
     for (let i = 0; i < this.skeps.length; i++) if (this.skeps[i].refill > 0) this.skeps[i].refill--;
   }
 
   /** Every seat: the beats first (they lock the stick), then the sting test, then the stick, the dip, the anim. */
-  updateSeats(input) {
+  updateSeats(input: Input): void {
     const alert = this.swarm.state === ALERT;
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
@@ -313,7 +422,7 @@ export class HiveScreen extends Screen {
    * beat: two seats standing at one skep must not both be promised the same honey, and an emptying skep under a
    * raised dipper is the right read anyway.
    */
-  tryDip(s) {
+  tryDip(s: HiveSeat): void {
     let best = -1, bestD = REACH + 1;
     for (let i = 0; i < this.skeps.length; i++) {
       if (this.skeps[i].refill > 0) continue;
@@ -329,7 +438,7 @@ export class HiveScreen extends Screen {
   }
 
   /** The dipper comes back out: +1 to the seat and to the party, a ring at the doorway and a jar in the crate. */
-  landDip(s) {
+  landDip(s: HiveSeat): void {
     const x = SKEP_X[s.dipSkep], y = ROWS.bench - 8;
     s.count++; this.setTotal(this.total + 1);
     ringAt(x, y, 3, 12, UI.cream, 2, 12, false, true);
@@ -343,7 +452,7 @@ export class HiveScreen extends Screen {
    * critter is driven out of the bench's middle rather than across it, and two stung seats never collide in the
    * centre. One banked honey goes (the orchard's wormy-apple cost), and the grace starts immediately.
    */
-  sting(s) {
+  sting(s: HiveSeat): void {
     const dir = s.x < VIEW_W / 2 ? -1 : 1;
     s.bumpT = BUMP_FRAMES; s.safeT = SAFE_FRAMES; s.moving = false; s.dipT = 0; s.dipSkep = -1;
     s.x += dir * PUSH;
@@ -361,10 +470,10 @@ export class HiveScreen extends Screen {
     this.stings++;
   }
 
-  setTotal(n) { this.total = n; this.countStr = n + '/' + this.target; }
+  setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
   /** The round is over: drop the sign; a seat with honey cheers, one with none sulks. */
-  finish() {
+  finish(): void {
     if (this.clock.phase !== 0) return;
     // a dip that was still running when the round ended banks anyway, BEFORE the sign's number is built: the
     // promise this scene makes about a committed dip has no exception for the last frame of the clock
@@ -377,7 +486,7 @@ export class HiveScreen extends Screen {
     }
   }
 
-  draw(ctx) {
+  override draw(ctx: CanvasRenderingContext2D): void {
     const L = this.layers, f = this.frame;
     blitAt(ctx, L.far.L, 0, L.far.y);
     blitAt(ctx, L.ground.L, 0, L.ground.y);
@@ -414,7 +523,7 @@ export class HiveScreen extends Screen {
   }
 
   /** One seat, with the dipper wet for the second half of its reach (the beat pays off on the item too). */
-  drawSeat(ctx, s) {
+  drawSeat(ctx: CanvasRenderingContext2D, s: HiveSeat): void {
     const rig = s.rig, o = s.opts;
     rig.dipperWet = s.dipT > 0 && s.dipT <= DIP_FRAMES - 6 ? 1 : 0;
     o.x = s.x; o.y = s.y; o.facing = s.facing;
@@ -429,7 +538,7 @@ export class HiveScreen extends Screen {
    * back, but a headless peer never draws, so the first rule to use the tip would have diverged silently
    * (ARCHITECTURE section 0 / 5). The scratch belongs to the draw pass, like SHAPE above and orchard.js's PAW.
    */
-  drawStrand(ctx, s) {
+  drawStrand(ctx: CanvasRenderingContext2D, s: HiveSeat): void {
     if (s.dipT <= 0 || s.dipSkep < 0) return;
     const tip = jointScreen(s.rig, 'weaponTip', TIP);
     drawHoneyStrand(ctx, SKEP_X[s.dipSkep], ROWS.bench - 5, R(tip.x), R(tip.y), (DIP_FRAMES - s.dipT) / DIP_FRAMES);
@@ -440,7 +549,7 @@ export class HiveScreen extends Screen {
    * coop's fresh egg wears, on the same index-hashed blink, because it means the same thing. The index hash keeps
    * the five skeps off one beat, so the bench twinkles instead of flashing.
    */
-  drawSkepAt(ctx, i, f) {
+  drawSkepAt(ctx: CanvasRenderingContext2D, i: number, f: number): void {
     const x = SKEP_X[i], full = this.skeps[i].refill === 0;
     drawSkep(ctx, x, ROWS.bench, full);
     if (!full || !(((f + i * 7) >> 3) & 1)) return;
@@ -457,7 +566,7 @@ export class HiveScreen extends Screen {
    *         the meadow that says where the swarm is looking. Solid, never blinking - a blinking danger mark is off
    *         for half the frames a player might glance in.
    */
-  drawSwarmAt(ctx, f) {
+  drawSwarmAt(ctx: CanvasRenderingContext2D, f: number): void {
     const sw = this.swarm, sh = morphShape(sw), cx = R(sh.cx), cy = R(sh.cy);
     if (sw.state === ALERT && sw.mx >= MORPH_N) {
       // 6 px under the bar of bees, which lands it on the skeps' knobs: a lid coming down on the hives. Round 1 put
@@ -479,13 +588,13 @@ export class HiveScreen extends Screen {
   }
 
   /** An angry bee spiralling off a stung seat on the ANGRY_DX/DY table. Cosmetic: never in checksumFields(). */
-  drawAngry(ctx, a, i, f) {
+  drawAngry(ctx: CanvasRenderingContext2D, a: AngryBee, i: number, f: number): void {
     if (a.t >= ANGRY_T) return;
     drawBee(ctx, a.x + a.dir * ANGRY_DX[a.t], a.y + ANGRY_DY[a.t], (f + i * 3) & 2 ? 1 : 0);
   }
 
   /** The swarm band (see BAND_X above for what each state has to say and why it says it three ways). */
-  drawBand(ctx, f) {
+  drawBand(ctx: CanvasRenderingContext2D, f: number): void {
     const st = this.swarm.state;
     if (st !== CALM) this.drawCrest(ctx, st === WARY ? -1 : 1);
     ctx.fillStyle = UI.ink; ctx.fillRect(BAND_X - 2, BAND_Y - 2, BAND_W + 4, BAND_H + 4);
@@ -518,7 +627,7 @@ export class HiveScreen extends Screen {
   }
 
   /** The band's jagged crest: `dir` -1 rears it UP off the top edge (WARY), +1 hangs it DOWN off the bottom (ALERT). */
-  drawCrest(ctx, dir) {
+  drawCrest(ctx: CanvasRenderingContext2D, dir: number): void {
     const y = dir < 0 ? BAND_Y - 2 : BAND_Y + BAND_H + 2, w = BAND_W / BAND_TEETH;
     ctx.beginPath();
     ctx.moveTo(BAND_X - 2, y);
@@ -532,7 +641,7 @@ export class HiveScreen extends Screen {
     ctx.fillStyle = SIGNAL.hot; ctx.fill();
   }
 
-  summary() {
+  override summary() {
     const sw = this.swarm;
     return {
       honey: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
@@ -545,7 +654,7 @@ export class HiveScreen extends Screen {
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js), in one reused array. */
-  checksumFields() {
+  override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     const sw = this.swarm;
     f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.stings);

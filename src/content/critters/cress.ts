@@ -4,6 +4,7 @@
 // aprons clear it by value (.28+) like the hare's.
 import { celPath, pathRR, band } from '../../lib/art/shading.ts';
 import { critterBuild, makeCritterAnims, F, PLUM_STRAP } from './common.ts';
+import type { RigAccessory } from '../../lib/art/rig.ts';
 
 const R = Math.round;
 const SKIN = '#3F7D3B', MOSS = '#2A5A2A', CREAM = '#CFE3A6', WATER = '#2F5F7A', STRAW = '#E2B44A', DEEP = '#23412A';
@@ -20,7 +21,7 @@ const WILLOW = '#6B4E3A', WILLOW_LINE = '#C9B58E';
  * Straw sunhat (head space): sits ABOVE the eye domes, not on the hairline, because the domes are the eyes and a
  * brim through them would break the eye row. A wide 4 px inked brim, a low crown in one path, and a plum band.
  */
-const sunhat = { attach: 'head', draw(ctx, rig) {
+const sunhat: RigAccessory = { attach: 'head', draw(ctx, rig) {
   const r = rig.p.headR, y = R(-r * 1.28), bw = R(r * 1.25), cw = R(r * 0.7), ch = R(r * 0.42);
   // the crown's flat bottom closes INSIDE the band (y - 2), not at y - ch - 1: two pixels of wall used to show
   // between crown and band and the hat read as two stacked objects
@@ -31,7 +32,7 @@ const sunhat = { attach: 'head', draw(ctx, rig) {
 } };
 
 /** The foraging basket, slung on the far hip (hip space, back layer): a willow block with one cream weave line. */
-const hipBasket = { attach: 'hip', layer: 'back', draw(ctx, rig) {
+const hipBasket: RigAccessory = { attach: 'hip', layer: 'back', draw(ctx, rig) {
   const hw = R(rig.p.hip / 2), x = -hw - 7, y = -7;
   pathRR(ctx, x, y, 12, 10, 3);
   celPath(ctx, rig, WILLOW, x + 6, y + 5, 6, 0.36, 0.2);
