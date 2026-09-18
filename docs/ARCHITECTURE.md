@@ -9,21 +9,42 @@ author). Where a module says "ported", its behaviour is that game's, and `docs/A
 
 ## 0. Stack & non-negotiables
 
-- **Runtime:** browser, HTML5 Canvas 2D, vanilla JavaScript **ES modules**. No framework, no TypeScript *sources*,
-  no bundler required to *play* (`npm run dev` serves the repo; open `index.html`). `npm run build` produces a
-  single-file `dist/index.html` (esbuild) for sharing and for GitHub Pages, but `src/` must always run un-bundled.
-- **Types are checked, never compiled.** `npm run typecheck` runs `tsc --noEmit` over the JSDoc in `engine/` and
-  `net/` (`tsconfig.json`), widening one directory at a time as each is clean.
+- **Runtime:** browser, HTML5 Canvas 2D, **TypeScript ES modules**. No framework, and nothing is compiled to disk
+  during development. `npm run build` produces a single-file `dist/index.html` (esbuild) for sharing and for GitHub
+  Pages, and that file is still the whole game with no external references.
+- **A transform, but no build step.** `src/` is TypeScript, which a browser cannot parse, so `npm run dev`
+  transforms each module through esbuild ON REQUEST and serves it as JavaScript. There is no watcher and no output
+  directory: edit a file, reload the page. The transform leaves import specifiers alone, so the JS handed back still
+  says `from './game/run.ts'`, the browser asks for that, and it is transformed too — the served graph closes on
+  itself. What this costs, stated plainly: `src/` no longer runs from an arbitrary static server, and `index.html`
+  no longer opens from disk. `dist/index.html` still does both. The rule this replaces ("no bundler required to
+  play") was given up deliberately, in exchange for `game/` — the largest and busiest layer — being typechecked at
+  all rather than sitting outside `include` indefinitely.
+- **Import specifiers name the real `.ts` file** (`from './game.ts'`), which is the reverse of the usual TypeScript
+  convention. Node 22 resolves specifiers literally and does no extension remapping, so a `.js` specifier pointing
+  at a `.ts` file fails; writing `.ts` is what lets every tool in `tools/` import `src/` directly with no `tsx` and
+  no precompile.
+- **Types are checked, never compiled.** `npm run typecheck` runs `tsc --noEmit`; esbuild does all emitting.
+  `allowImportingTsExtensions` is legal only under `noEmit`, so the two are one decision. `include` now covers all
+  of `src/` — there is no directory left to opt out, which was the point. `strict` is still off; raising it is a
+  separate, measured step (see the game-engine repo's `docs/TS_MIGRATION.md`).
+- **Class fields are declared with `declare`.** `target: es2022` implies `useDefineForClassFields`, so a bare
+  `x: T` is not a type annotation: it emits a define that sets the property to `undefined` after `super()`, which
+  would silently clobber a base constructor's assignment. `npm run class-fields` fails on any instance field that
+  is neither `declare` nor initialised.
+- **The shared half lives in `src/lib/`**, vendored from the `game-engine` repository with `git subtree`. Do not
+  edit it here: fix it there and `git subtree pull`. `art/palettes.ts` and `engine/text.ts` are deliberate local
+  shims — each re-exports the library and adds this game's own art direction (the palette tables, the ink).
 - **Zero binary assets.** All art is drawn with canvas primitives at runtime. No image, font or audio file is ever
   fetched or committed. Icons and screenshots produced by the tools live outside the game (`tools/screens/`, ignored).
 - **Internal resolution:** `640 x 360` (`VIEW_W`, `VIEW_H`). That is the ONE canvas's bitmap size; CSS scales it to
-  the largest whole number of CSS pixels per game pixel that fills most of the window (`engine/canvas.js`,
+  the largest whole number of CSS pixels per game pixel that fills most of the window (`lib/engine/canvas.ts`,
   `image-rendering: pixelated`). Snap sprite positions to integers when drawing.
 - **Fixed timestep:** logic at exactly **60 Hz** (`DT = 1/60`), render per requestAnimationFrame with the latest
   state, at most 5 steps per frame. Every gameplay number is per frame at 60 fps (px/frame, frames).
-- **Determinism:** all gameplay randomness goes through `engine/rng.js` (seedable mulberry32). Never `Math.random()`
+- **Determinism:** all gameplay randomness goes through `lib/engine/rng.ts` (seedable mulberry32). Never `Math.random()`
   in simulation code (UI sparkle is fine). Never `Math.sin/cos/atan2/pow/hypot` on values that reach simulation
-  state — use `engine/trig.js` (`dsin`, `dcos`, `dhypot`); they are free to use in `draw()`. Never read the wall clock,
+  state — use `lib/engine/trig.ts` (`dsin`, `dcos`, `dhypot`); they are free to use in `draw()`. Never read the wall clock,
   the window size or the device in the simulation. This is what lets four browsers run the same game in lockstep.
 - **File size:** keep every file under ~600 lines; split rather than grow.
 - **No globals** except `window.__game` (debug/test hooks, section 6).

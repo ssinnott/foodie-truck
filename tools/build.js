@@ -1,4 +1,4 @@
-// Bundle src/main.js into a self-contained page: dist/index.html (open from disk or serve anywhere).
+// Bundle src/main.ts into a self-contained page: dist/index.html (open from disk or serve anywhere).
 import { build } from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,7 +9,7 @@ const OUT_DIR = path.join(ROOT, 'dist');
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 const result = await build({
-  entryPoints: [path.join(ROOT, 'src', 'main.js')],
+  entryPoints: [path.join(ROOT, 'src', 'main.ts')],
   bundle: true,
   format: 'iife',
   target: ['es2020'],
@@ -21,8 +21,8 @@ const result = await build({
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 
 let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const tagRe = /<script[^>]*type=["']module["'][^>]*src=["'][^"']*main\.js["'][^>]*>\s*<\/script>/i;
-if (!tagRe.test(html)) throw new Error('index.html: could not find <script type="module" src="src/main.js"> to inline');
+const tagRe = /<script[^>]*type=["']module["'][^>]*src=["'][^"']*main\.ts["'][^>]*>\s*<\/script>/i;
+if (!tagRe.test(html)) throw new Error('index.html: could not find <script type="module" src="src/main.ts"> to inline');
 html = html.replace(tagRe, () => `<script>\n${js}\n</script>`);
 if (/src=["'](\.\/)?src\//.test(html)) throw new Error('dist/index.html still references src/');
 fs.writeFileSync(path.join(OUT_DIR, 'index.html'), html);

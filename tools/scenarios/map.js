@@ -17,9 +17,9 @@
 //                is banked, and only then does driving home open the kitchen. The one test that proves an order
 //                built entirely out of the newly finished landmarks can actually be served.
 import { withPage, assert } from '../playtest.js';
-import { PLACES } from '../../src/content/places.js';
-import { INGREDIENTS, ORDERS } from '../../src/content/recipes.js';
-import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, riverDist, laneDist, wallBlocked } from '../../src/art/backgrounds/map.js';
+import { PLACES } from '../../src/content/places.ts';
+import { INGREDIENTS, ORDERS } from '../../src/content/recipes.ts';
+import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, riverDist, laneDist, wallBlocked } from '../../src/art/backgrounds/map.ts';
 
 const placeOf = (id) => PLACES.find((p) => p.id === id);
 const teleport = (page, x, y, heading) => page.evaluate(([px, py, h]) => { const t = window.__game.game.run.truck; t.x = px; t.y = py; t.at = ''; if (h != null) t.heading = h; }, [x, y, heading == null ? null : heading]);

@@ -4,10 +4,10 @@
 // Checks the data tier only: registry shape, palette ladder, animation table shape and cast distinctness. Every
 // threshold states what it measured; loosen one only with a reason written next to it. Geometry / pixel rules
 // (outline contract, far-palette leaks, silhouette IoU) are future work once three finished rigs exist to calibrate on.
-import { CRITTERS } from '../src/content/critters/index.js';
-import { INK, CHIBI } from '../src/content/critters/common.js';
-import { hexToRgb } from '../src/art/palettes.js';
-import { PLAYER_COLORS, PLAYER_LABELS } from '../src/constants.js';
+import { CRITTERS } from '../src/content/critters/index.ts';
+import { INK, CHIBI } from '../src/content/critters/common.ts';
+import { hexToRgb } from '../src/art/palettes.ts';
+import { PLAYER_COLORS, PLAYER_LABELS } from '../src/constants.ts';
 
 const notes = process.argv.includes('--notes');
 const findings = [];

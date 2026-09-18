@@ -8,10 +8,10 @@
 //   &zoom=3 &cols=8 &cw=96 &ch=110 &bg=#hex &facing=-1 (mirror test) &item=basket|rod|spoon|knife|food
 // Every cell is rendered at 1x through drawRig (chains, snapping and smears behave exactly as in game), then
 // pixel-zoomed. window.__sheet = { ready, error, bench(n) } for headless capture (tools/sheet-capture.js).
-import { CRITTERS } from '../src/content/critters/index.js';
-import { ITEMS } from '../src/content/critters/items.js';
-import { buildRig, drawRig } from '../src/art/rig.js';
-import { AnimPlayer } from '../src/game/animation.js';
+import { CRITTERS } from '../src/content/critters/index.ts';
+import { ITEMS } from '../src/content/critters/items.ts';
+import { buildRig, drawRig } from '../src/lib/art/rig.ts';
+import { AnimPlayer } from '../src/lib/art/animation.ts';
 
 const q = new URLSearchParams(location.search);
 const mode = q.get('mode') || 'anims';

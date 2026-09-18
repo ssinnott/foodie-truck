@@ -6,6 +6,11 @@
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,
+    // Import specifiers name the real .ts file, not a .js that does not exist. Legal only under
+    // noEmit, which is exactly what this config is: tsc checks, esbuild emits (tools/server.js
+    // transforms per request for the dev loop, tools/build.js bundles for shipping), and Node 22
+    // strips types natively for everything under tools/. See game-engine docs/TS_MIGRATION.md.
+    "allowImportingTsExtensions": true,
     "target": "es2022",
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -19,7 +24,6 @@
   },
   "include": [
     "types/**/*.d.ts",
-    "src/engine/**/*.js",
-    "src/net/**/*.js"
+    "src/**/*.ts"
   ]
 }
