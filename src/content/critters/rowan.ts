@@ -151,9 +151,12 @@ const kerchief: RigAccessory = { attach: 'torso', draw(ctx, rig) {
 export const build = critterBuild({
   palette: { skin: SKIN, hair: HAIR, belly: JACKET, secondary: TROUSERS, shorts: TROUSERS, accent: BEETROOT, dark: CLOG },
   sleeveHex: JACKET,
-  // 61 px standing: the tallest torso-and-legs in the cast under a 13 px head, because the boss stands a little
-  // taller than the crew, and a neck of 2 so a line of skin shows between the collar and the chin
-  proportions: { headR: 13, neck: 2, torsoW: 24, torsoH: 18, hip: 20, handR: 4.5, upperLeg: 7, lowerLeg: 7, footL: 9, shoulderX: 8 },
+  // 76 px standing, a quarter taller than the tallest critter (Barley, 64): an adult among the animals, on legs
+  // and a torso a third longer than the chibi reference and arms to match, under a 14 px head so the body still
+  // sits in the cast's 1.9..2.8 heads band (2.71). tools/art-check.js carries the height exception by name. The
+  // torso stays 24 wide, narrower than Barley's 28: tall and lean, not big. A neck of 4 so a line of skin shows
+  // between the collar and the chin.
+  proportions: { headR: 14, neck: 3, torsoW: 24, torsoH: 22, hip: 20, upperArm: 10, lowerArm: 9, handR: 4.8, upperLeg: 11, lowerLeg: 11, footL: 10, shoulderX: 8 },
   ears: 'none', nose: false, tail: 'none', boots: CLOG,
   // eyes on the critter row (eyeY 0, not the default -2) so the hat band clears the brows by a pixel (hatY)
   face: { eyeY: 0, whitesAlways: true },
@@ -167,19 +170,19 @@ export const build = critterBuild({
 const OFF = { armL: [-10, 14] };
 export const anims = makeCritterAnims({
   // The signature: a taste from the spoon. The hand comes up level with the mouth and a hand's width in front of
-  // it (armR [110, 50] puts the fist ~15 px forward of the lips at chin height on this rig), and the spoon is
-  // turned BACK along the hand (weapon -110: the spoon's limb angle is the hand's 160 minus that, ~270, pointing
-  // at the mouth) so its bowl lands on the lips instead of poking forward the way the shared `eat` holds an
-  // apple. Eyes shut to savour it, then two nods with a smile: the verdict every plate on this truck waits for.
+  // it (armR [100, 60] on this rig's 10 + 9 arm puts the fist ~15 px forward of the lips at chin height), and the
+  // spoon is turned BACK along the hand (weapon -114: the spoon's limb angle is the hand's ~156 minus that, ~270,
+  // pointing at the mouth) so its bowl lands on the lips instead of poking forward the way the shared `eat` holds
+  // an apple. Eyes shut to savour it, then two nods with a smile: the verdict every plate on this truck waits for.
   taste: { loop: false, frames: [
-    F(8, { armR: [72, 40], ...OFF, torso: -2, head: 2, weapon: -40, face: 'neutral' }, { ease: 'in' }),
-    F(6, { armR: [112, 50], ...OFF, torso: -4, head: 6, weapon: -110, face: 'closed' }, { ease: 'overshoot' }),
-    F(14, { armR: [110, 50], ...OFF, torso: -4, head: 8, weapon: -110, face: 'closed' }),
-    // the nod: the spoon turns a shade further back (-130) so its bowl drops to the chin as the head comes down,
+    F(8, { armR: [66, 44], ...OFF, torso: -2, head: 2, weapon: -40, face: 'neutral' }, { ease: 'in' }),
+    F(6, { armR: [102, 60], ...OFF, torso: -4, head: 6, weapon: -114, face: 'closed' }, { ease: 'overshoot' }),
+    F(14, { armR: [100, 60], ...OFF, torso: -4, head: 8, weapon: -114, face: 'closed' }),
+    // the nod: the spoon turns a shade further back (-134) so its bowl drops to the chin as the head comes down,
     // instead of riding up across the nose - nothing crosses the face (ART_STYLE 0.7)
-    F(6, { armR: [104, 46], ...OFF, torso: -2, head: 14, weapon: -130, face: 'happy' }, { ease: 'inout' }),
-    F(6, { armR: [104, 46], ...OFF, torso: -2, head: 4, weapon: -130, face: 'happy' }, { ease: 'inout' }),
-    F(8, { armR: [56, 40], ...OFF, torso: 0, head: 0, weapon: -30, face: 'happy' }, { ease: 'out' }),
+    F(6, { armR: [96, 56], ...OFF, torso: -2, head: 14, weapon: -134, face: 'happy' }, { ease: 'inout' }),
+    F(6, { armR: [96, 56], ...OFF, torso: -2, head: 4, weapon: -134, face: 'happy' }, { ease: 'inout' }),
+    F(8, { armR: [52, 40], ...OFF, torso: 0, head: 0, weapon: -30, face: 'happy' }, { ease: 'out' }),
   ] },
 });
 

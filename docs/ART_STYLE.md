@@ -72,9 +72,10 @@ in §12. **Canonical reference rig: Barley** (`content/critters/barley.js`).
 | **Sorrel** | field mouse | the chef — CHOP / MIX | 48 / 11 | smallest body under a puffed toque, big round ears, thin rose tail | `#E2DDEA` (.88) | `#7A6A8C` | `#D9A2AE` (rose) | `#E2DDEA` | `#4A3F6B` | white toque with a 4 px blackberry band; paring knife |
 | **Chicory** | brown hare | the driver — DRIVE / HONK | 56 / 13 | 16 px upright ears with dark tips, flat cap + goggles, cream scarf | `#6B5241` (.34) | `#3A2B22` | `#EBD9B4` | `#6B5241` | `#8C6E48` | goggles slide onto the eyes on `hurt`; bulb horn |
 | **Cress** | pond frog | the forager — GATHER / CAST | 57 / 13 | wide head with two eye domes on top, long legs and big feet, straw sunhat | `#3F7D3B` (.39) | `#2A5A2A` | `#CFE3A6` | `#3F7D3B` | `#2F5F7A` | straw hat with a plum band; dark-willow basket on the hip |
-| **Rowan** | human | the head chef — TASTE / ORDER | 61 / 13 | the tallest toque in the cast, straight-sided and pleated, on a round skull with no muzzle, no animal ears and no tail; chef's whites under the apron | skin `#603A28` (.26) | hair `#BFB7AA` (silver) | jacket `#F4F0E6` | `#515A68` | `#515A68` | beetroot neckerchief and hat band (the truck's own body colour: the owner wears the livery); a wooden spoon |
+| **Rowan** | human | the head chef — TASTE / ORDER | 76 / 14 | the tallest toque in the cast, straight-sided and pleated, on a round skull with no muzzle, no animal ears and no tail; chef's whites under the apron | skin `#603A28` (.26) | hair `#BFB7AA` (silver) | jacket `#F4F0E6` | `#515A68` | `#515A68` | beetroot neckerchief and hat band (the truck's own body colour: the owner wears the livery); a wooden spoon |
 
-Heights are the shipped rig's (`tools/art-check.js` holds the cast to a 46–68 px band): the two small critters
+Heights are the shipped rig's (`tools/art-check.js` holds the critters to a 46–68 px band; the human alone may
+stand to 78, an adult among the animals at a quarter over Barley): the two small critters
 grew a couple of pixels in the torso so the apron — the player's own colour — is not swallowed by the head.
 Two light furs and two dark ones, so the four aprons (the player colour, L .54–.64) clear every fur by value: wool
 .29+, mouse .27+, hare .37+, frog .28+. Sheep and mouse are both pale and are told apart by silhouette (wool
@@ -144,7 +145,8 @@ out at about a quarter of the torso width, not the humanoid rig's 2 px, so both 
 edges and neither crosses the apron — the apron is the player's identity and nothing may lie across it.
 Height = `upperLeg + lowerLeg + footH − 2 + torsoH − 2 + neck + 2·headR`. Species vary within: the hungry one
 headR 14–16 / torsoW 28 (the widest), the chef headR 11–12
-(smallest body, tallest hat), ears add 8–18 px above the skull. `art-check` holds height 46..68 and 1.9..2.8 heads.
+(smallest body, tallest hat), ears add 8–18 px above the skull. `art-check` holds height 46..68 and 1.9..2.8 heads
+(the human head chef stands 76 on a 14 px head, 2.7 heads: longer legs, torso and arms, not a bigger sprite).
 Paws `handR ≥ 0.33·headR` so they read from across the screen. Draw scales: 1× in mini-games and the kitchen,
 0.5× as the map's window busts, 2× on cards and the title, 2.5× on select busts.
 

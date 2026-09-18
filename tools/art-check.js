@@ -38,12 +38,13 @@ for (const c of CRITTERS) {
   for (const k of ['name', 'role', 'species', 'build', 'anims']) if (!c[k]) err(S, 'registry/shape', `missing ${k}`);
   if (!c.build) continue;
   const b = c.build, pal = b.palette || {};
+  /** The one human in the cast: a jacket for a body and an adult's height (see the two rules that read it). */
+  const human = c.species === 'human';
   if (b.outline !== INK) err(S, 'palette/outline', `outline ${b.outline} is not the game ink ${INK}`);
   for (const k of ['skin', 'hair', 'belly', 'primary', 'secondary', 'shorts', 'accent', 'dark']) if (!pal[k]) err(S, 'palette/slots', `palette.${k} missing`);
   // A human wears a jacket: the upper arm is its sleeve (critterBuild's `sleeveHex`) and the apron sits on its
   // whites, which the build carries in `belly` (the slot a critter's light torso front takes). Everything else
   // about the ladder is the same rule measured against the same slot, so `body` is the only thing that branches.
-  const human = c.species === 'human';
   if (pal.sleeve && pal.sleeve !== pal.skin && !human) warn(S, 'palette/sleeve', 'sleeve should equal skin: a critter\'s arms are fur (critterBuild sets it)');
   // The apron is the PLAYER SPOT (ART_STYLE section 4): primary is set per seat to PLAYER_COLORS[slot], so the fur it
   // sits on must clear all four hexes BY VALUE ALONE (measured: wool .29+, mouse .27+, hare .37+, frog .28+,
@@ -61,7 +62,11 @@ for (const c of CRITTERS) {
   const p = { ...CHIBI, ...(b.proportions || {}) };
   const h = p.upperLeg + p.lowerLeg + p.footH - 2 + p.torsoH - 2 + p.neck + p.headR * 2;
   const heads = h / (p.headR * 2);
-  if (h < 46 || h > 68) err(S, 'proportions/height', `standing height ${h} px outside 46..68 (measured reference 56)`);
+  // The critters stand 46..68 (measured reference 56). The one human is an adult among them and stands a quarter
+  // taller than the tallest critter, 76: the band is widened for a human alone, so a critter that creeps up
+  // toward the head chef's height is still caught.
+  const maxH = human ? 78 : 68;
+  if (h < 46 || h > maxH) err(S, 'proportions/height', `standing height ${h} px outside 46..${maxH} (measured reference 56)`);
   if (heads < 1.9 || heads > 2.8) warn(S, 'proportions/heads-tall', `${heads.toFixed(2)} heads tall outside the chibi band 1.9..2.8`);
   if (p.handR < p.headR * 0.33) warn(S, 'proportions/paws', `handR ${p.handR} < 0.33 headR: paws must read from across the screen`);
   // animation table
