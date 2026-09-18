@@ -32,7 +32,11 @@ import { F } from '../../content/critters/common.ts';
 import { makeOrchardLayers, ORCHARD, GRASS_Y, FENCE_Y, BLEED_X, PARALLAX } from '../../art/backgrounds/orchard.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates, RIBBON_BASKET } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
+import { drawControlCard } from '../controlcard.ts';
+import type { CardScheme } from '../controlcard.ts';
 
+/** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
+const SCHEMES: readonly CardScheme[] = Object.freeze(['move']);
 const R = Math.round, TAU = Math.PI * 2, DEG = Math.PI / 180;
 /** Movement: px/frame, and the lane's ends (a basket's width in from each edge). */
 const SPEED = 2.2, X_MIN = 24, X_MAX = 616;
@@ -80,8 +84,15 @@ const SOOT = '#3A3340';
 const FUSE_H = 7;
 /** Where a missed apple lands: in front of the front lane, outside the clean band, above the fence. */
 const APPLE_FLOOR = 330;
-/** The catch box: the basket's drawn rim is 22 px across, so the box is too, and the rows below the rim an apple's bottom counts in (vy < 4 never skips it). */
-const BOX_HALF = 11, BOX_ABOVE = 2, BOX_BELOW = 4, RIM_BELOW_PAW = 8;
+/**
+ * The catch box is the whole critter AND its basket: BODY_HALF either side of the feet and BODY_TOP rows up from
+ * them (plus the BOX_BELOW rows under the feet so a fast apple never skips it), or the basket's rim - BOX_HALF
+ * either side of the rim point RIM_BELOW_PAW under the near paw, from the rig's own proportions, and the rows just
+ * around it. It used to be the rim and nothing else, and a small player could stand right under an apple and watch
+ * it fall past their shoulder: if any part of the critter or the basket is under the apple, the critter has it.
+ * The rim is still where the ring and the +1 are drawn, so the catch still reads as a catch.
+ */
+const BODY_HALF = 22, BODY_TOP = 52, BOX_BELOW = 4, BOX_HALF = 11, BOX_ABOVE = 2, RIM_BELOW_PAW = 8;
 /** The catch beat (basket squash 1.15) and the bump beat (4/10/6 frames of the shared `bump` anim, movement locked). */
 const CATCH_FRAMES = 3, BUMP_FRAMES = 21;
 /** Splats: a missed apple as one inked flat ellipse stepping down a size every 5 frames, gone in 20. */
@@ -173,7 +184,7 @@ function drawSeat(ctx: CanvasRenderingContext2D, seat: OrchardSeat, fill: number
 export interface OrchardSeat extends Seat {
   /** Frames left of the bomb sequence (BOOM_TOTAL..0); the seat neither moves nor catches while it runs. */
   boomT: number;
-  /** Rim x offset from the feet in the catch pose, in screen px; `facing` mirrors it. */
+  /** Rim x offset from the feet in the catch pose, in screen px; `facing` mirrors it. Where the ring is drawn, not the catch test. */
   boxCatchX: number;
   /** Rim y offset from the feet in that pose (negative = above the feet). */
   boxCatchY: number;
@@ -242,6 +253,8 @@ export class OrchardScreen extends Screen {
   declare booms: number;
   /** "3/4" for the clock ticket, rebuilt by setTotal() as the count changes. */
   declare countStr: string;
+  /** What the action key is called on seat 0's device, for the HOW TO PLAY card. */
+  declare cardKey: string;
   /** The round's clock and its ending (game/minigame.ts). */
   declare clock: Clock;
   /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
@@ -284,6 +297,7 @@ export class OrchardScreen extends Screen {
     this.countStr = '0/' + this.target;
     this.clock = makeClock();
     this.fields = [];
+    this.cardKey = game.input.keyText(0, 'action');
   }
 
   override update(): void {
@@ -354,7 +368,9 @@ export class OrchardScreen extends Screen {
         const s = this.seats[k];
         if (s.bumpT > 0 || s.boomT > 0) continue;
         const bx = s.x + s.facing * (s.moving ? s.boxWalkX : s.boxCatchX), by = s.y + (s.moving ? s.boxWalkY : s.boxCatchY);
-        if (a.x < bx - BOX_HALF || a.x > bx + BOX_HALF || bottom < by - BOX_ABOVE || bottom >= by + BOX_BELOW) continue;
+        const onBody = a.x >= s.x - BODY_HALF && a.x <= s.x + BODY_HALF && bottom >= s.y - BODY_TOP && bottom < s.y + BOX_BELOW;
+        const onRim = a.x >= bx - BOX_HALF && a.x <= bx + BOX_HALF && bottom >= by - BOX_ABOVE && bottom < by + BOX_BELOW;
+        if (!onBody && !onRim) continue;
         caught = true;
         a.active = false;
         if (a.kind === RIPE) {
@@ -444,6 +460,7 @@ export class OrchardScreen extends Screen {
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
     drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawEndSign(ctx, this.clock, this.frame);
     if (this.game.options.debug) this.drawBoxes(ctx);
   }
@@ -532,6 +549,7 @@ export class OrchardScreen extends Screen {
     ctx.strokeStyle = UI.red; ctx.lineWidth = 1;
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
+      ctx.strokeRect(s.x - BODY_HALF + 0.5, s.y - BODY_TOP + 0.5, BODY_HALF * 2, BODY_TOP + BOX_BELOW);
       const bx = s.x + s.facing * (s.moving ? s.boxWalkX : s.boxCatchX), by = s.y + (s.moving ? s.boxWalkY : s.boxCatchY);
       ctx.strokeRect(bx - BOX_HALF + 0.5, by - BOX_ABOVE + 0.5, BOX_HALF * 2, BOX_ABOVE + BOX_BELOW);
     }

@@ -38,7 +38,8 @@ npm run dev        # http://localhost:8080
 
 **Four players on one couch.** The keyboard seats two, and a gamepad takes the lowest seat nobody is already on
 the keys for the moment it is pressed — so four pads fill the truck, or two pads either side of the keyboard pair.
-Pick up a controller on the title screen and press A.
+Pick up a controller on the title screen and press A. Every round opens on a HOW TO PLAY card that shows its
+controls as animated keys, so nobody has to read the hint line to know what to do.
 
 | Action | P1 keys | P2 keys | Any seat, on a gamepad |
 |---|---|---|---|

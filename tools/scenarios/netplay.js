@@ -132,7 +132,9 @@ async function pressRight(pages, page, slot, label) {
   const moved = after.map((d, i) => dot(d, slot)[1] - dot(before[i], slot)[1]);
   assert(moved.every((m) => m >= 40), `${label}: the held key moved seat ${slot}'s dot right on every machine (${moved.join()} px)`);
   assert(new Set(moved).size === 1, `${label}: ...by the SAME amount everywhere (${moved.join()})`);
-  const still = after.every((d, i) => d.filter((x) => x[0] !== slot).every((x) => { const b = dot(before[i], x[0]); return b[1] === x[1] && b[2] === x[2]; }));
+  // position only: a seat standing still can now catch an apple that lands on it (the whole body is the catch box),
+  // so its count may tick without anybody touching its keys
+  const still = after.every((d, i) => d.filter((x) => x[0] !== slot).every((x) => dot(before[i], x[0])[1] === x[1]));
   assert(still, `${label}: nobody else's dot moved`);
 }
 

@@ -29,15 +29,19 @@ import { coopLayers, ROWS, NEST_X, NEST_EGG_Y } from '../../art/backgrounds/coop
 import { drawHen } from '../../art/hens.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
+import { drawControlCard } from '../controlcard.ts';
+import type { CardScheme } from '../controlcard.ts';
 import { drawHint } from '../ui.ts';
 
+/** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
+const SCHEMES: readonly CardScheme[] = Object.freeze(['move', 'tap']);
 const R = Math.round;
 /** Movement: px/frame along the lane, and the feet clamp. */
 const SPEED = 2.0, X_MIN = 20, X_MAX = 620;
 /** Seat i stands with its feet at LANE_Y0 - i * LANE_GAP: P1 in front, four lanes 8 px apart so bodies stack. */
 const LANE_Y0 = 316, LANE_GAP = 8;
-/** Eggs: a fixed pool, one laid every 90..150 frames (a nest half the time), plucked within 18 px along the lane. */
-const MAX_EGGS = 8, SPAWN_MIN = 90, SPAWN_MAX = 150, EGG_S = 5, PLUCK_R = 18, REACH_FRAMES = 12;
+/** Eggs: a fixed pool, one laid every 90..150 frames (a nest half the time), plucked from anywhere the critter's body overlaps them (34 px either side of the feet). */
+const MAX_EGGS = 8, SPAWN_MIN = 90, SPAWN_MAX = 150, EGG_S = 5, PLUCK_R = 34, REACH_FRAMES = 12;
 /** At most three nests hold an egg at once: nest eggs share the pool, and six unreachable ones would starve the floor spawns. */
 const NEST_CAP = 3;
 /** Floor eggs land in the band's front rows, where the lanes are, never under the lip. */
@@ -218,6 +222,8 @@ export class CoopScreen extends Screen {
   declare countStr: string;
   /** The hint line along the bottom. */
   declare hint: string;
+  /** What the action key is called on seat 0's device, for the HOW TO PLAY card. */
+  declare cardKey: string;
   /** The round's clock and its ending (game/minigame.ts). */
   declare clock: Clock;
   /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
@@ -261,6 +267,7 @@ export class CoopScreen extends Screen {
     this.total = 0;
     this.countStr = '0/' + this.target;
     this.hint = 'MOVE: LEFT/RIGHT   PLUCK: ' + game.input.keyText(0, 'action');
+    this.cardKey = game.input.keyText(0, 'action');
     this.clock = makeClock();
     this.fields = [];
     // the y-sort's fixed index array: seats, hens, then the floor eggs
@@ -404,6 +411,7 @@ export class CoopScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
     blitAt(ctx, L.rafter.L, 0, L.rafter.y);
     drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
   }

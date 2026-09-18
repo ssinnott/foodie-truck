@@ -37,6 +37,8 @@ import { INGREDIENTS } from '../../content/recipes.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawTicket, drawOrderTicket, drawNamePlate, drawHint, drawStamp, ROW } from '../ui.ts';
 import type { OrderTicketOpts } from '../ui.ts';
+import { drawControlCard } from '../controlcard.ts';
+import type { CardScheme } from '../controlcard.ts';
 import { drawText } from '../../engine/text.ts';
 import { kitchenLayer, ROWS, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.ts';
 import {
@@ -44,6 +46,10 @@ import {
   drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, drawKettleSteam, PLATE, BELL, POT, OVEN,
 } from '../../art/kitchenProps.ts';
 
+/** The HOW TO PLAY card's pictograms per station (game/controlcard.ts): walk, then the station's own verb. */
+const SCHEMES: Record<string, readonly CardScheme[]> = { chop: ['move', 'mash'], mix: ['move', 'hold'], stove: ['move', 'hold'], oven: ['move', 'hold'], plate: ['move', 'tap'] };
+/** Where the HOW TO PLAY card rests in the kitchen: up on the rail between the two papers. */
+const CARD_TOP_Y = 12;
 const R = Math.round;
 const CHOP = 0, MIX = 1, STOVE = 2, OVEN_S = 3, PLATE_S = 4;
 const STATION_IDX = { chop: CHOP, mix: MIX, stove: STOVE, oven: OVEN_S, plate: PLATE_S };
@@ -191,6 +197,10 @@ export class KitchenScreen extends Screen {
   declare custOpts: { facing: number; margin: number };
   /** The hint line under the counter, rebuilt by setHint() as each step comes up. */
   declare hint: string;
+  /** The frame the current step came up on: the HOW TO PLAY card is raised again for every step. */
+  declare stepFrame: number;
+  /** The card's pictograms for the current step. */
+  declare schemes: readonly CardScheme[];
 
   constructor(game: Game) { super(game, 'kitchen'); this.seats = []; this.fields = []; }
 
@@ -239,6 +249,8 @@ export class KitchenScreen extends Screen {
   setHint(): void {
     const id = this.stepIdx < this.steps.length ? STATIONS[this.steps[this.stepIdx]].id : 'plate';
     this.hint = `${HINTS[id]}   (${this.keyName})   WALK: ← →`;
+    this.schemes = SCHEMES[id] || SCHEMES.plate;
+    this.stepFrame = this.frame;
   }
 
   override update(): void {
@@ -413,6 +425,8 @@ export class KitchenScreen extends Screen {
     }
     if (!this.served) this.drawWidget(ctx, st, station);
     this.drawHud(ctx, f);
+    // between the order ticket and the recipe card, clear of the station signs the player is about to read
+    if (!this.served) drawControlCard(ctx, f, f - this.stepFrame, this.schemes, this.keyName, CARD_TOP_Y);
   }
 
   /** The per-frame marks on the stations: only the ones this order uses. */

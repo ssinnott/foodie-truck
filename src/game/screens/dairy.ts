@@ -23,8 +23,12 @@ import { ROWS, SEAT_X, SEAT_PITCH, CHURN_X, dairyLayers } from '../../art/backgr
 import { drawCow, drawStool, drawPail, drawJet, drawChevrons, drawChurn, drawSwallow, TEAT_DX, TEAT_DY, PAIL_H } from '../../art/dairyProps.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
+import { drawControlCard } from '../controlcard.ts';
+import type { CardScheme } from '../controlcard.ts';
 import { drawHint } from '../ui.ts';
 
+/** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
+const SCHEMES: readonly CardScheme[] = Object.freeze(['mash']);
 const R = Math.round;
 
 /**
@@ -228,6 +232,8 @@ export class DairyScreen extends Screen {
   declare countStr: string;
   /** The hint line along the bottom. */
   declare hint: string;
+  /** What the action key is called on seat 0's device, for the HOW TO PLAY card. */
+  declare cardKey: string;
   /** The round's clock and its ending (game/minigame.ts). */
   declare clock: Clock;
   /** The sorted pass's fixed index array: four objects per stall (the cow, its pail, the stool, the milker). */
@@ -279,6 +285,7 @@ export class DairyScreen extends Screen {
     this.total = 0;
     this.countStr = '0/' + this.target;
     this.hint = 'MILK: TAP ' + game.input.keyText(0, 'action') + ' OVER AND OVER';
+    this.cardKey = game.input.keyText(0, 'action');
     this.clock = makeClock();
     // the sorted pass's fixed index array: four objects per stall (the cow, its pail, the stool, the milker)
     const total = n * 4;
@@ -392,6 +399,7 @@ export class DairyScreen extends Screen {
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
     drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
   }

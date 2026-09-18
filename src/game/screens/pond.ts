@@ -32,7 +32,11 @@ import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
+import { drawControlCard } from '../controlcard.ts';
+import type { CardScheme } from '../controlcard.ts';
 
+/** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
+const SCHEMES: readonly CardScheme[] = Object.freeze(['tap', 'mash']);
 const R = Math.round;
 const IDLE = 0, CAST = 1, WAIT = 2, BITE = 3, HOOKED = 4;
 const STATE_NAMES = Object.freeze(['idle', 'cast', 'wait', 'bite', 'hooked']);
@@ -138,6 +142,8 @@ export class PondScreen extends Screen {
   declare countStr: string;
   /** The one-line control prompt under the panel, built once in enter() off seat 0's key. */
   declare hint: string;
+  /** What the action key is called on seat 0's device, for the HOW TO PLAY card. */
+  declare cardKey: string;
 
   constructor(game: Game) { super(game, 'pond'); this.seats = []; this.sum = []; }
 
@@ -154,6 +160,7 @@ export class PondScreen extends Screen {
     this.countStr = '0/' + this.target;
     const key = game.input.keyText(0, 'action');
     this.hint = `CAST: ${key}   REEL IN: TAP ${key}`;
+    this.cardKey = game.input.keyText(0, 'action');
     this.seats = makeSeats<PondSeat>(game, () => ROWS.feet);
     const shift = R((SEAT_X.length - this.seats.length) * SEAT_PITCH / 2);
     for (let i = 0; i < this.seats.length; i++) {
@@ -308,6 +315,7 @@ export class PondScreen extends Screen {
     // the reel gauges over the biting floats, after everything: the one thing a tapping player is watching
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === BITE) this.drawReel(ctx, this.seats[i]);
     drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
   }

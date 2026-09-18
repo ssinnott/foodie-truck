@@ -39,8 +39,12 @@ import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, PlateStack, Seat } from '../minigame.ts';
+import { drawControlCard } from '../controlcard.ts';
+import type { CardScheme } from '../controlcard.ts';
 import { drawHint } from '../ui.ts';
 
+/** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
+const SCHEMES: readonly CardScheme[] = Object.freeze(['move', 'hold']);
 const R = Math.round, DEG = Math.PI / 180;
 
 // ---------------------------------------------------------------- the numbers
@@ -78,8 +82,8 @@ const POUR_MAX = 2, TELEGRAPH = 24, POUR_FRAMES = 110, WAKE_MIN = 70, WAKE_MAX =
  * round even camping under one spout. A four-seat party shares the same 2400 frames and the same two live spouts,
  * which is what keeps a full room co-operative rather than four people racing each other.
  */
-/** A seat is under a chute within this of its centre: 36 px of standing room, a little wider than a critter. */
-const CATCH_HALF = 18;
+/** A seat is under a chute within this of its centre: 72 px of standing room, so any part of the critter under the spout counts. */
+const CATCH_HALF = 36;
 /**
  * The sack. FILL_RATE is 1/90, so an empty sack takes 90 frames (1.5 s) under a pour - the beat the whole scene is
  * cut to, and comfortably inside one 110-frame pour. FULL is the brim, where the sack ties itself off; BRIM_BAND is
@@ -343,6 +347,8 @@ export class MillScreen extends Screen {
   declare countStr: string;
   /** The hint line under the floor, built once in enter() with the seat's own action key. */
   declare hint: string;
+  /** What the action key is called on seat 0's device, for the HOW TO PLAY card. */
+  declare cardKey: string;
   /** The round clock and its end sign (game/minigame.ts). */
   declare clock: Clock;
   /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
@@ -405,6 +411,7 @@ export class MillScreen extends Screen {
     this.total = 0;
     this.countStr = '0/' + this.target;
     this.hint = 'MOVE: ARROWS   FILL: HOLD ' + game.input.keyText(0, 'action');
+    this.cardKey = game.input.keyText(0, 'action');
     this.clock = makeClock();
     this.fields = [];
     this.tagStack = { n: 0, v: new Int16Array(8 * 4) };
@@ -554,6 +561,7 @@ export class MillScreen extends Screen {
     blitAt(ctx, L.beam.L, 0, L.beam.y);                 // the ceiling boards: the gear's teeth run up into them
     this.drawPlates(ctx);
     drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
   }

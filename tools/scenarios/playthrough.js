@@ -198,7 +198,7 @@ async function pickApples(api, page) {
 // ---------------------------------------------------------------- the coop, played
 
 /** Plucking reach along the lane (game/screens/coop.js PLUCK_R). */
-const PLUCK_R = 18;
+const PLUCK_R = 34;
 function nearest(list, x) {
   let best = null, bd = 1e9;
   for (const p of list) { const d = Math.abs(p[0] - x); if (d < bd) { bd = d; best = p; } }

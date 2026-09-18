@@ -40,8 +40,12 @@ import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, PlateStack, Seat } from '../minigame.ts';
+import { drawControlCard } from '../controlcard.ts';
+import type { CardScheme } from '../controlcard.ts';
 import { drawHint } from '../ui.ts';
 
+/** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
+const SCHEMES: readonly CardScheme[] = Object.freeze(['move', 'mash']);
 const R = Math.round;
 /** Per-seat state. A seat in PULL is inside a beat and its stick is ignored. */
 const IDLE = 0, GRIP = 1, PULL = 2;
@@ -76,16 +80,17 @@ const ROOT_Y = ROWS.root;
 const MAX_TOPS = 8, SEED_TOPS = 7, SPAWN_MIN = 70, SPAWN_MAX = 120;
 const TOP_X_MIN = 44, TOP_X_MAX = 596, MIN_GAP = 42, PLANT_TRIES = 8;
 /**
- * The grip window: anything whose crown is within REACH px of the feet, either side. It is symmetric on purpose -
- * a window biased GRIP_DX in front of the facing was written first and thrown out, because a critter that had just
- * walked LEFT past a top could not then take hold of the top it was standing on without tapping right first, which
- * is a fiddle nobody should have to learn in a cozy game. Facing is decided BY the grip instead (tryGrip).
- * REACH 16 gives a 32 px window, the same order as the coop's 14 px pluck radius, and MIN_GAP (42) is wider than
- * it, so two tops are never both takeable from one spot.
+ * The grip window: anything whose crown is within REACH px of the feet, either side - a whole critter's width, so
+ * any top the body overlaps can be taken. It is symmetric on purpose: a window biased in front of the facing was
+ * written first and thrown out, because a critter that had just walked LEFT past a top could not then take hold of
+ * the top it was standing on without tapping right first. Facing is decided BY the grip instead (tryGrip), and two
+ * tops inside the window go to the nearer one.
  *
- * GRIP_DX survives as the POSE's offset: where the paws land relative to the feet once the seat has hold.
+ * GRIP_DX is the POSE's offset: where the paws land relative to the feet once the seat has hold. A seat that took
+ * hold from the edge of its window SLIDES to that spot at GRIP_SLIDE px/frame under the grip anim, rather than
+ * jumping there in one frame.
  */
-const GRIP_DX = 10, REACH = 16;
+const GRIP_DX = 10, REACH = 34, GRIP_SLIDE = 4;
 
 /**
  * THE GAUGE. A pull is PULL_PRESSES taps of `action` after the grip, each one worth PULL_STEP of the bar's
@@ -170,6 +175,8 @@ export interface GardenSeat extends Seat {
   top: number;
   /** Frames since the last press on this grip, against GRIP_TIMEOUT. */
   grip: number;
+  /** Where the feet are sliding to while gripping: GRIP_DX back from the top. */
+  gripX: number;
   /** The gauge, 0..GAUGE_UNITS: PULL_STEP per press, the root out at the top. */
   pull: number;
   /** Scratch for the trug's screen point, refilled by jointScreen() on every drawSeat. */
@@ -261,6 +268,8 @@ export class GardenScreen extends Screen {
   declare countStr: string;
   /** The hint line under the row, built once in enter() with the seat's own action key. */
   declare hint: string;
+  /** What the action key is called on seat 0's device, for the HOW TO PLAY card. */
+  declare cardKey: string;
   /** The round clock and its end sign (game/minigame.ts). */
   declare clock: Clock;
   /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
@@ -291,7 +300,7 @@ export class GardenScreen extends Screen {
       // note over ITEMS).
       s.rig.weapon = GARDEN_TRUG as RigWeapon; s.rig.trugCount = 0;
       s.player.setOverlay(GARDEN_ANIMS);
-      s.state = IDLE; s.t = 0; s.top = -1; s.grip = 0; s.pull = 0;
+      s.state = IDLE; s.t = 0; s.top = -1; s.grip = 0; s.pull = 0; s.gripX = s.x;
       s.trugPt = { x: s.x, y: s.y - 18 };
       seatAnim(s, 'carry');
       // four people working a row, not one pose printed four times: each seat starts its breath a beat later
@@ -318,6 +327,7 @@ export class GardenScreen extends Screen {
     this.pulls = 0;
     this.countStr = '0/' + this.target;
     this.hint = 'MOVE: LEFT/RIGHT   PULL: TAP ' + game.input.keyText(0, 'action') + ' OVER AND OVER';
+    this.cardKey = game.input.keyText(0, 'action');
     this.clock = makeClock();
     this.fields = [];
     // four name plates and, above each, at most one gauge
@@ -404,8 +414,10 @@ export class GardenScreen extends Screen {
     }
   }
 
-  /** A seat with hold of a top: every press is a tug on the gauge, and GRIP_TIMEOUT frames without one lets go. */
+  /** A seat with hold of a top: slide the feet in, every press is a tug on the gauge, and GRIP_TIMEOUT frames without one lets go. */
   stepGrip(s: GardenSeat, pressed: boolean): void {
+    const dx = s.gripX - s.x;
+    if (dx > GRIP_SLIDE) s.x += GRIP_SLIDE; else if (dx < -GRIP_SLIDE) s.x -= GRIP_SLIDE; else s.x = s.gripX;
     if (pressed) { this.tug(s); return; }
     if (++s.grip >= GRIP_TIMEOUT) this.letGo(s);
   }
@@ -424,13 +436,12 @@ export class GardenScreen extends Screen {
     const t = this.tops[best];
     t.held = 1;
     s.state = GRIP; s.top = best; s.grip = 0; s.pull = 0;
-    // and the step INTO the row: face the top, then plant the feet GRIP_DX back from it. The grip pose's paws land
-    // at a fixed offset from the feet, so without this a seat that took hold from the edge of its window spent the
-    // whole tug gripping air beside the plant. Worst case the step is GRIP_DX px (a top directly underfoot) - five
-    // frames' walk - and it lands under the grip anim's own 9-frame anticipation, which is what hides it.
+    // and the step INTO the row: face the top, then slide the feet to GRIP_DX back from it (stepGrip). The grip
+    // pose's paws land at a fixed offset from the feet, so without this a seat that took hold from the edge of its
+    // window spent the whole tug gripping air beside the plant.
     s.facing = t.x >= s.x ? 1 : -1;
-    s.x = t.x - s.facing * GRIP_DX;
-    if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
+    s.gripX = t.x - s.facing * GRIP_DX;
+    if (s.gripX < X_MIN) s.gripX = X_MIN; else if (s.gripX > X_MAX) s.gripX = X_MAX;
     s.moving = false;
     seatAnim(s, 'grip', true);
   }
@@ -521,6 +532,7 @@ export class GardenScreen extends Screen {
     particles.draw(ctx, null, 'front');
     this.drawPlates(ctx);
     drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
     if (this.game.options.debug) this.drawWindows(ctx);
@@ -601,7 +613,7 @@ export class GardenScreen extends Screen {
     f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pulls);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      f.push(s.x, s.facing, s.count, s.state, s.t, s.grip, s.pull, s.top, s.moving ? 1 : 0);
+      f.push(s.x, s.facing, s.count, s.state, s.t, s.grip, s.gripX, s.pull, s.top, s.moving ? 1 : 0);
     }
     for (let i = 0; i < this.tops.length; i++) {
       const t = this.tops[i];

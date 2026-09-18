@@ -91,6 +91,15 @@ Common rules: side view, feet on a scene-specific floor line, one critter per se
 drawn as a paper timer, the target count from the order; the scene ends with a sign dropping in (`APPLES: 12`)
 and a 60-frame hold, then `run.gather` and back to the map. All randomness through `rng` inside `update()`.
 
+**Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
+kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
+part of the critter overlaps the thing, the seat can use it. Nobody has to find an exact spot.
+
+**Every round opens on a HOW TO PLAY card** (`game/controlcard.ts`): a paper ticket under the clock for 210
+frames, then it slides away, showing the round's controls as animated keycaps rather than words — two arrow keys
+pressed by turns (MOVE), the action key pressed once (TAP), pressed over and over with motion marks (TAP TAP TAP)
+or held down with a bar filling under it (HOLD). The key is labelled with the seat's own binding.
+
 The whole game is built on **three inputs and nothing else**: move left and right, tap ACTION over and over, and
 hold ACTION down. There are no timing windows, no beats to hit and no wrong buttons — a young player can never lose
 what they have gathered, and the 40-second clock is a backstop rather than an opponent. The only hazards left are
@@ -98,7 +107,8 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
 
 - **Orchard — CATCH** (*move*). Move left/right with a basket held in front. Apples (14 px, so they read from
   across a room) spawn above the canopy every 30–60 frames at a seeded x and fall at 1.4–2.4 px/frame with a small
-  sway; caught at the basket's top edge. A missed apple splats on the grass and costs nothing. One in ten is a
+  sway; caught the moment it overlaps the critter's body (the ring and the +1 are drawn at the basket's rim). A missed
+  apple splats on the grass and costs nothing. One in ten is a
   **wormy** apple: catching it is the bump beat and nothing more. One in ten is a **bomb** — a ripe apple with a
   burning fuse — and catching it is the scene's joke: the critter holds it up and watches the fuse burn for 40
   frames, it goes off in smoke and embers, and the critter stands blackened and dazed for 90 frames before shaking
@@ -109,7 +119,7 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   twelve times reels it in: every press is one turn of the reel, drawn as a bar over the float. A press during the wait
   does nothing.
 - **Coop — COLLECT** (*move + tap*). Walk left/right along a depth lane; eggs appear in nests and on the floor in
-  front of the lanes every 90–150 frames; `action` within 18 px along the lane plucks one (a 12-frame reach up into
+  front of the lanes every 90–150 frames; `action` with the egg anywhere under the critter (34 px either side) plucks one (a 12-frame reach up into
   a nest from the gold ring on the floor under it, a 12-frame crouch to a floor egg). Five hens potter about the
   back of the floor and touch nobody.
 - **Dairy — PUMP** (*tap*). A stool and a cow per seat, nobody moves. Every `action` press is a squirt; twelve fill a
@@ -117,22 +127,23 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   never kick.
 - **Mill — FILL** (*move + hold*). Four chutes along the back wall wake on a seeded 70–130 frame timer, at most two
   at once: 24 frames of telegraph, then 110 frames of pouring. Seats walk left and right on their own depth lanes;
-  standing within 18 px of a pouring chute with `action` **held** fills the sack at 1/90 per frame (1.5 s from
+  standing anywhere under a pouring chute (36 px either side) with `action` **held** fills the sack at 1/90 per frame (1.5 s from
   empty). The moment it reaches the brim it ties itself off (+1 flour, an 18-frame tie beat, a fresh sack);
   letting go early **keeps** the part sack to top up at the next chute. Nothing bursts.
-- **Hives — CREEP** (*move + hold*). Five straw skeps on a bench; **holding** `action` within 16 px of a full one
+- **Hives — CREEP** (*move + hold*). Five straw skeps on a bench; **holding** `action` anywhere over a full one (36 px either side)
   for 60 frames dips it — a strand of honey climbs the dipper and a bar fills over the skep — then +1 honey, and
   that skep is empty for 150 frames, so the party is pushed along the bench. Letting go early costs nothing. The
   bees drone over the bench and never turn.
 - **Market garden — PULL** (*move + tap*). Leafy tops stand in the bed (seven at the start, more every 70–120
-  frames up to eight, never closer than 42 px); every one is a carrot. `action` within 16 px grips a top and opens
+  frames up to eight, never closer than 42 px); every one is a carrot. `action` with a top anywhere under the critter (34 px either side) grips it and opens
   a pull gauge above that seat; each further `action` press fills it a twelfth, and the twelfth brings the root out
   (+1 carrot, a 14-frame pull). 150 frames without a press lets go at no cost.
 
 ## 6. The kitchen
 
 The truck interior, side-on, camera locked. Stations left to right (`content/places.js STATIONS`): CHOP, MIX, STOVE,
-OVEN, PLATE. A critter stands at one station at a time and walks between them (left/right). The order's `steps`
+OVEN, PLATE. A critter stands at one station at a time (within 40 px of its spot, so any overlap counts) and walks
+between them (left/right). The HOW TO PLAY card is raised again for every new step with that station's verb. The order's `steps`
 are worked in order; the recipe card shows them with checks. Interactions:
 
 | Station | Verb | Rule |

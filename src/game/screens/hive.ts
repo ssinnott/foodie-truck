@@ -29,8 +29,12 @@ import { hiveLayers, HIVE, ROWS, SKEP_X, CRATE_X } from '../../art/backgrounds/h
 import { drawSkep, drawSwarm, drawHoneyCrate, drawHoneyStrand, HONEY_DIPPER, SWARM_SHAPE, SWARM_SPIN, SKEP_H } from '../../art/hiveProps.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
+import { drawControlCard } from '../controlcard.ts';
+import type { CardScheme } from '../controlcard.ts';
 import { drawHint, drawBar } from '../ui.ts';
 
+/** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
+const SCHEMES: readonly CardScheme[] = Object.freeze(['move', 'hold']);
 const R = Math.round;
 /**
  * CREEP: px/frame, and the lane's ends. The orchard runs at 2.2 and the coop at 2.0; this scene is named for moving
@@ -43,13 +47,12 @@ const LANE_Y0 = 322, LANE_GAP = 8;
 /** The skeps stand on the bench plank (art/backgrounds/hive.js ROWS.bench); the sparkle rides above the knob. */
 const SKEP_TOP = ROWS.bench - SKEP_H, CRATE_Y = ROWS.bench;
 /**
- * The dip. REACH is half the drawn skep (18 px) less a couple, so a seat has to be standing essentially under its
- * doorway - the backdrop wears a scuffed dip spot at every SKEP_X exactly that wide, which is the only teaching
- * this rule gets. DIP_HOLD is how long `action` is held for the honey to come: 60 frames, a full second, long
+ * The dip. REACH is a whole critter's width either side of the skep: anywhere the body overlaps the skep, the
+ * dipper reaches it, so nobody has to find the exact spot under the doorway. DIP_HOLD is how long `action` is held for the honey to come: 60 frames, a full second, long
  * enough to be a hold rather than a tap and short enough that a child never wonders if it is working - the strand
  * of honey climbing onto the dipper and the bar over the skep both say so from the first frame.
  */
-const REACH = 16, DIP_HOLD = 60;
+const REACH = 36, DIP_HOLD = 60;
 /**
  * A dipped skep is empty for this long. 150 frames is a couple of walks along the bench, so the party is pushed
  * ALONG the bench rather than parked at one skep, which is the movement this mini-game is made of.
@@ -179,6 +182,8 @@ export class HiveScreen extends Screen {
   declare countStr: string;
   /** The hint line along the bottom. */
   declare hint: string;
+  /** What the action key is called on seat 0's device, for the HOW TO PLAY card. */
+  declare cardKey: string;
   /** The round's clock and its ending (game/minigame.ts). */
   declare clock: Clock;
   /** The checksum scratch array, refilled by checksumFields(); never reallocated. */
@@ -215,6 +220,7 @@ export class HiveScreen extends Screen {
     this.total = 0;
     this.countStr = '0/' + this.target;
     this.hint = 'MOVE: LEFT/RIGHT   DIP: HOLD ' + game.input.keyText(0, 'action') + ' AT A HIVE';
+    this.cardKey = game.input.keyText(0, 'action');
     this.clock = makeClock();
     this.fields = [];
   }
@@ -362,6 +368,7 @@ export class HiveScreen extends Screen {
     // scores must never be hidden by a name card, and the strand's whole job is to be read
     for (let i = 0; i < this.seats.length; i++) this.drawStrand(ctx, this.seats[i]);
     drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
   }
