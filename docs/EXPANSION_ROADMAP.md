@@ -12,7 +12,9 @@
 > were wrong about the game as it stood: it counted a day's six orders as six recipes, promised that the existing
 > scenarios would be unmoved, and got the weather odds, the save record's own example, the session length and the
 > cost of the wire wrong besides. Each is corrected in place and marked **[corrected]**, so what the plan got wrong
-> is on the record rather than quietly rewritten.
+> is on the record rather than quietly rewritten. Where the thing BUILT differs from the thing planned - a page
+> drawn more plainly, a menu row in another place, a test that turned out not to be needed - the cell says
+> **[built as]** and describes what shipped. 8 of the first and 7 of the second.
 
 The game is wide and flat. A run is one day (`run.ts`: "when the third line has been served the day is done — that
 is the game's end"), about half an hour, and then the title screen. Three things follow from that:
@@ -42,8 +44,9 @@ touches the rules the whole game stands on:
 
 ## A. The Week
 
-> **Done.** Built as described, with one correction and one change of approach, both marked below. The numbers are
-> in `docs/GDD.md` section 3; the day shapes are `game/run.ts DAY_SHAPES` and the save record is `game/week.ts`.
+> **Done.** Built as described, with one correction and one change of approach, both marked below, and the test
+> row of its cost table rewritten to what the work actually took. The numbers are in `docs/GDD.md` section 3; the
+> day shapes are `game/run.ts DAY_SHAPES` and the save record is `game/week.ts`.
 
 A run becomes **five days** instead of one, resumable between them. `dayComplete()` stops being the end of the
 game; `weekComplete()` becomes it. The closed board stops being terminal and becomes the hinge between days.
@@ -167,17 +170,19 @@ The week costs **one byte on the wire and a version bump**, and nothing else:
 | The save record | a new `game/week.ts` (the bindings' shape), `main.ts` hook |
 | `CONTINUE` | `game/screens/title.ts` |
 | The wire | `net/protocol.ts` (the byte, `PROTOCOL_VERSION` 3), **`net/session.ts`** (`StartParams`, `beginMatch`, `applyStart`, the lobby), `net/checksum.ts`, `tools/nettest.js`, `docs/MULTIPLAYER.md` [corrected: the first draft left `session.ts` out, and it owns the START parameters end to end] |
-| Tests | a `week` scenario (five days head to head, asserting each shape), `playthrough` extended to the day-2 board, two golden frames (the week strip, the fête board) |
+| Tests | **[built as]** `week`, `weekRollover`, `weekResume`, `weekOnlineGuard` and `weekFresh` scenarios, `netweek` for the wire, `stageWeekEnd` for the last night, plus `stage`, `stageClosing`, `twists`, `playthrough` and the map's `weather` all taught to read the shape of the day they stand in — and screenshots of the strip and the fête board. Not golden frames: `tools/golden.js` fingerprints the art and engine layer, which none of this touches, and it came out identical. |
 | Docs | `docs/GDD.md` section 3 rewritten around the week; section 10's `stage` entry |
 
 ---
 
 ## B. The Recipe Book
 
-> **Done.** Built as described. The numbers are in `docs/GDD.md` section 12; the store is `game/book.ts`, the
-> screen is `game/screens/book.ts`, and the invariant is enforced by `tools/check.js` and proved from outside by
-> the `bookInvariant` playtest scenario. The "no new art" claim held: `art/dishes.ts` has a distinct drawing for
-> all sixty-three recipes, checked rather than assumed.
+> **Done**, but not in every particular: the table below was the plan, and three of its cells describe a page
+> richer than the one that shipped. They are corrected in place and marked **[built as]**. `docs/GDD.md` section
+> 12 describes what actually exists and wins on any disagreement. The store is `game/book.ts`, the screen is
+> `game/screens/book.ts`, and the invariant is enforced by `tools/check.js` and proved from outside by the
+> `bookInvariant` playtest scenario. The "no new art" claim held: `art/dishes.ts` has a distinct drawing for all
+> sixty-three recipes, checked rather than assumed.
 
 A book that **records and never unlocks**. Sixty-three dishes, forty ingredients, twelve landmarks and three
 diners are already in the game and a player has no way to see that they exist. The book is where the day's real
@@ -204,11 +209,11 @@ write, at the same screen boundary, as the week's.
 
 | Page | Records | Drawn as |
 |---|---|---|
-| **The dishes** | Per recipe: times cooked, best stars, the day it was first served | A card per recipe in `ORDERS` order. A dish you have cooked is its own `art/dishes.ts` picture **inked in**, named, with its ingredients under it. One you have not is the same card **in pencil**: the dish's silhouette, its name blanked to `- - -`, its ingredient glyphs greyed. No new art — every dish drawing already exists. |
-| **The diners** | Per `DINERS` id: times fed, the dish they have ordered most | Their portrait from `content/critters/customers.ts` with their tally, on the back pages. |
+| **The dishes** | Per recipe: times cooked, best stars, the day it was first served | A card per recipe in `ORDERS` order, four across and three down. A dish you have cooked is its own `art/dishes.ts` picture **inked in**, named, **[built as]** with its tally and best rating under it and the day it was first served — not its ingredients, which no card draws. One you have not is the same card **in pencil**: the picture faded back to a shape, its name blanked to `- - -`. No new art — every dish drawing already exists. |
+| **The diners** | Per `DINERS` id: times fed, the dish they have ordered most | **[built as]** their NAME from `content/critters/customers.ts` with their tally, as text rows on a slate. The plan said a portrait; the built page draws none, and three busts at this size would have been smaller than the name beside them. |
 | **The larder** | Per ingredient: times gathered | The forty glyphs from `art/food.ts` in a grid, greyed until gathered once. |
 | **The road** | Per landmark: visits | Twelve rows, the map's own names. |
-| **The header** | Weeks finished, dishes served all told | `23 OF 63 DISHES` is the number the closed board has never been able to print. |
+| **The strap** | **[built as]** recipes cooked out of the whole menu | `23 OF 63 COOKED` is the number the closed board has never been able to print. It counts DISTINCT recipes ever cooked, not servings; the record also keeps days of trading and weeks finished, but the screen does not print them. |
 
 The counters saturate rather than overflow, and an unknown recipe id in a stale record is dropped on load rather
 than throwing: a book written by a build with sixty-three recipes must load on a build with seventy, and the
@@ -222,11 +227,13 @@ it can never be open while a run is live.
 
 **The title menu is the one layout problem.** `ROWS` was `PLAY / ONLINE / CONTROLS / CREW / SOURCE` and the box
 was sized for five. The week adds `CONTINUE` and the book adds `BOOK`, which is seven. `CONTINUE` replaces `PLAY`
-in place — they are the same row in two states — and `BOOK` sits next to `CREW`, which makes six.
+in place — they are the same row in two states — and `BOOK` joins the list, which makes six.
 
-**Built as:** six rows, and the A-frame grew from 104 px to 122 and moved up 14, because six rows at the menu's
-14 px pitch do not clear 104 and a row clipped by its own frame is worse than a slightly taller A-frame. The
-legs land within 4 px of where they did, and the board still starts where the crew lineup stops.
+**Built as:** `PLAY`/`CONTINUE`, `ONLINE`, `BOOK`, `CONTROLS`, `CREW`, `SOURCE` — the book sits third, between
+ONLINE and CONTROLS, and not beside CREW as the line above first proposed. The A-frame grew from 104 px to 122 and
+moved up 14, because six rows at the menu's 14 px pitch do not clear 104 and a row clipped by its own frame is
+worse than a slightly taller A-frame. The legs land within 4 px of where they did, and the board still starts
+where the crew lineup stops.
 
 ### Cost
 
@@ -237,7 +244,7 @@ legs land within 4 px of where they did, and the board still starts where the cr
 | The screen | a new `game/screens/book.ts`, `game/game.ts` screen table, `SCREEN_MUSIC` (`title`) |
 | The menu row | `game/screens/title.ts` |
 | The invariant | a rule in `tools/check.js` |
-| Tests | a `book` scenario (cook a day, assert the record, reopen the screen), one golden frame |
+| Tests | **[built as]** `book` (the screen, its pages, pencil against ink), `bookRecords` (a day banked, and banked once) and `bookInvariant` (a full book and an empty one lay out the same day), plus screenshots. No golden frame, for the reason above. |
 | Docs | a new `docs/GDD.md` section 12, and the invariant restated in `docs/MULTIPLAYER.md` beside the `localStorage` rule |
 
 **Not doing: anything the book gates.** No recipe unlocked by cooking, no landmark opened by visiting, no cast
@@ -259,15 +266,17 @@ change on its own; rows 4–5 make it resumable; rows 6–8 are the book.
 |---|---|---|---|
 | 1 | `run.day`, `planWeek`, `DAY_SHAPES`, `weekComplete()` — the spine, no UI | `game/run.ts` | Half a session; the day shapes are data |
 | 2 | The closed board's `NEXT DAY` and the week strip; the open board's day heading | `game/screens/stage.ts` | A session, mostly drawing |
-| 3 | The `week` scenario and the two golden frames | `tools/scenarios/` | A short session |
+| 3 | The week scenarios, and retrofitting the day-blind ones | `tools/scenarios/` | Longer than a short session: five scenarios had to learn which day they stand in |
 | 4 | The save record and `CONTINUE` | `game/week.ts`, `game/screens/title.ts`, `main.ts` | A session |
 | 5 | The wire: the `day` byte, `PROTOCOL_VERSION` 3, the checksum field | `net/protocol.ts`, `net/session.ts`, `net/checksum.ts`, `tools/nettest.js` | Small, and the nettest covers it |
 | 6 | The book's store and `recordDay` | `game/book.ts`, one call in `stage.ts` | A session |
 | 7 | The book screen | `game/screens/book.ts`, `title.ts`, the menu layout | The biggest drawing job on the list; the dish pictures exist |
-| 8 | The invariant's check rule, the `book` scenario, the golden frame | `tools/check.js`, `tools/scenarios/` | A short session |
+| 8 | The invariant's check rule and the book scenarios | `tools/check.js`, `tools/scenarios/` | A short session |
 
-Every step keeps `npm run check` green: the typecheck, the class-fields and lib checks, the art check, the net test
-and the golden frames (the week strip, the fête board and the book are new golden baselines, deliberately).
+Every step keeps `npm run check` green: the typecheck, the class-fields and lib checks, the art check, the net
+test and the golden fingerprint. **[built as]** the golden did NOT need a new baseline: `tools/golden.js` hashes
+the art and engine layer's drawn output, and none of this work touches a rig, a pose or a palette — it came back
+`8 subjects identical`, which is the evidence that a week and a book added no behaviour to the shared layer.
 
 Rows 1–3 are worth shipping as one pull request: a week that always starts on Monday is a better game than a
 single day, and it is testable without a byte of persistence.
