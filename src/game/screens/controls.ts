@@ -76,7 +76,7 @@ export class ControlsScreen extends Screen {
   /** The hint strip shown instead while listening. */
   declare listenHint: string;
 
-  constructor(game: Game) { super(game, 'controls'); this.row = 0; this.col = 0; }
+  constructor(game: Game) { super(game, 'controls'); this.touchAlt = true; this.row = 0; this.col = 0; }
 
   override enter(params: ScreenParams) {
     super.enter(params);

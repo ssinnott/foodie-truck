@@ -408,6 +408,14 @@ export class Screen {
    * screen that types has it, and main.ts reads it off whatever screen is on top.
    */
   declare typing?: boolean;
+  /**
+   * True on a screen that reads the `alt` action, so a phone is offered the ALT button on it and on no other
+   * (engine/touch.js, game/touchpad.js). Declared, not set, and read off the top screen by main.ts, exactly as
+   * `typing` is: a thumb control that does nothing on the screen it is drawn over is worse than no control, and
+   * ALT is the one button of the five that most screens have no use for. `tools/check.js` holds a screen that
+   * reads `alt` to declaring it.
+   */
+  declare touchAlt?: boolean;
 }
 
 /** Game shell: owns the screen stack and the shared services (input, audio, rng, options, net, run). */

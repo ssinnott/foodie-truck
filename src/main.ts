@@ -2,7 +2,7 @@
 import { VIEW_W, VIEW_H } from './constants.ts';
 import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.ts';
-import { setTouchTyping, setTouchVirtual, touchTyping, TOUCH_PAD, TOUCH_BUTTONS } from './engine/touch.ts';
+import { setTouchTyping, setTouchAlt, setTouchVirtual, TOUCH_PAD, TOUCH_BUTTONS } from './engine/touch.ts';
 import { drawTouchPad } from './game/touchpad.ts';
 import { audio } from './engine/audio.ts';
 import { rng } from './lib/engine/rng.ts';
@@ -141,6 +141,9 @@ function boot() {
         // A screen reading text (the lobby spelling a host key) is the one thing a phone needs a system keyboard
         // for; it goes away again the moment that screen stops asking.
         setTouchTyping(!!(game.screen && game.screen.typing));
+        // ALT is offered on the three screens that read it and on no other: everywhere else that circle would be
+        // a thumb control that does nothing, lying over a ticket that says something.
+        setTouchAlt(!!(game.screen && game.screen.touchAlt));
         game.update();
         if (game.net && game.net.afterStep) game.net.afterStep();
       } catch (e) { recordError(e); }
@@ -150,7 +153,7 @@ function boot() {
         game.draw(ctx);
         // Over the fade as well as the scene: the controls are the player's hands, not part of what is being
         // faded between, and a d-pad that dips to black on every screen change looks like it stopped working.
-        drawTouchPad(ctx, input, touchTyping());
+        drawTouchPad(ctx, input);
         view.present();
       } catch (e) { recordError(e); }
     },

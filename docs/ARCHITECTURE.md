@@ -138,7 +138,12 @@ place and hit in another. `maskAt(x, y)` is the hit test; `touchMask()` is what 
 mapped through `toInternal` into the 640x360 the layout is written in.
 
 The overlay is offered on `(hover: none) and (pointer: coarse)` — the query `index.html` already asks before it
-tells a portrait phone to turn sideways — so a laptop with a touchscreen is not handed thumb controls. A keyboard
+tells a portrait phone to turn sideways — so a laptop with a touchscreen is not handed thumb controls. ALT is
+offered more narrowly still: only on a screen that declares `touchAlt` (the road's horn, the crew gallery's turn,
+the CONTROLS column reset), because a thumb control that does nothing on the screen it is drawn over is worse than
+no control, and that circle otherwise lay across the day board's shopping list. `setTouchAlt(on)` is how `main.js`
+says so each step, off the top screen's flag, and `tools/check.js` holds a screen that reads `alt` to declaring
+it. A keyboard
 or pad mask stands it down (`suppressTouch`), the next touch brings it back, and `keyText` names the button on the
 glass while it is up, so the hint lines screens build in `enter()` read as instructions rather than as a keyboard
 nobody in the room has.

@@ -11,7 +11,7 @@
 import { VIEW_W, UI } from '../constants.ts';
 import { drawText, measureText } from '../engine/text.ts';
 import { BIT } from '../engine/actions.ts';
-import { TOUCH_PAD, TOUCH_BUTTONS, BUTTON_INSET } from '../engine/touch.ts';
+import { TOUCH_PAD, TOUCH_BUTTONS, BUTTON_INSET, touchAltOn, touchTyping } from '../engine/touch.ts';
 import type { Input } from './game.ts';
 
 const R = Math.round;
@@ -73,14 +73,19 @@ function drawButton(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: nu
 /**
  * The whole overlay, over everything else a frame drew. `input` is the service itself: it answers whether the
  * controls are up at all (a phone or a tablet, and no pad or keyboard in the player's hands) and what is held.
+ * Which buttons those are, and whether a screen is asking to be typed into, are the touch layer's own answers -
+ * the SAME answers it hit-tests by, so what is drawn and what can be pressed cannot come apart.
  */
-export function drawTouchPad(ctx: CanvasRenderingContext2D, input: Input, typing: boolean = false): void {
+export function drawTouchPad(ctx: CanvasRenderingContext2D, input: Input): void {
   if (!input.touchOn()) return;
-  const mask = input.touchMask();
+  const mask = input.touchMask(), typing = touchTyping();
   const alpha = ctx.globalAlpha;
   ctx.globalAlpha = alpha * (mask ? HELD_ALPHA : IDLE_ALPHA);
   drawPad(ctx, mask);
-  for (const b of TOUCH_BUTTONS) drawButton(ctx, b.cx, b.cy, b.r, b.label, (mask & BIT[b.action]) !== 0);
+  for (const b of TOUCH_BUTTONS) {
+    if (b.action === 'alt' && !touchAltOn()) continue;
+    drawButton(ctx, b.cx, b.cy, b.r, b.label, (mask & BIT[b.action]) !== 0);
+  }
   // A screen that is reading text needs a system keyboard, and on a phone that is a tap and not a key: say so
   // where nothing else is drawn, and say it only while something is actually asking to be typed into.
   if (typing) {

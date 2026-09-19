@@ -47,9 +47,12 @@ export const BUTTON_INSET = 4;
  * overlay lies over the scene, and the places it must not lie over are the ones the game puts words in: the menu
  * board down the right of the title and the lobby (which is why the cluster hugs the bottom edge, under it), the
  * ticket in one top corner (the shopping list, the order), the seat's name plate in the other (the road, which is
- * why MENU hangs a plate's height below the top edge), and the hint strip across the bottom middle. ALT is the one
- * button that would not fit around all that, so it goes above the d-pad rather than beside GO: the left thumb has
- * to lift for it, and ALT is the rare one - a honk on the road, a portrait turned round in the crew gallery.
+ * why MENU hangs a plate's height below the top edge), and the hint strip across the bottom middle.
+ *
+ * ALT would not fit around all of that, so it goes above the d-pad rather than beside GO - and it is drawn on the
+ * three screens that READ it and on no other (`setTouchAlt`, off the top screen's `touchAlt`). Everywhere else the
+ * left thumb has nothing over the pad and nothing is covered: over the day board that circle sat on the shopping
+ * list's first row, hiding the one thing on the screen a player is there to read.
  */
 export const TOUCH_BUTTONS: readonly TouchButton[] = Object.freeze([
   { action: 'action', cx: 592, cy: 308, r: 32, label: 'GO' },
@@ -77,6 +80,8 @@ let pending = 0;
 let tapPending = false;
 /** Set while a keyboard or pad is the live device; the next touch clears it. */
 let suppressed = false;
+/** Is the top screen one that reads `alt`? While it is not, that button is neither drawn nor hit. */
+let altOn = false;
 /** Cached media query: a phone or a tablet, not a laptop whose screen happens to be touchable. */
 let coarse: MediaQueryList | null = null;
 /** The off-screen field that raises the soft keyboard, and what it held when it was last read. */
@@ -110,11 +115,20 @@ export function maskAt(x: number, y: number): number {
     return m;
   }
   for (const b of TOUCH_BUTTONS) {
+    if (b.action === 'alt' && !altOn) continue;
     const bx = x - b.cx, by = y - b.cy;
     if (bx * bx + by * by <= b.r * b.r) return BIT[b.action];
   }
   return 0;
 }
+/**
+ * main.js, every step: does the screen on top read `alt`? Only three do (the road's horn, the crew gallery's
+ * turn, the CONTROLS column reset), and on every other screen that circle would be a control that does nothing
+ * lying over one that says something.
+ */
+export function setTouchAlt(on: boolean): void { altOn = !!on; }
+/** Is the ALT button on offer? game/touchpad.js draws exactly the buttons that can be pressed. */
+export function touchAltOn(): boolean { return altOn; }
 
 /** Every live contact, test points included. */
 function livePoints(): { x: number; y: number }[] {

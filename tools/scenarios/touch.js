@@ -22,7 +22,7 @@
 import { withPage, assert } from '../playtest.js';
 
 /** Bit i of a mask is ACTIONS[i] (engine/actions.js). */
-const LEFT = 1, RIGHT = 2, UP = 4, DOWN = 8;
+const LEFT = 1, RIGHT = 2, UP = 4, DOWN = 8, ACTION = 16, ALT = 32, CANCEL = 64;
 
 /** The centre of a named button, from the layout the game itself hit-tests against. */
 function buttonAt(layout, action) { return layout.buttons.find((b) => b.action === action); }
@@ -108,7 +108,7 @@ export const SCENARIOS = {
       await api.touch([{ x: pad.cx + reach, y: pad.cy }, { x: go.cx, y: go.cy }]);
       await api.step(2);
       const both = (await api.inputState()).mask;
-      assert((both & RIGHT) !== 0 && (both & 16) !== 0, `a thumb each side holds a direction AND the button (mask ${both})`);
+      assert((both & RIGHT) !== 0 && (both & ACTION) !== 0, `a thumb each side holds a direction AND the button (mask ${both})`);
       await api.touch([]);
       await api.step(4);
 
@@ -123,6 +123,21 @@ export const SCENARIOS = {
       const s3 = await api.summary();
       assert(s3.screen === 'stage', `a stamped seat opens the day board (now on ${s3.screen})`);
       assert(s3.run && s3.run.party.length === 1, `with a party of one (${JSON.stringify(s3.run && s3.run.party)})`);
+
+      // ---- ALT is offered where it does something, and nowhere else ----
+      const alt = buttonAt(layout, 'alt');
+      await api.touch([{ x: alt.cx, y: alt.cy }]);
+      await api.step(2);
+      assert((await api.inputState()).mask === 0, 'the day board has no use for ALT, so there is nothing there to press');
+      await api.touch([]);
+      await api.step(2);
+      await api.goto('map');
+      await api.step(4);
+      await api.touch([{ x: alt.cx, y: alt.cy }]);
+      await api.step(2);
+      assert(((await api.inputState()).mask & ALT) !== 0, 'the road, which honks with it, does offer it');
+      await api.touch([]);
+      await api.step(2);
 
       // ---- a keyboard takes the screen back, and the next touch takes it again ----
       await page.keyboard.down('KeyZ');
@@ -196,7 +211,7 @@ export const SCENARIOS = {
       await api.step(1);
       const esc = await api.inputState();
       assert(esc.typed.join() === 'Escape', `X spells ESCAPE while a screen is typing (${esc.typed.join()})`);
-      assert((esc.mask & 64) === 0, 'and does not also press CANCEL on the screen underneath');
+      assert((esc.mask & CANCEL) === 0, 'and does not also press CANCEL on the screen underneath');
       await api.touch([]);
       await api.step(2);
       const out = await api.summary();

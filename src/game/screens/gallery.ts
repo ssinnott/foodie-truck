@@ -62,7 +62,7 @@ export class GalleryScreen extends Screen {
   /** One card per cast member, in cast order. */
   declare slots: GallerySlot[];
 
-  constructor(game: Game) { super(game, 'gallery'); }
+  constructor(game: Game) { super(game, 'gallery'); this.touchAlt = true; }
   override enter(params: ScreenParams): void {
     super.enter(params);
     this.anim = 0; this.zoom = 2; this.facing = 1;
