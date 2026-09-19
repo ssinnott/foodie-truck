@@ -170,7 +170,8 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   twelve turns bring a pat of butter (+1 butter, the pat hops to the rack) and the milker turns back to the cow.
   Butter is milk plus the churn, so a pat is exactly two dozen taps.
 - **Mill — FILL** (*move + hold*). Four chutes along the back wall wake on a seeded 70–130 frame timer, at most two
-  at once: 24 frames of telegraph, then 110 frames of pouring. Seats walk left and right on their own depth lanes;
+  at once: 24 frames of telegraph, then 330 frames of pouring (long enough to cross the whole floor and still fill a
+  sack). Seats walk left and right on their own depth lanes;
   standing anywhere under a pouring chute (36 px either side) with `action` **held** fills the sack at 1/90 per frame (1.5 s from
   empty). The moment it reaches the brim it ties itself off (+1 flour, an 18-frame tie beat, a fresh sack);
   letting go early **keeps** the part sack to top up at the next chute. Nothing bursts. A **rice** visit is the

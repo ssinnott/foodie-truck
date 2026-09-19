@@ -64,8 +64,9 @@ const R = Math.round, DEG = Math.PI / 180;
  * Movement. 2.4 px/frame is a step up on the orchard's 2.2 and the coop's 2.0, and the step is bought by the walk
  * this scene actually asks for: CHUTE_PITCH is 140 px, and taking CATCH_HALF off each end leaves a 104 px run
  * between two catch zones. At 2.4 that is 44 frames; TELEGRAPH covers 24 of them, so a player who leaves the
- * moment a spout lights arrives 20 frames into a 110-frame pour with 90 frames left and a full sack costs 54.
- * At 2.2 the same walk is 48 frames, which still works but leaves no room for a player who starts a beat late.
+ * moment a spout lights arrives 20 frames into a 330-frame pour, and even the far wall (572 px, 238 frames) is
+ * reached with the 90 a sack needs still to run. At 2.2 the same walk is 48 frames, which still works but leaves
+ * less room for a player who starts a beat late.
  * The clamp is symmetric, 34 px in from each wall: a whole body stays on the boards and inside the end posts
  * (backgrounds/mill.js POST_X 30 and 610). Neither end is dead floor - the mill's own stock is piled at the left
  * and the party's cart is parked at the right (BARROW_X 574) - but both stand above the walk band, so a seat walks
@@ -82,23 +83,28 @@ const SPEED = 2.4, X_MIN = 34, X_MAX = 606;
 const LANE_Y0 = ROWS.feet, LANE_GAP = 8;
 /**
  * The chutes. At most POUR_MAX are awake at once so a solo player is never asked to be in two places, and a wake
- * lands every 70..130 frames (mean 100). A wake costs a chute TELEGRAPH + POUR_FRAMES = 134 frames of its life, so
+ * lands every 70..130 frames (mean 100). A wake costs a chute TELEGRAPH + POUR_FRAMES = 354 frames of its life, so
  * over a 2400-frame round the two slots offer 4800 chute-frames against the ~24 wakes the timer asks for: the cap
- * is what shapes the round, not the timer, and the room never fills with gold.
+ * is what shapes the round, not the timer, and with two spouts nearly always running the room is never bare.
+ *
+ * POUR_FRAMES was 110 and a sack needs 90 of them: a spout was only ever worth reaching if you were already under
+ * it when it lit, and a player anywhere else on the floor watched it close as they arrived (the playtest's own
+ * words: "hard to get to"). 330 is five and a half seconds - the whole floor at walking pace with a sack's worth to
+ * spare - and a pour that long fills two or three sacks for a seat that stays, which is what a mill does.
  */
-const POUR_MAX = 2, TELEGRAPH = 24, POUR_FRAMES = 110, WAKE_MIN = 70, WAKE_MAX = 130;
+const POUR_MAX = 2, TELEGRAPH = 24, POUR_FRAMES = 330, WAKE_MIN = 70, WAKE_MAX = 130;
 /**
- * The tuning: a sack is 90 frames of one 110-frame pour, so a player who reaches a spout inside its telegraph ties
- * a sack off that pour, and a player who arrives late tops the part sack up at the next one. Wakes land every
- * 70..130 frames, so a solo party banks the fallback target of 3 in a handful of wakes, well inside the 2400-frame
- * round even camping under one spout. A four-seat party shares the same 2400 frames and the same two live spouts,
- * which is what keeps a full room co-operative rather than four people racing each other.
+ * The tuning: a sack is 90 frames of one 330-frame pour, so a player who reaches a spout from anywhere on the
+ * floor ties a sack off that pour, and a player who arrives late tops the part sack up at the next one. Wakes
+ * land every 70..130 frames, so a solo party banks the fallback target of 3 in a wake or two, well inside the
+ * 2400-frame round even camping under one spout. A four-seat party shares the same 2400 frames and the same two
+ * live spouts, which is what keeps a full room co-operative rather than four people racing each other.
  */
 /** A seat is under a chute within this of its centre: 72 px of standing room, so any part of the critter under the spout counts. */
 const CATCH_HALF = 36;
 /**
  * The sack. FILL_RATE is 1/90, so an empty sack takes 90 frames (1.5 s) under a pour - the beat the whole scene is
- * cut to, and comfortably inside one 110-frame pour. FULL is the brim, where the sack ties itself off; BRIM_BAND is
+ * cut to, and well inside one 330-frame pour. FULL is the brim, where the sack ties itself off; BRIM_BAND is
  * the last 0.35 of a sack (32 frames) where the tag and the sack's own tie turn green, so a player sees "nearly
  * there" before the tie beat lands.
  */
