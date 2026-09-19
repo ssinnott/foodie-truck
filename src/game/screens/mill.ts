@@ -9,6 +9,16 @@
 // The round ends when the party's total reaches the order's amount or the 40-second clock runs out; the FLOUR sign
 // drops, is held, then run.gather('flour') and back to the map.
 //
+// The same chutes fill sacks of RICE when the list asks for it (game/run.js gatherTarget, docs/GDD.md section 5),
+// and the mechanic does not change by a frame - but the LOOK does, because a visit that pours flour dust into flour
+// sacks under a flour-dusted beam while the clock says RICE is a lie a child spots at once. What the visit gathers
+// is settled once in enter(): the GRAINS record (art/millProps.js grainFor, the garden's per-plant pattern) says
+// what falls out of a spout (dust bands, or separate grains), what a wake coughs out, what fills and marks the sack
+// and what hangs in the light shaft, and the backdrop is the mill's rice variant (art/backgrounds/mill.js
+// millLayers('rice'): straw sheaves and a hulling bin in place of the sack stack, a winnowing fan for the scoop,
+// loose grain and chaff for the flour dust). Everything it touches is draw-side: nothing in update() or the
+// checksum reads it.
+//
 // Determinism (docs/ARCHITECTURE.md section 0): the chutes and the seats are fixed pools of plain sim objects, the
 // only randomness is `rng` inside update() (the wake timer and which spout takes it), input is read by seat slot
 // only, and the one place trig touches simulation state is the sack offsets built ONCE in enter() through
@@ -22,6 +32,7 @@ import { rng, makeRng } from '../../lib/engine/rng.ts';
 import type { RngInstance } from '../../lib/engine/rng.ts';
 import { dsin, dcos } from '../../lib/engine/trig.ts';
 import { particles } from '../../engine/particles.ts';
+import type { ParticleKind } from '../../engine/particles.ts';
 import { blitAt, VIEW_W } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt } from '../../art/fx.ts';
 import { drawFood } from '../../art/food.ts';
@@ -31,9 +42,9 @@ import type { Point } from '../../lib/art/rigParts.ts';
 import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { gatherTarget } from '../run.ts';
-import { MILL, ROWS, CHUTE_X, CHUTE_PITCH, SHAFT, millLayers } from '../../art/backgrounds/mill.ts';
+import { ROWS, CHUTE_X, CHUTE_PITCH, SHAFT, millLayers } from '../../art/backgrounds/mill.ts';
 import {
-  MILL_SACK, DORMANT, WAKING, POURING, TAG_W, TAG_H,
+  MILL_SACK, DORMANT, WAKING, POURING, TAG_W, TAG_H, grainFor,
   drawChute, drawPour, drawPile, drawBarrow, drawTiedSack, drawFillTag, drawGear, drawSail,
 } from '../../art/millProps.ts';
 import {
@@ -224,7 +235,40 @@ function placeTag(stack: PlateStack, cx: number, y0: number): Point {
 }
 
 /**
- * A seat's rig as this scene hands it round: lib/art/rig.ts's own rig plus the three fields art/millProps.js
+ * The visit's GRAINS record (art/millProps.js): what the chutes pour and how the sacks are marked, picked once in
+ * enter() by the ingredient this visit gathers and handed into every prop draw. Stated here rather than imported
+ * for the reason MillLayer gives below: art/millProps.js is still untyped, and this is the shape the screen reads.
+ */
+export interface MillGrain {
+  /** The ingredient id, which is also the backdrop variant (art/backgrounds/mill.js millLayers). */
+  id: string;
+  /** 0: the pour is flour's dust bands | 1: separate grains. */
+  grains: number;
+  /** The ingredient's lightest tone: the bands or the grains, and the waking mouth. */
+  lit: string;
+  core: string;
+  edge: string;
+  heap: string;
+  heapCap: string;
+  /** What fills the sack, and its shadow band. */
+  packed: string;
+  packedSh: string;
+  /** 0/1: the sack wears the stencilled band a rice sack is marked with. */
+  band: number;
+  /** The motes in the light shaft: flour dust, or straw chaff. */
+  mote: string;
+  moteSize: number;
+  /** What a waking spout coughs out of its lip. */
+  puffKind: ParticleKind;
+  puff: string;
+  puffSize: number;
+  puffGravity: number;
+  /** 0 takes the kind's own lifetime. */
+  puffLife: number;
+}
+
+/**
+ * A seat's rig as this scene hands it round: lib/art/rig.ts's own rig plus the four fields art/millProps.js
  * MILL_SACK reads straight back off the rig it is handed (its header names them). Optional because `buildRig`
  * builds a complete `Rig` without them - a rig carries a sack's fill only while its owner is on this floor.
  */
@@ -235,6 +279,8 @@ export interface MillRig extends Rig {
   sackZone?: number;
   /** 0/1, the strobe the screen alternates while zone 2 is on. */
   sackBlink?: number;
+  /** The visit's GRAINS record: what is packed in the sack and whether it wears the band. Set once in enter(). */
+  sackGrain?: MillGrain;
 }
 
 /**
@@ -326,6 +372,8 @@ export class MillScreen extends Screen {
   declare hex: string;
   declare signPrefix: string;
   declare clockIcon: (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
+  /** What this visit's chutes pour and how its sacks are marked (art/millProps.js GRAINS), picked once from `ing`. */
+  declare grain: MillGrain;
   /** The four spouts, one slot per CHUTE_X, built in enter() and never grown. */
   declare chutes: Chute[];
   /** The backdrop, pre-rendered once (art/backgrounds/mill.js millLayers) and blitted per frame. */
@@ -334,8 +382,8 @@ export class MillScreen extends Screen {
   declare vis: RngInstance;
   /** The mote spawn options, built once in enter() and handed to particles.spawn every MOTE_EVERY frames. */
   declare moteOpts: { color: string; size: number; life: number; vx: number; vy: number; gravity: number; drag: number; screen: boolean };
-  /** The burst options for the dust a waking spout coughs out (engine/particles.js `burst`). */
-  declare puffOpts: { speed: number; up: number; color: string; gravity: number; screen: boolean };
+  /** The burst options for the dust (or grain) a waking spout coughs out (engine/particles.js `burst`). */
+  declare puffOpts: { speed: number; up: number; color: string; size: number; gravity: number; life: number; vrot: number; screen: boolean };
   /** The fill tag's gauge, built once and read by every drawFillTag. */
   declare zones: TagZones;
   /** Frames until the room's one wake timer hands its turn to a free spout (WAKE_MIN..WAKE_MAX). */
@@ -368,12 +416,23 @@ export class MillScreen extends Screen {
   override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
-    this.layers = millLayers();
+    // what this visit gathers comes FIRST: the backdrop variant, the pour and the sacks all hang off it
+    this.ing = gatherTarget(run, params.place, 'mill');
+    const ing = INGREDIENTS[this.ing] || INGREDIENTS.flour;
+    this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
+    const icon = this.icon, hex = this.hex;
+    this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
+    this.grain = grainFor(this.ing);
+    const g = this.grain;
+    this.layers = millLayers(g.id);
     particles.clear();
     this.vis = makeRng(MOTE_SEED);
-    // every options object a per-frame call needs is built HERE and mutated, never in update() or draw()
-    this.moteOpts = { color: MILL.flour, size: 2, life: 170, vx: -0.1, vy: 0.12, gravity: 0.003, drag: 1, screen: true };
-    this.puffOpts = { speed: 0.7, up: -0.8, color: MILL.dust, gravity: 0.02, screen: true };
+    // every options object a per-frame call needs is built HERE and mutated, never in update() or draw(). The
+    // motes and the puffs take their kind, tone and fall from the visit's record: flour dust hanging in the shaft
+    // and coughed out of a waking lip, or chaff in the shaft and grains dropping out of the lip.
+    this.moteOpts = { color: g.mote, size: g.moteSize, life: 170, vx: -0.1, vy: 0.12, gravity: 0.003, drag: 1, screen: true };
+    // `vrot` 0: a crumb kind is given a random spin unless told not to, and a 3 px grain has nothing to show a spin with
+    this.puffOpts = { speed: 0.7, up: -0.8, color: g.puff, size: g.puffSize, gravity: g.puffGravity, life: g.puffLife, vrot: 0, screen: true };
     // the tag's gauge, in fractions of its trough: where the brim band starts, where the brim post stands, and the fill
     // the whole trough stands for (art/millProps.js drawFillTag) - the brim IS the end of the trough now
     this.zones = { brim: BRIM_AT / FULL, full: 1, cap: FULL };
@@ -392,7 +451,7 @@ export class MillScreen extends Screen {
       // literal misses RigWeapon's `attach?: HandName` by that one field. It IS a rig weapon - rig.ts reads exactly
       // these keys back off it - so the assertion says what millProps.js cannot yet (garden.ts carries the same
       // note over its trug).
-      s.rig.weapon = MILL_SACK as RigWeapon; s.rig.sackFill = 0; s.rig.sackZone = 0; s.rig.sackBlink = 0;
+      s.rig.weapon = MILL_SACK as RigWeapon; s.rig.sackFill = 0; s.rig.sackZone = 0; s.rig.sackBlink = 0; s.rig.sackGrain = g;
       s.player.setOverlay(MILL_ANIMS);
       s.fill = 0; s.chute = -1; s.tieT = 0; s.count = 0;
       // where this critter's sack neck sits, once, from ITS proportions: the pour column bends to this point and
@@ -412,11 +471,6 @@ export class MillScreen extends Screen {
     this.hopCursor = 0;
     this.tied = 0;
 
-    this.ing = gatherTarget(run, params.place, 'mill');
-    const ing = INGREDIENTS[this.ing] || INGREDIENTS.flour;
-    this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
-    const icon = this.icon, hex = this.hex;
-    this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
     const need = run ? run.need(this.ing) : null;
     // the remainder, not the whole order: the map may already have banked some (the three shipped scenes agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
@@ -482,8 +536,9 @@ export class MillScreen extends Screen {
       const c = this.chutes[i];
       c.seat = -1;
       if (c.state === WAKING) {
-        // the telegraph MOVES as well as lighting up: a puff of dust falling out of the spout every four frames
-        if ((c.t & 3) === 0) particles.burst('dust', CHUTE_X[i], ROWS.mouth + 6, 2, this.puffOpts);
+        // the telegraph MOVES as well as lighting up: a puff of dust (or a couple of grains) falling out of the
+        // spout every four frames
+        if ((c.t & 3) === 0) particles.burst(this.grain.puffKind, CHUTE_X[i], ROWS.mouth + 6, 2, this.puffOpts);
         if (--c.t <= 0) { c.state = POURING; c.t = POUR_FRAMES; }
       } else if (c.state === POURING) {
         if (--c.t <= 0) { c.state = DORMANT; c.t = 0; }
@@ -565,7 +620,7 @@ export class MillScreen extends Screen {
     let flying = 0;
     for (let i = 0; i < this.hops.length; i++) if (this.hops[i].t < HOP_FRAMES) flying++;
     drawShadow(ctx, BARROW_X, BARROW_Y, 40, 0.34, 0);
-    drawBarrow(ctx, BARROW_X, BARROW_Y, this.total - flying);
+    drawBarrow(ctx, BARROW_X, BARROW_Y, this.total - flying, this.grain);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; drawShadow(ctx, s.x, s.y, s.rig.width + 6, 0.4, 0); }
     for (let i = this.seats.length - 1; i >= 0; i--) this.drawSeat(ctx, this.seats[i], f);
     for (let i = 0; i < this.hops.length; i++) this.drawHop(ctx, this.hops[i]);
@@ -585,21 +640,22 @@ export class MillScreen extends Screen {
    * the one mark in the frame that says which chute is live - is never crossed by the column's own 2 px ink.
    */
   drawChutes(ctx: CanvasRenderingContext2D, f: number): void {
+    const g = this.grain;
     for (let i = 0; i < this.chutes.length; i++) {
       const c = this.chutes[i], x = CHUTE_X[i];
       if (c.state === POURING) {
         const age = POUR_FRAMES - c.t, k = age < 10 ? age / 10 : 1;
         if (c.seat >= 0) {
           const s = this.seats[c.seat];
-          drawPour(ctx, x, ROWS.mouth, R(s.x + s.facing * s.sackDX), R(s.y + s.sackDY), f, k);
+          drawPour(ctx, x, ROWS.mouth, R(s.x + s.facing * s.sackDX), R(s.y + s.sackDY), f, k, g);
         } else {
-          drawPour(ctx, x, ROWS.mouth, x, ROWS.pile, f, k);
-          drawPile(ctx, x, ROWS.pile, age / POUR_FRAMES);
+          drawPour(ctx, x, ROWS.mouth, x, ROWS.pile, f, k, g);
+          drawPile(ctx, x, ROWS.pile, age / POUR_FRAMES, g);
         }
       }
       // the shake is on ALTERNATE frames and only through the telegraph; the mouth strobes on a slower beat so the
       // two warnings do not read as one flicker
-      drawChute(ctx, x, c.state, c.state === WAKING && (f & 1) ? 1 : 0, (f >> 2) & 1);
+      drawChute(ctx, x, c.state, c.state === WAKING && (f & 1) ? 1 : 0, (f >> 2) & 1, g);
     }
   }
 
@@ -621,7 +677,7 @@ export class MillScreen extends Screen {
     const k = h.t / HOP_FRAMES;
     const x = R(h.x0 + (BARROW_X - h.x0) * k);
     const y = R(h.y0 + (BARROW_Y - 24 - h.y0) * k - Math.sin(k * Math.PI) * HOP_LIFT);
-    drawTiedSack(ctx, x, y, h.slot);
+    drawTiedSack(ctx, x, y, h.slot, this.grain);
   }
 
   /**

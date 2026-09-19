@@ -173,7 +173,12 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   at once: 24 frames of telegraph, then 110 frames of pouring. Seats walk left and right on their own depth lanes;
   standing anywhere under a pouring chute (36 px either side) with `action` **held** fills the sack at 1/90 per frame (1.5 s from
   empty). The moment it reaches the brim it ties itself off (+1 flour, an 18-frame tie beat, a fresh sack);
-  letting go early **keeps** the part sack to top up at the next chute. Nothing bursts.
+  letting go early **keeps** the part sack to top up at the next chute. Nothing bursts. A **rice** visit is the
+  same round in the same room dressed for rice, so the ingredient is read off the scene and not only off the clock:
+  the chutes pour loose grain instead of dust, a waking spout dribbles grain from its lip, the sacks wear a
+  stencilled band and pile on the cart as rice sacks, and the mill's own stock in the corner is straw sheaves and a
+  hulling bin (`art/backgrounds/mill.js millLayers('rice')`, cached beside the flour room the way the cove is kept
+  beside the pond). Not a number changes between the two.
 - **Hives — CREEP** (*move + hold*). Five straw skeps on a bench; **holding** `action` anywhere over a full one (36 px either side)
   for 60 frames dips it — a strand of honey climbs the dipper and a bar fills over the skep — then +1 honey, and
   that skep is empty for 150 frames, so the party is pushed along the bench. Letting go early costs nothing. The

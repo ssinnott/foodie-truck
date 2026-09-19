@@ -131,7 +131,12 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   (the one thing that moves on it is the one cool mark); signal: mint `#5FD3C0` on the pump chevron and the full pail.
 - **Mill**: a dark timber tower, boarded wall `#4A3A2C` (the plane the whole cast reads against), oak frame
   `#6B543A`, plank floor `#7A6144` (L .40, so dark hooves keep their contact), hessian `#8A7350`; the flour and the
-  sacks are the lightest things in the room; signal: gold `#F2C14E` at a pouring chute's mouth.
+  sacks are the lightest things in the room; signal: gold `#F2C14E` at a pouring chute's mouth. A rice visit is the
+  same room painted per variant and cached per variant (`millLayers('rice')`): the rice's own `#F7F3E6` for the
+  grain, straw `#C9A05C` and husk `#A88A4E` for the sheaves, the winnowing fan and the hulling bin that replace the
+  sack stack and the scoop, loose grain and chaff where the flour was dusted; a pour is separate 2×3 grains falling
+  down a dark trickle instead of cream bands on a pale column, and a rice sack wears one 3 px stencilled band. The
+  frame, the window, the cart and the signal are unchanged, so the two visits read as one building.
 - **Hives**: late-afternoon clover meadow, sky `#F9DDB8`→`#F2C39A`, downs `#B3AE7E`, clipped hedge `#3F5A34` (darker
   than the orchard's canopy so the two green scenes never twin), meadow cooler and lighter than the orchard's grass,
   five straw skeps on a bench; signal: gold on a skep with honey left in it.
