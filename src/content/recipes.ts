@@ -4,8 +4,8 @@
 // An INGREDIENT names the landmark that supplies it (`place`, one of content/places.js) and a colour the HUD
 // ticket, the map sign and the kitchen item all share, so a player learns "red = apples" once.
 //
-// A landmark can supply MORE THAN ONE ingredient: the orchard drops pears and peaches as well as apples, the market
-// garden's bed grows six vegetables besides the carrot, and the mill fills sacks of rice as well as flour. A
+// A landmark can supply MORE THAN ONE ingredient: the orchard drops pears and peaches as well as apples, the farm's
+// bed grows six vegetables besides the carrot, and the mill fills sacks of rice as well as flour. A
 // mini-game gathers whichever of its landmark's ingredients the shopping list is still short of (game/run.js
 // gatherTarget), so every entry here is reachable without a screen of its own. The FIRST ingredient listed for a
 // landmark is the one its screen falls back to when nothing is asked for (a dev jump with no order).
@@ -26,7 +26,7 @@ export const INGREDIENTS = Object.freeze({
   // the dairy churns as well as milks; the mill fills rice sacks under the same chutes
   butter: { name: 'BUTTER', place: 'dairy', hex: '#F5D66B', icon: 'butter' },
   rice: { name: 'RICE', place: 'mill', hex: '#F7F3E6', icon: 'rice' },
-  // the market garden's other rows, pulled out of the bed like the carrots
+  // the farm's other rows, pulled out of the bed like the carrots
   potato: { name: 'POTATOES', place: 'garden', hex: '#C29A5B', icon: 'potato' },
   onion: { name: 'ONIONS', place: 'garden', hex: '#E7C58C', icon: 'onion' },
   leek: { name: 'LEEKS', place: 'garden', hex: '#7DB35A', icon: 'leek' },
@@ -62,7 +62,7 @@ export const ORDERS = Object.freeze([
     needs: [{ id: 'fish', amount: 3 }, { id: 'egg', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'stove', 'plate'] },
   { id: 'omelette', dish: 'APPLE OMELETTE', customer: 'goat', line: 'SOMETHING WITH EGGS. AND APPLES. SURPRISE ME.',
     needs: [{ id: 'egg', amount: 3 }, { id: 'apple', amount: 2 }], steps: ['fridge', 'mix', 'stove', 'plate'] },
-  // The four orders below are what the dairy, the mill, the hives and the market garden are FOR: until an order
+  // The four orders below are what the dairy, the mill, the hives and the farm are FOR: until an order
   // asked for milk, flour, honey or carrots, `run.missing()` never named those landmarks, `screenForPlace` never
   // returned their screens and four finished mini-games would have sat unreachable behind a signpost. Each one
   // pairs a new ingredient with a second so the truck still makes two stops, and the amounts are the 3..4 a party

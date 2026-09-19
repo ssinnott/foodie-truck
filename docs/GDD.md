@@ -67,7 +67,7 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   ingredient is somewhere a day can send the truck. Recipes are only ever appended, because `?order=N` and the
   scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
-  orchard drops pears, peaches and avocados as well as apples; the market garden pulls six vegetables besides the
+  orchard drops pears, peaches and avocados as well as apples; the farm pulls six vegetables besides the
   carrot; the dairy's pails go on to butter; the mill's chutes fill rice sacks. A mini-game gathers whichever of
   its landmark's ingredients the list is still short of (`run.js gatherTarget`: the first short one in
   `INGREDIENTS` order, else the first the list asks for, else the landmark's first — so a bare dev jump still
@@ -93,10 +93,10 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - World `1920 x 1080` px (`content/places.js WORLD_W/H`), one flat plane in 3/4 storybook view, y-sorted sprites
   with ground-contact shadows. Camera follows the truck (0.1 lerp, integer snap, clamped to the world).
 - **Landmarks** (`PLACES`): home (the truck stop), orchard (apples, pears, peaches, avocados), pond (trout), coop
-  (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), market garden (carrots, potatoes, onions, leeks,
+  (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
   south lane (strawberries, blueberries). **All nine supply landmarks open a mini-game** while the list is short
-  of what they supply — the cove opens the pond's (crab lines off the jetty) and the bank opens the market's
+  of what they supply — the cove opens the pond's (crab lines off the jetty) and the bank opens the farm's
   (berries pulled from the beds), each screen reading the landmark it stands at off its `place` param — and **any
   of them can hold a line** once it is full; arriving where there is nothing to do shows a sign instead
   (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
@@ -120,13 +120,13 @@ drawn as a paper timer, the target count from the shopping list (that ingredient
 for twelve eggs may take two visits); the scene ends with a sign dropping in (`APPLES: 12`)
 and a 60-frame hold, then `run.gather` and back to the map. All randomness through `rng` inside `update()`.
 
-A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the market garden) and a
-screen two landmarks share (the pond's jetty is the cove's, the market's bed is the bank's) asks `run.js
+A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the farm) and a
+screen two landmarks share (the pond's jetty is the cove's, the farm's bed is the bank's) asks `run.js
 gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the clock and in the basket,
 its name on the end sign, and the landmark's own name on the clock ticket. The mechanic never changes — a pear is
 caught like an apple, a crab reeled in like a trout. The cove repaints the pond's layers in a seaside palette
 (`art/backgrounds/pond.js COVE`: open sea to the horizon, dunes for the tree-line, sand and marram for the turf,
-foam under the deck, no lily pads); the bank keeps the market's backdrop.
+foam under the deck, no lily pads); the bank keeps the farm's backdrop.
 
 **Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
 kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
@@ -171,8 +171,12 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   for 60 frames dips it — a strand of honey climbs the dipper and a bar fills over the skep — then +1 honey, and
   that skep is empty for 150 frames, so the party is pushed along the bench. Letting go early costs nothing. The
   bees drone over the bench and never turn.
-- **Market garden — PULL** (*move + tap*). Leafy tops stand in the bed (seven at the start, more every 70–120
-  frames up to eight, never closer than 42 px); every one is whatever the visit gathers (a carrot by default). `action` with a top anywhere under the critter (34 px either side) grips it and opens
+- **Farm — PULL** (*move + tap*). Leafy tops stand in the bed (seven at the start, more every 70–120
+  frames up to eight, never closer than 42 px); every one is whatever the visit gathers (a carrot by default), and
+  is drawn as that plant (`art/gardenProps.js PLANTS`: a carrot's fern, a potato's flowering haulm, an onion's
+  tubes, a leek's blades over its shank, a beetroot's crimson-stemmed rosette, a pumpkin under its vine, a hearted
+  cabbage, a strawberry plant with its berries on, a blueberry bush), so a row of leeks never looks like a row of
+  carrots. `action` with a top anywhere under the critter (34 px either side) grips it and opens
   a pull gauge above that seat; each further `action` press fills it a twelfth, and the twelfth brings the root out
   (+1 carrot, a 14-frame pull). 150 frames without a press lets go at no cost.
 

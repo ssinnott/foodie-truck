@@ -1,12 +1,13 @@
-// MARKET GARDEN - PULL (docs/GDD.md section 5; docs/ART_STYLE.md section 1, section 4). Side view, afternoon: the
-// Saturday Market's own walled kitchen garden, and the crew works one row of it. Leafy tops stand in the crop ridge
-// at seeded x positions; every seat walks LEFT and RIGHT along the row on its own depth lane; `action` within REACH
-// of a top takes HOLD of it and opens that seat's PULL GAUGE - a paper bar that fills a step with every further
-// `action` press. Tap it over and over - a dozen times - and the root comes out (+1). There is no beat to hit and nothing to pull by
-// mistake: every top in this bed is a carrot, a top nobody has pressed on for GRIP_TIMEOUT frames is simply let go
-// of at no cost, and the only thing the row asks of anyone is to keep tapping. The round ends when the party's total
-// reaches the order's amount or the 40-second clock runs out; the CARROTS sign drops, is held, then
-// run.gather('carrot') and back to the map.
+// FARM - PULL (docs/GDD.md section 5; docs/ART_STYLE.md section 1, section 4). Side view, afternoon: Furrow Farm's
+// walled kitchen garden, and the crew works one row of it. Leafy tops stand in the crop ridge at seeded x positions,
+// every one drawn as the vegetable the visit gathers (art/gardenProps.js PLANTS: a carrot's fern, a leek's blades,
+// a pumpkin under its vine); every seat walks LEFT and RIGHT along the row on its own depth lane; `action` within
+// REACH of a top takes HOLD of it and opens that seat's PULL GAUGE - a paper bar that fills a step with every
+// further `action` press. Tap it over and over - a dozen times - and the root comes out (+1). There is no beat to
+// hit and nothing to pull by mistake: every top in this bed is the same crop, a top nobody has pressed on for
+// GRIP_TIMEOUT frames is simply let go of at no cost, and the only thing the row asks of anyone is to keep tapping.
+// The round ends when the party's total reaches the order's amount or the 40-second clock runs out; the CARROTS
+// sign drops, is held, then run.gather('carrot') and back to the map.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): the crop is a fixed pool of plain sim objects built in enter() and
 // never grown; every random number - where a top is planted - comes from the rng singleton inside update(); the
@@ -16,8 +17,9 @@
 //
 // One signal, and only one (docs/ART_STYLE.md section 4): SIGNAL.garden gold, on the sparkle over a ripe root -
 // "the thing you want", the same mark the coop's fresh egg wears. There is no SIGNAL.hot anywhere in this scene and
-// that is deliberate: nothing in a market garden can hurt you. The carrot's own orange is the ingredient's hex and
-// only ever appears on a root that is OUT of the ground (art/gardenProps.js ROOT_HEX); the gauge's fill is UI.green
+// that is deliberate: nothing on a farm's vegetable row can hurt you. The carrot's own orange is the ingredient's
+// hex and only ever appears on a root that is OUT of the ground (art/gardenProps.js ROOT_HEX); a crop that grows in
+// view (a pumpkin, a cabbage) wears its hex on the vegetable itself and nowhere else; the gauge's fill is UI.green
 // under an ink line, never gold, as section 4 requires.
 import { VIEW_W, UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
@@ -36,8 +38,8 @@ import type { Rig, RigWeapon } from '../../lib/art/rig.ts';
 import type { Point } from '../../lib/art/rigParts.ts';
 import { gardenLayers, ROWS } from '../../art/backgrounds/garden.ts';
 import {
-  CROP, FERN_H, TAG_W, TAG_H, GAUGE_UNITS, GARDEN_TRUG, GARDEN_ANIMS,
-  drawFern, drawHole, drawRipeSpark, drawPulledCarrot, drawPullGauge, drawBarrow,
+  CROP, TAG_W, TAG_H, GAUGE_UNITS, GARDEN_TRUG, GARDEN_ANIMS,
+  plantFor, drawHole, drawRipeSpark, drawPulledRoot, drawPullGauge, drawBarrow,
 } from '../../art/gardenProps.ts';
 import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
@@ -119,13 +121,13 @@ const HOLE_STEP = 10, HOLE_FRAMES = 40, MAX_HOLES = 6;
 const FLIGHT_FRAMES = 14, FLIGHT_LIFT = 26, MAX_FLIGHTS = 4;
 /** Thistledown on the afternoon air: a cosmetic stream off its own seed, one every eight frames. */
 const DOWN_EVERY = 8, DOWN_SEED = 205, DOWN_PALE = '#F1E4C8';
-/** The fern's 1 px breeze, index-hashed so the row does not sway as one object. */
+/** The plants' 1 px breeze, index-hashed so the row does not sway as one object. */
 const SWAY = Int8Array.of(0, 1, 0, -1);
 /** The barrow: parked on the path behind the back lane, so nothing solid ever stands in the walk band. */
 const BARROW_X = 586, BARROW_Y = 280;
 
 const PLUS_ONE = '+1';
-const TITLE = 'SATURDAY MARKET', FALLBACK_TARGET = 4;
+const TITLE = 'FURROW FARM', FALLBACK_TARGET = 4;
 
 /** The ground-contact ellipse every sprite draws before the sorted pass. */
 function drawSeatShadow(ctx: CanvasRenderingContext2D, seat: GardenSeat): void { drawShadow(ctx, seat.x, seat.y, seat.rig.width + 6, 0.4, 0); }
@@ -245,15 +247,16 @@ export class GardenScreen extends Screen {
   /** The crop: a fixed pool of MAX_TOPS slots, built in enter() and never grown. */
   declare tops: CropTop[];
   /**
-   * What the bed grows this visit (game/run.js gatherTarget): the carrot or one of the market's other six rows,
-   * or a berry when the bramble bank borrows this screen. `icon`/`hex` are its glyph, the sign prefix its name,
-   * the title the landmark's.
+   * What the bed grows this visit (game/run.js gatherTarget): the carrot or one of the farm's other six rows, or a
+   * berry when the bramble bank borrows this screen. `icon`/`hex` are its glyph, the sign prefix its name, the
+   * title the landmark's, and `plant` is what stands in the row for it (art/gardenProps.js PLANTS).
    */
   declare ing: string;
   declare icon: string;
   declare hex: string;
   declare signPrefix: string;
   declare title: string;
+  declare plant: { h: number; draw: (ctx: CanvasRenderingContext2D, x: number, y: number, sway: number, variant: number) => void };
   declare clockIcon: (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
   /** The backdrop, pre-rendered once (art/backgrounds/garden.js gardenLayers) and blitted per frame. */
   declare layers: GardenBackdrop;
@@ -301,13 +304,14 @@ export class GardenScreen extends Screen {
     this.vis = makeRng(DOWN_SEED);
     this.downOpts = { color: DOWN_PALE, color2: CROP.leafHi, size: 3, life: 150, vx: -0.25, vy: 0.3, screen: true };
 
-    // what the bed grows this visit: the market's carrot (or one of its six other rows), or the berries when the
+    // what the bed grows this visit: the farm's carrot (or one of its six other rows), or the berries when the
     // bramble bank borrows this screen (game/run.js gatherTarget)
     const place = PLACES.find((p) => p.id === params.place && p.screen === 'garden');
     this.ing = gatherTarget(run, place ? place.id : undefined, 'garden');
     const ing = INGREDIENTS[this.ing] || INGREDIENTS.carrot;
     this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
     this.title = place ? place.name : TITLE;
+    this.plant = plantFor(this.icon);
     const icon = this.icon, hex = this.hex;
     this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
 
@@ -361,7 +365,7 @@ export class GardenScreen extends Screen {
   /**
    * Plant the bed the truck arrives to. The x positions are an even spread with a seeded jitter rather than the
    * spawner's rejection sampling: seven rejection-sampled positions leave gaps a player has to walk twice, and the
-   * opening frame of a market garden has to look planted.
+   * opening frame of a farm's vegetable row has to look planted.
    */
   plantBed(): void {
     const span = TOP_X_MAX - TOP_X_MIN;
@@ -570,15 +574,15 @@ export class GardenScreen extends Screen {
     jointScreen(rig, 'handN', s.trugPt);
   }
 
-  /** One top: a ripe fern with its gold sparkle blinking above it. */
+  /** One top: the visit's ripe plant with its gold sparkle blinking above it. */
   drawTop(ctx: CanvasRenderingContext2D, t: CropTop, i: number, f: number): void {
     if (!t.active) return;
     // held: a 2 px shake on alternate frames - the tug, and the only mark that says which top a gauge belongs to
     const sway = t.held ? (((f >> 1) & 1) ? 2 : -2) : SWAY[((f + i * 13) >> 4) & 3];
-    drawFern(ctx, t.x, ROOT_Y, sway, i & 1);
-    // 6 above the fern's drawn top: 4 for the mark's own half-height (drawRipeSpark takes its CENTRE) and 2 of
+    this.plant.draw(ctx, t.x, ROOT_Y, sway, i & 1);
+    // 6 above the plant's drawn top: 4 for the mark's own half-height (drawRipeSpark takes its CENTRE) and 2 of
     // clear air, so the one signal in the scene stands off the foliage instead of on it
-    if (((f + i * 7) >> 3) & 1) drawRipeSpark(ctx, t.x + 7, ROOT_Y - FERN_H - 6);
+    if (((f + i * 7) >> 3) & 1) drawRipeSpark(ctx, t.x + 7, ROOT_Y - this.plant.h - 6);
   }
 
   /** The pulled root's hop from its hole into the seat's trug (the trug point comes from the last drawSeat). */
@@ -586,7 +590,7 @@ export class GardenScreen extends Screen {
     if (fl.t >= FLIGHT_FRAMES) return;
     const s = this.seats[fl.seat], k = fl.t / FLIGHT_FRAMES;
     const tx = s.trugPt.x, ty = s.trugPt.y + 10;
-    drawPulledCarrot(ctx, R(fl.x0 + (tx - fl.x0) * k), R(fl.y0 + (ty - fl.y0) * k - Math.sin(k * Math.PI) * FLIGHT_LIFT), this.icon, this.hex);
+    drawPulledRoot(ctx, R(fl.x0 + (tx - fl.x0) * k), R(fl.y0 + (ty - fl.y0) * k - Math.sin(k * Math.PI) * FLIGHT_LIFT), this.icon, this.hex);
   }
 
   /**

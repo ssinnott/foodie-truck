@@ -214,7 +214,7 @@ export function startRun(game, o) {
 
 /**
  * Which ingredient a mini-game gathers this visit (docs/GDD.md section 5). A landmark can supply several (the
- * orchard drops apples, pears, peaches and avocados; the market garden pulls seven roots), and two landmarks can
+ * orchard drops apples, pears, peaches and avocados; the farm pulls seven roots), and two landmarks can
  * share one screen (the cove borrows the pond's jetty), so the screen asks with the landmark it stands at -
  * `place` is the map's hand-off param, or a ?place= dev jump - and its own id as the fallback:
  *   1. the landmark's ingredients, in INGREDIENTS order, or every ingredient of every landmark that opens `screen`

@@ -8,10 +8,10 @@ them one at a time, order by order, until the third line has been served. Then t
 
 Twenty-two recipes, twenty-three ingredients, nine landmarks, and **seven mini-games** — each with its own verb:
 catch, fish, collect, pump, fill, creep, pull. A landmark can supply several things (the orchard drops pears, peaches
-and avocados as well as apples; the market garden's bed grows six vegetables besides the carrot; the dairy churns
+and avocados as well as apples; the farm's bed grows six vegetables besides the carrot; the dairy churns
 butter and the mill fills rice sacks), and the two newest landmarks — Cockle Cove, where crabs, seaweed and sea salt
 come off a jetty, and Bramble Bank, where strawberries and blueberries are pulled from the beds — borrow the pond's
-and the market's mini-games. Every one of them is played with the same three inputs — move left and right, tap the
+and the farm's mini-games. Every one of them is played with the same three inputs — move left and right, tap the
 action button over and over, or hold it down — with no timing windows and nothing to lose, so a small child can play
 the whole game.
 
@@ -34,7 +34,7 @@ so the repository stays reviewable in a diff.
 |---|---|---|
 | **Day board** | `stage` | The day's plan on paper: the three lines (where each waits, who is in it, what they order) and the shopping list they add up to. Confirm opens the truck. After the last line it comes back closed, every customer's stars on it. |
 | **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, arriving at a landmark with a line opens the queue. |
-| **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows, hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, and tap to pull carrots out of the market garden. Everyone seated plays at once and the party's total counts. |
+| **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows, hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, and tap to pull carrots out of the farm's bed. Everyone seated plays at once and the party's total counts. |
 | **The line** | `line` | The truck pulled up at a queue: the customer at its front steps up and says what they want. Take the order into the kitchen. |
 | **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to pull each ingredient out of the fridge; tap to chop; hold to mix, cook and bake; ring the bell to plate), serve, and watch the customer eat. The next in line steps up; when the line is empty, the truck drives to the next one. |
 

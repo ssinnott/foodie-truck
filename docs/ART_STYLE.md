@@ -127,10 +127,13 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
 - **Hives**: late-afternoon clover meadow, sky `#F9DDB8`→`#F2C39A`, downs `#B3AE7E`, clipped hedge `#3F5A34` (darker
   than the orchard's canopy so the two green scenes never twin), meadow cooler and lighter than the orchard's grass,
   five straw skeps on a bench; signal: gold on a skep with honey left in it.
-- **Market garden**: a walled kitchen garden, straw sky `#E9DCBE`→`#F4C9A0`, lime-washed wall `#8A8478`
+- **Farm**: a walled kitchen garden, straw sky `#E9DCBE`→`#F4C9A0`, lime-washed wall `#8A8478`
   (deliberately near-colourless: brick sat 19° from P2's marmalade apron across 70 rows of frame), tilled beds
-  `#4A3C32` (L .25), crop green `#7FA850`; signal: gold on a ripe root's
-  sparkle — and no HOT anywhere, because nothing in a market garden can hurt you.
+  `#4A3C32` (L .25), crop green `#7FA850` with the other crops' foliage a step off it (potato haulm `#6C9448`,
+  onion and leek blades `#6FA07E`, beetroot leaves `#5E7F3E`) so each vegetable is its own plant in the row; a
+  crop that grows in view (pumpkin, cabbage, an onion's or a beetroot's shoulder, the berries) wears its
+  ingredient hex on the vegetable itself and nowhere else; signal: gold on a ripe root's
+  sparkle — and no HOT anywhere, because nothing on a farm's vegetable row can hurt you.
 - **Kitchen**: plum wall `#4A3038`, slate counter top `#4F5A62` (rows 200–206), steel counter front `#3E4A55`
   (rows 206–246), floor checker `#4E4450` / `#5A4E5C` (rows 246–340), feet line y 252 so torsos read on the counter
   front and heads on the wall; a floor-standing oven that breaks the counter line; copper pot `#B87333`; paper and
@@ -228,7 +231,7 @@ face (`markings`) or replace the hook; whichever, keep the rows of §0.6 and the
 
 Paint once, blit per frame (`art/layers.js`): every scene pre-renders its layers with a seeded rng (seed blocks:
 map 140–159, orchard 100–109, pond 110–119, coop 120–129, kitchen 130–139,
-title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, market garden 200–209) and blits at integer
+title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, farm 200–209) and blits at integer
 offsets; parallax
 `far 0.2 / mid 0.5 / ground 1 / near 1.2` for side views, none in the kitchen, chunks for the map. 16 rows of bleed.
 Nothing solid in the near layer at critter height; walk lanes carry no scatter; the plane behind the critters'

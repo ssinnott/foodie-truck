@@ -29,10 +29,12 @@ export const MAP = Object.freeze({
   river: '#6F9FB0', deep: '#4E7A8C', hedge: '#566241', canopy: '#728252', wall: '#F1E4C8', wallShade: '#C9B58E',
   roof: '#A65A48', roofShade: '#7A4034', plum: PLUM.shadow, skyTop: '#FBE3C4', skyLow: '#F4C9A0', hillFar: '#8E8A78',
   hillNear: '#B4A48C', wood: '#9A6234', woodDark: '#5E3A1B', trunk: '#6B4E3A', rose: '#C96B7A', mustard: '#E2B44A',
-  board: '#55665A', boardShade: '#465549', brass: '#B8873A', churn: '#B8C4C9', slate: '#2F4B3C', window: '#D9C9A8', cobble: '#C9B58E',
+  board: '#55665A', boardShade: '#465549', brass: '#B8873A', churn: '#B8C4C9', slate: '#2F4B3C', window: '#D9C9A8',
   // the second pass's two landmarks: the cove's sand is the lane's own buff and its water the river's; the bramble
   // bank's blueberries are the ingredient's hex a value down, so the one new colour on the plane is still muted
   sand: '#D9C393', rock: '#8E9AA0', blueberry: '#4A5BA8',
+  /** The farm's tilled plot: the trunk brown a step lighter, so its furrows read as earth and not as a plank floor. */
+  soil: '#7A6249',
 });
 
 export const CHUNK_W = VIEW_W, CHUNK_H = VIEW_H, CHUNKS_X = WORLD_W / VIEW_W, CHUNKS_Y = WORLD_H / VIEW_H;
@@ -54,7 +56,7 @@ export const LANES = Object.freeze([
   [960, 200, 1200, 200, 1280, 280, 1500, 280],
   [960, 700, 1240, 700, 1400, 700, 1400, 760, 1480, 760],
   [1500, 520, 1560, 580, 1560, 760, 1480, 760],
-  // the second pass: the market lane carries on east to the cove; a spur drops off the pond lane to the berry bank
+  // the second pass: the farm lane carries on east to the cove; a spur drops off the pond lane to the berry bank
   [1500, 520, 1760, 520],
   [1150, 700, 1150, 850, 1180, 880],
 ]);
@@ -102,7 +104,7 @@ export function riverBlocked(px, py) { return riverDist(px, py) < RIVER_BLOCK &&
 
 // ---------------------------------------------------------------- authored world content
 const place = (id) => PLACES.find((p) => p.id === id);
-const HOME = place('home'), ORCHARD = place('orchard'), POND = place('pond'), COOP = place('coop'), DAIRY = place('dairy'), MILL = place('mill'), HIVE = place('hive'), MARKET = place('garden');
+const HOME = place('home'), ORCHARD = place('orchard'), POND = place('pond'), COOP = place('coop'), DAIRY = place('dairy'), MILL = place('mill'), HIVE = place('hive'), FARM = place('garden');
 const SHORE = place('shore'), BRAMBLE = place('bramble');
 /** Wheat fields (hand-placed so no landmark sits in one); lanes cut gates through their hedges. */
 const WHEAT = [[1020, 130, 260, 120], [110, 420, 230, 160], [1580, 860, 280, 180], [60, 960, 200, 90]];
@@ -129,7 +131,7 @@ export const SPOTS = Object.freeze({
 export const SIGN_AT = Object.freeze({
   home: { x: HOME.x + 76, y: HOME.y - 4 }, orchard: { x: ORCHARD.x + 30, y: ORCHARD.y - 18 }, pond: { x: POND.x + 56, y: POND.y - 28 },
   coop: { x: COOP.x + 52, y: COOP.y - 18 }, dairy: { x: DAIRY.x - 52, y: DAIRY.y - 18 }, mill: { x: MILL.x - 40, y: MILL.y - 18 },
-  hive: { x: HIVE.x - 30, y: HIVE.y - 18 }, garden: { x: MARKET.x, y: MARKET.y - 28 },
+  hive: { x: HIVE.x - 30, y: HIVE.y - 18 }, garden: { x: FARM.x, y: FARM.y - 28 },
   shore: { x: SHORE.x - 34, y: SHORE.y - 26 }, bramble: { x: BRAMBLE.x + 40, y: BRAMBLE.y - 18 },
 });
 /** Every signpost clears this much lane: LANE_HALF plus half a truck, so nothing is driven through (scenarios/map.js). */
@@ -138,7 +140,7 @@ export const SIGN_CLEAR = LANE_HALF + 8;
 export const PARK_AT = Object.freeze({ x: HOME.x + 30, y: HOME.y + 26 });
 
 /**
- * The four tall landmarks are painted into the ground chunks, so nothing y-sorts them against the truck: without a
+ * The five tall landmarks are painted into the ground chunks, so nothing y-sorts them against the truck: without a
  * test the token drives inside the mill tower and the sails cross it. Fields stay drivable (GDD section 4); walls do
  * not. Flat [x0, y0, x1, y1] world rects, a little wider than the walls so the 40 px token stays clear of the brick.
  */
@@ -147,6 +149,7 @@ const WALLS = [
   COOP.x - 38, COOP.y - 110, COOP.x + 38, COOP.y - 56,      // the coop hut (its run and door stay open)
   DAIRY.x - 42, DAIRY.y - 84, DAIRY.x + 42, DAIRY.y - 14,   // the dairy barn
   MILL.x - 30, MILL.y - 82, MILL.x + 30, MILL.y - 6,        // the mill tower
+  FARM.x - 70, FARM.y - 68, FARM.x - 6, FARM.y - 30,        // the farm's barn (the plot beside it stays drivable, like a field)
 ];
 /** True where a wall stands: the truck stops against it (comparisons only, so the sim stays deterministic). */
 export function wallBlocked(px, py) {
@@ -207,7 +210,7 @@ function groundShade(g, cx, by, w, k = 0.22, lean = 2) { ellipse(g, R(cx + lean)
 /**
  * Lollipop tree: 4 px trunk, a shaded canopy disc; base at (bx, by).
  *
- * The crown carries the SAME warm ink as the stall, the signposts and the cottage. `discShaded` lays its ink disc
+ * The crown carries the SAME warm ink as the barn, the signposts and the cottage. `discShaded` lays its ink disc
  * under the fill, but on a circle the fill's antialiasing eats that ring from the inside while the ground eats it
  * from the outside, and the crowns came out of the first pass with no printed line at all (a judge's histogram of a
  * tree found zero #2A1F1A). One stroked ring over the fill puts a solid printed line of INK back on the boundary,
@@ -238,12 +241,6 @@ function building(g, x, y, w, h, wall, wallShade, roof, roofShade, o) {
   boxShaded(g, x + R(w * 0.6), y - 15, dw, 15, MAP.wood, MAP.woodDark, INK, 1, 0.3);
   boxOutlined(g, x + 8, y - h + 8, 9, 9, MAP.window);
   g.fillStyle = MAP.skyTop; g.fillRect(x + 8, y - h + 8, 3, 9);
-}
-function stall(g, x, y, stripe) {
-  boxOutlined(g, x + 2, y - 14, 2, 14, MAP.woodDark); boxOutlined(g, x + 24, y - 14, 2, 14, MAP.woodDark);
-  boxShaded(g, x, y - 6, 28, 6, MAP.wood, MAP.woodDark);
-  pathRR(g, x - 1, y - 24, 30, 10, 3); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = MAP.wall; g.fill();
-  g.save(); g.clip(); g.fillStyle = stripe; for (let sx = x - 1; sx < x + 30; sx += 10) g.fillRect(sx, y - 24, 5, 10); g.restore();
 }
 function skep(g, cx, by) {
   pathRR(g, cx - 6, by - 14, 12, 14, 6); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = MAP.wheat; g.fill();
@@ -301,10 +298,32 @@ function paintLandmarks(g) {
   lollipop(g, HIVE.x, HIVE.y - 44, 16);
   boxShaded(g, HIVE.x - 20, HIVE.y - 36, 40, 8, MAP.wood, MAP.woodDark);
   skep(g, HIVE.x - 13, HIVE.y - 36); skep(g, HIVE.x, HIVE.y - 36); skep(g, HIVE.x + 13, HIVE.y - 36);
-  // market: a cobbled square with three striped stalls
-  g.fillStyle = MAP.cobble; pathRR(g, MARKET.x - 24, MARKET.y - 84, 48, 48, 4); g.fill();
-  g.fillStyle = MAP.laneEdge; for (let y = MARKET.y - 80; y < MARKET.y - 40; y += 4) for (let x = MARKET.x - 21 + ((y >> 2) & 1) * 2; x < MARKET.x + 22; x += 5) g.fillRect(x, y, 2, 2);
-  stall(g, MARKET.x - 62, MARKET.y - 44, MAP.rose); stall(g, MARKET.x + 34, MARKET.y - 44, MAP.shade); stall(g, MARKET.x - 14, MARKET.y - 92, MAP.mustard);
+  // farm: a timber barn on the lane's north side, a fenced plot of crop rows beside it with a scarecrow in it, and
+  // a hay bale by the barn door. The plot is paint, not a wall (the fields are drivable, GDD section 4); the barn
+  // is in WALLS like every other building.
+  groundShade(g, FARM.x - 38, FARM.y - 30, 70, 0.1, 4);
+  building(g, FARM.x - 66, FARM.y - 30, 56, 36, MAP.wood, MAP.woodDark, MAP.board, MAP.slate, { doorW: 12 });
+  g.fillStyle = MAP.woodDark; g.fillRect(FARM.x - 66, FARM.y - 48, 56, 1); g.fillRect(FARM.x - 40, FARM.y - 66, 1, 36);   // the barn's boarding
+  pathRR(g, FARM.x - 84, FARM.y - 44, 14, 12, 5); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = MAP.wheat; g.fill();
+  g.save(); g.clip(); g.fillStyle = MAP.furrow; for (let y = FARM.y - 41; y < FARM.y - 32; y += 4) g.fillRect(FARM.x - 84, y, 14, 2); g.restore();
+  // the plot: tilled earth in a wattle fence, five furrows of green tops running with the lane. It stops at x + 54:
+  // the river's west bank runs about 60 px east of the door, and a bed under water is a bed nobody planted.
+  groundShade(g, FARM.x + 24, FARM.y - 42, 68, 0.08, 4);
+  pathRR(g, FARM.x - 6, FARM.y - 90, 60, 46, 3); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = MAP.soil; g.fill();
+  g.fillStyle = MAP.trunk; for (let y = FARM.y - 84; y < FARM.y - 46; y += 8) g.fillRect(FARM.x - 4, y, 56, 2);
+  for (let y = FARM.y - 86; y < FARM.y - 46; y += 8) for (let x = FARM.x + 2; x < FARM.x + 52; x += 9) {
+    g.fillStyle = MAP.hedge; g.fillRect(x - 2, y - 2, 5, 4); g.fillStyle = MAP.canopy; g.fillRect(x - 2, y - 2, 2, 2);
+  }
+  g.fillStyle = MAP.woodDark;
+  for (let px = FARM.x - 6; px <= FARM.x + 52; px += 10) { g.fillRect(px, FARM.y - 96, 2, 8); g.fillRect(px, FARM.y - 50, 2, 8); }
+  g.fillRect(FARM.x - 6, FARM.y - 93, 60, 2); g.fillRect(FARM.x - 6, FARM.y - 47, 60, 2);
+  // the scarecrow, in the plot's near corner: a post, a crossbar, a shirt in the landmark's own rose, a straw head
+  // under a hat - the one thing on the map that says "farm" from across the room
+  boxOutlined(g, FARM.x + 40, FARM.y - 76, 3, 30, MAP.woodDark);
+  boxOutlined(g, FARM.x + 32, FARM.y - 68, 19, 3, MAP.woodDark);
+  boxOutlined(g, FARM.x + 37, FARM.y - 70, 9, 11, MAP.rose);
+  discShaded(g, FARM.x + 41, FARM.y - 76, 5, MAP.wheat, MAP.furrow);
+  boxOutlined(g, FARM.x + 35, FARM.y - 81, 13, 3, MAP.woodDark); boxOutlined(g, FARM.x + 37, FARM.y - 86, 9, 5, MAP.woodDark);
   // cove: a stretch of COAST, not a pool - the sea comes in over the east hedge between C.top and C.bottom with a
   // weaving shoreline, a sand strip curving back into the meadow at each end, foam breaking along the waterline,
   // a deeper band further out, rocks at the tide line, two crab pots on the sand and a rowing boat pulled up by

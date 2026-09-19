@@ -58,7 +58,7 @@ export function drawLineTag(ctx, sx, sy, text, w) {
 /**
  * The crew strip, top-right: the seats' name plates on ONE paper card of the order ticket's own recipe, not four
  * loose colour chips floating on the world. The first pass stacked bare plates straight on the plane, and over the
- * market they read as part of the stalls; the card gives them a home, and its drop shadow says which layer they are
+ * farm they read as part of the plot; the card gives them a home, and its drop shadow says which layer they are
  * on. `seats` = [{ slot, plateText, plateW }]; the card is sized to the widest plate so it never clips a name.
  */
 export const PLATE_PITCH = 14;

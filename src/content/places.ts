@@ -16,12 +16,14 @@ export const PLACES = Object.freeze([
   { id: 'dairy', name: 'BUTTERCUP DAIRY', sign: 'MILK', x: 300, y: 820, screen: 'dairy', accent: '#F1E4C8' },
   { id: 'mill', name: 'WINDLE MILL', sign: 'FLOUR', x: 960, y: 200, screen: 'mill', accent: '#E3C68F' },
   { id: 'hive', name: 'CLOVER HIVES', sign: 'HONEY', x: 700, y: 900, screen: 'hive', accent: '#E2B44A' },
-  { id: 'garden', name: 'SATURDAY MARKET', sign: 'MARKET', x: 1250, y: 520, screen: 'garden', accent: '#C96B7A' },
+  // The farm keeps the id `garden`: it is the name of its SCREEN (the walled kitchen garden the crew works a row
+  // of), the seed block, the scenario and the dev jump, and the landmark was only ever the place that garden is at.
+  { id: 'garden', name: 'FURROW FARM', sign: 'FARM', x: 1250, y: 520, screen: 'garden', accent: '#C96B7A' },
   // The second pass's landmarks. Neither has a mini-game of its own yet: each BORROWS the screen of the landmark
-  // whose verb fits (the cove is fished from a jetty like the millpond, the berry beds are pulled like the market
-  // garden's), and the screen gathers whichever of the landmark's ingredients the list is short of (game/run.js
+  // whose verb fits (the cove is fished from a jetty like the millpond, the berry beds are pulled like the farm's
+  // rows), and the screen gathers whichever of the landmark's ingredients the list is short of (game/run.js
   // gatherTarget). A shared screen keeps the shared accent, so the cove is mint like the pond and the bank is rose
-  // like the market (docs/ART_STYLE.md section 4: one signal colour per scene, and these are the same scenes).
+  // like the farm (docs/ART_STYLE.md section 4: one signal colour per scene, and these are the same scenes).
   { id: 'shore', name: 'COCKLE COVE', sign: 'SHORE', x: 1760, y: 520, screen: 'pond', accent: '#5FD3C0' },
   { id: 'bramble', name: 'BRAMBLE BANK', sign: 'BERRIES', x: 1180, y: 880, screen: 'garden', accent: '#C96B7A' },
 ]);
