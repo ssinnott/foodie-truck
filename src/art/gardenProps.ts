@@ -61,7 +61,7 @@ const BEET_LEAF_SH = mix(CROP.beetLeaf, PLUM.deep, 0.3), SHANK_SH = mix(CROP.sha
  * fruit. Nothing in backgrounds/garden.js is painted in it.
  *
  * The same rule, read for the crops that grow IN VIEW: a pumpkin sits on the soil, a cabbage hearts up above it, an
- * onion and a beetroot show their shoulders, strawberries and blueberries hang on the plant. Their hex is painted on
+ * onion and a beetroot show their shoulders. Their hex is painted on
  * exactly that - the vegetable itself, standing in the bed, the way the orchard's red hangs in its canopy on the
  * fruit - and never on a leaf, a stem or the soil.
  */
@@ -312,35 +312,12 @@ function drawCabbage(ctx, x, y, sway, variant) {
   ctx.fillStyle = t.hi; ctx.fillRect(cx - 4, cy - 4, 2, 2);
 }
 
-// the strawberry: three trefoils on short stalks, the berries hanging at the soil line in front
-const STRAW_T = Float32Array.of(-11, -9, 3, 2.5, -0.5, -7, -12, 3, 2.5, 0.4, -5, -8, 3, 2.5, 0, -3, -15, 3, 2.5, -0.5, 3, -15, 3, 2.5, 0.5, 0, -18, 3, 2.5, 0, 5, -8, 3, 2.5, 0, 7, -12, 3, 2.5, -0.4, 11, -9, 3, 2.5, 0.5);
-const STRAW_BERRY = Int8Array.of(-9, -2, 8, -3, 2, 0);
-function drawStrawberry(ctx, x, y, sway, variant) {
-  x = R(x); y = R(y);
-  const m = variant ? -1 : 1, hex = INGREDIENTS.strawberry.hex;
-  stem(ctx, x, y, -7, -10, m, 0, CROP.leafSh); stem(ctx, x, y, 0, -15, m, sway, CROP.leafSh); stem(ctx, x, y, 7, -10, m, 0, CROP.leafSh);
-  leafMass3(ctx, x, y, STRAW_T, m, sway, CROP.leaf, CROP.leafSh);
-  cap(ctx, x - 2 + sway, y - 20);
-  for (let i = 0; i < STRAW_BERRY.length; i += 2) drawFood(ctx, 'strawberry', x + m * STRAW_BERRY[i], y + STRAW_BERRY[i + 1], 3.5, hex);
-}
-
-// the blueberry: a small woody bush, three twigs with little oval leaves and two clusters of berries
-const BLUE_T = Float32Array.of(-6, -14, 3.5, 2.5, -0.8, -9, -20, 3.5, 2.5, -0.4, -3, -22, 3.5, 2.5, -1, 3, -26, 3.5, 2.5, 0.4, 6, -12, 3.5, 2.5, 0.8, 10, -17, 3.5, 2.5, 0.3);
-function drawBlueberry(ctx, x, y, sway, variant) {
-  x = R(x); y = R(y);
-  const m = variant ? -1 : 1, hex = INGREDIENTS.blueberry.hex;
-  stem(ctx, x, y, -9, -22, m, sway, CROP.willow); stem(ctx, x, y, 1, -28, m, sway, CROP.willow); stem(ctx, x, y, 9, -19, m, sway, CROP.willow);
-  leafMass3(ctx, x, y, BLUE_T, m, sway, CROP.blade, BLADE_SH);
-  cap(ctx, x - m * 4 - 1 + sway, y - 24);
-  drawFood(ctx, 'blueberry', x - m * 5 + sway, y - 16, 3, hex);
-  drawFood(ctx, 'blueberry', x + m * 6 + sway, y - 11, 3, hex);
-}
-
 /**
  * THE PLANTS, by INGREDIENTS icon id: what stands in the crop ridge when the bed grows that vegetable, and how tall
  * it is drawn (px above the soil line, ink included, at the widest sway the screen hands in) so the ripe sparkle
  * can stand clear of it. `plantFor` falls back to the carrot's fern for anything not listed, so a new ingredient
- * pointed at this screen grows SOMETHING on its first day.
+ * pointed at this screen grows SOMETHING on its first day. The berries are not here: Bramble Bank picks them off
+ * its own bushes (art/brambleProps.js), and a strawberry plant in a farm row was the visit that said it should.
  */
 export const PLANTS = Object.freeze({
   carrot: { h: FERN_H, draw: drawFern },
@@ -350,8 +327,6 @@ export const PLANTS = Object.freeze({
   beetroot: { h: 31, draw: drawBeetroot },
   pumpkin: { h: 25, draw: drawPumpkin },
   cabbage: { h: 19, draw: drawCabbage },
-  strawberry: { h: 22, draw: drawStrawberry },
-  blueberry: { h: 31, draw: drawBlueberry },
 });
 export function plantFor(icon) { return PLANTS[icon] || PLANTS.carrot; }
 

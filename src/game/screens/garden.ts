@@ -247,9 +247,9 @@ export class GardenScreen extends Screen {
   /** The crop: a fixed pool of MAX_TOPS slots, built in enter() and never grown. */
   declare tops: CropTop[];
   /**
-   * What the bed grows this visit (game/run.js gatherTarget): the carrot or one of the farm's other six rows, or a
-   * berry when the bramble bank borrows this screen. `icon`/`hex` are its glyph, the sign prefix its name, the
-   * title the landmark's, and `plant` is what stands in the row for it (art/gardenProps.js PLANTS).
+   * What the bed grows this visit (game/run.js gatherTarget): the carrot or one of the farm's other six rows.
+   * `icon`/`hex` are its glyph, the sign prefix its name, the title the landmark's, and `plant` is what stands in
+   * the row for it (art/gardenProps.js PLANTS).
    */
   declare ing: string;
   declare icon: string;
@@ -304,8 +304,7 @@ export class GardenScreen extends Screen {
     this.vis = makeRng(DOWN_SEED);
     this.downOpts = { color: DOWN_PALE, color2: CROP.leafHi, size: 3, life: 150, vx: -0.25, vy: 0.3, screen: true };
 
-    // what the bed grows this visit: the farm's carrot (or one of its six other rows), or the berries when the
-    // bramble bank borrows this screen (game/run.js gatherTarget)
+    // what the bed grows this visit: the farm's carrot, or one of its six other rows (game/run.js gatherTarget)
     const place = PLACES.find((p) => p.id === params.place && p.screen === 'garden');
     this.ing = gatherTarget(run, place ? place.id : undefined, 'garden');
     const ing = INGREDIENTS[this.ing] || INGREDIENTS.carrot;

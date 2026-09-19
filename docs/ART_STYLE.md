@@ -135,6 +135,11 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   crop that grows in view (pumpkin, cabbage, an onion's or a beetroot's shoulder, the berries) wears its
   ingredient hex on the vegetable itself and nowhere else; signal: gold on a ripe root's
   sparkle — and no HOT anywhere, because nothing on a farm's vegetable row can hurt you.
+- **Bramble Bank**: the farm's afternoon sky over the hive's downs `#B3AE7E` and a tall hedgerow `#3F5A34` with a
+  five-bar gate; the turf bank `#8A9459` (L .53), the trodden path `#A8946E` (L .58, the frog is the binding
+  constraint again), bushes in the orchard's canopy green `#4F6B3A` on dark willow canes, unripe berries a pale
+  green pea, ripe ones in the ingredient hex; accent rose on the pick-your-own board only; signal: the farm's gold
+  on a ripe berry's sparkle.
 - **Kitchen**: plum wall `#4A3038`, slate counter top `#4F5A62` (rows 200–206), steel counter front `#3E4A55`
   (rows 206–246), floor checker `#4E4450` / `#5A4E5C` (rows 246–340), feet line y 252 so torsos read on the counter
   front and heads on the wall; a floor-standing oven that breaks the counter line; copper pot `#B87333`; paper and
@@ -232,7 +237,7 @@ face (`markings`) or replace the hook; whichever, keep the rows of §0.6 and the
 
 Paint once, blit per frame (`art/layers.js`): every scene pre-renders its layers with a seeded rng (seed blocks:
 map 140–159, orchard 100–109, pond 110–119, coop 120–129, kitchen 130–139,
-title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, farm 200–209) and blits at integer
+title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, farm 200–209, bramble bank 210–219) and blits at integer
 offsets; parallax
 `far 0.2 / mid 0.5 / ground 1 / near 1.2` for side views, none in the kitchen, chunks for the map. 16 rows of bleed.
 Nothing solid in the near layer at critter height; walk lanes carry no scatter; the plane behind the critters'

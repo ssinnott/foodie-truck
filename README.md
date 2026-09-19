@@ -10,8 +10,8 @@ Twenty-two recipes, twenty-three ingredients, nine landmarks, and **seven mini-g
 catch, fish, collect, pump, fill, creep, pull. A landmark can supply several things (the orchard drops pears, peaches
 and avocados as well as apples; the farm's bed grows six vegetables besides the carrot; the dairy churns
 butter and the mill fills rice sacks), and the two newest landmarks — Cockle Cove, where crabs, seaweed and sea salt
-come off a jetty, and Bramble Bank, where strawberries and blueberries are pulled from the beds — borrow the pond's
-and the farm's mini-games. Every one of them is played with the same three inputs — move left and right, tap the
+come off a jetty, and Bramble Bank, where strawberries and blueberries are picked off the bushes — the cove borrows
+the pond's mini-game and the bank has its own. Every one of them is played with the same three inputs — move left and right, tap the
 action button over and over, or hold it down — with no timing windows and nothing to lose, so a small child can play
 the whole game.
 

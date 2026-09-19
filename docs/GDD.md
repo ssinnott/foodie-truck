@@ -96,8 +96,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
   south lane (strawberries, blueberries). **All nine supply landmarks open a mini-game** while the list is short
-  of what they supply — the cove opens the pond's (crab lines off the jetty) and the bank opens the farm's
-  (berries pulled from the beds), each screen reading the landmark it stands at off its `place` param — and **any
+  of what they supply — the cove opens the pond's (crab lines off the jetty), reading the landmark it stands at off
+  its `place` param, and the bank opens its own (berries picked off the bushes) — and **any
   of them can hold a line** once it is full; arriving where there is nothing to do shows a sign instead
   (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
   `THE LINES ARE WAITING` at home).
@@ -120,13 +120,13 @@ drawn as a paper timer, the target count from the shopping list (that ingredient
 for twelve eggs may take two visits); the scene ends with a sign dropping in (`APPLES: 12`)
 and a 60-frame hold, then `run.gather` and back to the map. All randomness through `rng` inside `update()`.
 
-A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the farm) and a
-screen two landmarks share (the pond's jetty is the cove's, the farm's bed is the bank's) asks `run.js
+A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the farm, the bank) and a
+screen two landmarks share (the pond's jetty is the cove's) asks `run.js
 gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the clock and in the basket,
 its name on the end sign, and the landmark's own name on the clock ticket. The mechanic never changes — a pear is
 caught like an apple, a crab reeled in like a trout. The cove repaints the pond's layers in a seaside palette
 (`art/backgrounds/pond.js COVE`: open sea to the horizon, dunes for the tree-line, sand and marram for the turf,
-foam under the deck, no lily pads); the bank keeps the farm's backdrop.
+foam under the deck, no lily pads).
 
 **Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
 kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
@@ -182,6 +182,13 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   carrots. `action` with a top anywhere under the critter (34 px either side) grips it and opens
   a pull gauge above that seat; each further `action` press fills it a twelfth, and the twelfth brings the root out
   (+1 carrot, a 14-frame pull). 150 frames without a press lets go at no cost.
+
+- **Bramble Bank — PICK** (*move + tap*). Six berry bushes stand along the foot of the bank, three berry spots
+  each; six berries are ripe when the truck pulls up and one more ripens every 70–120 frames on a bush with a green
+  spot left (the pea turns into the visit's own berry with the gold sparkle over it). `action` with a bush anywhere
+  under the critter (34 px either side) picks its ripe berry (a 12-frame reach up into the bush, the berry hops
+  into the basket, +1); a bush with nothing ripe on it does nothing. The bank used to borrow the farm's bed, and a
+  strawberry pulled out of the ground by its top was the visit that said it should not.
 
 ## 6. The kitchen
 
