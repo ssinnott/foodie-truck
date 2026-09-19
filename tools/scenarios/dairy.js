@@ -6,7 +6,7 @@
 //           party's total up by one, and the other seats still on zero. Then the two things the byre promises:
 //             any rhythm works - twelve taps spread over six seconds fill a pail just the same;
 //             nothing else does anything - `alt` moves nothing, and no cow ever kicks.
-//           Finally the clock is forced to its last frames: the MILK sign drops, is held, and the screen hands back
+//           Finally the finish line is brought down to the party's total: the MILK sign drops, is held, and the screen hands back
 //           to the map with the order's milk line updated by the party's total.
 //           Shots: tools/screens/dairy-pump.png (mid-squirt: the jet, the ring, the chevron on its next step) and
 //           dairy-sign.png.
@@ -82,12 +82,14 @@ export const SCENARIOS = {
       assert(mashed.bumpT === 0 && mashed.anim !== 'bump', `forty taps in a row and nothing kicks (bumpT ${mashed.bumpT}, anim '${mashed.anim}')`);
       assert(mashed.count === altBefore.count + Math.floor((altBefore.fill + 40) / PUMP_PER_PAIL), `every one of them counted (seat 0 ${altBefore.count} -> ${mashed.count})`);
 
-      // --- the ending: force the clock out, expect the sign, then the map with the milk banked
+      // --- the ending: bring the finish line down to the party's total (there is no clock to force), expect the sign,
+      // then the map with the milk banked
       const last = await api.summary();
-      await page.evaluate(() => { window.__game.game.screen.clock.timer = 3; });
+      assert(last.top.total >= 1, `something was milked before the ending (total ${last.top.total})`);
+      await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(1, sc.total); sc.setTotal(sc.total); });
       await api.step(4 + SLAM + 20);
       const s2 = await api.summary();
-      assert(s2.screen === 'dairy' && s2.top.phase === 1 && /^MILK: \d+$/.test(s2.top.sign), `the clock ran out: the MILK sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
+      assert(s2.screen === 'dairy' && s2.top.phase === 1 && /^MILK: \d+$/.test(s2.top.sign), `the target was reached: the MILK sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
       await api.shot('dairy-sign');
       await api.step(HOLD);
       const s3 = await api.summary();

@@ -5,8 +5,8 @@
 // climbs onto it over DIP_HOLD frames of holding, and on the last one it is +1, a ring, a jar in the party's crate,
 // and that skep goes empty for REFILL_FRAMES. Letting go early puts the dipper back at no cost; the next hold starts
 // again. The bees drone over the bench the whole time and never turn: there is nothing in this meadow that stings.
-// The round ends when the party's total reaches the order's remainder or the 40-second clock runs out; the HONEY sign
-// drops, is held, then run.gather() and back to the map.
+// The round ends when the party's total reaches the order's remainder, and not before (there is no clock to run
+// out); the HONEY sign drops, is held, then run.gather() and back to the map.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): the skeps, the seats and the swarm are fixed pools of plain sim
 // objects built in enter(); every random number comes from the rng singleton inside update(); the swarm's orbit is
@@ -245,7 +245,7 @@ export class HiveScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /** The swarm: drift and spin, nothing else. Its x is rng-driven, so it stays in the sim and in the checksum. */
@@ -367,7 +367,7 @@ export class HiveScreen extends Screen {
     // the honey runs AFTER the plates, the pond's rule for its caught trout: the payoff of the only beat that
     // scores must never be hidden by a name card, and the strand's whole job is to be read
     for (let i = 0; i < this.seats.length; i++) this.drawStrand(ctx, this.seats[i]);
-    drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawClock(ctx, this.countStr, this.total / this.target, clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -422,7 +422,7 @@ export class HiveScreen extends Screen {
   override summary() {
     const sw = this.swarm;
     return {
-      honey: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
+      honey: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
       swarm: { x: R(sw.x) },
       seats: this.seats.map((s) => [s.slot, R(s.x), s.count, s.dipT, s.bumpT]),
       // [x, refill] per skep: a headless test needs the x to drive a seat to one, and the refill to see it empty
@@ -434,7 +434,7 @@ export class HiveScreen extends Screen {
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     const sw = this.swarm;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total);
     // the swarm's whole state: its x is rng-driven, so these three numbers reproduce the drawn cloud
     f.push(sw.phase, sw.x, sw.tx);
     for (let i = 0; i < this.seats.length; i++) {

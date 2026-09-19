@@ -1,4 +1,4 @@
-// The HOW TO PLAY card: a paper ticket that drops in under the clock for the first seconds of every mini-game (and
+// The HOW TO PLAY card: a paper ticket that drops in under the tally ticket for the first seconds of every mini-game (and
 // on every new step in the kitchen) and shows the round's controls as PICTURES, not words - a small player who
 // cannot read the hint line yet can still read a key going up and down. Four pictograms, each an animated keycap:
 //   move   two arrow keys, pressed by turns;

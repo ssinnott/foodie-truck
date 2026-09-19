@@ -56,8 +56,9 @@ const TAG_ABOVE = 46;
 /**
  * A line that is waiting where the truck already stands (the pantry filled at that very landmark) opens on its
  * own after this many frames: arrival fires on `truck.at` CHANGING, and nobody should have to drive off and back
- * to be let in. A mini-game is never reopened this way - a round that ran out of time hands back to the map with
- * the truck still at its landmark, and the player must be free to drive on.
+ * to be let in. A mini-game is never reopened this way - a round hands back to the map with the truck still at
+ * its landmark, and if that landmark supplies something else the list is short of, the player must be free to
+ * drive on rather than be pulled straight into the next round.
  */
 const REOPEN_FRAMES = 45;
 

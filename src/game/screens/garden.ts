@@ -5,7 +5,7 @@
 // `action` press. Tap it over and over - a dozen times - and the root comes out (+1). There is no beat to hit and nothing to pull by
 // mistake: every top in this bed is a carrot, a top nobody has pressed on for GRIP_TIMEOUT frames is simply let go
 // of at no cost, and the only thing the row asks of anyone is to keep tapping. The round ends when the party's total
-// reaches the order's amount or the 40-second clock runs out; the CARROTS sign drops, is held, then
+// reaches the order's amount, and not before (there is no clock to run out); the CARROTS sign drops, is held, then
 // run.gather('carrot') and back to the map.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): the crop is a fixed pool of plain sim objects built in enter() and
@@ -411,7 +411,7 @@ export class GardenScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /** Every seat: the beats first (they lock the stick), then the gauge, then the walk and the grip. */
@@ -555,7 +555,7 @@ export class GardenScreen extends Screen {
     for (let i = 0; i < this.flights.length; i++) this.drawFlight(ctx, this.flights[i]);
     particles.draw(ctx, null, 'front');
     this.drawPlates(ctx);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, this.title);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -620,7 +620,7 @@ export class GardenScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
       pulls: this.pulls,
       // pull is the gauge, 0..GAUGE_UNITS, meaningful while the seat has hold of something (top >= 0)
       seats: this.seats.map((s) => ({
@@ -634,7 +634,7 @@ export class GardenScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pulls);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pulls);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       f.push(s.x, s.facing, s.count, s.state, s.t, s.grip, s.gripX, s.pull, s.top, s.moving ? 1 : 0);

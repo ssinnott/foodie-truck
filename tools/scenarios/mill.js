@@ -12,7 +12,7 @@
 //              keeps the part fill, and a hold that goes on and on just fills the next sack - nothing bursts. The
 //              same hold with the chute dormant fills nothing, which is the assert that catches a fill that forgot
 //              to check the chute;
-//            * the clock forced to its last frames: the FLOUR sign drops with the party's total on it, is held,
+//            * the finish line brought down to the party's total: the FLOUR sign drops with that total on it, is held,
 //              the screen hands back to the map and run.gather('flour') has moved the order's flour line.
 //          Writes tools/screens/mill-fill.png (a sack in the brim band under a pouring chute - the shot the
 //          "nearly full" read is judged from).
@@ -89,7 +89,7 @@ export const SCENARIOS = {
       assert(x1 !== x0 && x1 >= 34 && x1 <= 606, `seat 0 walked and stayed on the floor (${x0} -> ${x1})`);
       assert(JSON.stringify(last.top.seats.slice(1).map((s) => s[1])) === others0, 'the other seats, with no input, stayed put');
       // 303 frames: main.js boots test mode with one step, then 2 + 300 here
-      assert(last.top.timer === 2400 - 303, `the clock counted every frame (timer ${last.top.timer})`);
+      assert(last.top.elapsed === 303, `the clock counted every frame (elapsed ${last.top.elapsed})`);
 
       // --- the rule, part one: a chute that is NOT pouring fills nothing, however hard action is held
       await stage(api, page, 1, false);
@@ -155,13 +155,15 @@ export const SCENARIOS = {
       assert(long.bumpT === 0 && long.anim !== 'bump', `nothing burst (bumpT ${long.bumpT}, anim '${long.anim}')`);
       await api.step(5);
 
-      // --- the ending: force the clock to its last frames, expect the sign, the hold, then the map and the bank
+      // --- the ending: bring the finish line down to the party's total (there is no clock to force), expect the sign,
+      // the hold, then the map and the bank
       const lastMill = await api.summary();
-      await page.evaluate(() => { window.__game.game.screen.clock.timer = 3; });
+      assert(lastMill.top.total >= 1, `something was filled before the ending (total ${lastMill.top.total})`);
+      await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(1, sc.total); sc.setTotal(sc.total); });
       await api.step(4 + SLAM + 20);
       const s2 = await api.summary();
       assert(s2.screen === 'mill' && s2.top.phase === 1 && s2.top.sign === 'FLOUR: ' + lastMill.top.total,
-        `the clock ran out: the FLOUR sign is up with the party's total (phase ${s2.top.phase}, '${s2.top.sign}')`);
+        `the target was reached: the FLOUR sign is up with the party's total (phase ${s2.top.phase}, '${s2.top.sign}')`);
       await api.step(HOLD);
       const s3 = await api.summary();
       assert(s3.screen === 'map', `after the sign's hold the mill hands back to the map (on ${s3.screen})`);
