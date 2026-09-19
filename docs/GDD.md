@@ -126,6 +126,13 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   While the pantry is short, driving within 36 px of it is +1 of that ingredient (the float in the ingredient's
   colour, the ring, the catch's pip, a THANKS!), the cart is righted and empty, and the compass is re-pointed in
   case that filled a line. Once the pantry is full the cart is only a cart. One integer (taken) on the wire.
+- **The weather** (`run.weather`, from the plan: three days in five clear, one **drizzle**, one **fog**). A drizzle
+  day draws rain across the view, splashes the wheels on the lanes, and puts a **mud patch** (`run.mud`) on one
+  more lane spot: within 44 px of it the truck slows to field speed and throws mud, and it comes out wearing the
+  splatter for the rest of the day (`run.muddy`). A fog day fades the world to milk beyond 120 px of the truck
+  (full at 280) and lights every landmark's lantern over the fog, so the lamps and the compass arrow are what you
+  steer by; nothing slows or blocks. And **Barley waves** at every flock the truck is held by, once per crossing,
+  BAAA! from the cab.
 - **HUD**: the shopping list (one row per ingredient, `have/amount`, a tick when full, the gold arrow on the first
   short one) while gathering, then the lines (`sign  N IN LINE`, washed back once served, the arrow on the one the
   compass points at); the steering-wheel widget with one tick per seat that lights while that seat pushes; the

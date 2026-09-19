@@ -21,7 +21,7 @@
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.ts';
 import { INGREDIENTS, ORDERS } from '../../src/content/recipes.ts';
-import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, SPOTS, riverDist, laneDist, wallBlocked, waterBlocked, pondBlocked, seaBlocked, shoreX } from '../../src/art/backgrounds/map.ts';
+import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, SPOTS, CROSSING_SPOTS, riverDist, laneDist, wallBlocked, waterBlocked, pondBlocked, seaBlocked, shoreX } from '../../src/art/backgrounds/map.ts';
 
 const placeOf = (id) => PLACES.find((p) => p.id === id);
 /** The road's crossings (screens/map.ts): take every herd off the road, for the scenarios that drive the lanes for other reasons. */
@@ -56,6 +56,7 @@ export const SCENARIOS = {
       assert(held.top.blocked === true && d >= BLOCK_R - 3 && d <= BLOCK_R + 12, `the herd holds the truck a half-token short (blocked ${held.top.blocked}, ${d.toFixed(1)} px off the spot)`);
       assert(held.top.sign === (c0.kind === 0 ? 'SHEEP!' : 'DUCKS!'), `...with the sign up (got '${held.top.sign}')`);
       assert(held.top.crossings[0].t > 0, `...and the crossing's own clock running (t ${held.top.crossings[0].t})`);
+      assert(c0.kind !== 0 || held.top.crossings[0].waved === 1, `Barley, aboard, waved at the flock (waved ${held.top.crossings[0].waved})`);
       await api.shot('map-crossing');
       // ALT: the honk scatters them
       await api.press(0, { alt: true }, 2, 2);
@@ -107,6 +108,40 @@ export const SCENARIOS = {
       await api.hold(0, { right: true }); await api.step(50); await api.release(0);
       const s2 = await api.summary();
       assert(JSON.stringify(s2.run.needs) === JSON.stringify(s1.run.needs), 'a second pass over it gives nothing');
+    });
+  },
+  /**
+   * weather - a drizzle day (seed 2): rain over the view, a mud patch on a lane spot; the truck is driven into it,
+   *           slows to field speed, and comes out muddy for the day. Then a fog day (seed 5): the view fades to milk
+   *           round the truck and nothing slows. Writes map-drizzle and map-fog.
+   */
+  async weather(server) {
+    await withPage(server, 'skipTo=map&critters=0,1,2,3&seed=2', async (api, page) => {
+      await api.step(5);
+      await noCrossings(page);
+      const s0 = await api.summary();
+      assert(s0.top.weather === 1 && s0.top.mud && s0.top.muddy === 0, `seed 2 is a drizzle day with a mud patch (weather ${s0.top.weather}, mud ${JSON.stringify(s0.top.mud)})`);
+      const spot = CROSSING_SPOTS.find((p) => p.x === s0.top.mud.x && p.y === s0.top.mud.y);
+      assert(!!spot, 'the mud patch stands on a lane spot');
+      const heading = Math.round(((Math.atan2(spot.dy, spot.dx) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 8)) % 16;
+      const stick = { right: spot.dx > 0.3, left: spot.dx < -0.3, down: spot.dy > 0.3, up: spot.dy < -0.3 };
+      await teleport(page, spot.x - spot.dx * 90, spot.y - spot.dy * 90, heading);
+      await api.hold(0, stick); await api.step(40);
+      await api.shot('map-drizzle');
+      const inMud = await api.summary();
+      assert(inMud.top.inMud === true && inMud.top.speed < 1.3 && inMud.top.muddy === 1, `in the mud the truck slows to field speed and is muddy (inMud ${inMud.top.inMud}, speed ${inMud.top.speed}, muddy ${inMud.top.muddy})`);
+      await api.step(80); await api.release(0);
+      const out = await api.summary();
+      assert(out.top.inMud === false && out.top.muddy === 1, `and wears the mud out the other side (inMud ${out.top.inMud}, muddy ${out.top.muddy})`);
+    });
+    await withPage(server, 'skipTo=map&critters=0,1,2,3&seed=5', async (api, page) => {
+      await api.step(5);
+      const s0 = await api.summary();
+      assert(s0.top.weather === 2 && !s0.top.mud, `seed 5 is a fog day (weather ${s0.top.weather})`);
+      await api.hold(0, { right: true }); await api.step(120); await api.release(0);
+      await api.shot('map-fog');
+      const s1 = await api.summary();
+      assert(s1.top.truck.x > s0.top.truck.x + 80, `nothing slows in the fog (${s0.top.truck.x} -> ${s1.top.truck.x})`);
     });
   },
   async map(server) {

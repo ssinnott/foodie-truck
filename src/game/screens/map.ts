@@ -16,11 +16,16 @@
 // spots. While the pantry is short, driving over the spill is +1 of the first ingredient the list is short of (the
 // float, the ring and the catch's pip), and the cart is righted; the compass is re-pointed in case that filled a
 // line. Once the pantry is full the cart is only a cart.
+// THE WEATHER (`run.weather`): a drizzle day draws rain across the view, splashes the wheels on the lanes and puts a
+// MUD PATCH (`run.mud`) on one more spot, where the truck slows to field speed, throws mud, and comes out wearing
+// the splatter for the rest of the day (`run.muddy`); a fog day fades the world to milk beyond FOG_R of the truck
+// and lights every landmark's lantern, so the compass arrow does the work. Nothing slows or blocks but the mud.
+// And Barley, when aboard, waves at every flock the truck is held by: BAAA! from the cab, once per crossing.
 //
 // Everything in update() is deterministic: input by seat only, distances from + - * / and Math.sqrt, no clock, no
 // Math.random; run.truck { x, y, heading, at } is the state that survives between visits and feeds the desync canary.
 // The camera, the animation players, the sails, the bees, the smoke and the particles are visual and never hashed.
-import { VIEW_W, VIEW_H, SIGNAL } from '../../constants.ts';
+import { VIEW_W, VIEW_H, SIGNAL, PLAYER_COLORS } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, Run, ScreenParams, TruckState } from '../game.ts';
 import { dcos, dsin } from '../../lib/engine/trig.ts';
@@ -35,6 +40,7 @@ import { AnimPlayer } from '../../lib/art/animation.ts';
 import type { Pose } from '../../lib/art/poses.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import { WORLD_W, WORLD_H, PLACES } from '../../content/places.ts';
+import { WEATHER_DRIZZLE, WEATHER_FOG } from '../run.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { drawFood } from '../../art/food.ts';
 import { INK } from '../../art/layers.ts';
@@ -59,6 +65,10 @@ const HONK_FRAMES = 30, SQUASH_FRAMES = 4, SIGN_FRAMES = 90, RING_FRAMES = 60, T
 const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3, KIND_HERD = 4, KIND_CART = 5;
 /** The tipped cart: the truck takes its spill within CART_R of the spot. */
 const CART_R = 36, THANKS = 'THANKS!';
+/** The mud patch's reach, the fog's clear radius and its full-milk radius, and the rain's streak count. */
+const MUD_R = 44, FOG_R = 120, FOG_FAR = 280, RAIN_N = 70, WAVE_TXT = 'BAAA!';
+/** The splatter a muddy truck wears: fleck offsets about the token's anchor (x, y, size). */
+const SPLATTER = Int8Array.of(-16, -4, 3, -9, -2, 2, 11, -3, 3, 17, -6, 2, -3, -9, 2, 6, -11, 2, -20, -8, 2, 14, -12, 2);
 /**
  * The crossings. A crossing ON its lane blocks the truck within BLOCK_R of its spot; a honk within HONK_R scatters
  * it over CLEAR_FRAMES; left alone, sheep clear AUTO_SHEEP frames after the first block and ducks in AUTO_DUCKS.
@@ -73,6 +83,9 @@ const OFF_ALONG = Int8Array.of(-10, 12, -2, 14, 4, -16, 10, -6, 2);
 const DUCK_PERP = Int8Array.of(-30, -20, -11, -2, 7, 16, 25);
 const SHEEP_TXT = 'SHEEP!', DUCKS_TXT = 'DUCKS!';
 const DUST = { size: 2, life: 20, vy: -0.15 };
+/** Mud off the wheels (crumbs of soil that fall back to the lane), and a puddle's splash on a drizzle day. */
+const MUD_OPTS = { speed: 1.6, up: 1.8, color: '#7A6249', sizeJitter: 1 };
+const PUDDLE_OPTS = { speed: 1.2, up: 1.4 };
 // The signs an arrival that opens nothing drops in: while the pantry is short, a landmark the list does not need
 // (or home, which has no queue and nothing to gather); once it is full, a landmark with no line, one whose line has
 // been served, or home again.
@@ -356,7 +369,7 @@ export class MapScreen extends Screen {
     this.placeHerds();
     this.cartSprite = { kind: KIND_CART, x: run.cart ? run.cart.x : -1000, y: run.cart ? run.cart.y : -1000, L: null, w: 40, h: 24, shadow: 26 };
     this.sprites.push(this.cartSprite);
-    this.sum.length = 7 + run.crossings.length * 2;
+    this.sum.length = 8 + run.crossings.length * 3;
     this.order.length = 0; for (let i = 0; i < this.sprites.length; i++) this.order.push(i);
     this.glow = destGlowSprite(); this.cloud = cloudShadowSprite();
     // dev-only nudge so a capture can show the truck rolling: seat 0 is pushed east for the first two seconds
@@ -403,7 +416,8 @@ export class MapScreen extends Screen {
     }
     this.lean = approach(this.lean, leanTo, 0.08);
     const onLane = laneDist(truck.x, truck.y) <= LANE_HALF + 2;
-    const target = pushing ? (onLane ? LANE_SPEED : FIELD_SPEED) : 0;
+    const inMud = this.inMud(truck.x, truck.y);
+    const target = pushing ? (onLane && !inMud ? LANE_SPEED : FIELD_SPEED) : 0;
     this.speed = approach(this.speed, target, this.speed < target ? 0.12 : 0.25);
     this.blocked = false;
     if (this.speed > 0) {
@@ -428,9 +442,14 @@ export class MapScreen extends Screen {
         const txt = c.kind === 0 ? SHEEP_TXT : DUCKS_TXT;
         if (this.signTimer === 0 || this.signText !== txt) this.raiseSign(txt);
         if (this.baaCd === 0) { game.audio.play(c.kind === 0 ? 'baa' : 'quack'); this.baaCd = BAA_CD; }
+        // the hungry one waves at every flock, once, from the cab: a sheep among sheep
+        if (c.kind === 0 && !c.waved) { const b = this.seats.find((x) => x.critter === 'barley'); if (b) { c.waved = 1; floatText(truck.x, truck.y - 46, WAVE_TXT, PLAYER_COLORS[b.slot]); } }
       } else { truck.x = nx; truck.y = ny; }
       this.wheelAcc += this.speed; this.wheelStep = Math.floor(this.wheelAcc / 5) & 3;
       if (!onLane && (this.frame % 6) === 0) particles.spawn('dust', truck.x - COS[truck.heading] * 12, truck.y, DUST);
+      // the mud: it flies off the wheels, and the truck wears it home; the drizzle's puddles splash on the lanes
+      if (inMud) { if (!game.run.muddy) game.run.muddy = 1; if ((this.frame & 3) === 0) particles.burst('crumb', truck.x - COS[truck.heading] * 10, truck.y + 2, 2, MUD_OPTS); }
+      else if (onLane && game.run.weather === WEATHER_DRIZZLE && (this.frame % 8) === 0) particles.burst('drop', truck.x, truck.y + 2, 1, PUDDLE_OPTS);
     }
     if (this.splashCd > 0) this.splashCd--;
     if (COS[truck.heading] > 0.01) this.facing = 1; else if (COS[truck.heading] < -0.01) this.facing = -1;
@@ -502,6 +521,14 @@ export class MapScreen extends Screen {
     floatText(cart.x + 26, cart.y - 20, THANKS, MAP.skyTop);
     this.game.audio.play('catch');
     this.pickDest();
+  }
+
+  /** True within MUD_R of the drizzle day's mud patch. */
+  inMud(x: number, y: number): boolean {
+    const m = this.game.run.mud;
+    if (!m) return false;
+    const dx = m.x - x, dy = m.y - y;
+    return dx * dx + dy * dy < MUD_R * MUD_R;
   }
 
   /** The crossing ON its lane whose spot is within BLOCK_R of (x, y), or -1. */
@@ -585,6 +612,13 @@ export class MapScreen extends Screen {
     const c0 = Math.floor(cam.x / CHUNK_W), c1 = Math.min(CHUNKS_X - 1, Math.floor((cam.x + VIEW_W - 1) / CHUNK_W));
     const r0 = Math.floor(cam.y / CHUNK_H), r1 = Math.min(CHUNKS_Y - 1, Math.floor((cam.y + VIEW_H - 1) / CHUNK_H));
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) ctx.drawImage(chunkLayer(r * CHUNKS_X + c).canvas, c * CHUNK_W - cam.x, r * CHUNK_H - cam.y);
+    // the drizzle day's mud patch, on the lane: a soft brown pool with a darker rim, before anything stands on it
+    const mud = this.game.run.mud;
+    if (mud && this.inView(mud.x, mud.y, 60)) {
+      ctx.fillStyle = MAP.woodDark; ctx.beginPath(); ctx.ellipse(mud.x - cam.x, mud.y - cam.y, MUD_R, MUD_R * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = MAP.soil; ctx.beginPath(); ctx.ellipse(mud.x - cam.x, mud.y - cam.y - 1, MUD_R - 4, MUD_R * 0.55 - 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = MAP.skyTop; ctx.globalAlpha = 0.35; ctx.fillRect(mud.x - cam.x - 12, mud.y - cam.y - 6, 10, 2); ctx.fillRect(mud.x - cam.x + 8, mud.y - cam.y + 4, 6, 2); ctx.globalAlpha = 1;
+    }
     // the cheap per-frame marks on the ground: glints, hens, bees, the phone, the chimney
     ctx.fillStyle = MAP.skyTop;
     for (let i = 0; i < GLINTS.length; i++) {
@@ -623,6 +657,7 @@ export class MapScreen extends Screen {
       const cx = ((CLOUDS[i][0] + f * 0.15) % (WORLD_W + 160)) - 160 - cam.x, cy = CLOUDS[i][1] - cam.y;
       if (cx > -160 && cx < VIEW_W && cy > -60 && cy < VIEW_H) ctx.drawImage(this.cloud.canvas, Math.round(cx), cy);
     }
+    this.drawWeather(ctx, f);
     // the tags over the queues that are still waiting: the picture says where the lines are before the HUD does
     if (this.serving) {
       for (let i = 0; i < this.lineTags.length; i++) {
@@ -642,10 +677,41 @@ export class MapScreen extends Screen {
     if (this.signTimer > 0) drawSignPlate(ctx, this.signText, this.signW, SIGN_FRAMES - this.signTimer);
     drawMapHint(ctx);
   }
+  /**
+   * The weather, over the world and under the HUD. Drizzle: RAIN_N streaks of river-blue on a frame hash, falling
+   * a little to the left. Fog: the world fades to milk beyond FOG_R of the truck (a radial gradient, clear inside,
+   * full at FOG_FAR), and every landmark's lantern is drawn again over the fog so the lamps are what you steer by.
+   */
+  drawWeather(ctx: CanvasRenderingContext2D, f: number): void {
+    const w = this.game.run.weather, cam = this.cam, truck = this.truck;
+    if (w === WEATHER_DRIZZLE) {
+      ctx.strokeStyle = MAP.river; ctx.globalAlpha = 0.7; ctx.lineWidth = 2; ctx.beginPath();
+      for (let i = 0; i < RAIN_N; i++) {
+        const x = (i * 97 + ((f * 2) % 640) * ((i & 1) ? 1 : 0)) % VIEW_W, y = (i * 53 + f * 7) % (VIEW_H + 12) - 12;
+        ctx.moveTo(x, y); ctx.lineTo(x - 3, y + 10);
+      }
+      ctx.stroke(); ctx.globalAlpha = 1;
+      return;
+    }
+    if (w !== WEATHER_FOG) return;
+    const tx = truck.x - cam.x, ty = truck.y - cam.y - 12;
+    const g = ctx.createRadialGradient(tx, ty, FOG_R, tx, ty, FOG_FAR);
+    g.addColorStop(0, 'rgba(251,227,196,0)'); g.addColorStop(1, 'rgba(251,227,196,0.88)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    for (const p of PLACES) {
+      const sg = SIGN_AT[p.id]; if (!sg) continue;
+      const gx = sg.x - cam.x, gy = sg.y - 18 - cam.y;
+      if (gx < -24 || gx > VIEW_W + 24 || gy < -24 || gy > VIEW_H + 24) continue;
+      ctx.globalAlpha = p.id === this.destId ? 0.9 : 0.55; ctx.drawImage(this.glow.canvas, gx - 22, gy - 22); ctx.globalAlpha = 1;
+      ctx.fillStyle = SIGNAL.map; ctx.fillRect(gx - 2, gy - 18, 4, 5);
+    }
+  }
   inView(wx: number, wy: number, m: number): boolean { const c = this.cam; return wx >= c.x - m && wx <= c.x + VIEW_W + m && wy >= c.y - m && wy <= c.y + VIEW_H + m; }
   drawTruck(ctx: CanvasRenderingContext2D, sx: number, sy: number): void {
     const moving = this.speed > 0.2;
     drawTruck(ctx, sx, sy, this.truckOpts(moving ? ((this.frame >> 2) & 1) : 0));
+    // the mud it drove through, worn for the rest of the day: brown flecks about the wheel arches
+    if (this.game.run.muddy) { ctx.fillStyle = MAP.soil; for (let i = 0; i < SPLATTER.length; i += 3) ctx.fillRect(sx + SPLATTER[i], sy + SPLATTER[i + 1], SPLATTER[i + 2], SPLATTER[i + 2]); }
   }
   /** One walker of a crossing: a sheep dawdling (the walk beat only while it scatters) or a duck in the file. */
   drawWalker(ctx: CanvasRenderingContext2D, s: MapSprite, sx: number, sy: number, f: number): void {
@@ -690,8 +756,9 @@ export class MapScreen extends Screen {
     const t = this.truck;
     return {
       truck: { x: Math.round(t.x), y: Math.round(t.y), heading: t.heading, at: t.at }, speed: Math.round(this.speed * 100) / 100, dest: this.destId, destLine: this.destLine, serving: this.serving, sign: this.signTimer > 0 ? this.signText : '', honk: this.honk > 0, blocked: this.blocked, seats: this.seats.length,
-      crossings: this.game.run.crossings.map((c) => ({ x: c.x, y: c.y, kind: c.kind, herd: c.herd, state: c.state, t: c.t })),
+      crossings: this.game.run.crossings.map((c) => ({ x: c.x, y: c.y, kind: c.kind, herd: c.herd, state: c.state, t: c.t, waved: c.waved })),
       cart: this.game.run.cart ? { x: this.game.run.cart.x, y: this.game.run.cart.y, taken: this.game.run.cart.taken } : null,
+      weather: this.game.run.weather, mud: this.game.run.mud ? { x: this.game.run.mud.x, y: this.game.run.mud.y } : null, muddy: this.game.run.muddy, inMud: this.inMud(t.x, t.y),
     };
   }
   /** Every field that could diverge between peers (net/checksum.js). */
@@ -699,8 +766,9 @@ export class MapScreen extends Screen {
     const t = this.truck, s = this.sum;
     s[0] = t.x; s[1] = t.y; s[2] = t.heading; s[3] = this.speed; s[4] = placeIndex(t.at); s[5] = this.reopen;
     const cs = this.game.run.crossings;
-    for (let i = 0; i < cs.length; i++) { s[6 + i * 2] = cs[i].state; s[7 + i * 2] = cs[i].t; }
-    s[6 + cs.length * 2] = this.game.run.cart ? this.game.run.cart.taken : 0;
+    for (let i = 0; i < cs.length; i++) { s[6 + i * 3] = cs[i].state; s[7 + i * 3] = cs[i].t; s[8 + i * 3] = cs[i].waved; }
+    s[6 + cs.length * 3] = this.game.run.cart ? this.game.run.cart.taken : 0;
+    s[7 + cs.length * 3] = this.game.run.muddy;
     return s;
   }
 }

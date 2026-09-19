@@ -109,6 +109,10 @@ export interface DayPlan {
   crossings: DayPlanCrossing[];
   /** The tipped cart's lane spot (an index into CROSSING_SPOTS, never one a crossing uses), or -1 for no cart today. */
   cart: number;
+  /** WEATHER_CLEAR, WEATHER_DRIZZLE or WEATHER_FOG (game/run.ts). */
+  weather: number;
+  /** The mud patch's lane spot on a drizzle day (another CROSSING_SPOTS index), or -1. */
+  mud: number;
 }
 
 /** The tipped cart on the road: a hand cart on the verge with its load across the lane; driving over it is +1 of something the list is short of. */
@@ -133,6 +137,8 @@ export interface Crossing extends DayPlanCrossing {
   state: number;
   /** On the lane: frames since the truck first ran up against it (0 until it has). Clearing: frames left of the scatter. */
   t: number;
+  /** 1 once Barley has waved at this flock (a sheep crossing, with the hungry one aboard). */
+  waved: number;
 }
 
 /** Where the truck is on the world map, kept between visits to the map screen. */
@@ -175,6 +181,12 @@ export interface Run {
   crossings: Crossing[];
   /** The tipped cart, or null on a day without one. */
   cart: Cart | null;
+  /** The day's weather (game/run.ts WEATHER_*). */
+  weather: number;
+  /** The mud patch on a drizzle day, or null. */
+  mud: { x: number; y: number } | null;
+  /** 1 once the truck has been through the mud: it wears the splatter for the rest of the day. */
+  muddy: number;
   /** Frames spent in the run. */
   frame: number;
   /** The shopping-list line for an ingredient, or null when the day never asks for it. */

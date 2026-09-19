@@ -41,6 +41,8 @@ export const RECIPES_PER_DAY = 3, LINES_PER_DAY = 3, LINE_LENGTH = 2;
 export const CROSSINGS_PER_DAY = 3;
 /** Sheep: 0, ducks: 1. About a third of crossings are the duck parade; a flock is 5..9, the ducks a mother and six. */
 export const CROSSING_SHEEP = 0, CROSSING_DUCKS = 1, DUCK_ODDS = 0.35, FLOCK_MIN = 5, FLOCK_MAX = 9, DUCK_FAMILY = 7;
+/** The day's weather: three days in five are clear, one drizzles (wet lanes, a mud patch), one is foggy (the view shrinks, the lanterns glow). */
+export const WEATHER_CLEAR = 0, WEATHER_DRIZZLE = 1, WEATHER_FOG = 2;
 /** The village diners who queue, by content/critters/customers.js id. */
 export const DINERS = Object.freeze(['owl', 'otter', 'goat']);
 /** Salt mixed into the run seed for the plan's own rng stream, so the same seed never draws the plan and the first apple alike. */
@@ -106,7 +108,10 @@ export function planDay(seed: number, o: { order?: number; recipes?: number[] } 
   // the tipped cart: one more lane spot, never one a crossing stands on (the spots were shuffled above, so it is the next one along)
   const rest = shuffle(r, CROSSING_SPOTS.map((_, i) => i)).filter((i) => spots.indexOf(i) < 0);
   const cart = rest.length ? rest[0] : -1;
-  return { recipes: recipes.map((i) => ORDERS[i].id), lines, crossings, cart };
+  // the weather, and on a drizzle day the mud patch on one more spot
+  const w = r.int(0, 4), weather = w === 3 ? WEATHER_DRIZZLE : w === 4 ? WEATHER_FOG : WEATHER_CLEAR;
+  const mud = weather === WEATHER_DRIZZLE && rest.length > 1 ? rest[1] : -1;
+  return { recipes: recipes.map((i) => ORDERS[i].id), lines, crossings, cart, weather, mud };
 }
 
 /**
@@ -151,9 +156,13 @@ export function startRun(game, o) {
     /** World-map state the map screen keeps between visits (truck position, heading, which place it is at). */
     truck: { x: 0, y: 0, heading: 0, at: 'home' },
     /** The day's crossings: the first is out on its lane from the start, the rest come out one at a time as each clears. */
-    crossings: plan.crossings.map((c, i): Crossing => { const sp = CROSSING_SPOTS[c.spot]; return { ...c, x: sp.x, y: sp.y, dx: sp.dx, dy: sp.dy, state: i === 0 ? 1 : 0, t: 0 }; }),
+    crossings: plan.crossings.map((c, i): Crossing => { const sp = CROSSING_SPOTS[c.spot]; return { ...c, x: sp.x, y: sp.y, dx: sp.dx, dy: sp.dy, state: i === 0 ? 1 : 0, t: 0, waved: 0 }; }),
     /** The tipped cart on the road, untouched until the truck drives over its spill. */
     cart: plan.cart >= 0 ? ({ x: CROSSING_SPOTS[plan.cart].x, y: CROSSING_SPOTS[plan.cart].y, taken: 0 } as Cart) : null,
+    /** The weather, the mud patch (a drizzle day), and whether the truck has been through it. */
+    weather: plan.weather,
+    mud: plan.mud >= 0 ? { x: CROSSING_SPOTS[plan.mud].x, y: CROSSING_SPOTS[plan.mud].y } : null,
+    muddy: 0,
     /** Frames spent in the run (a clock the kitchen and results can read). */
     frame: 0,
     /** Mutators */
@@ -225,6 +234,7 @@ export function startRun(game, o) {
         dayComplete: run.dayComplete(), truckAt: run.truck.at,
         crossings: run.crossings.map((c) => ({ x: c.x, y: c.y, kind: c.kind, herd: c.herd, state: c.state, t: c.t })),
         cart: run.cart ? { x: run.cart.x, y: run.cart.y, taken: run.cart.taken } : null,
+        weather: run.weather, mud: run.mud ? { x: run.mud.x, y: run.mud.y } : null, muddy: run.muddy,
       };
     },
   };

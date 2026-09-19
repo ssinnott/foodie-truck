@@ -55,8 +55,8 @@ cloud when a bake step opens the oven door.
 
 ## B. Road events on the map
 
-> **Built:** the crossing system with both skins (sheep, ducks), the honk that scatters them, and the tipped cart
-> (`docs/GDD.md` section 4). **Not built yet:** mud and the weather, and Barley's wave to the flock.
+> **Done.** The crossing system with both skins (sheep, ducks), the honk that scatters them, the tipped cart,
+> the weather with its mud patch, and Barley's wave to the flock (`docs/GDD.md` section 4).
 
 The map (`screens/map.ts`) drives one truck, blocks it at water with a splash, and drops a sign on arrival. It has a
 honk that does nothing. Road events give the honk a job and put something between the landmarks. All of them are
