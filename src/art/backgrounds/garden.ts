@@ -1,13 +1,14 @@
-// THE SATURDAY MARKET'S KITCHEN GARDEN, painted once (docs/ART_STYLE.md section 1, section 7; docs/GDD.md
-// section 5). Afternoon light in a walled garden of worked ground: three layers with seeds from the market-garden
-// block 200..209 (ART_STYLE section 7's table), side view, every one blitted at x 0:
+// FURROW FARM'S KITCHEN GARDEN, painted once (docs/ART_STYLE.md section 1, section 7; docs/GDD.md section 5).
+// Afternoon light in a walled garden of worked ground: three layers with seeds from the farm's block 200..209
+// (ART_STYLE section 7's table), side view, every one blitted at x 0:
 //
 //   far     rows   0..212   sky, the distant tree line, the garden's south wall with its gate and two fan-trained
-//                           fruit trees, the bunting strung across it, and a market stall at each edge of the frame
+//                           fruit trees, the bunting strung across it, and a farm-gate produce stall at each edge
+//                           of the frame
 //   mid     rows 160..250   the currant hedge along the wall's foot, the water butt, a crate stack, and the BACK
 //                           BED - a boarded raised bed of dark tilled earth with four runner-bean wigwams in it
 //   ground  rows 250..360   the trodden path the crew works from (the clean walk band, no scatter), the dark
-//                           tilled CROP RIDGE the carrots stand in, and the hazel hurdle along the bottom edge
+//                           tilled CROP RIDGE the crop stands in, and the hazel hurdle along the bottom edge
 //
 // The camera never moves here - a walled garden is exactly one frame wide - so the layers are VIEW_W across and
 // carry no bleed and no parallax factors, the way the coop's interior does. Adding a second screen of garden is a
@@ -66,7 +67,7 @@ export const GARDEN = Object.freeze({
   plum: PLUM.shadow,
 });
 
-/** Seed block 200..209 belongs to the market garden (ART_STYLE section 7). */
+/** Seed block 200..209 belongs to the farm (ART_STYLE section 7). */
 const SEED = 200;
 
 /**
@@ -146,8 +147,9 @@ function bunting(g, x0, y0, x1, y1, n, sag) {
 }
 
 /**
- * A market stall at one edge of the frame: four hazel poles, a striped awning with a scalloped valance, a counter
- * under a cloth and three crates of produce on it. `dir` 1 puts the open side toward the middle of the frame.
+ * A farm-gate produce stall at one edge of the frame: four hazel poles, a striped awning with a scalloped valance,
+ * a counter under a cloth and three crates of produce on it. `dir` 1 puts the open side toward the middle of the
+ * frame.
  * The stripes are cut with cream so no single hue holds more than four pixels in a row.
  */
 function stall(g, x, dir, stripe, rnd) {

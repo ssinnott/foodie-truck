@@ -13,6 +13,7 @@ import { UI, PLAYER_COLORS, PLUM } from '../constants.ts';
 import { mix } from './palettes.ts';
 import { pathRoundedPoly, pathEllipse } from '../lib/art/shapes.ts';
 import { DAIRY } from './backgrounds/dairy.ts';
+import { F } from '../content/critters/common.ts';
 
 const R = Math.round, TAU = Math.PI * 2, DEG = Math.PI / 180;
 const INK = UI.ink;
@@ -231,6 +232,78 @@ function drawMark(ctx, hex, cock) {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------- the milking stances
+/**
+ * The seated pose's root drop. Every DAIRY_ANIMS key carries it, and each seat's stool is cut to it: a chibi's hip
+ * is only 11..16 px off the ground standing, so however the legs fold the stool can only ever be about a dozen px
+ * tall - which is what a milking stool is. 4 is the drop that lands every one of the four casts' feet within a
+ * pixel of the floor line with the knees folded under the hips (see SIT).
+ */
+export const SIT_ROOT_Y = 4;
+/** The chibi's hip is only 11..16 px off the ground, so a milking stool is a low one; each seat's is cut to its rig. */
+export const STOOL_MIN = 6;
+/**
+ * The scene's own beats, an AnimPlayer overlay on top of the shared table (the pond's POND_ANIMS pattern). Every
+ * key sets BOTH legs and the root, because a missing key resolves to DEFAULT_POSE and a seated critter would stand
+ * up mid-beat.
+ *
+ * SIT is the milking stance: the thigh just past horizontal (88) with the shin folded back under it (a 26 degree
+ * total) puts the knees up and the feet on the floor about 9 px in front of the stool, which is what sitting on a
+ * 12 px stool looks like when the whole leg is 17 px long. The far leg is a touch less forward so two legs do not
+ * print as one. Round 1 folded harder (96 / -74) and dropped the hip to 10 px, which left no stool to see.
+ *
+ * pumpR / pumpL are the tapping made visible ON the critter: the milking paw pulls down while the braced paw rides
+ * up, and the two alternate press by press so a run of taps reads as a rhythm rather than one pose stuttering.
+ * Both are non-looping and fall back to milkIdle when they finish, so a crew that has stopped pumping breathes
+ * instead of freezing mid-pull.
+ *
+ * WHERE THE OFF PAW IS, and why it is not on a teat. Round 1 put both arms up at the udder (armR 126 / armL 122),
+ * and both paws were then within 4 degrees of each other: the far arm is rooted 16..20 px BEHIND the near one
+ * (shoulderF is at -shoulderX - 2 and shoulderX is 7..9 across the cast), so at that angle its paw landed inside
+ * the critter's own skull - 4..9 px from the head joint against a head radius of 11..15 - and the far arm draws
+ * before the head (ART_STYLE 0.3), so not one pixel of it survived in any frame. Every capture showed a one-pawed
+ * milker, against 0's "a viewer must instantly pick out both paws".
+ *
+ * It cannot be fixed by opening the far arm toward the udder, and the geometry says so flatly: a chibi arm is
+ * 15..18 px long, the far shoulder is 16..20 px behind the near one, so the far paw's reach in x STOPS about 15 px
+ * short of where the near paw already is - 8 px past the udder's outer edge - and everything between the two is
+ * the critter's own torso and skull, which draw over it. Measured across the four casts and the whole arm circle,
+ * the far paw survives in exactly one place: BEHIND the body, where the stool is. So the milker strips the teat
+ * one-pawed and braces the off paw back on the stool's seat, which is a posture a byre milker actually takes: 40
+ * to 90 px of paw survive on every cast in every key (measured by rendering the seat with its far palette forced
+ * to magenta and counting), the silhouette is open, and the pump beat still rocks the braced paw against the
+ * milking one, so which paw is down goes on saying which button just landed.
+ */
+const SIT = { legR: [88, -62], legL: [76, -52] };
+export const DAIRY_ANIMS = Object.freeze({
+  milkIdle: { loop: true, frames: [
+    F(26, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [0, SIT_ROOT_Y], torso: 4, head: 8, face: 'happy' }),
+    F(26, { ...SIT, armR: [128, 2], armL: [-27, -10], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 10, face: 'happy' }),
+  ] },
+  pumpR: { loop: false, frames: [
+    F(4, { ...SIT, armR: [112, 8], armL: [-48, -18], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 9, face: 'happy' }, { ease: 'out' }),
+    F(9, { ...SIT, armR: [114, 6], armL: [-44, -16], root: [0, SIT_ROOT_Y], torso: 5, head: 8, face: 'happy' }),
+  ] },
+  pumpL: { loop: false, frames: [
+    F(4, { ...SIT, armR: [138, -6], armL: [-16, -2], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 9, face: 'happy' }, { ease: 'out' }),
+    F(9, { ...SIT, armR: [136, -4], armL: [-19, -4], root: [0, SIT_ROOT_Y], torso: 5, head: 8, face: 'happy' }),
+  ] },
+  /**
+   * Seated cheer and seated sulk for the end sign: a paw up off the udder and the other thrown up BEHIND the
+   * shoulder, or both down. The off arm goes back over the shoulder rather than forward for the same reason the
+   * milking keys brace it back - forward of the body it is inside the skull and nothing of it draws.
+   */
+  cheer: { loop: true, frames: [
+    F(10, { ...SIT, armR: [116, 20], armL: [-128, 14], root: [0, SIT_ROOT_Y - 1], torso: -4, head: -6, squash: 1.05, face: 'happy' }),
+    F(14, { ...SIT, armR: [126, 14], armL: [-138, 6], root: [0, SIT_ROOT_Y - 3], torso: -6, head: -10, stretch: 1.04, face: 'happy' }),
+    F(8, { ...SIT, armR: [118, 18], armL: [-130, 12], root: [0, SIT_ROOT_Y - 1], torso: -4, head: -6, squash: 1.06, face: 'happy' }),
+  ] },
+  sad: { loop: true, frames: [
+    F(30, { ...SIT, armR: [56, 44], armL: [-30, -6], root: [0, SIT_ROOT_Y + 1], torso: 14, head: 22, face: 'hurt' }),
+    F(30, { ...SIT, armR: [58, 46], armL: [-28, -8], root: [0, SIT_ROOT_Y + 2], torso: 16, head: 24, face: 'hurt' }),
+  ] },
+});
+
 // ---------------------------------------------------------------- the milker's kit
 /**
  * The three-legged milking stool, seat top `h` px above the floor at (x, y).
@@ -359,6 +432,70 @@ export function drawSplash(ctx, x, y, step) {
   ctx.fillStyle = MILK; pathEllipse(ctx, x, y, rx, ry); ctx.fill();
   ctx.fillStyle = MILK_SH; pathEllipse(ctx, x + 1, y + 1, rx - 2, ry - 1); ctx.fill();
   if (step < 2) { ctx.fillStyle = INK; ctx.fillRect(x - rx - 4, y - 2, 3, 3); ctx.fillRect(x + rx + 2, y - 3, 3, 3); }
+}
+
+// ---------------------------------------------------------------- the butter churn
+/**
+ * The BARREL CHURN a butter visit stands beside every stall: an upright oak barrel on a trestle with a crank on its
+ * near face, whose handle the milker turns. It is a different object from the tin churns on the rack on purpose -
+ * those are the milk's score and this is a machine the crew works - so it wears the byre's oak (the furniture tone,
+ * two steps up from the floor like the stool) with the cool tin kept for its hoops and the crank, so the one thing
+ * that moves on it is the one cool mark.
+ *
+ * `hubY` is where the crank's axle is, handed in by the screen because it is worked out from the milker's OWN arm
+ * the way the cow's udder is (screens/dairy.js): the barrel is then cut to reach 12 px above that hub and stands on
+ * the trestle at `y`, so a mouse's churn is a hand shorter than a sheep's and each paw lands on its own handle.
+ * `angle` is the crank in degrees (draw-only: the screen derives it from the press count), and `handle` false
+ * draws the barrel without its crank arm, so the screen can lay the arm back over the milker's paw afterwards.
+ */
+export const CHURN_W = 22, CHURN_ABOVE_HUB = 12, TRESTLE_H = 6, CRANK_R = 8;
+const OAK_LIT = mix(DAIRY.oak, MILK_HI, 0.25), OAK_SH = mix(DAIRY.oak, PLUM.shadow, 0.38);
+export function drawBarrelChurn(ctx, x, y, hubY, angle, handle) {
+  x = R(x); y = R(y); hubY = R(hubY);
+  const top = hubY - CHURN_ABOVE_HUB, bot = y - TRESTLE_H, hw = CHURN_W >> 1;
+  // the trestle: two splayed legs under the barrel's chime, the same oak dark the stool's legs are
+  ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - hw + 4, bot); ctx.lineTo(x - hw - 2, y); ctx.moveTo(x + hw - 4, bot); ctx.lineTo(x + hw + 2, y); ctx.stroke();
+  ctx.strokeStyle = DAIRY.oakDark; ctx.lineWidth = 3; ctx.stroke();
+  // the barrel: one inked body bellied 2 px at the waist, staves as dark seams, a lit stave on the light side
+  ctx.beginPath();
+  ctx.moveTo(x - hw, top); ctx.lineTo(x + hw, top); ctx.quadraticCurveTo(x + hw + 4, (top + bot) / 2, x + hw, bot);
+  ctx.lineTo(x - hw, bot); ctx.quadraticCurveTo(x - hw - 4, (top + bot) / 2, x - hw, top); ctx.closePath();
+  ink(ctx, DAIRY.oak);
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = OAK_SH; ctx.fillRect(x + 2, top, hw + 4, bot - top);
+  ctx.fillStyle = OAK_LIT; ctx.fillRect(x - hw + 2, top + 2, 3, bot - top - 4);
+  ctx.fillStyle = DAIRY.oakDark; ctx.fillRect(x - 3, top, 1, bot - top); ctx.fillRect(x + 5, top, 1, bot - top);
+  // two tin hoops, each inside its own ink line
+  for (let k = 0; k < 2; k++) {
+    const hy = top + 6 + k * (bot - top - 15);
+    ctx.fillStyle = INK; ctx.fillRect(x - hw - 4, hy - 1, CHURN_W + 8, 5);
+    ctx.fillStyle = TIN; ctx.fillRect(x - hw - 4, hy, CHURN_W + 8, 3);
+    ctx.fillStyle = TIN_SH; ctx.fillRect(x + 2, hy, hw + 4, 3);
+  }
+  ctx.restore();
+  // the lid, a shade of milk showing at its rim: what is in there
+  ctx.fillStyle = INK; ctx.fillRect(x - hw - 2, top - 4, CHURN_W + 4, 5);
+  ctx.fillStyle = DAIRY.oakDark; ctx.fillRect(x - hw - 1, top - 3, CHURN_W + 2, 3);
+  ctx.fillStyle = MILK; ctx.fillRect(x - hw + 2, top - 1, CHURN_W - 4, 1);
+  // the crank's hub on the near face, and the arm if asked for
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x, hubY, 4, 0, TAU); ctx.fill();
+  ctx.fillStyle = TIN_SH; ctx.beginPath(); ctx.arc(x, hubY, 2.5, 0, TAU); ctx.fill();
+  if (handle) drawCrankArm(ctx, x, hubY, angle);
+}
+/**
+ * The crank arm alone: a tin bar from the hub at (x, hubY) to a round oak knob CRANK_R out at `angle` degrees.
+ * Drawn AFTER the milker in the churn phase so the knob reads on top of the paw that is turning it - the thing a
+ * tapping player is watching go round.
+ */
+export function drawCrankArm(ctx, x, hubY, angle) {
+  x = R(x); hubY = R(hubY);
+  const kx = R(x + Math.cos(angle * DEG) * CRANK_R), ky = R(hubY + Math.sin(angle * DEG) * CRANK_R);
+  ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, hubY); ctx.lineTo(kx, ky); ctx.stroke();
+  ctx.strokeStyle = TIN; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(kx, ky, 4, 0, TAU); ctx.fill();
+  ctx.fillStyle = DAIRY.oak; ctx.beginPath(); ctx.arc(kx, ky, 2.5, 0, TAU); ctx.fill();
 }
 
 /** A churn standing on the rack with its base at (x, y): the party's score, one churn per milk banked. */

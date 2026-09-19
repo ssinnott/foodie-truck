@@ -11,6 +11,17 @@
 // Nothing here animates: the chutes, the pouring flour, the spur wheel, the sail in the window, the motes and the
 // cast are the screen's per-frame marks (millProps.js).
 //
+// TWO VARIANTS of the same room, painted with the same painters off the same seeds and cached separately, the way
+// backgrounds/pond.js keeps the cove beside the pond: `millLayers('flour')` is Windle Mill grinding, and
+// `millLayers('rice')` is the same floor on a day it is hulling rice (docs/GDD.md section 5: the mill fills rice sacks
+// under the same chutes). A rice visit used to be pixel-identical to a flour one - same stack of hessian, same flour
+// dusted along every beam - with only the clock's glyph and the end sign to say otherwise, so a player who had just
+// been asked for rice pudding was handed a room full of flour. The switch is carried by the things a miller would
+// actually change: the stock in the left corner is sheaves of rice straw and a hulling bin instead of stacked flour
+// sacks, the scoop on the wall is a winnowing fan, and the flour dust ground into the beams and the floor is loose
+// grain and straw chaff instead. The frame, the chutes, the window and the cart are the mill's own, so the two
+// visits are unmistakably the same building.
+//
 // The value ladder this room is built on (ART_STYLE 0.1 / 7: the plane behind the critters' torsos must be at least
 // 25 % off the lightest fur, Barley's wool #F1E4C8 at L .90). Measured: timber L .24 (73 % off), the lit shaft over
 // it L .33 (63 % off), the stacked hessian L .46 (48 % off), the plank floor L .40 (56 % off, and comfortably over
@@ -20,6 +31,7 @@
 import { makeLayer, boxOutlined, boxShaded, vGradient, INK, VIEW_W, VIEW_H } from '../layers.ts';
 import { mix } from '../palettes.ts';
 import { PLUM } from '../../constants.ts';
+import { INGREDIENTS } from '../../content/recipes.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
 
@@ -54,6 +66,20 @@ export const MILL = Object.freeze({
   flour: '#EFE4CA',
   /** The only daylight in the room: the sky through the high window, the map's own dusk peach. */
   sky: '#F4C9A0',
+});
+/**
+ * The rice visit's extra tones: three, on top of the room's own. `grain` is the rice INGREDIENT's hex - the one the
+ * HUD ticket, the map sign and the kitchen all share, so a player learns one rice - and, like the flour, it is the
+ * lightest thing in the room (L .90) and is never carried in bulk: loose grains on the floor, a few on the mound in
+ * the bin, the grains in a pouring chute (millProps.js). `straw` is the coop's nest straw, already in the world's
+ * ladder, for the sheaves and the winnowing fan; `husk` is the unhulled paddy heaped in the bin, a step under it.
+ * Both sit at saturation .54 and .54, under the .65 ceiling ART_STYLE section 1 sets for anything that is not a
+ * signal. SIGNAL.mill gold still appears NOWHERE in this backdrop, in either variant.
+ */
+export const RICE = Object.freeze({
+  grain: INGREDIENTS.rice.hex,
+  straw: '#C9A05C',
+  husk: '#A88A4E',
 });
 /** Seed block 180..189 belongs to the mill (ART_STYLE section 7). */
 const SEED = 180;
@@ -131,6 +157,67 @@ function stackSack(g, x, y, w, h, tone) {
 }
 
 /**
+ * One sheaf of rice straw standing against the wall, feet centred on (x, base), `w` wide at the foot and `h` tall:
+ * an inked bundle that pinches in to the rope band two-fifths of the way up and opens out again into the heads,
+ * one shadow face down its right side, a lit strip up its left, and four 2 px stalk lines under the band. The
+ * pinch and the band are what say "sheaf" rather than "a yellow post": a plain tapered bundle standing beside
+ * four oak posts would be a fifth, paler post.
+ */
+function sheaf(g, x, base, w, h, rnd) {
+  const cx = R(x), waist = R(base - h * 0.42), top = base - h, hw = R(w / 2), ww = R(hw * 0.45);
+  g.fillStyle = INK;
+  g.beginPath();
+  g.moveTo(cx - hw - 1, base + 1); g.lineTo(cx - ww - 1, waist); g.lineTo(cx - hw - 1, top + 2); g.lineTo(cx - ww, top - 2);
+  g.lineTo(cx + ww, top - 2); g.lineTo(cx + hw + 1, top + 2); g.lineTo(cx + ww + 1, waist); g.lineTo(cx + hw + 1, base + 1);
+  g.closePath(); g.fill();
+  g.fillStyle = RICE.straw;
+  g.beginPath();
+  g.moveTo(cx - hw, base); g.lineTo(cx - ww, waist); g.lineTo(cx - hw, top + 3); g.lineTo(cx - ww + 1, top);
+  g.lineTo(cx + ww - 1, top); g.lineTo(cx + hw, top + 3); g.lineTo(cx + ww, waist); g.lineTo(cx + hw, base);
+  g.closePath(); g.fill();
+  g.save(); g.clip();
+  g.fillStyle = mix(RICE.straw, PLUM.deep, 0.4); g.fillRect(cx + 1, top - 2, hw + 2, h + 4);                 // the shaded half
+  g.fillStyle = mix(RICE.straw, RICE.grain, 0.35); g.fillRect(cx - hw, top, 3, h);                           // the lit strip
+  g.fillStyle = mix(RICE.straw, PLUM.deep, 0.55);                                                            // the stalks: 2 px runs
+  for (let k = 0; k < 4; k++) g.fillRect(cx - hw + 2 + k * 4 + R(rnd() * 2), waist + 3, 2, R(h * 0.3));
+  g.restore();
+  g.fillStyle = INK; g.fillRect(cx - ww - 2, waist - 2, ww * 2 + 4, 5);                                      // the rope band
+  g.fillStyle = MILL.hessian; g.fillRect(cx - ww - 1, waist - 1, ww * 2 + 2, 3);
+}
+
+/**
+ * The hulling bin: a hooped oak tub with a mound of paddy heaped over its rim and a pestle leaning out of it. The
+ * one prop in the room that says what the chutes are pouring today before a single one of them wakes. `w` and `h`
+ * are the tub; the pestle stands 38 px over its rim.
+ */
+function hullingBin(g, x, base, w, h) {
+  const cx = R(x), top = base - h, hw = R(w / 2);
+  g.fillStyle = INK; g.fillRect(cx + 3, top - 34, 4, 40);                                                    // the pestle, behind the rim
+  g.fillStyle = MILL.beam; g.fillRect(cx + 4, top - 33, 2, 38);
+  g.fillStyle = INK; g.fillRect(cx, top - 38, 10, 6);
+  g.fillStyle = mix(MILL.beam, PLUM.deep, 0.3); g.fillRect(cx + 1, top - 37, 8, 4);
+  g.fillStyle = INK;                                                                                         // the tub: a tapered stave box
+  g.beginPath(); g.moveTo(cx - hw - 1, top - 1); g.lineTo(cx + hw + 1, top - 1); g.lineTo(cx + hw - 2, base + 1); g.lineTo(cx - hw + 2, base + 1); g.closePath(); g.fill();
+  g.fillStyle = MILL.beam;
+  g.beginPath(); g.moveTo(cx - hw, top); g.lineTo(cx + hw, top); g.lineTo(cx + hw - 3, base); g.lineTo(cx - hw + 3, base); g.closePath(); g.fill();
+  g.save(); g.clip();
+  g.fillStyle = mix(MILL.beam, PLUM.deep, 0.45); g.fillRect(cx + 3, top, hw, h);
+  g.fillStyle = mix(MILL.beam, MILL.flour, 0.18); g.fillRect(cx - hw, top, 3, h);
+  g.fillStyle = mix(MILL.beam, PLUM.deep, 0.3); for (let k = -1; k <= 1; k++) g.fillRect(cx + k * 7 - 1, top, 1, h);    // stave seams
+  g.restore();
+  for (let k = 0; k < 2; k++) {                                                                              // two iron hoops
+    const hy = top + 5 + k * (h - 12);
+    g.fillStyle = INK; g.fillRect(cx - hw - 1, hy, w + 2, 5);
+    g.fillStyle = MILL.iron; g.fillRect(cx - hw, hy + 1, w, 3);
+  }
+  g.fillStyle = INK; g.beginPath(); g.ellipse(cx, top + 1, hw + 1, 8, 0, Math.PI, 0); g.closePath(); g.fill();    // the paddy heaped over the rim
+  g.fillStyle = RICE.husk; g.beginPath(); g.ellipse(cx, top + 1, hw, 7, 0, Math.PI, 0); g.closePath(); g.fill();
+  g.fillStyle = mix(RICE.husk, RICE.grain, 0.4); g.beginPath(); g.ellipse(cx - 3, top - 2, hw * 0.4, 3, 0, Math.PI, 0); g.closePath(); g.fill();
+  g.fillStyle = RICE.grain;                                                                                  // a few hulled grains showing
+  g.fillRect(cx - 8, top - 1, 2, 3); g.fillRect(cx - 1, top - 4, 2, 3); g.fillRect(cx + 8, top - 1, 2, 3);
+}
+
+/**
  * The tower wall.
  *
  * Boards run VERTICALLY (a mill tower is weatherboarded up the frame, and vertical seams also stop the widest flat
@@ -138,7 +225,7 @@ function stackSack(g, x, y, w, h, tone) {
  * between the beam and the chutes' mouths - because rows 196..292 are where the cast's tags, plates, heads and
  * torsos are and ART_STYLE section 7 wants that plane quiet.
  */
-function paintWall(g, w, h, rnd) {
+function paintWall(g, w, h, rnd, rice) {
   g.fillStyle = MILL.timber; g.fillRect(0, 0, w, h);
   g.fillStyle = MILL.seam;
   for (let x = 8; x < w; x += 16) g.fillRect(x, 0, 1, h);                                        // board seams
@@ -199,14 +286,37 @@ function paintWall(g, w, h, rnd) {
   for (let y = ROWS.joist + 4; y < ROWS.joist + 26; y += 5) { g.fillStyle = MILL.iron; g.fillRect(TRAP_X + 41, y, 1, 3); }
   g.strokeStyle = INK; g.lineWidth = 3; g.beginPath(); g.arc(TRAP_X + 41, ROWS.joist + 32, 6, 0.2, Math.PI * 1.1); g.stroke();
   g.strokeStyle = MILL.iron; g.lineWidth = 2; g.beginPath(); g.arc(TRAP_X + 41, ROWS.joist + 32, 6, 0.2, Math.PI * 1.1); g.stroke();
-  g.fillStyle = mix(MILL.beam, MILL.flour, 0.4); g.fillRect(0, ROWS.joist + 1, w, 2);             // flour dusted along the beam's top
+  // flour dusted along the beam's top; on a rice day the beam is clean of it, and it is loose grain and chaff that
+  // sit on it instead: the same 2 px lit row, tinted straw, with 2x3 grains and straw flecks standing on it
+  if (rice) {
+    g.fillStyle = mix(MILL.beam, RICE.straw, 0.45); g.fillRect(0, ROWS.joist + 1, w, 2);
+    for (let x = 4 + R(rnd() * 10); x < w; x += 14 + R(rnd() * 22)) { g.fillStyle = (x & 1) ? RICE.grain : RICE.straw; g.fillRect(x, ROWS.joist, 2, 3); }
+  } else {
+    g.fillStyle = mix(MILL.beam, MILL.flour, 0.4); g.fillRect(0, ROWS.joist + 1, w, 2);
+  }
 
   // tools on the wall, hung BETWEEN the chutes in the one clear band (rows 118..168): a flour scoop, a beam
   // balance, a besom. All of them dark on dark - they give the wall structure without competing with the cast.
   const toolDark = mix(MILL.beam, PLUM.deep, 0.3);
-  boxOutlined(g, 172, 122, 4, 30, toolDark, INK, 1);                                              // scoop handle
-  boxShaded(g, 162, 150, 24, 16, MILL.hessian, mix(MILL.hessian, PLUM.deep, 0.4), INK, 1, 0.4);   // scoop pan
-  g.fillStyle = mix(MILL.hessian, MILL.flour, 0.45); g.fillRect(164, 150, 20, 3);
+  if (rice) {
+    // the winnowing fan hangs where the flour scoop does: a flat straw disc on a short peg, a dark woven rim, one
+    // shadow band across its lower half and six 2 px weave knots round the hub - the shape a reader knows from
+    // every picture of rice being tossed clean, and the one tool on this wall a flour mill would not own
+    g.fillStyle = INK; g.fillRect(172, 122, 4, 8);
+    g.beginPath(); g.arc(174, 148, 19, 0, TAU); g.fill();
+    g.fillStyle = mix(RICE.straw, PLUM.deep, 0.35); g.beginPath(); g.arc(174, 148, 18, 0, TAU); g.fill();
+    g.fillStyle = RICE.straw; g.beginPath(); g.arc(174, 148, 14, 0, TAU); g.fill();
+    g.save(); g.beginPath(); g.arc(174, 148, 14, 0, TAU); g.clip();
+    g.fillStyle = mix(RICE.straw, PLUM.deep, 0.3); g.fillRect(156, 152, 36, 14);
+    g.fillStyle = mix(RICE.straw, PLUM.deep, 0.45);
+    for (let k = 0; k < 6; k++) { const a = k * (TAU / 6); g.fillRect(R(174 + Math.cos(a) * 9) - 1, R(148 + Math.sin(a) * 9) - 1, 2, 2); }
+    g.restore();
+    g.fillStyle = INK; g.beginPath(); g.arc(174, 148, 3, 0, TAU); g.fill();
+  } else {
+    boxOutlined(g, 172, 122, 4, 30, toolDark, INK, 1);                                            // scoop handle
+    boxShaded(g, 162, 150, 24, 16, MILL.hessian, mix(MILL.hessian, PLUM.deep, 0.4), INK, 1, 0.4); // scoop pan
+    g.fillStyle = mix(MILL.hessian, MILL.flour, 0.45); g.fillRect(164, 150, 20, 3);
+  }
   g.fillStyle = INK; g.fillRect(318, 120, 3, 14);                                                 // the balance's stem
   boxOutlined(g, 292, 132, 56, 4, MILL.iron, INK, 1);                                             // its beam
   for (const px of [296, 340]) {
@@ -221,10 +331,18 @@ function paintWall(g, w, h, rnd) {
   // the mill's own stock, piled against the left wall: a contact shadow, then three courses leaning on it. The pile
   // stops at row 232 (a clear 40 rows under the lowest chute mouth) and at x 76, which is outside chute 1's catch
   // zone AND outside the widest heap an uncaught pour builds there, so nothing pale ever stands where a seat does.
+  // On a rice day the same corner holds the rice: two sheaves of straw leaning on the wall and the hulling bin in
+  // front of them, inside the same box (rows 232..292, x 8..76) for the same reason.
   const floorSh = mix(MILL.timber, PLUM.deep, 0.4);
   for (let i = 0; i < STACK_X.length; i++) {
     const x0 = STACK_X[i];
     g.fillStyle = floorSh; g.beginPath(); g.ellipse(x0 + 32, ROWS.floor - 4, 42, 6, 0, 0, TAU); g.fill();
+    if (rice) {
+      sheaf(g, x0 + 10, ROWS.floor - 4, 18, 52, rnd);
+      sheaf(g, x0 + 27, ROWS.floor - 3, 20, 58, rnd);
+      hullingBin(g, x0 + 51, ROWS.floor - 4, 30, 26);
+      continue;
+    }
     for (let row = 0; row < 3; row++) {
       const n = 3 - row, y = ROWS.floor - 16 - row * 18;
       for (let k = 0; k < n; k++) {
@@ -244,7 +362,7 @@ function paintWall(g, w, h, rnd) {
  * that band bare, because a pale fleck under a boot is a dropped pinch of flour the player will try to pick up. The
  * scatter therefore only lands on the 30 rows of apron in front of the cast.
  */
-function paintFloor(g, w, h, rnd) {
+function paintFloor(g, w, h, rnd, rice) {
   g.fillStyle = MILL.plank; g.fillRect(0, 0, w, h);
   g.fillStyle = INK; g.fillRect(0, 0, w, 2);
   g.fillStyle = MILL.plankDark; g.fillRect(0, 2, w, 8);                                           // the wall's shadow on the boards
@@ -262,27 +380,42 @@ function paintFloor(g, w, h, rnd) {
   for (let i = 0; i < 60; i++) {
     const x = R(rnd() * w), y = 3 + R(rnd() * (h - 6));
     if (y < WALK_TO) continue;
+    if (rice) {
+      // spilt grain and straw chaff instead of flour ground into the boards: 2x3 grains (the smallest oval that
+      // reads at 1x, ART_STYLE 0.8) and 2 px straw wisps, on the same apron rows, off the same rnd stream
+      if (i & 1) { g.fillStyle = RICE.grain; g.fillRect(x, y, 2, 3); } else { g.fillStyle = RICE.straw; g.fillRect(x, y, 3 + R(rnd() * 3), 2); }
+      continue;
+    }
     g.fillStyle = dusted; g.fillRect(x, y, 2 + R(rnd() * 3), 1);
   }
 }
 
 /** The top tie beam and the ceiling boards, blitted over everything so the spur wheel's shafts run up into them. */
-function paintBeam(g, w, h) {
+function paintBeam(g, w, h, rnd, rice) {
   g.fillStyle = MILL.seam; g.fillRect(0, 0, w, h - 10);
   for (let x = 0; x < w; x += 22) { g.fillStyle = mix(MILL.seam, INK, 0.5); g.fillRect(x, 0, 1, h - 10); }
   boxShaded(g, -2, h - 14, w + 4, 14, MILL.beam, mix(MILL.beam, PLUM.deep, 0.45), INK, 2, 0.4);
-  g.fillStyle = mix(MILL.beam, MILL.flour, 0.4); g.fillRect(0, h - 13, w, 2);
+  // the lit top edge: flour settled on it, or on a rice day chaff
+  g.fillStyle = rice ? mix(MILL.beam, RICE.straw, 0.45) : mix(MILL.beam, MILL.flour, 0.4); g.fillRect(0, h - 13, w, 2);
 }
 
-/** The backdrop is a pure function of its seeds: painted on the first visit, kept for every visit after. */
-let LAYERS = null;
-/** Pre-render every layer once. Returns { wall, floor, beam } with the screen y each is blitted at. */
-export function millLayers() {
-  if (LAYERS) return LAYERS;
-  LAYERS = {
-    wall: { L: makeLayer(VIEW_W, WALL_H, paintWall, SEED), y: 0 },
-    floor: { L: makeLayer(VIEW_W, FLOOR_H, paintFloor, SEED + 1), y: ROWS.floor },
-    beam: { L: makeLayer(VIEW_W, BEAM_H, paintBeam, SEED + 2), y: 0 },
+/**
+ * The pre-rendered layers per variant: 'flour' (Windle Mill grinding) and 'rice' (the same floor hulling rice). A
+ * backdrop is a pure function of its seeds and its variant: painted on the first visit of each kind, kept for every
+ * visit after, and the two never share a slot - one cache keyed on nothing would hand a rice visit the flour room
+ * whenever a flour visit had come first in the session (backgrounds/pond.js keeps the cove beside the pond the
+ * same way). Same seeds for both, so the board grain, the plank ends and the scuffs land on the same pixels.
+ */
+const LAYERS = { flour: null, rice: null };
+/** Pre-render every layer once per variant. Returns { wall, floor, beam } with the screen y each is blitted at. */
+export function millLayers(variant = 'flour') {
+  const key = variant === 'rice' ? 'rice' : 'flour';
+  if (LAYERS[key]) return LAYERS[key];
+  const rice = key === 'rice';
+  LAYERS[key] = {
+    wall: { L: makeLayer(VIEW_W, WALL_H, (g, w, h, rnd) => paintWall(g, w, h, rnd, rice), SEED), y: 0 },
+    floor: { L: makeLayer(VIEW_W, FLOOR_H, (g, w, h, rnd) => paintFloor(g, w, h, rnd, rice), SEED + 1), y: ROWS.floor },
+    beam: { L: makeLayer(VIEW_W, BEAM_H, (g, w, h, rnd) => paintBeam(g, w, h, rnd, rice), SEED + 2), y: 0 },
   };
-  return LAYERS;
+  return LAYERS[key];
 }

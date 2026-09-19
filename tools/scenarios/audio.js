@@ -11,7 +11,7 @@
 import { withPage, assert } from '../playtest.js';
 
 /** Tracks the screens must ask for (game/game.ts SCREEN_MUSIC), by the screen a skipTo lands on. */
-const WANT = { title: 'title', select: 'title', controls: 'title', gallery: 'title', lobby: 'title', stage: 'board', map: 'drive', orchard: 'gather', pond: 'pond', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', line: 'line', kitchen: 'kitchen', results: 'results' };
+const WANT = { title: 'title', select: 'title', controls: 'title', gallery: 'title', lobby: 'title', stage: 'board', map: 'drive', orchard: 'gather', pond: 'pond', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', bramble: 'gather', beach: 'pond', line: 'line', kitchen: 'kitchen', results: 'results' };
 
 export const SCENARIOS = {
   async audio(server) {

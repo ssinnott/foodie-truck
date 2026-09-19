@@ -21,6 +21,8 @@ import { DairyScreen } from './game/screens/dairy.ts';
 import { MillScreen } from './game/screens/mill.ts';
 import { HiveScreen } from './game/screens/hive.ts';
 import { GardenScreen } from './game/screens/garden.ts';
+import { BrambleScreen } from './game/screens/bramble.ts';
+import { BeachScreen } from './game/screens/beach.ts';
 import { KitchenScreen } from './game/screens/kitchen.ts';
 import { ResultsScreen } from './game/screens/results.ts';
 import { LineScreen } from './game/screens/line.ts';
@@ -103,6 +105,8 @@ function boot() {
   game.registerScreen('mill', (g) => new MillScreen(g));
   game.registerScreen('hive', (g) => new HiveScreen(g));
   game.registerScreen('garden', (g) => new GardenScreen(g));
+  game.registerScreen('bramble', (g) => new BrambleScreen(g));
+  game.registerScreen('beach', (g) => new BeachScreen(g));
   game.registerScreen('kitchen', (g) => new KitchenScreen(g));
   game.registerScreen('results', (g) => new ResultsScreen(g));
   game.registerScreen('line', (g) => new LineScreen(g));

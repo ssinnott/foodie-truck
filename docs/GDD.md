@@ -67,8 +67,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   ingredient is somewhere a day can send the truck. Recipes are only ever appended, because `?order=N` and the
   scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
-  orchard drops pears, peaches and avocados as well as apples; the market garden pulls six vegetables besides the
-  carrot; the dairy's pails go on to butter; the mill's chutes fill rice sacks. A mini-game gathers whichever of
+  orchard drops pears, peaches and avocados as well as apples; the farm pulls six vegetables besides the
+  carrot; the dairy's pails go on through the churn to butter; the mill's chutes fill rice sacks. A mini-game gathers whichever of
   its landmark's ingredients the list is still short of (`run.js gatherTarget`: the first short one in
   `INGREDIENTS` order, else the first the list asks for, else the landmark's first — so a bare dev jump still
   catches apples), and draws that ingredient's glyph and colour on the tally ticket, in the basket and on the end sign.
@@ -94,11 +94,10 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - World `1920 x 1080` px (`content/places.js WORLD_W/H`), one flat plane in 3/4 storybook view, y-sorted sprites
   with ground-contact shadows. Camera follows the truck (0.1 lerp, integer snap, clamped to the world).
 - **Landmarks** (`PLACES`): home (the truck stop), orchard (apples, pears, peaches, avocados), pond (trout), coop
-  (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), market garden (carrots, potatoes, onions, leeks,
+  (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
   south lane (strawberries, blueberries). **All nine supply landmarks open a mini-game** while the list is short
-  of what they supply — the cove opens the pond's (crab lines off the jetty) and the bank opens the market's
-  (berries pulled from the beds), each screen reading the landmark it stands at off its `place` param — and **any
+  of what they supply — the cove its beach (crabs chased along the sand), the bank its bushes — and **any
   of them can hold a line** once it is full; arriving where there is nothing to do shows a sign instead
   (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
   `THE LINES ARE WAITING` at home).
@@ -123,13 +122,12 @@ round has no time limit**: it ends only when the party's total reaches the targe
 line of the list; the scene ends with a sign dropping in (`APPLES: 12`) and a 60-frame hold, then `run.gather` and
 back to the map. All randomness through `rng` inside `update()`.
 
-A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the market garden) and a
-screen two landmarks share (the pond's jetty is the cove's, the market's bed is the bank's) asks `run.js
-gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the tally ticket and in the
-basket, its name on the end sign, and the landmark's own name on the ticket. The mechanic never changes — a pear is
-caught like an apple, a crab reeled in like a trout. The cove repaints the pond's layers in a seaside palette
-(`art/backgrounds/pond.js COVE`: open sea to the horizon, dunes for the tree-line, sand and marram for the turf,
-foam under the deck, no lily pads); the bank keeps the market's backdrop.
+A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the farm, the bank, the
+cove) asks `run.js gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the tally
+ticket and in the basket, its name on the end sign, and the landmark's own name on the ticket. The mechanic's SHAPE
+never changes — a pear is caught like an apple — but the visit looks like its ingredient (the orchard's trees, the
+farm's plants, the mill's grain) and where the ingredient is a different kind of thing it plays as one: butter is
+milk and then the churn, salt is a pan that has to crust before it can be scraped.
 
 **Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
 kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
@@ -153,7 +151,13 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   burning fuse — and catching it is the scene's joke: the critter holds it up and watches the fuse burn for 40
   frames, it goes off in smoke and embers, and the critter stands blackened and dazed for 90 frames before shaking
   it off. Nothing is lost but the time. Four seats use four depth lanes 8 px apart so bodies stack instead of
-  fusing.
+  fusing. A visit for pears, peaches or avocados is the same catch under **that fruit's own trees**: the backdrop's
+  canopies are painted per fruit (a pear tree taller and narrower, a peach tree rounder with a pink-tinged leaf,
+  an avocado tree one big dark glossy canopy), the fruit hangs on its branch in that canopy in its own colour before
+  it lets go, and the fall has the fruit's own feel from a per-fruit table (a pear sways less, a peach drifts
+  wider, an avocado drops heavier and straighter) — every speed still inside the basket's catch window, every
+  number still drawn from `rng`. The wormy one and the bomb play on every visit: a wormy pear is a bruised pear with
+  the same grub, and a pear with a fuse goes off exactly as an apple does.
 - **Pond — FISH** (*tap*). Fixed standing spots on a jetty, one float column per seat. `action` casts; the float
   bobs; after a seeded 60–150 frames the fish bites (the float drops, a mint ring) and stays on. Tapping `action`
   twelve times reels it in: every press is one turn of the reel, drawn as a bar over the float. A press during the wait
@@ -164,20 +168,49 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   back of the floor and touch nobody.
 - **Dairy — PUMP** (*tap*). A stool and a cow per seat, nobody moves. Every `action` press is a squirt; twelve fill a
   pail — +1 milk, the pail hops to the churn rack, a fresh one slides under the cow. Any rhythm works, and the cows
-  never kick.
+  never kick. A **butter** visit adds the churn: a barrel churn stands beside every stall, the full pail pours into
+  it instead of banking, the milker turns round on the stool and every `action` press is a turn of the crank;
+  twelve turns bring a pat of butter (+1 butter, the pat hops to the rack) and the milker turns back to the cow.
+  Butter is milk plus the churn, so a pat is exactly two dozen taps.
 - **Mill — FILL** (*move + hold*). Four chutes along the back wall wake on a seeded 70–130 frame timer, at most two
-  at once: 24 frames of telegraph, then 110 frames of pouring. Seats walk left and right on their own depth lanes;
+  at once: 24 frames of telegraph, then 330 frames of pouring (long enough to cross the whole floor and still fill a
+  sack). Seats walk left and right on their own depth lanes;
   standing anywhere under a pouring chute (36 px either side) with `action` **held** fills the sack at 1/90 per frame (1.5 s from
   empty). The moment it reaches the brim it ties itself off (+1 flour, an 18-frame tie beat, a fresh sack);
-  letting go early **keeps** the part sack to top up at the next chute. Nothing bursts.
+  letting go early **keeps** the part sack to top up at the next chute. Nothing bursts. A **rice** visit is the
+  same round in the same room dressed for rice, so the ingredient is read off the scene and not only off the clock:
+  the chutes pour loose grain instead of dust, a waking spout dribbles grain from its lip, the sacks wear a
+  stencilled band and pile on the cart as rice sacks, and the mill's own stock in the corner is straw sheaves and a
+  hulling bin (`art/backgrounds/mill.js millLayers('rice')`, cached beside the flour room the way the cove is kept
+  beside the pond). Not a number changes between the two.
 - **Hives — CREEP** (*move + hold*). Five straw skeps on a bench; **holding** `action` anywhere over a full one (36 px either side)
   for 60 frames dips it — a strand of honey climbs the dipper and a bar fills over the skep — then +1 honey, and
   that skep is empty for 150 frames, so the party is pushed along the bench. Letting go early costs nothing. The
   bees drone over the bench and never turn.
-- **Market garden — PULL** (*move + tap*). Leafy tops stand in the bed (seven at the start, more every 70–120
-  frames up to eight, never closer than 42 px); every one is whatever the visit gathers (a carrot by default). `action` with a top anywhere under the critter (34 px either side) grips it and opens
+- **Farm — PULL** (*move + tap*). Leafy tops stand in the bed (seven at the start, more every 70–120
+  frames up to eight, never closer than 42 px); every one is whatever the visit gathers (a carrot by default), and
+  is drawn as that plant (`art/gardenProps.js PLANTS`: a carrot's fern, a potato's flowering haulm, an onion's
+  tubes, a leek's blades over its shank, a beetroot's crimson-stemmed rosette, a pumpkin under its vine, a hearted
+  cabbage, a strawberry plant with its berries on, a blueberry bush), so a row of leeks never looks like a row of
+  carrots. `action` with a top anywhere under the critter (34 px either side) grips it and opens
   a pull gauge above that seat; each further `action` press fills it a twelfth, and the twelfth brings the root out
   (+1 carrot, a 14-frame pull). 150 frames without a press lets go at no cost.
+
+- **Bramble Bank — PICK** (*move + tap*). Six berry bushes stand along the foot of the bank, three berry spots
+  each; six berries are ripe when the truck pulls up and one more ripens every 70–120 frames on a bush with a green
+  spot left (the pea turns into the visit's own berry with the gold sparkle over it). `action` with a bush anywhere
+  under the critter (34 px either side) picks its ripe berry (a 12-frame reach up into the bush, the berry hops
+  into the basket, +1); a bush with nothing ripe on it does nothing. The bank used to borrow the farm's bed, and a
+  strawberry pulled out of the ground by its top was the visit that said it should not.
+
+- **Cockle Cove — CHASE** (*move + tap*). The crew runs along the dry sand with the sea behind it and the strand
+  line in front. Crabs come up out of burrows (three at the start, another every 50–100 frames, five at most) and
+  scuttle along the strand at 1.2 px/frame, stopping now and then with their claws up; a crab that sees a critter
+  within 46 px darts away at 2.8 for 14 frames, then stops, tired, for 36 (the mint sparkle) and will not dart again
+  for 110. `action` with a crab anywhere under the critter (34 px either side) grabs it: a 12-frame pounce, the crab
+  hops into the basket, +1. A crab nobody catches goes back down after 720 frames. Seaweed visits wash clumps up
+  that drift at 0.3 px/frame and are raked with the same grab; salt visits fill four fixed rock pans that crust
+  over 90 frames and are scraped once white. A grab at empty sand does nothing.
 
 ## 6. The kitchen
 
@@ -312,8 +345,8 @@ the truck's own motif — the rising sixth 1-3-5-6 — somewhere. Which screen p
 | `title` | title, select, lobby, controls, gallery | The parked truck at dusk: a music box over a squeezebox, unhurried. G, 96. |
 | `board` | stage (open) | The day's plan on paper: a whistle reading it out over an organ. C, 84. |
 | `drive` | map | The lane: an oompah squeezebox under a whistle, the wheels in the shaker. D, 128. |
-| `gather` | orchard, coop, dairy, mill, hive, garden | Marimba over a plucked bass, a woodblock keeping the forty seconds. F, 120. |
-| `pond` | pond | Water waltzes: a flute over a pad, in 3. A, 88. |
+| `gather` | orchard, coop, dairy, mill, hive, garden, bramble | Marimba over a plucked bass, a woodblock keeping time. F, 120. |
+| `pond` | pond, beach | Water waltzes: a flute over a pad, in 3. A, 88. |
 | `line` | line | The queue at dusk: the title's squeezebox with a plucked tune over it, swung. G, 92. |
 | `kitchen` | kitchen | The order on the pass: a harpsichord running over organ stabs, the clock in the drums. C, 140. |
 | `results` | results | The customer eats: bells over brass, the motif three times and a bow. D, 112. |

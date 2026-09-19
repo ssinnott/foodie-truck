@@ -1,11 +1,21 @@
 // Pippin Orchard, painted once (docs/ART_STYLE.md section 1 "Orchard", section 7; docs/GDD.md section 5).
 //
-// Four layers with seeds from the orchard block 100..109, side view, daylight. Row bands are the contract the screen
+// Five layers with seeds from the orchard block 100..109, side view, daylight. Row bands are the contract the screen
 // stands its critters on: sky 0..SKY_H, the canopy mass above the trunks, grass from GRASS_Y, the play band
 // (BAND_TOP..BAND_BOT) trodden a step darker and kept free of scatter, and the fence rail pinned to
 // FENCE_Y..360 in the near layer. Nothing here animates: the petals, the apples, the splats and the critters are the
 // screen's per-frame marks. Every canopy is one inked mass (ink pass, fill pass, then caps and crescents clipped per
 // blob) so a reader sees one tree-line, not a heap of outlined circles.
+//
+// THE TREES ARE THE FRUIT'S OWN. The orchard drops pears, peaches and avocados as well as apples (content/recipes.js
+// names it on four ingredients), and for a while every one of them fell out of the same apple trees, so a pear visit
+// was the apple orchard with the glyph swapped. The two layers that ARE the trees - `mid` (the trunks and canopies)
+// and `eaves` (the crown edges hanging in at the top corners) - are painted from a per-fruit TREES entry: the same
+// painter and the same rnd stream (seeds 101 and 104 for every fruit, exactly as the cove repaints the pond's layout
+// in another palette), a different shape and leaf tone. The sky, the plum wood, the grass and the fence are one
+// orchard whichever tree stands in it, so those three layers are painted once and shared between the variants.
+// Layers are cached PER FRUIT (`orchardLayers`, the pond's `pondLayers(variant)` pattern), so a day that visits for
+// apples and then for pears repaints nothing on the second visit and the two never fight over one cache.
 import { makeLayer, vGradient, boxShaded, INK, PARALLAX, VIEW_W, VIEW_H } from '../layers.ts';
 import { mix } from '../palettes.ts';
 import { PLUM, UI } from '../../constants.ts';
@@ -46,8 +56,61 @@ export const BLEED_X = 64;
 const LW = VIEW_W + BLEED_X * 2;
 const SEED = 100;
 
-/** One canopy blob list: [cx, cy, r, ...] in layer space. */
-function crowns(g, list, fill, cap, shade) {
+/** What makeLayer hands back: the offscreen canvas and its size. */
+type Layer = ReturnType<typeof makeLayer>;
+
+/**
+ * One tree per fruit the orchard drops: the shape and the leaf tone of `mid` and `eaves`. Read ONCE, at paint time,
+ * so plain named fields cost nothing per frame (the pond's COVE is the same shape of table).
+ *
+ * The geometry fields drive paintMid's one loop: trees stand `pitch + rnd * pitchJit` apart, the canopy's centre
+ * sits at row `cy + rnd * cyJit`, and each crown is `blobs` (+1 on a coin flip) discs thrown `spread..spread+spreadJit`
+ * px from the centre, stretched by `sx` across and `sy` down, of radius `r..r+rJit`, plus one core disc of `coreR`
+ * at `coreDy` under the centre. `capR` is the highlight cap's radius as a fraction of the blob's, `trunk` the trunk's
+ * width, and `eaveR`/`eaveJit`/`eaveStep` the corner eaves' discs.
+ *
+ *   apple    the shipped tree, untouched: its numbers are the literals the painter used to hold, consumed from the
+ *            stream in the same order, so the apple orchard is pixel-identical to the one every screenshot and
+ *            scenario was judged on.
+ *   pear     TALLER AND NARROWER. The blobs are thrown 0.55 across and 1.3 down, so each crown is an upright egg
+ *            about 90 px wide and 120 tall, and the trees stand a tighter 84..100 apart so the row still closes
+ *            above the hang row. A yellower, lighter leaf than the apple's (#587A3C with #82A04E caps), because a
+ *            pear tree in leaf IS a paler green and because the hanging pear (#B9C24A) has to sit on it.
+ *   peach    ROUNDER, and pink-tinged. The spread is a wider, shallower ellipse and the core disc is a full 44 px
+ *            ball, so each crown is one round head about 150 px wide. The leaf is a warmer olive (#5F7040) and the
+ *            highlight cap a dusty rose (#C49488, sat .30): a storybook peach tree carries its blossom and its fruit
+ *            at once, and the pink cap on every blob is what says "peach" at the squint. Measured: peach #F5A66B is
+ *            L .48 against the cap's .33 (relDiff .31) and the fill's .14 (.70), so the fruit still pops.
+ *   avocado  A BIG DARK GLOSSY CANOPY: fewer, bigger trees (140..160 apart, blobs r 36..44, a 46 px core) on a
+ *            thick 16 px trunk, in a deep cool green (#3A5A48, L .09 - a hue step off the hive's hedge #3F5A34, so
+ *            the two dark greens never twin) with a larger, cooler cap (#6E9070 at 0.72 r) for the gloss. The
+ *            fruit's own green #5C7A3B (L .165) clears the fill by .47, and at the falling size the glyph shows its
+ *            cut flesh and stone anyway, which is what reads.
+ * Every tone is under the .65 saturation ceiling (ART_STYLE section 1). None of the four fruit hexes is painted in:
+ * a fruit in the leaves that never falls is a false target, for a pear exactly as for the signal-red apple, so the
+ * only fruit in any canopy is the screen's own hanging one, one beat before it lets go.
+ */
+export interface TreeStyle {
+  canopy: string; cap: string; capR: number;
+  pitch: number; pitchJit: number; cy: number; cyJit: number; blobs: number;
+  spread: number; spreadJit: number; sx: number; sy: number; r: number; rJit: number; coreDy: number; coreR: number;
+  trunk: number; eaveR: number; eaveJit: number; eaveStep: number;
+}
+export const TREES: Readonly<Record<string, TreeStyle>> = Object.freeze({
+  apple: Object.freeze({ canopy: ORCHARD.canopy, cap: ORCHARD.tuft, capR: 0.62, pitch: 104, pitchJit: 24, cy: 84, cyJit: 12, blobs: 4,
+    spread: 20, spreadJit: 10, sx: 1, sy: 0.7, r: 30, rJit: 8, coreDy: 6, coreR: 38, trunk: 12, eaveR: 22, eaveJit: 6, eaveStep: 34 }),
+  pear: Object.freeze({ canopy: '#587A3C', cap: '#82A04E', capR: 0.62, pitch: 84, pitchJit: 16, cy: 82, cyJit: 10, blobs: 5,
+    spread: 18, spreadJit: 10, sx: 0.55, sy: 1.3, r: 22, rJit: 6, coreDy: 8, coreR: 28, trunk: 10, eaveR: 16, eaveJit: 6, eaveStep: 26 }),
+  peach: Object.freeze({ canopy: '#5F7040', cap: '#C49488', capR: 0.6, pitch: 124, pitchJit: 20, cy: 90, cyJit: 8, blobs: 5,
+    spread: 24, spreadJit: 8, sx: 1.1, sy: 0.85, r: 30, rJit: 6, coreDy: 0, coreR: 44, trunk: 12, eaveR: 24, eaveJit: 6, eaveStep: 36 }),
+  avocado: Object.freeze({ canopy: '#3A5A48', cap: '#6E9070', capR: 0.72, pitch: 140, pitchJit: 20, cy: 88, cyJit: 10, blobs: 6,
+    spread: 26, spreadJit: 12, sx: 1.15, sy: 0.85, r: 36, rJit: 8, coreDy: 4, coreR: 46, trunk: 16, eaveR: 26, eaveJit: 6, eaveStep: 40 }),
+});
+/** The tree for an ingredient id; anything the table does not name (or no ingredient at all) stands in the apple orchard. */
+export function treeFor(ing: string): TreeStyle { return TREES[ing] || TREES.apple; }
+
+/** One canopy blob list: [cx, cy, r, ...] in layer space; `capR` is the highlight cap's radius as a fraction of the blob's. */
+function crowns(g, list, fill, cap, shade, capR = 0.62) {
   g.fillStyle = INK;
   for (let i = 0; i < list.length; i += 3) { g.beginPath(); g.arc(list[i], list[i + 1], list[i + 2] + 2, 0, TAU); g.fill(); }
   g.fillStyle = fill;
@@ -56,7 +119,7 @@ function crowns(g, list, fill, cap, shade) {
   for (let i = 0; i < list.length; i += 3) {
     const cx = list[i], cy = list[i + 1], r = list[i + 2];
     g.save(); g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.clip();
-    g.fillStyle = cap; g.beginPath(); g.arc(cx - r * 0.22, cy - r * 0.26, r * 0.62, 0, TAU); g.fill();
+    g.fillStyle = cap; g.beginPath(); g.arc(cx - r * 0.22, cy - r * 0.26, r * capR, 0, TAU); g.fill();
     g.fillStyle = shade; g.beginPath(); g.arc(cx + r * 0.34, cy + r * 0.4, r * 0.8, 0, TAU); g.fill();
     g.fillStyle = fill; g.beginPath(); g.arc(cx - r * 0.1, cy - r * 0.05, r * 0.66, 0, TAU); g.fill();
     g.restore();
@@ -120,12 +183,19 @@ function paintFar(g, w, h, rnd) {
   for (let x = 6; x < w; x += 29) g.fillRect(x, FENCE_FAR_Y - 3, 3, 14);
 }
 
-/** Mid: the lollipop trees. Trunks first (behind), then every canopy as one mass that overlaps into its neighbours. */
-function paintMid(g, w, h, rnd) {
-  const shade = mix(ORCHARD.canopy, ORCHARD.plum, 0.45), trunkShade = mix(ORCHARD.trunk, ORCHARD.plum, 0.4);
+/**
+ * Mid: the lollipop trees, in the shape and tone `T` (one TREES entry) gives them. Trunks first (behind), then every
+ * canopy as one mass that overlaps into its neighbours.
+ *
+ * The rnd stream is consumed in exactly the order the apple painter always consumed it (the pitch, then the trunk's
+ * jitter, the centre row, the coin flip, then per blob the angle, the throw and the radius), and the apple entry's
+ * numbers are the ones that used to be literals here, so TREES.apple paints the orchard that shipped.
+ */
+function paintMid(g, w, h, rnd, T: TreeStyle) {
+  const shade = mix(T.canopy, ORCHARD.plum, 0.45), trunkShade = mix(ORCHARD.trunk, ORCHARD.plum, 0.4);
   const blobs = [];
-  for (let x = 24; x < w; x += 104 + R(rnd() * 24)) {
-    const tx = x + R(rnd() * 16), tw = 12;
+  for (let x = 24; x < w; x += T.pitch + R(rnd() * T.pitchJit)) {
+    const tx = x + R(rnd() * 16), tw = T.trunk;
     // trunk: one inked block with its shadow band on the right, flaring at the root into the grass line
     g.fillStyle = INK; g.fillRect(tx - tw / 2 - 2, 120, tw + 4, GRASS_Y - 120 + 2);
     g.fillStyle = ORCHARD.trunk; g.fillRect(tx - tw / 2, 122, tw, GRASS_Y - 122 + 2);
@@ -133,17 +203,18 @@ function paintMid(g, w, h, rnd) {
     g.fillStyle = INK; g.fillRect(tx - tw / 2 - 5, GRASS_Y - 8, tw + 10, 10);
     g.fillStyle = ORCHARD.trunk; g.fillRect(tx - tw / 2 - 3, GRASS_Y - 6, tw + 6, 8);
     g.fillStyle = trunkShade; g.fillRect(tx + 1, GRASS_Y - 6, tw / 2 + 2, 8);
-    // canopy: four or five blobs, big enough that the row closes into one mass. Measured coverage across the visible
-    // width is 18 % at row 40, 58 % at row 50 and 78 % at row 60, so the screen hangs its apples at row 66 (see
-    // APPLE_Y0) - that is where an apple is inside the leaves rather than balanced on the rim of them.
-    const cy = 84 + R(rnd() * 12), n = 4 + (rnd() < 0.5 ? 1 : 0);
+    // canopy: T.blobs or one more, big enough that the row closes into one mass. For the apple tree the measured
+    // coverage across the visible width is 18 % at row 40, 58 % at row 50 and 78 % at row 60, so the screen hangs
+    // its apples at row 66 (its FALL table) - that is where an apple is inside the leaves rather than balanced on
+    // the rim of them. The other three trees are measured the same way and each hangs its fruit on its own row.
+    const cy = T.cy + R(rnd() * T.cyJit), n = T.blobs + (rnd() < 0.5 ? 1 : 0);
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * TAU + rnd() * 0.8, d = 20 + rnd() * 10;
-      blobs.push(R(tx + Math.cos(a) * d), R(cy + Math.sin(a) * d * 0.7), R(30 + rnd() * 8));
+      const a = (i / n) * TAU + rnd() * 0.8, d = T.spread + rnd() * T.spreadJit;
+      blobs.push(R(tx + Math.cos(a) * d * T.sx), R(cy + Math.sin(a) * d * T.sy), R(T.r + rnd() * T.rJit));
     }
-    blobs.push(tx, cy + 6, 38);
+    blobs.push(tx, cy + T.coreDy, T.coreR);
   }
-  crowns(g, blobs, ORCHARD.canopy, ORCHARD.tuft, shade);
+  crowns(g, blobs, T.canopy, T.cap, shade, T.capR);
 }
 
 /**
@@ -186,27 +257,47 @@ function paintFence(g, w, h) {
   for (let x = 20; x < w; x += 96) { g.fillStyle = ORCHARD.fence; g.fillRect(x, 1, 8, h - 3); g.fillStyle = dark; g.fillRect(x + 5, 1, 3, h - 3); }
 }
 
-/** Near, top: two canopy edges hanging into the frame at the corners (the centre stays clear for the clock). */
-function paintEaves(g, w, h, rnd) {
-  const shade = mix(ORCHARD.canopy, ORCHARD.plum, 0.45), blobs = [];
-  for (let x = 0; x < 250; x += 34) blobs.push(x + R(rnd() * 8), R(rnd() * 6) - 14, 22 + R(rnd() * 6));
-  for (let x = w - 250; x < w; x += 34) blobs.push(x + R(rnd() * 8), R(rnd() * 6) - 14, 22 + R(rnd() * 6));
-  crowns(g, blobs, ORCHARD.canopy, ORCHARD.tuft, shade);
+/** Near, top: two edges of the fruit's own canopy hanging into the frame at the corners (the centre stays clear for the clock). */
+function paintEaves(g, w, h, rnd, T: TreeStyle) {
+  const shade = mix(T.canopy, ORCHARD.plum, 0.45), blobs = [];
+  for (let x = 0; x < 250; x += T.eaveStep) blobs.push(x + R(rnd() * 8), R(rnd() * 6) - 14, T.eaveR + R(rnd() * T.eaveJit));
+  for (let x = w - 250; x < w; x += T.eaveStep) blobs.push(x + R(rnd() * 8), R(rnd() * 6) - 14, T.eaveR + R(rnd() * T.eaveJit));
+  crowns(g, blobs, T.canopy, T.cap, shade, T.capR);
 }
 
+/** The five layers a visit blits: `mid` and `eaves` are the fruit's own tree, the other three are the one orchard. */
+export interface OrchardLayers { far: Layer; mid: Layer; ground: Layer; near: Layer; eaves: Layer }
+/** The three layers every fruit shares, painted on the first visit of any kind. */
+let shared: { far: Layer; ground: Layer; near: Layer } | null = null;
+/** The pre-rendered set per fruit (TREES keys), painted on the first visit for that fruit and kept for every visit after. */
+const layers: Record<string, OrchardLayers | null> = { apple: null, pear: null, peach: null, avocado: null };
+
 /**
- * Pre-render every layer once. Returns { far, mid, ground, near, eaves }; each is blitted by the screen at
- * `-BLEED_X - round(cam * f)` for its parallax factor f (PARALLAX.far/mid/ground/near). The scene is one screen wide so
- * the camera never actually moves; the factors are wired so a wider orchard is a one-line change.
+ * The layers for a visit that gathers `ing`, painted on first use and cached per fruit. Each is blitted by the
+ * screen at `-BLEED_X - round(cam * f)` for its parallax factor f (PARALLAX.far/mid/ground/near). The scene is one
+ * screen wide so the camera never actually moves; the factors are wired so a wider orchard is a one-line change.
+ * `mid` and `eaves` are painted from the fruit's TREES entry on the same seeds whichever fruit it is (the layout is
+ * one rnd stream; only the table differs); far, ground and near are painted once and handed to every set.
  */
-export function makeOrchardLayers() {
-  return {
-    far: makeLayer(LW, GRASS_Y + 8, paintFar, SEED),
-    mid: makeLayer(LW, GRASS_Y + 8, paintMid, SEED + 1),
-    ground: makeLayer(LW, VIEW_H - GRASS_Y, paintGround, SEED + 2),
-    near: makeLayer(LW, VIEW_H - FENCE_Y, paintFence, SEED + 3),
-    eaves: makeLayer(LW, 30, paintEaves, SEED + 4),
+export function orchardLayers(ing: string): OrchardLayers {
+  const key = TREES[ing] ? ing : 'apple';
+  if (layers[key]) return layers[key];
+  if (!shared) {
+    shared = {
+      far: makeLayer(LW, GRASS_Y + 8, paintFar, SEED),
+      ground: makeLayer(LW, VIEW_H - GRASS_Y, paintGround, SEED + 2),
+      near: makeLayer(LW, VIEW_H - FENCE_Y, paintFence, SEED + 3),
+    };
+  }
+  const T = TREES[key];
+  layers[key] = {
+    far: shared.far,
+    mid: makeLayer(LW, GRASS_Y + 8, (g, w, h, rnd) => paintMid(g, w, h, rnd, T), SEED + 1),
+    ground: shared.ground,
+    near: shared.near,
+    eaves: makeLayer(LW, 30, (g, w, h, rnd) => paintEaves(g, w, h, rnd, T), SEED + 4),
   };
+  return layers[key];
 }
 
 export { PARALLAX };

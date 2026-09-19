@@ -112,7 +112,14 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   scatter) with a `#B99A6A` edge, river `#6F9FB0` over `#4E7A8C`, hedges `#4F6B3A`, cottage walls `#F1E4C8`, roofs
   `#A65A48`, plum tree-line `#4A3038`, a dusk-peach horizon strip `#F4C9A0`; signal: lantern gold on the next sign.
 - **Orchard**: daytime warm sky `#FBE3C4`→`#F4C9A0`, canopy `#4F6B3A` with `#6E8A48` caps, grass `#5E7A3E` (L .42),
-  four depth lanes 8 px apart; signal: ripe apple red `#D9463B`; HOT on a bomb apple's fuse spark.
+  four depth lanes 8 px apart; signal: ripe apple red `#D9463B`; HOT on a bomb apple's fuse spark. The trees are
+  the fruit's own (`backgrounds/orchard.js TREES`, the mid and eaves layers repainted per fruit on the same seeds
+  and cached per fruit, the way the cove borrows the pond): a **pear** tree taller and narrower in a paler leaf
+  `#587A3C` / `#82A04E`; a **peach** tree one round head in a warmer olive `#5F7040` with dusty-rose `#C49488` caps,
+  its blossom and its fruit at once; an **avocado** tree a big dark glossy canopy `#3A5A48` / `#6E9070` on a thick
+  trunk (a hue step off the hive's hedge, so the two dark greens never twin). No fruit hex is ever painted into a
+  canopy — a fruit in the leaves that never falls is a false target — so the only fruit on any tree is the screen's
+  own hanging one, one beat before it drops.
 - **Pond**: golden-hour sky, a plum tree-line `#4A3038` behind the torsos, bank turf `#6E7A5A`, water `#4E7A8C` with a
   `#6F9FB0` surface band, jetty `#9A6234`; signal: bite ring mint `#5FD3C0`; floats white with a slot-colour cap and an
   8×5 slot tag above.
@@ -120,17 +127,36 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   (cool, L .32), hens rust `#A8623A` and speckled grey; signal: fresh-egg gold sparkle `#F2C14E`.
 - **Dairy**: a dim stone byre, slate eave `#453F4C`, lime-washed stone `#806A4B`, oak beams `#5C3E22`, byre floor
   `#5E4C33` under straw `#A07C42`, one bright hay hatch of `#FBE3C4` sky; cows `#A8724A` with cream patches, four
-  stalls on a 126 px pitch; signal: mint `#5FD3C0` on the pump chevron and the full pail.
+  stalls on a 126 px pitch; on a butter visit an oak barrel churn beside each stall with tin hoops and a tin crank
+  (the one thing that moves on it is the one cool mark); signal: mint `#5FD3C0` on the pump chevron and the full pail.
 - **Mill**: a dark timber tower, boarded wall `#4A3A2C` (the plane the whole cast reads against), oak frame
   `#6B543A`, plank floor `#7A6144` (L .40, so dark hooves keep their contact), hessian `#8A7350`; the flour and the
-  sacks are the lightest things in the room; signal: gold `#F2C14E` at a pouring chute's mouth.
+  sacks are the lightest things in the room; signal: gold `#F2C14E` at a pouring chute's mouth. A rice visit is the
+  same room painted per variant and cached per variant (`millLayers('rice')`): the rice's own `#F7F3E6` for the
+  grain, straw `#C9A05C` and husk `#A88A4E` for the sheaves, the winnowing fan and the hulling bin that replace the
+  sack stack and the scoop, loose grain and chaff where the flour was dusted; a pour is separate 2×3 grains falling
+  down a dark trickle instead of cream bands on a pale column, and a rice sack wears one 3 px stencilled band. The
+  frame, the window, the cart and the signal are unchanged, so the two visits read as one building.
 - **Hives**: late-afternoon clover meadow, sky `#F9DDB8`→`#F2C39A`, downs `#B3AE7E`, clipped hedge `#3F5A34` (darker
   than the orchard's canopy so the two green scenes never twin), meadow cooler and lighter than the orchard's grass,
   five straw skeps on a bench; signal: gold on a skep with honey left in it.
-- **Market garden**: a walled kitchen garden, straw sky `#E9DCBE`→`#F4C9A0`, lime-washed wall `#8A8478`
+- **Farm**: a walled kitchen garden, straw sky `#E9DCBE`→`#F4C9A0`, lime-washed wall `#8A8478`
   (deliberately near-colourless: brick sat 19° from P2's marmalade apron across 70 rows of frame), tilled beds
-  `#4A3C32` (L .25), crop green `#7FA850`; signal: gold on a ripe root's
-  sparkle — and no HOT anywhere, because nothing in a market garden can hurt you.
+  `#4A3C32` (L .25), crop green `#7FA850` with the other crops' foliage a step off it (potato haulm `#6C9448`,
+  onion and leek blades `#6FA07E`, beetroot leaves `#5E7F3E`) so each vegetable is its own plant in the row; a
+  crop that grows in view (pumpkin, cabbage, an onion's or a beetroot's shoulder, the berries) wears its
+  ingredient hex on the vegetable itself and nowhere else; signal: gold on a ripe root's
+  sparkle — and no HOT anywhere, because nothing on a farm's vegetable row can hurt you.
+- **Bramble Bank**: the farm's afternoon sky over the hive's downs `#B3AE7E` and a tall hedgerow `#3F5A34` with a
+  five-bar gate; the turf bank `#8A9459` (L .53), the trodden path `#A8946E` (L .58, the frog is the binding
+  constraint again), bushes in the orchard's canopy green `#4F6B3A` on dark willow canes, unripe berries a pale
+  green pea, ripe ones in the ingredient hex; accent rose on the pick-your-own board only; signal: the farm's gold
+  on a ripe berry's sparkle.
+- **Cockle Cove**: the pond's golden hour over the cove's own sea (`art/backgrounds/pond.js COVE`: open water
+  `#5E93A8` to an inked horizon, the near water `#3F7E8E`), a cream breaker line, wet sand `#A88E66`, the dry sand
+  `#D9C393` with the trodden path `#BFA574` (L .63) under the crew's torsos, marram in the corners, a rowing boat
+  and crab pots; the crab in the ingredient's red is the one red object in the scene; signal: the pond's mint on a
+  grab's ring and over a stopped crab or a crusted pan.
 - **Kitchen**: plum wall `#4A3038`, slate counter top `#4F5A62` (rows 200–206), steel counter front `#3E4A55`
   (rows 206–246), floor checker `#4E4450` / `#5A4E5C` (rows 246–340), feet line y 252 so torsos read on the counter
   front and heads on the wall; a floor-standing oven that breaks the counter line; copper pot `#B87333`; paper and
@@ -228,7 +254,7 @@ face (`markings`) or replace the hook; whichever, keep the rows of §0.6 and the
 
 Paint once, blit per frame (`art/layers.js`): every scene pre-renders its layers with a seeded rng (seed blocks:
 map 140–159, orchard 100–109, pond 110–119, coop 120–129, kitchen 130–139,
-title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, market garden 200–209) and blits at integer
+title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, farm 200–209, bramble bank 210–219, beach 220–229) and blits at integer
 offsets; parallax
 `far 0.2 / mid 0.5 / ground 1 / near 1.2` for side views, none in the kitchen, chunks for the map. 16 rows of bleed.
 Nothing solid in the near layer at critter height; walk lanes carry no scatter; the plane behind the critters'

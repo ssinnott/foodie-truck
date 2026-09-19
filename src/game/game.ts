@@ -24,13 +24,15 @@ export type Audio = typeof import('../engine/audio.ts')['audio'];
 /**
  * The track each screen plays, started by `push` BEFORE the screen's `enter()` runs, so a screen that wants
  * something else for one visit (the day board when the truck is closed) overrides it from enter(). A screen
- * missing from here leaves the music alone: the pause overlay sits over its scene's track. The seven mini-games
- * share one round track, bar the pond, which is water and waltzes.
+ * missing from here leaves the music alone: the pause overlay sits over its scene's track. The nine mini-games
+ * share one round track, bar the pond, which is water and waltzes (the cove's beach is the same water, and the
+ * same waltz).
  */
 const SCREEN_MUSIC: Record<string, string> = Object.freeze({
   title: 'title', lobby: 'title', select: 'title', controls: 'title', gallery: 'title',
   stage: 'board', map: 'drive', line: 'line', kitchen: 'kitchen', results: 'results',
-  orchard: 'gather', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', pond: 'pond',
+  orchard: 'gather', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', bramble: 'gather',
+  pond: 'pond', beach: 'pond',
 });
 
 /** One line of an order or of the shopping list: an ingredient (content/recipes.js INGREDIENTS), how many are wanted, how many are in. */

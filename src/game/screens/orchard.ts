@@ -11,10 +11,18 @@
 // The round ends when the party's total reaches the order's amount, and not before (there is no clock to run out);
 // a wooden sign drops in on ropes, is held a second, then run.gather() and back to the map.
 //
+// The orchard drops pears, peaches and avocados as well as apples, and a visit gathers whichever the day is short of
+// (game/run.js gatherTarget). The mechanic never changes - a pear is caught like an apple - but the visit LOOKS like
+// that fruit's: the trees are painted per fruit (art/backgrounds/orchard.ts TREES, cached per fruit by
+// orchardLayers), the glyph everywhere is the fruit's own, and the fall has the fruit's feel from FALL below. The
+// wormy one and the bomb are the orchard's jokes and play on every visit: a wormy pear is a bruised pear with the
+// same grub, and a pear with a fuse goes off exactly as an apple does.
+//
 // Determinism (docs/ARCHITECTURE.md section 0): the apples are a fixed array of plain sim objects, every random
-// number comes from the rng singleton inside update(), the sway is dsin, the catch boxes are built once in enter()
-// with dsin/dcos from the rig's proportions (pawRoot, below) and never read back from a draw. The petals,
-// splats, rings and float text are cosmetic and stay out of checksumFields().
+// number comes from the rng singleton inside update() (the per-fruit numbers it draws between are read from FALL, a
+// table chosen once in enter()), the sway is dsin, the catch boxes are built once in enter() with dsin/dcos from
+// the rig's proportions (pawRoot, below) and never read back from a draw. The petals, splats, rings and float text
+// are cosmetic and stay out of checksumFields().
 import { VIEW_W, UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, Input, ScreenParams } from '../game.ts';
@@ -31,7 +39,8 @@ import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import type { Point } from '../../lib/art/rigParts.ts';
 import { F } from '../../content/critters/common.ts';
-import { makeOrchardLayers, ORCHARD, GRASS_Y, FENCE_Y, BLEED_X, PARALLAX } from '../../art/backgrounds/orchard.ts';
+import { orchardLayers, ORCHARD, GRASS_Y, FENCE_Y, BLEED_X, PARALLAX } from '../../art/backgrounds/orchard.ts';
+import type { OrchardLayers } from '../../art/backgrounds/orchard.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates, RIBBON_BASKET } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -54,6 +63,31 @@ const LANE_Y0 = 316, LANE_GAP = 8;
  * the clock ticket's bottom edge at ~47 (the ticket draws after the apples).
  */
 const MAX_APPLES = 12, SPAWN_MIN = 30, SPAWN_MAX = 60, APPLE_Y0 = 66, VY_MIN = 1.4, VY_MAX = 2.4, SWAY = 3, SWAY_RATE = 0.06;
+/**
+ * How each fruit falls: [the slowest fall, the fastest fall (px/frame), the sway's amplitude (px), the hang row].
+ * Chosen once in enter() (`this.fall`, the garden's `plantFor(this.icon)` pattern) and only ever READ by
+ * updateApples, which still draws every number from the rng singleton between the table's bounds, so the sim is as
+ * deterministic with four rows as it was with one. The apple row IS the constants above, so the scenario that
+ * mirrors them (tools/scenarios/orchard.js) reads one set of numbers; the others vary the feel, never the mechanic:
+ *   pear     much the same fall with a shorter sway - a pear drops stalk-up and does not tumble;
+ *   peach    lighter and slower with a wider sway, the one that drifts;
+ *   avocado  heavier and straighter: a faster floor, a 1 px sway, and every speed still inside the rim's 6-row
+ *            catch window (BOX_ABOVE + BOX_BELOW), so a fast one can no more skip the basket than an apple can.
+ * The hang row is where the fruit's own canopy is leaves rather than sky, measured per tree as row 66 was for the
+ * apple (coverage of the visible width on that row: apple 84 % at 66, pear 77 % at 64 - the narrow crowns leave sky
+ * between them and never close past 82 % - peach 86 % at 70, the round heads sitting lower, avocado 89 % at 62, the
+ * big canopy closed already and a heavier fruit hung higher having further to fall).
+ * Float64, not Float32: the apple row has to hand rng.range the same 1.4 and 2.4 it always got, to the last bit.
+ */
+const FALL: Readonly<Record<string, Float64Array>> = Object.freeze({
+  apple: Float64Array.of(VY_MIN, VY_MAX, SWAY, APPLE_Y0),
+  pear: Float64Array.of(1.5, 2.4, 2, 64),
+  peach: Float64Array.of(1.3, 2.2, 5, 70),
+  avocado: Float64Array.of(1.8, 2.6, 1, 62),
+});
+const F_VY_MIN = 0, F_VY_MAX = 1, F_SWAY = 2, F_ROW = 3;
+/** The fall for an ingredient id; anything the table does not name falls like an apple. */
+function fallFor(ing: string): Float64Array { return FALL[ing] || FALL.apple; }
 /**
  * ...but an apple that BEGINS at row 56 materialises out of blank leaves: the canopy is a smooth green mass and the
  * only red in the frame is fruit already falling through open air, so the scene never says "apple orchard" and its
@@ -130,15 +164,6 @@ const PAW_PT: Point = { x: 0, y: 0 };
 /** The shared anim keys the boxes are built from (content/critters/common.js CARRY / catch frame 0). */
 const CATCH_POSE = { torso: -4, upper: 72, lower: 48 }, WALK_POSE = { torso: 6, upper: 60, lower: 50 };
 
-/**
- * The orchard's backdrop: the five layers makeOrchardLayers pre-renders (far, mid, ground, near, eaves), each
- * blitted at its own parallax factor. Taken off the painter rather than restated here, so a layer added there is
- * a layer this screen can blit without a second edit.
- */
-export type OrchardLayers = ReturnType<typeof makeOrchardLayers>;
-
-/** The backdrop is a pure function of its seeds: painted on the first visit, kept for every visit after. */
-let LAYERS: OrchardLayers | null = null;
 /** Reused by pawRoot so the catch-box maths allocates nothing (it runs four times, in enter()). */
 const PAW: Point = { x: 0, y: 0 };
 
@@ -201,9 +226,9 @@ export interface Apple {
   x: number;
   /** The seeded x it hangs on and sways about. */
   x0: number;
-  /** The row its centre is drawn on, from APPLE_Y0 down. */
+  /** The row its centre is drawn on, from the fruit's hang row (FALL) down. */
   y: number;
-  /** Fall speed in px/frame (VY_MIN..VY_MAX). */
+  /** Fall speed in px/frame, between the fruit's FALL bounds (VY_MIN..VY_MAX for an apple). */
   vy: number;
   /** RIPE, WORMY or BOMB. */
   kind: number;
@@ -228,8 +253,14 @@ export class OrchardScreen extends Screen {
   // this screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild and under
   // Node's type stripping alike, so the emitted class is the one that shipped.
 
-  /** The backdrop, pre-rendered once (art/backgrounds/orchard.ts makeOrchardLayers) and blitted per frame. */
+  /**
+   * The backdrop for this visit's fruit: the five layers orchardLayers pre-renders (far, mid, ground, near, eaves)
+   * once per fruit and keeps (art/backgrounds/orchard.ts), each blitted at its own parallax factor. The type is the
+   * painter's, so a layer added there is a layer this screen can blit without a second edit.
+   */
   declare layers: OrchardLayers;
+  /** This fruit's FALL row: the speeds and sway updateApples draws between, and the row the fruit hangs on. */
+  declare fall: Float64Array;
   /** The petal stream's own generator (PETAL_SEED): cosmetic only, never the sim. */
   declare vis: RngInstance;
   /** The petal spawn options, built once in enter() and handed to particles.spawn every PETAL_EVERY frames. */
@@ -272,12 +303,13 @@ export class OrchardScreen extends Screen {
   override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
-    if (!LAYERS) LAYERS = makeOrchardLayers();
-    this.layers = LAYERS;
     particles.clear();
     this.vis = makeRng(PETAL_SEED);
     this.petalOpts = { color: PETAL_PALE, color2: ORCHARD.fallen, size: 4, life: 130, vx: -0.3, vy: 0.5, screen: true };
     this.ing = gatherTarget(run, params.place, 'orchard');
+    // the fruit's own trees and the fruit's own fall, both picked once here and only read after
+    this.layers = orchardLayers(this.ing);
+    this.fall = fallFor(this.ing);
     const ing = INGREDIENTS[this.ing] || INGREDIENTS.apple;
     this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
     const icon = this.icon, hex = this.hex;
@@ -355,15 +387,16 @@ export class OrchardScreen extends Screen {
     }
   }
 
-  /** Spawn, fall, sway; then the catch test against every seat's rim, then the miss. */
+  /** Spawn, fall, sway (the bounds from this fruit's FALL row); then the catch test against every seat's rim, then the miss. */
   updateApples(): void {
+    const fall = this.fall;
     if (--this.nextSpawn <= 0) {
       this.nextSpawn = rng.int(SPAWN_MIN, SPAWN_MAX);
       for (let i = 0; i < this.apples.length; i++) {
         const a = this.apples[i];
         if (a.active) continue;
-        a.active = true; a.x0 = rng.int(X_MIN + 8, X_MAX - 8); a.x = a.x0; a.y = APPLE_Y0;
-        a.vy = rng.range(VY_MIN, VY_MAX); a.t = rng.int(0, 100);
+        a.active = true; a.x0 = rng.int(X_MIN + 8, X_MAX - 8); a.x = a.x0; a.y = fall[F_ROW];
+        a.vy = rng.range(fall[F_VY_MIN], fall[F_VY_MAX]); a.t = rng.int(0, 100);
         const roll = rng.int(1, KIND_ROLL); a.kind = roll === 1 ? WORMY : roll === 2 ? BOMB : RIPE;
         a.hang = HANG_FRAMES;
         break;
@@ -374,7 +407,7 @@ export class OrchardScreen extends Screen {
       if (!a.active) continue;
       // on the branch: no fall, no catch test, and a.t held at its seeded sway phase until the apple lets go
       if (a.hang > 0) { a.hang--; a.x = a.x0 + (a.hang < SHIVER_FRAMES && (a.hang & 1) ? 1 : 0); continue; }
-      a.t++; a.y += a.vy; a.x = a.x0 + dsin(a.t * SWAY_RATE) * SWAY;
+      a.t++; a.y += a.vy; a.x = a.x0 + dsin(a.t * SWAY_RATE) * fall[F_SWAY];
       const bottom = a.y + APPLE_S;
       let caught = false;
       for (let k = 0; k < this.seats.length && !caught; k++) {
@@ -551,13 +584,14 @@ export class OrchardScreen extends Screen {
    * Nothing in this scene fades — ART_STYLE section 5 keeps soft marks for steam and smoke, and 0.2 wants a line
    * round every object — so it is stepped, not alpha-blended. It is deliberately a wide, flat ellipse and never a
    * disc: a round red disc lying on the grass is an apple, and the player would go for it. It draws after the seats
-   * because it lands in front of the front lane.
+   * because it lands in front of the front lane. It is the fruit's own hex (for an apple that IS SIGNAL.orchard):
+   * a pear that hit the grass and left a red mark was an apple's splat under a pear tree.
    */
   drawSplat(ctx: CanvasRenderingContext2D, sp: Splat): void {
     if (sp.t >= SPLAT_FRAMES) return;
     const k = (sp.t / SPLAT_STEP) | 0, rx = SPLAT_RX[k], ry = SPLAT_RY[k];
     ctx.fillStyle = UI.ink; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx + 1, ry + 1, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = SIGNAL.orchard; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = this.hex; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = foodTones(this.hex).sh;   // the splat's shade band: the fruit's own shadow tone (cached per hex)
     ctx.beginPath(); ctx.ellipse(sp.x + 1, sp.y + 1, rx - 1, ry - 1, 0, 0, TAU); ctx.fill();
   }

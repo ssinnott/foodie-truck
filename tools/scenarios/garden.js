@@ -1,7 +1,7 @@
-// Playtest scenarios for the market-garden work (registered in tools/scenarios/index.js). Each export is
+// Playtest scenarios for the farm work (registered in tools/scenarios/index.js). Each export is
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
-//   garden - four seats in the Saturday Market's kitchen garden on the CARROT SOUP order, so the target is the
+//   garden - four seats in Furrow Farm's kitchen garden on the CARROT SOUP order, so the target is the
 //            order's own carrot line and not the fallback. Then, in order:
 //              REAL INPUT   seat 0 is walked along the row with the stick (it moved, it stayed inside the row, and
 //                           the three seats with no input stayed exactly where they were), walked onto the nearest
@@ -52,7 +52,7 @@ export const SCENARIOS = {
     await withPage(server, BOOT, async (api, page) => {
       await api.step(2);
       const s0 = await api.summary();
-      assert(s0.screen === 'garden', `the market garden is up with a run started (on ${s0.screen})`);
+      assert(s0.screen === 'garden', `the farm is up with a run started (on ${s0.screen})`);
       assert(s0.top.seats.length === 4, `four seats work the row (${s0.top.seats.length})`);
       const carrotLine = (s0.run.needs || []).find((n) => n.startsWith('carrot:')) || '';
       assert(carrotLine === `carrot:0/${s0.top.target}` && s0.top.target > 0, `the target is the order's own carrot line (${carrotLine}, target ${s0.top.target})`);

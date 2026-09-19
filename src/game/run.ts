@@ -30,7 +30,7 @@ import type { Order, OrderNeed, Run, RunLine, RunCustomer, DayPlan, DayPlanLine 
  * first pass are APPENDED rather than filed next to their neighbours: the index is what crosses the wire, so
  * inserting 'dairy' after 'coop' would silently move 'kitchen' under every peer already holding the old table.
  */
-export const SCENES = Object.freeze(['map', 'orchard', 'pond', 'coop', 'kitchen', 'dairy', 'mill', 'hive', 'garden', 'stage', 'line']);
+export const SCENES = Object.freeze(['map', 'orchard', 'pond', 'coop', 'kitchen', 'dairy', 'mill', 'hive', 'garden', 'stage', 'line', 'bramble', 'beach']);
 /** The scene an online match opens on: the day board, so the party reads the day's plan together and opens the truck. */
 export const START_SCENE = SCENES.indexOf('stage');
 
@@ -214,7 +214,7 @@ export function startRun(game, o) {
 
 /**
  * Which ingredient a mini-game gathers this visit (docs/GDD.md section 5). A landmark can supply several (the
- * orchard drops apples, pears, peaches and avocados; the market garden pulls seven roots), and two landmarks can
+ * orchard drops apples, pears, peaches and avocados; the farm pulls seven roots), and two landmarks can
  * share one screen (the cove borrows the pond's jetty), so the screen asks with the landmark it stands at -
  * `place` is the map's hand-off param, or a ?place= dev jump - and its own id as the fallback:
  *   1. the landmark's ingredients, in INGREDIENTS order, or every ingredient of every landmark that opens `screen`

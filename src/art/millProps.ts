@@ -5,7 +5,7 @@
 // nut turning overhead, and the sail sweeping past the high window.
 //
 // Screen space, integer coordinates, no allocation per call, the scene's palette from backgrounds/mill.js and the
-// game's warm ink round every object. Three rules this file exists to hold:
+// game's warm ink round every object. Four rules this file exists to hold:
 //   * SIGNAL.mill (gold) is the ONE saturated colour here and it marks exactly one thing, the thing constants.js
 //     binds it to: THE CHUTE THAT IS POURING NOW. It is never painted on a beam, a sack, a plank or a paper ticket
 //     (ART_STYLE section 4 bans a signal colour as decor), and the wake telegraph does NOT get it - a warning that
@@ -15,13 +15,17 @@
 //     the kitchen's stove bar idiom, and the case ART_STYLE section 4 names when it bans gold on paper (0.17).
 //   * SIGNAL.hot is the game's reserved danger colour and marks one thing here, the sack about to burst: the tag's
 //     zone past the brim post and the sack's tie strobing with it - the same job it does on the rooster's comb.
+//   * WHAT is pouring is a per-visit record from GRAINS (flour or rice, docs/GDD.md section 5), picked ONCE by the
+//     screen in enter() with `grainFor(ingredient)` and handed into every draw here, the way the garden picks its
+//     plant. The mechanic is the same sack under the same spout; the record only changes what the eye is told is
+//     falling - flour's dust bands or rice's loose grains - and how the sack it lands in is marked.
 // Everything that turns turns on an INDEX STEP read from the scene's frame counter, never on the simulation clock.
 import { UI, SIGNAL, PLAYER_COLORS, PLUM } from '../constants.ts';
 import { INK } from './layers.ts';
 import { mix } from './palettes.ts';
 import { pathGear } from '../lib/art/shapes.ts';
 import { celPath, pathRR, LIGHT_X, LIGHT_Y } from '../lib/art/shading.ts';
-import { MILL, ROWS, WINDOW } from './backgrounds/mill.ts';
+import { MILL, RICE, ROWS, WINDOW } from './backgrounds/mill.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
 
@@ -42,6 +46,14 @@ const GEAR_IRON_HI = mix(MILL.iron, MILL.flour, 0.28);
  * inked object stuck to it (ART_STYLE 0.2: a boundary inside one silhouette carries no line of its own).
  */
 const CANVAS = '#A88E63', PACKED = '#DCCBA2', CANVAS_SH = mix(CANVAS, PLUM.shadow, 0.34);
+/**
+ * The rice sack's own tones. The packed rice is the ingredient's own near-white stepped a fifth toward the flour's
+ * cream (L .88 against the canvas's .57, the same order of ladder as the flour's .80), so the fill level still
+ * reads as a colour change INSIDE the sack's line; `STENCIL` is the dark band a rice sack is marked with, the
+ * canvas in shadow again, and the one mark that tells the two sacks apart on the cart at 1x.
+ */
+const RICE_PACKED = mix(RICE.grain, PACKED, 0.2), RICE_PACKED_SH = mix(RICE_PACKED, PLUM.shadow, 0.26);
+const STENCIL = mix(CANVAS, PLUM.deep, 0.55);
 
 // ---------------------------------------------------------------- the spur wheel and the stone nut
 /**
@@ -146,7 +158,7 @@ const MOUTH_W = 16, MOUTH_H = 4;
  * spout is dark. The wake therefore reads as three cheap moving things - the shake, the dust falling out of the lip
  * and the strobe - while gold means "flour is falling HERE" and nothing else (ART_STYLE section 4).
  */
-export function drawChute(ctx, x, state, shake, blink) {
+export function drawChute(ctx, x, state, shake, blink, g) {
   const cx = R(x) + shake, top = ROWS.chuteTop, neck = top + HEAD_H, lip = ROWS.mouth;
   // the hopper head: a tapered oak box, inked as one object
   ctx.beginPath();
@@ -176,8 +188,14 @@ export function drawChute(ctx, x, state, shake, blink) {
   ctx.fillStyle = INK; ctx.fillRect(cx - LIP_W, lip - LIP_H, LIP_W * 2, LIP_H + 2);
   const waking = state === WAKING && blink;
   ctx.fillStyle = waking ? MILL.dust : MILL.beam; ctx.fillRect(cx - LIP_W + 1, lip - LIP_H + 1, LIP_W * 2 - 2, 3);
-  const mouth = state === POURING ? SIGNAL.mill : waking ? MILL.flour : MILL.seam;
+  // the wake's strobe shows what is about to fall: lit flour filling the mouth, or on a rice day three grains
+  // sitting in a dark mouth (the same 2x3 ovals the pour is made of, so the telegraph reads as grain too)
+  const mouth = state === POURING ? SIGNAL.mill : waking ? (g.grains ? g.core : g.lit) : MILL.seam;
   ctx.fillStyle = mouth; ctx.fillRect(cx - MOUTH_W / 2, lip - MOUTH_H, MOUTH_W, MOUTH_H);
+  if (waking && g.grains) {
+    ctx.fillStyle = g.lit;
+    ctx.fillRect(cx - 7, lip - MOUTH_H, 2, 3); ctx.fillRect(cx - 1, lip - MOUTH_H + 1, 2, 3); ctx.fillRect(cx + 4, lip - MOUTH_H, 2, 3);
+  }
 }
 
 /**
@@ -196,6 +214,55 @@ const POUR_W0 = 3, POUR_W1 = 5, POUR_BANDS = 8, POUR_CYCLE = 150;
  */
 const POUR_CORE = mix(MILL.dust, MILL.timber, 0.15);
 /**
+ * The rice stream's body: hessian pulled a third toward the wall's timber, L .37. Rice is the OPPOSITE problem to
+ * flour. Flour is a dust that fills its column, so the body is pale and the motion is bands running through it;
+ * rice is loose grain with air between the grains, so the body is the DARK of the spout's inside showing through
+ * and the motion is the grains themselves. Painted the flour way - white ovals on the pale POUR_CORE - the grains
+ * would sit the same 31 % off the body that the bands do, and at the 1x squint that is the flour pour with spots.
+ * At L .37 the grains (L .90) clear it by more than double the ladder step, the trickle reads as a trickle of
+ * separate things, and the column is darker than every fur in the cast instead of a step under the lightest one.
+ */
+const RICE_CORE = mix(MILL.hessian, MILL.timber, 0.35), RICE_EDGE = mix(RICE_CORE, PLUM.deep, 0.35);
+/** The heap loose rice makes on the planks: the grain toned toward the hessian, a lit cap of the grain itself. */
+const RICE_HEAP = mix(RICE.grain, MILL.hessian, 0.4);
+/**
+ * The grains in a pouring rice chute: GRAIN_N 2x3 ovals (the smallest oval that reads at 1x, ART_STYLE 0.8), each
+ * on its own index-hashed beat down the column and at its own fixed lateral slot from GRAIN_DX, in thirds of the
+ * column's half-width. 31 is coprime with POUR_CYCLE, so the 32 phases spread evenly down the column instead of
+ * bunching; the DX table is a fixed scatter and not a hash so a grain never jumps sideways between frames. 24 was
+ * tried first and at 1x the column was a dotted line with more gap than grain; 32 puts one every 4 px of a
+ * full-height column, which is a stream, and is still 32 fillRects.
+ */
+const GRAIN_N = 32;
+const GRAIN_DX = Int8Array.of(0, -2, 2, -3, 1, 3, -1, 2, -2, 0, 3, -3, 1, -1, 2, -2, 3, 0, -3, 1, -1, 2, 1, -2, 3, -1, 0, 2, -3, 1, -2, 3);
+
+/**
+ * What a visit pours: the per-ingredient record every draw in this file reads (the garden's per-plant table is
+ * the precedent). `grains` picks the pour's motion (0: flour's full-width bands; 1: rice's loose ovals) and the
+ * telegraph's mouth; `lit` is the ingredient's own lightest tone (what the bands and the grains are painted in,
+ * and what the waking mouth strobes to); `core`/`edge` the column's body and shadow strip; `heap`/`heapCap` the
+ * pile an uncaught pour builds; `packed`/`packedSh` what fills the sack; `band` whether the sack carries the
+ * stencilled band a rice sack is marked with; `mote`/`moteSize` what hangs in the light shaft (flour dust, or
+ * straw chaff on a rice day); and the `puff*` fields what the wake coughs out of the lip - a dust cloud, or on a
+ * rice day 3 px grains ('crumb', drawn flat with a shaded underside) that drop a short way and vanish.
+ * Everything in it is built ONCE here; the screen copies the puff fields into its own options object in enter().
+ */
+export const GRAINS = Object.freeze({
+  flour: Object.freeze({
+    id: 'flour', grains: 0, lit: MILL.flour, core: POUR_CORE, edge: DUST_SH, heap: MILL.dust, heapCap: POUR_CORE,
+    packed: PACKED, packedSh: FLOUR_SH, band: 0, mote: MILL.flour, moteSize: 2,
+    puffKind: 'dust', puff: MILL.dust, puffSize: 3, puffGravity: 0.02, puffLife: 0,
+  }),
+  rice: Object.freeze({
+    id: 'rice', grains: 1, lit: RICE.grain, core: RICE_CORE, edge: RICE_EDGE, heap: RICE_HEAP, heapCap: RICE.grain,
+    packed: RICE_PACKED, packedSh: RICE_PACKED_SH, band: 1, mote: RICE.straw, moteSize: 2,
+    puffKind: 'crumb', puff: RICE.grain, puffSize: 3, puffGravity: 0.12, puffLife: 22,
+  }),
+});
+/** The record for an ingredient id; anything the mill does not know how to pour is poured as flour. */
+export function grainFor(id) { return GRAINS[id] || GRAINS.flour; }
+
+/**
  * The falling flour, from the spout's lip to wherever it is landing: (x0, y0) to (x1, y1). It LEANS, because when a
  * seat is filling, the bottom of the column is that seat's sack hanging beside its hip, not the floor - a column
  * that stayed rigid while the sack it is filling stood 12 px to one side was the single loudest lie in the scene.
@@ -204,9 +271,10 @@ const POUR_CORE = mix(MILL.dust, MILL.timber, 0.15);
  * behind Barley's cream wool is a sheep-shaped hole. The only cream in it is the eight travelling bands, which are
  * what make it fall rather than hang; the 2 px DUST_SH strip left down its RIGHT edge is the shadow side of the
  * top-left light (ART_STYLE section 3). `k` in 0..1 fades the column in over its first frames so a pour starts
- * rather than appears.
+ * rather than appears. `g` is the visit's GRAINS record: on a rice day the same cone is the dark inside of the
+ * spout with GRAIN_N separate grains falling down it, and there are no bands.
  */
-export function drawPour(ctx, x0, y0, x1, y1, frame, k0) {
+export function drawPour(ctx, x0, y0, x1, y1, frame, k0, g) {
   const k = k0 < 0 ? 0 : k0 > 1 ? 1 : k0;
   const wTop = POUR_W0, wBot = POUR_W0 + R(POUR_W1 * k), h = y1 - y0;
   if (h <= 2) return;
@@ -221,13 +289,24 @@ export function drawPour(ctx, x0, y0, x1, y1, frame, k0) {
   // a 2 px line, not the usual 1 px: this is the coop's `airEgg` problem (a cream shell crossing cream wool), and
   // a pouring chute stands DIRECTLY behind whoever is filling from it, so the stream needs the heavier boundary
   ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.stroke();
-  ctx.fillStyle = DUST_SH; ctx.fill();
-  ctx.fillStyle = POUR_CORE;
+  ctx.fillStyle = g.edge; ctx.fill();
+  ctx.fillStyle = g.core;
   ctx.beginPath();
   ctx.moveTo(x0 - wTop, y0); ctx.lineTo(x0 + wTop - 2, y0); ctx.lineTo(x1 + wBot - 2, y1); ctx.lineTo(x1 - wBot, y1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = g.lit;
+  if (g.grains) {
+    // rice: separate 2x3 grains, each at its own phase down the column and its own slot across it, following the
+    // lean and the taper the same way the bands do. Thirty-two fillRects and no clip.
+    for (let i = 0; i < GRAIN_N; i++) {
+      const t = ((frame * 5 + i * 31) % POUR_CYCLE) / POUR_CYCLE;
+      if (t > k) continue;
+      const w = wTop + (wBot - wTop) * t;
+      ctx.fillRect(R(x0 + (x1 - x0) * t + GRAIN_DX[i] * (w - 1) / 3) - 1, R(y0 + h * t), 2, 3);
+    }
+    return;
+  }
   // the bands follow the LEAN and the taper, so they stay on the flour when the column bends 20 px across to a
   // sack, and they cost eight fillRects and no clip
-  ctx.fillStyle = MILL.flour;
   for (let i = 0; i < POUR_BANDS; i++) {
     const t = ((frame * 5 + i * 19) % POUR_CYCLE) / POUR_CYCLE;
     if (t > k) continue;
@@ -238,17 +317,25 @@ export function drawPour(ctx, x0, y0, x1, y1, frame, k0) {
 
 /**
  * The heap an uncaught pour builds on the planks: one inked flat ellipse growing with `k` (0..1), a lit cap, and
- * two flecks kicking out sideways so the flour lands rather than simply being there.
+ * two flecks kicking out sideways so the flour lands rather than simply being there. `g` is the visit's GRAINS
+ * record: a rice heap is the grain's tone with the grain itself for a cap, its flecks are 2x3 grains, and three
+ * more grains lie on its face so it is a heap of THINGS and not a paler flour pile.
  */
-export function drawPile(ctx, x, y, k0) {
+export function drawPile(ctx, x, y, k0, g) {
   const k = k0 < 0 ? 0 : k0 > 1 ? 1 : k0;
   const rx = 9 + R(17 * k), ry = 4 + R(4 * k);
   ctx.fillStyle = INK;
   ctx.beginPath(); ctx.ellipse(x, y, rx + 1, ry + 1, 0, 0, TAU); ctx.ellipse(x, y - ry, rx * 0.6 + 1, ry + 1, 0, 0, TAU); ctx.fill();
-  ctx.fillStyle = MILL.dust;
+  ctx.fillStyle = g.heap;
   ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.ellipse(x, y - ry, rx * 0.6, ry, 0, 0, TAU); ctx.fill();
-  ctx.fillStyle = POUR_CORE; ctx.beginPath(); ctx.ellipse(x - 2, y - ry - 1, rx * 0.4, ry * 0.5, 0, 0, TAU); ctx.fill();
-  ctx.fillStyle = MILL.dust;   // two flecks kicking out sideways, so the flour LANDS instead of simply being there
+  ctx.fillStyle = g.heapCap; ctx.beginPath(); ctx.ellipse(x - 2, y - ry - 1, rx * 0.4, ry * 0.5, 0, 0, TAU); ctx.fill();
+  if (g.grains) {
+    ctx.fillStyle = g.lit;
+    ctx.fillRect(x - rx - 5, y - 4, 2, 3); ctx.fillRect(x + rx + 2, y - 5, 2, 3);
+    ctx.fillRect(x - 6, y - 1, 2, 3); ctx.fillRect(x + 4, y - 2, 2, 3); ctx.fillRect(x + 1, y - ry - 3, 2, 3);
+    return;
+  }
+  ctx.fillStyle = g.heap;   // two flecks kicking out sideways, so the flour LANDS instead of simply being there
   ctx.fillRect(x - rx - 5, y - 4, 3, 3); ctx.fillRect(x + rx + 2, y - 5, 3, 3);
 }
 
@@ -297,10 +384,12 @@ function sackPath(ctx, wt, wb, h) {
 
 /**
  * The sack a critter fills, as a `weapon`-slot item (art/rig.js draws it in hand space, +x along the forearm, and
- * the paw closes over the gathered neck afterwards). The screen sets three fields before drawing the rig:
+ * the paw closes over the gathered neck afterwards). The screen sets three fields before drawing the rig, and a
+ * fourth once in enter():
  *   rig.sackFill  0..BURST, the raw fill
  *   rig.sackZone  0 under the brim band | 1 in the brim band | 2 over the brim, about to burst
  *   rig.sackBlink 0/1, the strobe the screen alternates while zone 2 is on
+ *   rig.sackGrain the visit's GRAINS record: what is packed in the sack and whether it wears the stencilled band
  *
  * Two reads, both at 1x and both on the critter itself: the sack's SHAPE (it grows from a rag to a fat bag, and
  * bulges past the brim) and its FILL (the packed flour is a lighter fill inside the sack's own outline, no second
@@ -309,11 +398,21 @@ function sackPath(ctx, wt, wb, h) {
  * stove bar says "let go now" in exactly that green), HOT on the strobe once the sack is over it. Gold belongs to
  * the chute and never comes near the sack. The tag over the head (drawFillTag) is the precise gauge; this is the
  * one you read without looking away from your paws.
+ *
+ * A rice sack is the same hessian with the STENCIL band across it, over whatever is packed in it: a miller marks
+ * the sacks that must not be mixed, and a 3 px dark band inside the sack's own line is the cheapest mark that
+ * survives the 1x squint. It sits LOW, two-thirds down the bag, so it lies inside the packed rice for most of the
+ * round (a dark stripe across white is the marked-sack read) and the fill's leading edge crosses it early, at a
+ * third full, long before the level means anything. It was 38 % down first, to keep it out of the fill's way, and
+ * that was the wrong way round: from half full to the brim the band and the fill's edge ran together into one dark
+ * cap under the tie, and the level - the one thing this sack is for - was the thing hidden.
  */
+const STENCIL_AT = 0.66, STENCIL_H = 3;
 export const MILL_SACK = { attach: 'handR', length: 16, draw(ctx, rig) {
   // the same counter-rotation items.js `upright` uses, so the sack hangs down whatever the arm is doing
   const a = Math.atan2(rig.light.y, rig.light.x) - Math.atan2(LIGHT_Y, LIGHT_X);
   const fill = rig.sackFill || 0, k = fill < 1 ? fill : 1, over = fill > 1 ? fill - 1 : 0;
+  const g = rig.sackGrain || GRAINS.flour;
   const wt = SACK_TOP0 + SACK_TOP1 * k, wb = SACK_BOT0 + SACK_BOT1 * k + SACK_BULGE * over, h = SACK_H0 + SACK_H1 * k;
   ctx.save(); ctx.rotate(a);
   sackPath(ctx, wt, wb, h);
@@ -323,10 +422,11 @@ export const MILL_SACK = { attach: 'handR', length: 16, draw(ctx, rig) {
     ctx.save(); sackPath(ctx, wt, wb, h); ctx.clip();
     const packed = R((h - 2) * k);
     if (packed > 0) {
-      ctx.fillStyle = PACKED; ctx.fillRect(-wb, SACK_TOP + h - packed, wb * 2, packed);
-      ctx.fillStyle = FLOUR_SH; ctx.fillRect(1, SACK_TOP + h - packed, wb, packed);
+      ctx.fillStyle = g.packed; ctx.fillRect(-wb, SACK_TOP + h - packed, wb * 2, packed);
+      ctx.fillStyle = g.packedSh; ctx.fillRect(1, SACK_TOP + h - packed, wb, packed);
     }
     ctx.fillStyle = CANVAS_SH; ctx.fillRect(1, SACK_TOP, wb, h - packed);
+    if (g.band) { ctx.fillStyle = STENCIL; ctx.fillRect(-wb, SACK_TOP + R(h * STENCIL_AT), wb * 2, STENCIL_H); }
     ctx.restore();
   }
   // the gathered neck and its tie: its own inked object, above the bag, in the seat's colour unless the sack is
@@ -341,12 +441,17 @@ export const MILL_SACK = { attach: 'handR', length: 16, draw(ctx, rig) {
   ctx.restore();
 } };
 
-/** A tied sack in the air on its way to the barrow, or sitting on it: 20x22, inked, full, with a slot-colour tie. */
-export function drawTiedSack(ctx, x, y, slot) {
+/**
+ * A tied sack in the air on its way to the barrow, or sitting on it: 20x22, inked, full, with a slot-colour tie.
+ * `g` is the visit's GRAINS record: a rice sack is packed in the rice's own near-white and wears the STENCIL band
+ * across its middle, which is what makes the pile on the cart say "rice" from across the room.
+ */
+export function drawTiedSack(ctx, x, y, slot, g) {
   const col = PLAYER_COLORS[slot] != null ? PLAYER_COLORS[slot] : UI.paperDark;
   ctx.fillStyle = INK; pathRR(ctx, x - 11, y - 20, 22, 22, 7); ctx.fill();
-  ctx.fillStyle = PACKED; pathRR(ctx, x - 10, y - 19, 20, 20, 6); ctx.fill();
-  ctx.fillStyle = FLOUR_SH; ctx.fillRect(x + 1, y - 14, 9, 14);
+  ctx.fillStyle = g.packed; pathRR(ctx, x - 10, y - 19, 20, 20, 6); ctx.fill();
+  ctx.fillStyle = g.packedSh; ctx.fillRect(x + 1, y - 14, 9, 14);
+  if (g.band) { ctx.fillStyle = STENCIL; ctx.fillRect(x - 10, y - 12, 20, 4); }
   ctx.fillStyle = INK; ctx.fillRect(x - 6, y - 25, 12, 8);
   ctx.fillStyle = col; ctx.fillRect(x - 5, y - 24, 10, 6);
 }
@@ -407,9 +512,10 @@ const CART_TOP = -30, CART_BOT = -11, CART_L0 = -26, CART_R0 = 20, CART_L1 = -21
  *
  * Round 1 drew the body as one flat 54x15 slab with a handle laid ACROSS it and it read as two planks and a wheel.
  * A cart is recognised by its BOX - a body wider at the rim than at the floor, with the plank seams running up it -
- * and by the shafts leaving the box's end rather than crossing it.
+ * and by the shafts leaving the box's end rather than crossing it. `g` is the visit's GRAINS record, handed on to
+ * every sack in the box.
  */
-export function drawBarrow(ctx, x, y, n) {
+export function drawBarrow(ctx, x, y, n, g) {
   const bx = R(x), by = R(y);
   // the wheel, behind the box: an oak disc with an iron tyre and a hub
   ctx.beginPath(); ctx.arc(bx - 14, by - 10, 11, 0, TAU);
@@ -440,7 +546,7 @@ export function drawBarrow(ctx, x, y, n) {
   ctx.fillRect(bx - 10, by + CART_TOP, 2, 22); ctx.fillRect(bx + 5, by + CART_TOP, 2, 22);
   ctx.restore();
   const drawn = n > BARROW_SLOT_X.length ? BARROW_SLOT_X.length : n;
-  for (let i = 0; i < drawn; i++) drawTiedSack(ctx, bx + BARROW_SLOT_X[i], by + CART_TOP + 6 + BARROW_SLOT_Y[i], -1);
+  for (let i = 0; i < drawn; i++) drawTiedSack(ctx, bx + BARROW_SLOT_X[i], by + CART_TOP + 6 + BARROW_SLOT_Y[i], -1, g);
 }
 
 /**

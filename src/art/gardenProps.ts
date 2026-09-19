@@ -1,7 +1,8 @@
-// The market garden's props (docs/ART_STYLE.md section 1, section 5; docs/GDD.md section 5): the ripe carrot's
-// FERN standing in the crop ridge, the hole a pulled root leaves, the root itself once it is out of the ground, the
-// trug every seat carries, the wheelbarrow the party's total piles up in, the PULL GAUGE the whole mini-game is read
-// from, and the grip stances the crew plays on top of the shared table.
+// The farm's props (docs/ART_STYLE.md section 1, section 5; docs/GDD.md section 5): the PLANTS standing in the crop
+// ridge - one per vegetable the bed can grow, from the carrot's fern to the pumpkin under its vine - the hole a
+// pulled root leaves, the root itself once it is out of the ground, the trug every seat carries, the wheelbarrow the
+// party's total piles up in, the PULL GAUGE the whole mini-game is read from, and the grip stances the crew plays on
+// top of the shared table.
 //
 // Screen space, integer coordinates, no allocation per call; the screen draws drawShadow under each sprite first.
 // Everything here is drawn in the rig's own style: 1 px warm ink round each OBJECT, a base and one shadow band
@@ -10,7 +11,7 @@
 import { UI, PLUM, SIGNAL } from '../constants.ts';
 import { INK } from './layers.ts';
 import { mix } from './palettes.ts';
-import { drawFood } from './food.ts';
+import { drawFood, foodTones } from './food.ts';
 import { celPoly, LIGHT_X, LIGHT_Y } from '../lib/art/shading.ts';
 import { INGREDIENTS } from '../content/recipes.ts';
 import { F } from '../content/critters/common.ts';
@@ -27,6 +28,17 @@ const R = Math.round, TAU = Math.PI * 2;
  */
 export const CROP = Object.freeze({
   leaf: '#7FA850', leafSh: '#55763A', leafHi: '#A6C877',
+  /**
+   * The other crops' foliage, so eight plants of one green is not what a row of leeks looks like. All of them sit
+   * between the fern's green and the hedge's, with the same top-left highlight in `leafHi`: a potato's haulm is a
+   * step darker and bluer than a carrot top, an onion's and a leek's tubes are blue-green, a beetroot's leaves are
+   * the darkest green in the bed under their crimson stems. Saturation stays under the 0.65 ceiling throughout.
+   */
+  haulm: '#6C9448', blade: '#6FA07E', beetLeaf: '#5E7F3E',
+  /** A potato flower: pale lilac-white, 3 px, never a block (P3's lavender apron is 60 rows above the bed). */
+  bloom: '#EAE0F0',
+  /** A leek's blanched shank, the same cream the leek glyph wears (art/food.js). */
+  shank: '#F1E4C8',
   /** Dark willow, the same basket wood the whole cast carries (content/critters/items.js). */
   willow: '#6B4E3A',
   soil: '#4A3C32',
@@ -40,11 +52,18 @@ export const CROP = Object.freeze({
 const HOLE_SH = mix(CROP.soil, PLUM.deep, 0.5);
 const BARROW_DARK = mix(UI.wood, PLUM.deep, 0.45), BARROW_RIM = mix(UI.wood, UI.woodLight, 0.6);
 const WHEEL_HUB = mix(UI.wood, UI.woodLight, 0.4);
+const HAULM_SH = mix(CROP.haulm, CROP.leafSh, 0.6), BLADE_SH = mix(CROP.blade, CROP.leafSh, 0.55);
+const BEET_LEAF_SH = mix(CROP.beetLeaf, PLUM.deep, 0.3), SHANK_SH = mix(CROP.shank, CROP.soil, 0.3);
 /**
  * The root's own orange is the INGREDIENT's hex - the same one the HUD ticket, the map sign and the kitchen use, so
  * a player learns one carrot. It is an EMITTER and never decor: it exists only on a root that is out of the ground
  * (in the air, in a trug, in the barrow, on the ticket), exactly as the orchard's signal red only ever exists on
  * fruit. Nothing in backgrounds/garden.js is painted in it.
+ *
+ * The same rule, read for the crops that grow IN VIEW: a pumpkin sits on the soil, a cabbage hearts up above it, an
+ * onion and a beetroot show their shoulders. Their hex is painted on
+ * exactly that - the vegetable itself, standing in the bed, the way the orchard's red hangs in its canopy on the
+ * fruit - and never on a leaf, a stem or the soil.
  */
 const ROOT_HEX = INGREDIENTS.carrot.hex;
 
@@ -53,7 +72,7 @@ const ROOT_HEX = INGREDIENTS.carrot.hex;
  * something over it needs. It read 34 here for a while, which is the maximum of the frond TIP tables and 3 px short
  * of the plant: `leaflets()` centres its ellipses ON those tips, so the ink pass (LEAF_R[3] + 1 = 3.6 by 3.0)
  * carries the tallest tip, FROND_A's (0, -34), three rows past it. Measured over both tables at every sway the
- * screen hands in: 37.
+ * screen hands in: 37. Every other plant's height is in PLANTS below, measured the same way.
  */
 export const FERN_H = 37;
 
@@ -62,9 +81,11 @@ export const FERN_H = 37;
  * Five fronds, as (tipX, tipY) from the crown. A fan: wide and low at the outside, tall and near-vertical in the
  * middle, which is the silhouette a carrot top actually makes.
  *
- * TWO tables, picked by the top's own index, because seven identical plants in a row is a stamp and a market
- * garden is a row of things that grew. Mirroring one table was tried instead and lost: it puts the single
- * highlight on the shaded side, and ART_STYLE section 3 fixes the light at top-left for the whole world.
+ * TWO tables, picked by the top's own index, because seven identical plants in a row is a stamp and a farm row is
+ * a row of things that grew. Mirroring one table was tried instead and lost: it puts the single highlight on the
+ * shaded side, and ART_STYLE section 3 fixes the light at top-left for the whole world. (The leaf-mass plants
+ * below DO mirror, because they pick their shaded leaves and place their highlight AFTER the mirror - see
+ * `leafMass`.)
  */
 const FROND_A = Int8Array.of(-13, -19, -8, -29, 0, -34, 8, -28, 13, -18);
 const FROND_B = Int8Array.of(-11, -23, -6, -31, 1, -33, 10, -26, 14, -15);
@@ -122,6 +143,193 @@ export function drawFern(ctx, x, y, sway, variant) {
   ctx.fillStyle = CROP.leafSh; ctx.fillRect(x - 3, y - 4, 6, 5);
 }
 
+// ---------------------------------------------------------------- the other crops
+/**
+ * Every plant here is drawn the fern's way: the whole thing inked first as ONE object, then filled, then one shadow
+ * band on the shaded (right) side and one 2 px highlight top-left (ART_STYLE 0.5), and the produce - where the
+ * vegetable grows in view - in the ingredient's own hex on top. `sway` is the fern's 1 px breeze or 2 px shake and
+ * moves the foliage above SWAY_DY only, so a pumpkin on the ground never slides while its leaves do. `variant` is
+ * the top's own index parity and MIRRORS the layout: the shaded leaves are picked by where they land after the
+ * mirror and the highlight sits on a centred part, so the light stays top-left whichever way the plant grew.
+ *
+ * A leaf-mass table is flat [dx, dy, rx, ry, rot] per leaf, from the crown, and it is walked in place: nothing here
+ * allocates per call (ARCHITECTURE section 8), because eight of these draw on every frame of the round.
+ */
+const SWAY_DY = -10;
+/** Draw every leaf of `T` (from entry `from`), mirrored by `m`, grown by `grow`, offset by (ox, oy). `side` > 0 draws only the leaves right of centre after the mirror. */
+function leafMass(ctx, x, y, T, m, sway, grow, ox, oy, side) {
+  for (let i = 0; i < T.length; i += 5) {
+    const dx = m * T[i], dy = T[i + 1];
+    if (side && dx < 3) continue;
+    const sx = dy <= SWAY_DY ? sway : 0;
+    ctx.beginPath(); ctx.ellipse(x + dx + sx + ox, y + dy + oy, T[i + 2] + grow, T[i + 3] + grow, m * T[i + 4], 0, TAU); ctx.fill();
+  }
+}
+/** The three passes of a leaf mass: ink, fill, and the shadow band on the mirrored-right leaves. */
+function leafMass3(ctx, x, y, T, m, sway, fill, sh) {
+  ctx.fillStyle = INK; leafMass(ctx, x, y, T, m, sway, 1, 0, 0, 0);
+  ctx.fillStyle = fill; leafMass(ctx, x, y, T, m, sway, 0, 0, 0, 0);
+  ctx.fillStyle = sh; leafMass(ctx, x, y, T, m, sway, -1.4, 1, 1, 1);
+}
+/** A stem from the crown (x, y - 2) to (x + m * dx + sway, y + dy): 4 px ink under 2 px `colour`. */
+function stem(ctx, x, y, dx, dy, m, sway, colour) {
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, y - 2); ctx.lineTo(x + m * dx + sway, y + dy);
+  ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.stroke();
+  ctx.strokeStyle = colour; ctx.lineWidth = 2; ctx.stroke();
+}
+/** The 2 px highlight cap every plant carries once. */
+function cap(ctx, x, y) { ctx.fillStyle = CROP.leafHi; ctx.fillRect(x, y, 2, 2); }
+/**
+ * A vegetable's shoulder breaking the soil: the upper half of a disc in the ingredient's hex, inked, with the
+ * shadow tone in its right half. `(x, y)` is the soil line; the dome rises `r` above it.
+ */
+function shoulder(ctx, x, y, r, hex) {
+  const t = foodTones(hex);
+  ctx.beginPath(); ctx.arc(x, y, r, Math.PI, 0); ctx.closePath();
+  ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.fillStyle = t.base; ctx.fill();
+  ctx.fillStyle = t.sh; ctx.beginPath(); ctx.arc(x, y, r - 1, -Math.PI * 0.35, 0); ctx.lineTo(x + 2, y - 1); ctx.closePath(); ctx.fill();
+}
+
+// the potato's haulm: a low bushy mound of round leaves with three flowers on top
+const POTATO_T = Float32Array.of(-9, -8, 6, 4.5, -0.5, 9, -8, 6, 4.5, 0.5, -5, -15, 5.5, 4.5, -0.3, 5, -15, 5.5, 4.5, 0.3, 0, -20, 5, 4, 0, 0, -9, 5, 4, 0);
+const POTATO_BLOOM = Int8Array.of(-7, -21, 4, -25, 8, -18);
+function drawPotato(ctx, x, y, sway, variant) {
+  x = R(x); y = R(y);
+  const m = variant ? -1 : 1;
+  stem(ctx, x, y, 0, -18, m, sway, CROP.leafSh);
+  leafMass3(ctx, x, y, POTATO_T, m, sway, CROP.haulm, HAULM_SH);
+  cap(ctx, x - 3 + sway, y - 23);
+  for (let i = 0; i < POTATO_BLOOM.length; i += 2) {
+    const bx = x + m * POTATO_BLOOM[i] + sway, by = y + POTATO_BLOOM[i + 1];
+    ctx.fillStyle = INK; ctx.fillRect(bx - 2, by - 2, 5, 5);
+    ctx.fillStyle = CROP.bloom; ctx.fillRect(bx - 1, by - 1, 3, 3);
+  }
+}
+
+// the onion: hollow tubular tops standing straight up, one flopped over, and the bulb's shoulder in the soil
+const ONION_A = Int8Array.of(-9, -24, -4, -31, 1, -34, 5, -30, 10, -22);
+const ONION_B = Int8Array.of(-10, -21, -5, -32, 0, -33, 6, -29, 11, -24);
+function onionPath(ctx, x, y, sway, T, flop) {
+  ctx.beginPath();
+  for (let i = 0; i < T.length; i += 2) { ctx.moveTo(x, y - 2); ctx.lineTo(x + T[i] + sway, y + T[i + 1]); }
+  // the flopped one: a tube that has bent over at the top, the mark that says "onion" rather than "grass"
+  ctx.moveTo(x, y - 2); ctx.quadraticCurveTo(x + flop * 6, y - 26, x + flop * 15 + sway, y - 13);
+}
+function drawOnion(ctx, x, y, sway, variant) {
+  x = R(x); y = R(y);
+  const T = variant ? ONION_B : ONION_A, flop = variant ? 1 : -1;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  onionPath(ctx, x, y, sway, T, flop);
+  ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.stroke();
+  ctx.strokeStyle = CROP.blade; ctx.lineWidth = 3; ctx.stroke();
+  // the shadow band: the two right-hand tubes, a step darker
+  ctx.beginPath();
+  for (let i = 6; i < T.length; i += 2) { ctx.moveTo(x + 1, y - 2); ctx.lineTo(x + T[i] + sway + 1, y + T[i + 1] + 2); }
+  ctx.strokeStyle = BLADE_SH; ctx.lineWidth = 2; ctx.stroke();
+  cap(ctx, x + T[2] + sway - 1, y + T[3] + 1);
+  shoulder(ctx, x, y, 6, INGREDIENTS.onion.hex);
+}
+
+// the leek: a blanched shank standing out of the soil with five flat blades fanning and arching off it
+const LEEK_T = Int8Array.of(-14, -22, -7, -31, 0, -34, 7, -30, 14, -20);
+function leekPath(ctx, x, y, sway, m) {
+  ctx.beginPath();
+  for (let i = 0; i < LEEK_T.length; i += 2) {
+    const tx = m * LEEK_T[i], ty = LEEK_T[i + 1];
+    ctx.moveTo(x, y - 8); ctx.quadraticCurveTo(x + tx * 0.35, y - 20, x + tx + sway, y + ty);
+  }
+}
+function drawLeek(ctx, x, y, sway, variant) {
+  x = R(x); y = R(y);
+  const m = variant ? -1 : 1;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  leekPath(ctx, x, y, sway, m); ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.stroke();
+  leekPath(ctx, x, y, sway, m); ctx.strokeStyle = CROP.blade; ctx.lineWidth = 4; ctx.stroke();
+  // the shadow band: the two blades that land right of centre after the mirror
+  ctx.beginPath();
+  for (let i = 0; i < LEEK_T.length; i += 2) {
+    const tx = m * LEEK_T[i], ty = LEEK_T[i + 1];
+    if (tx < 3) continue;
+    ctx.moveTo(x + 1, y - 7); ctx.quadraticCurveTo(x + tx * 0.35 + 1, y - 19, x + tx + sway + 1, y + ty + 1);
+  }
+  ctx.strokeStyle = BLADE_SH; ctx.lineWidth = 2; ctx.stroke();
+  cap(ctx, x - 1 + sway, y - 33);
+  // the shank, in front of where the blades leave it
+  ctx.fillStyle = INK; ctx.fillRect(x - 5, y - 11, 10, 13);
+  ctx.fillStyle = CROP.shank; ctx.fillRect(x - 4, y - 10, 8, 11);
+  ctx.fillStyle = SHANK_SH; ctx.fillRect(x + 1, y - 9, 3, 10);
+}
+
+// the beetroot: a rosette of upright leaves on crimson stems, and the crimson shoulder of the root in the soil
+const BEET_T = Float32Array.of(-10, -14, 4, 6, -0.6, -5, -20, 4, 6.5, -0.3, 0, -23, 4, 6.5, 0, 5, -20, 4, 6.5, 0.3, 10, -14, 4, 6, 0.6);
+function drawBeetroot(ctx, x, y, sway, variant) {
+  x = R(x); y = R(y);
+  const m = variant ? -1 : 1, hex = INGREDIENTS.beetroot.hex, stemHex = foodTones(hex).hi;
+  for (let i = 0; i < BEET_T.length; i += 5) stem(ctx, x, y, BEET_T[i], BEET_T[i + 1] + 3, m, BEET_T[i + 1] <= SWAY_DY ? sway : 0, stemHex);
+  leafMass3(ctx, x, y, BEET_T, m, sway, CROP.beetLeaf, BEET_LEAF_SH);
+  cap(ctx, x - 2 + sway, y - 28);
+  shoulder(ctx, x, y, 6, hex);
+}
+
+// the pumpkin: two broad leaves on a vine behind, and the fruit itself sitting on the soil in front of them
+const PUMPKIN_T = Float32Array.of(-11, -16, 7, 6, -0.4, 10, -18, 7, 6, 0.4);
+function drawPumpkin(ctx, x, y, sway, variant) {
+  x = R(x); y = R(y);
+  const m = variant ? -1 : 1, hex = INGREDIENTS.pumpkin.hex, t = foodTones(hex);
+  // the vine along the soil, and the two leaf stems
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - m * 16, y - 1); ctx.quadraticCurveTo(x, y - 6, x + m * 14, y - 2);
+  ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.stroke(); ctx.strokeStyle = CROP.leafSh; ctx.lineWidth = 2; ctx.stroke();
+  stem(ctx, x, y, -11, -12, m, sway, CROP.leafSh); stem(ctx, x, y, 10, -14, m, sway, CROP.leafSh);
+  leafMass3(ctx, x, y, PUMPKIN_T, m, sway, CROP.leaf, CROP.leafSh);
+  // the fruit: one inked body, its ribs and lower shadow clipped inside, the stalk on top
+  ctx.beginPath(); ctx.ellipse(x, y - 6, 9, 7, 0, 0, TAU);
+  ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = t.base; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = t.sh; ctx.fillRect(x - 4, y - 14, 2, 16); ctx.fillRect(x + 3, y - 14, 2, 16); ctx.fillRect(x - 10, y - 3, 20, 5);
+  ctx.fillStyle = t.hi; ctx.fillRect(x - 5, y - 11, 2, 2);
+  ctx.restore();
+  ctx.fillStyle = INK; ctx.fillRect(x - 2, y - 16, 5, 5);
+  ctx.fillStyle = CROP.leafSh; ctx.fillRect(x - 1, y - 15, 3, 3);
+}
+
+// the cabbage: five outer leaves splayed on the soil round a hearted head
+const CABBAGE_T = Float32Array.of(-11, -6, 6, 4, -0.4, 11, -6, 6, 4, 0.4, -7, -12, 5, 4, -0.6, 7, -12, 5, 4, 0.6, 0, -14, 5, 4, 0);
+function drawCabbage(ctx, x, y, sway, variant) {
+  x = R(x); y = R(y);
+  const m = variant ? -1 : 1, hex = INGREDIENTS.cabbage.hex, t = foodTones(hex);
+  leafMass3(ctx, x, y, CABBAGE_T, m, sway, CROP.leaf, CROP.leafSh);
+  const cx = x + sway, cy = y - 9;
+  ctx.beginPath(); ctx.arc(cx, cy, 8, 0, TAU);
+  ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = t.base; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = t.sh; ctx.beginPath(); ctx.arc(cx + 3, cy + 3, 7, 0, TAU); ctx.fill();
+  ctx.strokeStyle = t.sh; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx - 2, cy + 1, 4, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke();   // the outer leaf's vein
+  ctx.restore();
+  ctx.fillStyle = t.hi; ctx.fillRect(cx - 4, cy - 4, 2, 2);
+}
+
+/**
+ * THE PLANTS, by INGREDIENTS icon id: what stands in the crop ridge when the bed grows that vegetable, and how tall
+ * it is drawn (px above the soil line, ink included, at the widest sway the screen hands in) so the ripe sparkle
+ * can stand clear of it. `plantFor` falls back to the carrot's fern for anything not listed, so a new ingredient
+ * pointed at this screen grows SOMETHING on its first day. The berries are not here: Bramble Bank picks them off
+ * its own bushes (art/brambleProps.js), and a strawberry plant in a farm row was the visit that said it should.
+ */
+export const PLANTS = Object.freeze({
+  carrot: { h: FERN_H, draw: drawFern },
+  potato: { h: 28, draw: drawPotato },
+  onion: { h: 37, draw: drawOnion },
+  leek: { h: 38, draw: drawLeek },
+  beetroot: { h: 31, draw: drawBeetroot },
+  pumpkin: { h: 25, draw: drawPumpkin },
+  cabbage: { h: 19, draw: drawCabbage },
+});
+export function plantFor(icon) { return PLANTS[icon] || PLANTS.carrot; }
+
 /**
  * The fresh-root sparkle above a ripe top: SIGNAL.garden, the same four-armed mark the coop's fresh egg wears
  * (ART_STYLE section 4 - gold means "the thing you want"). It is the scene's ONLY saturated colour and it is a
@@ -159,19 +367,22 @@ export function drawHole(ctx, x, y, step) {
 }
 
 /**
- * A carrot in the air - just out of the ground, on its way to a trug. The root is art/food.js's own carrot glyph so
- * the shape is the one the ticket and the kitchen use; the three fronds on top are added here because a root with
- * its leaves still on is the whole difference between "pulled" and "an ingredient icon flying past".
+ * A root in the air - just out of the ground, on its way to a trug. The root is art/food.js's own glyph so the shape
+ * is the one the ticket and the kitchen use; a carrot and a beetroot get their leaves added on top here, because a
+ * root with its top still on is the whole difference between "pulled" and "an ingredient icon flying past". The
+ * others carry their own tops in the glyph (a leek, an onion, a pumpkin's stalk) or come out of the ground bare.
  */
-export function drawPulledCarrot(ctx, x, y, icon = 'carrot', hex = ROOT_HEX) {
+export function drawPulledRoot(ctx, x, y, icon = 'carrot', hex = ROOT_HEX) {
   x = R(x); y = R(y);
-  ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(x - 1, y - 4); ctx.lineTo(x - 6, y - 13);
-  ctx.moveTo(x, y - 4); ctx.lineTo(x, y - 15);
-  ctx.moveTo(x + 1, y - 4); ctx.lineTo(x + 6, y - 12);
-  ctx.stroke();
-  ctx.strokeStyle = CROP.leaf; ctx.lineWidth = 2; ctx.stroke();
+  if (icon === 'carrot' || icon === 'beetroot') {
+    ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x - 1, y - 4); ctx.lineTo(x - 6, y - 13);
+    ctx.moveTo(x, y - 4); ctx.lineTo(x, y - 15);
+    ctx.moveTo(x + 1, y - 4); ctx.lineTo(x + 6, y - 12);
+    ctx.stroke();
+    ctx.strokeStyle = icon === 'carrot' ? CROP.leaf : CROP.beetLeaf; ctx.lineWidth = 2; ctx.stroke();
+  }
   drawFood(ctx, icon, x, y, 6, hex);
 }
 
