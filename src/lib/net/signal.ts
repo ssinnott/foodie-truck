@@ -34,11 +34,15 @@ export function makeRoomCode(len = 6): string {
   return out.join('');
 }
 
-/** What travels over a rendezvous: `from` is stamped on by the strategy, `to` addresses one pairing. */
+/**
+ * What travels over a rendezvous: `from` is stamped on by the strategy, `to` addresses one pairing, and the rest
+ * is whatever the pairing (peer.ts's SignalMessage) or the room (a game's announcements) put in it. Wire JSON, so
+ * the rest is `any`: that is also what lets a mux channel stand in for peer.ts's SignalChannel.
+ */
 export interface SignalEnvelope {
   from?: string;
   to?: string;
-  [key: string]: unknown;
+  [key: string]: any;
 }
 
 /**
@@ -152,11 +156,14 @@ export function createSignalling({ appId, clientPrefix = appId.slice(0, 2) }: Si
   };
 }
 
-/** A pairing's private view of the rendezvous: what peer.ts is handed as its signal channel. */
+/**
+ * A pairing's private view of the rendezvous: what peer.ts is handed as its signal channel. It dispatches and does
+ * not read, so what a message contains is the pairing's business (peer.ts's SignalMessage), not typed here.
+ */
 export interface MuxChannel {
-  handler: ((m: SignalEnvelope) => void) | null;
-  send(obj: SignalEnvelope): void;
-  onMessage(fn: (m: SignalEnvelope) => void): void;
+  handler: ((m: any) => void) | null;
+  send(obj: object): void;
+  onMessage(fn: (m: any) => void): void;
   close(): void;
 }
 
