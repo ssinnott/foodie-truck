@@ -105,7 +105,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **The truck** is one shared vehicle. Every seated player's stick is a vector; they are summed (the driver's ×1.5),
   quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it,
   turning at most 1 heading step per 4 frames. Roads are the fast path; fields are drivable but slow and dusty;
-  the river is not drivable (bridges are). Arrival = within 40 px of a landmark's door point.
+  water is not drivable — the river (its bridges are), the millpond and the cove's sea: the truck stops a
+  half-token short of the edge with a splash. Arrival = within 40 px of a landmark's door point.
 - **HUD**: the shopping list (one row per ingredient, `have/amount`, a tick when full, the gold arrow on the first
   short one) while gathering, then the lines (`sign  N IN LINE`, washed back once served, the arrow on the one the
   compass points at); the steering-wheel widget with one tick per seat that lights while that seat pushes; the

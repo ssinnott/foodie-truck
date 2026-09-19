@@ -1,9 +1,9 @@
 // The world map (docs/GDD.md section 4, docs/ARCHITECTURE.md section 5): one shared truck on a 1920x1080 storybook
 // plane. Every seated player's stick is a vector; they are summed (the driver's x1.5), quantised to 16 headings on
 // dcos/dsin tables built here, and the truck turns one step per 4 frames, rolling 2.2 px/frame on a lane and 1.0 in
-// the fields; the river stops it except on the bridges. Arriving within 40 px of a landmark's door opens its
-// mini-game while the shopping list is short, or the line waiting there once the pantry is full (docs/GDD.md
-// section 3); otherwise a wooden sign says why not.
+// the fields; water stops it - the river except on its bridges, the millpond, the cove's sea. Arriving within 40 px
+// of a landmark's door opens its mini-game while the shopping list is short, or the line waiting there once the
+// pantry is full (docs/GDD.md section 3); otherwise a wooden sign says why not.
 //
 // Everything in update() is deterministic: input by seat only, distances from + - * / and Math.sqrt, no clock, no
 // Math.random; run.truck { x, y, heading, at } is the state that survives between visits and feeds the desync canary.
@@ -26,7 +26,7 @@ import { WORLD_W, WORLD_H, PLACES } from '../../content/places.ts';
 import { drawTruck } from '../../art/truck.ts';
 import {
   CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, RIVER_BLOCK, SPOTS, SIGN_AT, PARK_AT,
-  ROADSIDE_TREES, GLINTS, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, riverBlocked,
+  ROADSIDE_TREES, GLINTS, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, waterBlocked,
   wallBlocked, drawSails, drawHen, drawBee, drawPhoneRing, MAP,
 } from '../../art/backgrounds/map.ts';
 import { drawShoppingHud, drawLinesHud, drawLineTag, drawSeatPlates, drawWheel, drawDestArrow, drawHonk, drawSignPlate, drawMapHint } from '../maphud.ts';
@@ -389,8 +389,8 @@ export class MapScreen extends Screen {
       let nx = truck.x + COS[truck.heading] * this.speed, ny = truck.y + SIN[truck.heading] * this.speed;
       nx = nx < DRIVE_MIN_X ? DRIVE_MIN_X : nx > DRIVE_MAX_X ? DRIVE_MAX_X : nx;
       ny = ny < DRIVE_MIN_Y ? DRIVE_MIN_Y : ny > DRIVE_MAX_Y ? DRIVE_MAX_Y : ny;
-      if (riverBlocked(nx, ny)) {
-        // the splash belongs in the water in front of the nose, not under the truck: RIVER_BLOCK keeps the token a
+      if (waterBlocked(nx, ny)) {
+        // the splash belongs in the water in front of the nose, not under the truck: every block keeps the token a
         // half-length short of the bank, so a ring at the centre lands on grass and the cream word on the cream hatch
         this.speed = 0; this.blocked = true;
         if (this.splashCd === 0) {
