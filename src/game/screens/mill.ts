@@ -6,6 +6,10 @@
 // the moment it reaches the brim it ties itself off: +1 flour, the sack hops onto the barrow, a ring and a '+1', and
 // a fresh empty sack is in the paw. Letting go early keeps the part sack to be topped up at the next chute (this is
 // the co-op bit). Nothing bursts and nothing is ever lost: the only skill is being under the gold when it pours.
+// THE JOKE: one sack in SNEEZE_ODDS puts the flour up the tier's nose. The moment the tie beat ends the wind-up
+// starts (SNEEZE_UP frames, head back, eyes shut) and then ACHOO: the head snaps forward, a cloud of the visit's own
+// dust (chaff on a rice visit) goes up off the face, and the stick is locked for the whole SNEEZE_FRAMES. Nothing
+// is lost but the moment; the fresh sack is in the paw throughout.
 // The round ends when the party's total reaches the order's amount, and not before (there is no clock to run out);
 // the FLOUR sign drops, is held, then run.gather('flour') and back to the map.
 //
@@ -114,6 +118,9 @@ const POUR_EVERY = 12;
 const BRIM_AT = FULL - BRIM_BAND;
 /** The tie beat (18 frames of the `tie` anim) and the frame of it the sack leaves the paw on. */
 const TIE_FRAMES = 18, TIE_TOSS = 9;
+/** The sneeze: one tie in SNEEZE_ODDS; SNEEZE_UP frames of wind-up and the ACHOO on the frame after, SNEEZE_FRAMES in all. */
+const SNEEZE_ODDS = 6, SNEEZE_UP = 24, SNEEZE_FRAMES = 36;
+const ACHOO = 'ACHOO!';
 /** How far below the near paw the sack's neck hangs, in root space (MILL_SACK's tie band runs y 3..16). */
 const SACK_DROP = 8;
 /**
@@ -168,6 +175,17 @@ const MILL_ANIMS = Object.freeze({
     F(5, { armR: [104, 24], armL: [-140, -16], weapon: 40, torso: -6, head: -8, root: [0, -1], stretch: 1.03, face: 'shout' }, { ease: 'in' }),
     F(4, { armR: [132, 8], armL: [-152, -12], weapon: -20, torso: -10, head: -12, root: [0, -2], stretch: 1.06, face: 'happy' }, { ease: 'overshoot', smear: { from: 50, to: 150, a: 0.35 } }),
     F(9, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 2, head: 0, root: [0, 1], squash: 1.04, face: 'happy' }, { ease: 'inout' }),
+  ] },
+  // the sneeze: the wind-up leans back and back with the eyes shut, in three growing steps (ah... ah... AH...)
+  sneezeUp: { loop: false, frames: [
+    F(8, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: -6, head: -10, root: [0, 0], stretch: 1.02, face: 'closed' }, { ease: 'out' }),
+    F(8, { armR: [62, 50], armL: [-20, 8], weapon: 90, torso: -10, head: -18, root: [0, -1], stretch: 1.04, face: 'closed' }, { ease: 'out' }),
+    F(8, { armR: [64, 50], armL: [-22, 8], weapon: 90, torso: -14, head: -26, root: [0, -2], stretch: 1.06, face: 'closed' }, { ease: 'out' }),
+  ] },
+  // ...and the ACHOO: the whole body snaps forward and down with a smear, then comes back up dazed
+  achoo: { loop: false, frames: [
+    F(3, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 18, head: 26, root: [0, 2], squash: 1.08, face: 'shout' }, { ease: 'overshoot', smear: { from: -30, to: 40, a: 0.35 } }),
+    F(9, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 4, head: 6, root: [0, 0], face: 'dazed' }, { ease: 'inout' }),
   ] },
 });
 
@@ -305,6 +323,10 @@ export interface MillSeat extends Seat {
   chute: number;
   /** Frames left of the tie beat; 0 when the stick is live again. */
   tieT: number;
+  /** 1 while the sack just tied has a sneeze coming (rolled at the tie; it starts when the tie beat ends). */
+  sneezeDue: number;
+  /** Frames left of the sneeze (wind-up, then the ACHOO at SNEEZE_FRAMES - SNEEZE_UP); the stick is locked while it runs. */
+  sneezeT: number;
   /** Where this critter's sack neck hangs, in screen px from its feet: built ONCE in enter() from its own rig. */
   sackDX: number;
   sackDY: number;
@@ -402,6 +424,8 @@ export class MillScreen extends Screen {
   declare hopCursor: number;
   /** Sacks tied off this round. */
   declare tied: number;
+  /** Sneezes this round (the joke's count, for the tests and the desync canary). */
+  declare sneezes: number;
   /** Sacks the round is played to: the order's REMAINDER, or FALLBACK_TARGET with no run. */
   declare target: number;
   /** Sacks the party has banked this round. */
@@ -461,7 +485,7 @@ export class MillScreen extends Screen {
       // note over its trug).
       s.rig.weapon = MILL_SACK as RigWeapon; s.rig.sackFill = 0; s.rig.sackZone = 0; s.rig.sackBlink = 0; s.rig.sackGrain = g;
       s.player.setOverlay(MILL_ANIMS);
-      s.fill = 0; s.chute = -1; s.tieT = 0; s.count = 0;
+      s.fill = 0; s.chute = -1; s.tieT = 0; s.count = 0; s.sneezeDue = 0; s.sneezeT = 0;
       // where this critter's sack neck sits, once, from ITS proportions: the pour column bends to this point and
       // the tie's ring and hop start from it (see the draw pass). Cress's arm is not Barley's.
       const p = pawRoot(s.rig, FILL_POSE.torso, FILL_POSE.upper, FILL_POSE.lower);
@@ -477,7 +501,7 @@ export class MillScreen extends Screen {
     this.hops = [];
     for (let i = 0; i < MAX_HOPS; i++) this.hops.push({ t: HOP_FRAMES, x0: 0, y0: 0, slot: 0 });
     this.hopCursor = 0;
-    this.tied = 0;
+    this.tied = 0; this.sneezes = 0;
 
     const need = run ? run.need(this.ing) : null;
     // the remainder, not the whole order: the map may already have banked some (the three shipped scenes agree)
@@ -559,7 +583,8 @@ export class MillScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.bumpT > 0) { s.bumpT--; s.moving = false; s.chute = -1; s.player.tick(); continue; }
-      if (s.tieT > 0) { s.tieT--; s.moving = false; s.chute = -1; s.player.tick(); continue; }
+      if (s.tieT > 0) { if (--s.tieT === 0 && s.sneezeDue) this.sneeze(s); s.moving = false; s.chute = -1; s.player.tick(); continue; }
+      if (s.sneezeT > 0) { if (--s.sneezeT === SNEEZE_FRAMES - SNEEZE_UP) this.achoo(s); s.moving = false; s.chute = -1; s.player.tick(); continue; }
       const ax = input.axisX(s.slot);
       s.moving = ax !== 0;
       if (s.moving) {
@@ -579,7 +604,7 @@ export class MillScreen extends Screen {
           if (s.fill >= FULL) this.tie(s);
         }
       }
-      if (s.tieT === 0 && s.bumpT === 0) seatAnim(s, s.chute >= 0 ? 'fill' : s.moving ? 'carryWalk' : 'carry');
+      if (s.tieT === 0 && s.bumpT === 0 && s.sneezeT === 0) seatAnim(s, s.chute >= 0 ? 'fill' : s.moving ? 'carryWalk' : 'carry');
       s.player.tick();
     }
   }
@@ -594,6 +619,7 @@ export class MillScreen extends Screen {
   tie(s: MillSeat): void {
     s.count++; this.setTotal(this.total + 1); this.tied++;
     s.fill = 0; s.chute = -1; s.tieT = TIE_FRAMES; s.moving = false;
+    s.sneezeDue = rng.int(1, SNEEZE_ODDS) === 1 ? 1 : 0;   // the deal: one sack in SNEEZE_ODDS is up the nose
     seatAnim(s, 'tie', true);
     const mx = R(s.x + s.facing * s.sackDX), my = R(s.y + s.sackDY);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
@@ -605,6 +631,22 @@ export class MillScreen extends Screen {
     this.game.audio.play('tie');
   }
 
+  /** The joke, part one: the wind-up. The tie beat is over, the fresh sack is in the paw, and the head goes back and back. */
+  sneeze(s: MillSeat): void {
+    s.sneezeDue = 0; s.sneezeT = SNEEZE_FRAMES; this.sneezes++;
+    seatAnim(s, 'sneezeUp', true);
+  }
+
+  /** Part two: ACHOO. The body snaps forward and a cloud of the visit's own dust goes up off the face. */
+  achoo(s: MillSeat): void {
+    const fx = R(s.x + s.facing * 14), fy = R(s.y - 44);
+    seatAnim(s, 'achoo', true);
+    particles.burst(this.grain.puffKind, fx, fy, 8, this.puffOpts);
+    ringAt(fx, fy, 4, 18, UI.cream, 2, 10, false, true);
+    floatText(s.x, s.y - 70, ACHOO, UI.cream, 1, true);
+    this.game.audio.play('sneeze');
+  }
+
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
   /** The round is over: drop the sign; a seat that tied a sack cheers, one that never did sulks. */
@@ -613,7 +655,7 @@ export class MillScreen extends Screen {
     endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      s.moving = false; s.bumpT = 0; s.tieT = 0; s.chute = -1;
+      s.moving = false; s.bumpT = 0; s.tieT = 0; s.chute = -1; s.sneezeT = 0; s.sneezeDue = 0;
       seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true);
     }
   }
@@ -714,9 +756,9 @@ export class MillScreen extends Screen {
   override summary() {
     return {
       total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
-      tied: this.tied, wake: this.wake,
+      tied: this.tied, wake: this.wake, sneezes: this.sneezes,
       // fill is rounded to three places so a test can read it without chasing float tails
-      seats: this.seats.map((s) => [s.slot, R(s.x), s.count, Math.round(s.fill * 1000) / 1000, s.chute]),
+      seats: this.seats.map((s) => [s.slot, R(s.x), s.count, Math.round(s.fill * 1000) / 1000, s.chute, s.sneezeT]),
       // [state, frames left, the seat filling from it, its x]. State is 0 dormant / 1 waking / 2 pouring
       // (art/millProps.js DORMANT / WAKING / POURING). The x is carried so a headless test can walk a seat under a
       // spout without a copy of the layout table going stale behind it.
@@ -727,10 +769,10 @@ export class MillScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.wake, this.tied);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.wake, this.tied, this.sneezes);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      f.push(s.x, s.facing, s.count, s.fill, s.bumpT, s.tieT, s.chute, s.moving ? 1 : 0);
+      f.push(s.x, s.facing, s.count, s.fill, s.bumpT, s.tieT, s.chute, s.moving ? 1 : 0, s.sneezeDue, s.sneezeT);
     }
     for (let i = 0; i < this.chutes.length; i++) { const c = this.chutes[i]; f.push(c.state, c.t, c.seat); }
     return f;

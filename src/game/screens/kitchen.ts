@@ -30,7 +30,7 @@ import { Screen } from '../game.ts';
 import type { CritterDef, Game, Input, ScreenParams } from '../game.ts';
 import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
-import { blitAt } from '../../art/layers.ts';
+import { blitAt, INK } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt, burstCrumbs, burstSparkle, burstSteam } from '../../art/fx.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import type { DrawRigOpts, Rig, RigWeapon } from '../../lib/art/rig.ts';
@@ -52,7 +52,7 @@ import type { CardScheme } from '../controlcard.ts';
 import { drawText } from '../../engine/text.ts';
 import { kitchenLayer, ROWS, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.ts';
 import {
-  paintStations, drawStationFocus, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
+  PROPS, paintStations, drawStationFocus, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
   drawFridge, drawPile, drawFlight, intake, drawPullBar, drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, drawKettleSteam,
   PLATE, BELL, POT, OVEN, FRIDGE, BOARD,
 } from '../../art/kitchenProps.ts';
@@ -89,6 +89,13 @@ const HOLD_SOUND_EVERY = { [MIX]: 14, [STOVE]: 18, [OVEN_S]: 24 };
 const STAMP_Y = 140;
 /** The reach beat's hold, the eat gag's length, the chop anim's length. */
 const ACT_FRAMES = 20, EAT_FRAMES = 42, CHOP_ANIM = 21, GAG_CHANCE = 1 / 6;
+/**
+ * The two beats for the crew who are not Barley (docs/CONTENT_ROADMAP.md section A), on the same seeded one-in-six
+ * as the bite: the pot lid that rattles and lifts on its own for LID_FRAMES when a STOVE step completes, and the
+ * cloud of flour out of the oven door when an OVEN step completes. Both are draw-side: nothing about them scores.
+ */
+const LID_FRAMES = 40, LID_STEAM_EVERY = 5, CLOUD_PUFFS = 14;
+const POOF = 'POOF!';
 /** Segments on each station's paper tag; the fridge's is the order's own item count (`segs`). */
 const SEGS = [1, CHOP_HITS, 4, 4, 4, 1];
 /** Rows a critter's tallest head part reaches above its skull (ears, toque, sunhat), for the name plate. */
@@ -244,6 +251,12 @@ export class KitchenScreen extends Screen {
   declare total: number;
   /** The current step's state. */
   declare st: StepState;
+  /** Taps the CHOP step takes this order (the order's `chops`: more on an EXTRA CRUNCHY one). */
+  declare chops: number;
+  /** Frames left of the pot lid rattling; and the two gags' counts, for the tests. */
+  declare lidT: number;
+  declare lids: number;
+  declare poofs: number;
   /** True from the bell to the results screen. */
   declare served: boolean;
   /** Frames since the bell (the components land, then the stamp slams). */
@@ -288,6 +301,7 @@ export class KitchenScreen extends Screen {
     // the order: its steps as station indices, the ingredients' glyphs for the board and the plate
     const order = run.order;
     this.steps = order.steps.map((id) => STATION_IDX[id] != null ? STATION_IDX[id] : PLATE_S);
+    this.chops = order.chops || CHOP_HITS; this.lidT = 0; this.lids = 0; this.poofs = 0;
     this.stepNames = order.steps.map((id) => (STATIONS.find((s) => s.id === id) || STATIONS[0]).name);
     this.scores = this.steps.map(() => -1);
     this.owners = this.steps.map(() => -1);
@@ -347,6 +361,7 @@ export class KitchenScreen extends Screen {
     const game = this.game, inp = game.input;
     if (inp.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
+    if (this.lidT > 0) { if (--this.lidT % LID_STEAM_EVERY === 0) particles.spawn('steam', PROP_X[STOVE] + ((this.lidT >> 2) & 1 ? 8 : -8), ROWS.counterTop - 40, { screen: true }); }
     this.stepFlights();
     this.custPlayer.tick();
     if (this.tak > 0) this.tak--;
@@ -432,7 +447,7 @@ export class KitchenScreen extends Screen {
           st.count++; this.tak = 6; s.facing = 1; s.actT = CHOP_ANIM; this.playAnim(s, 'chop', true);
           ringAt(PROP_X[CHOP], ROWS.counterTop - 8, 3, 12, UI.cream, 2, 10, false, true);
           audio.play('chop');
-          if (st.count >= CHOP_HITS) this.completeStep(2, s);
+          if (st.count >= this.chops) this.completeStep(2, s);
         }
         break;
       case MIX:
@@ -457,7 +472,7 @@ export class KitchenScreen extends Screen {
   }
 
   /** How many segments a station's tag and tally carry: the fridge's is the order's item count, the rest are fixed. */
-  segs(k: number): number { return k === FRIDGE_S ? Math.max(1, this.pullIcons.length) : SEGS[k]; }
+  segs(k: number): number { return k === FRIDGE_S ? Math.max(1, this.pullIcons.length) : k === CHOP ? this.chops : SEGS[k]; }
 
   /** Bank a step's score, say so over the station, roll the gag, move on. */
   completeStep(score: number, s: Seat | null): void {
@@ -472,6 +487,15 @@ export class KitchenScreen extends Screen {
     // the food moves on: everything at this station takes off for the next step's prop (the fridge's items are
     // already on their way, one per tap, and the plate is the end of the line)
     if (station !== FRIDGE_S && station !== PLATE_S && idx + 1 < this.steps.length) this.launchBatch(station, this.steps[idx + 1]);
+    // the room's own two jokes, one in six each: the pot lid rattles after a stove step, a cloud of flour comes out
+    // of the oven after an oven step (the roll is made whether or not it lands, so every peer draws the same day)
+    if (station === STOVE && rng.chance(GAG_CHANCE)) { this.lidT = LID_FRAMES; this.lids++; this.game.audio.play('rattle'); }
+    if (station === OVEN_S && rng.chance(GAG_CHANCE)) {
+      this.poofs++;
+      particles.burst('dust', PROP_X[OVEN_S], ROWS.counterTop - 20, CLOUD_PUFFS, { color: UI.cream, speed: 1.6, up: 1.2, size: 4, life: 36, gravity: -0.01, screen: true });
+      floatText(PROP_X[OVEN_S], ROWS.counterTop - 56, POOF, UI.cream, 1, true);
+      this.game.audio.play('poof');
+    }
     // the hungry one: a seeded one-in-six bite on every completed step, whoever completed it
     for (let i = 0; i < this.seats.length; i++) {
       const b = this.seats[i];
@@ -599,6 +623,13 @@ export class KitchenScreen extends Screen {
     if (!this.served) drawControlCard(ctx, f, f - this.stepFrame, this.schemes, this.keyName, CARD_TOP_Y);
   }
 
+  /** The pot lid, rattling: an inked enamel disc over the pot that hops on alternate frames, steam getting out under it. */
+  drawLid(ctx: CanvasRenderingContext2D, f: number): void {
+    const x = PROP_X[STOVE], y = ROWS.counterTop - 42, up = ((f >> 1) & 1) ? 5 : 1;
+    ctx.beginPath(); ctx.ellipse(x, y - up, 20, 5, 0, 0, Math.PI * 2); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = PROPS.enamel; ctx.fill();
+    ctx.fillStyle = INK; ctx.fillRect(x - 2, y - up - 6, 4, 3);
+  }
+
   /** The per-frame marks on the stations: only the ones this order uses. */
   /** True once the step that uses station `k` has been scored. */
   done(k: number): boolean { for (let i = 0; i < this.steps.length; i++) if (this.steps[i] === k) return this.scores[i] >= 0; return false; }
@@ -629,6 +660,7 @@ export class KitchenScreen extends Screen {
     drawPlate(ctx, PLATE.x + 13, PLATE.y, this.icons, this.hexes, plated, plated > 0 && this.landT < LAND_SQUASH ? 1.25 : 1, this.dished() ? this.dishId : null);
     drawBellRing(ctx, this.ringT);
     drawKettleSteam(ctx, f);   // the room's pilot light: one plume that never stops, whatever the party is doing
+    if (this.lidT > 0) this.drawLid(ctx, f);
   }
 
   /** Every unit in the air on its arc; the ones still waiting their turn off the board sit where they were. */
@@ -667,7 +699,7 @@ export class KitchenScreen extends Screen {
   drawWidget(ctx: CanvasRenderingContext2D, st: StepState, station: number): void {
     const slot = this.liveSlot(station);
     if (station === FRIDGE_S) drawPullBar(ctx, st.count, this.segs(FRIDGE_S), slot);
-    else if (station === CHOP) drawChopBar(ctx, st.count, CHOP_HITS, slot);
+    else if (station === CHOP) drawChopBar(ctx, st.count, this.chops, slot);
     else if (station === MIX) drawDial(ctx, st.t / MIX_FRAMES, st.phase === 0 && st.t > 0, slot);
     else if (station === STOVE) drawStoveBar(ctx, st.t / STOVE_FRAMES, slot);
     else if (station === OVEN_S) drawOvenTimer(ctx, st.t / OVEN_FRAMES, slot);
@@ -695,6 +727,7 @@ export class KitchenScreen extends Screen {
     return {
       step: this.stepIdx, steps: this.stepNames, scores: this.scores.slice(), owners: this.owners.slice(), total: this.total, stars: this.stars, served: this.served,
       phase: this.st.phase, t: this.st.t, count: this.st.count, pulled: this.pulled, pulls: this.pullIcons.length, pullDest: this.pullDest,
+      chops: this.chops, lidT: this.lidT, lids: this.lids, poofs: this.poofs,
       batchAt: this.batchAt, landed: this.landed, flying: this.flights.reduce((n, fl) => n + (fl.active ? 1 : 0), 0), dish: this.dished() ? this.dishId : '',
       seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
     };

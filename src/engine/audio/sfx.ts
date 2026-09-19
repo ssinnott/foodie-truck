@@ -192,6 +192,46 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   reel: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.02, vol: 0.14 }); return noise(c, d, t, { dur: 0.03, vol: 0.12 * o.v, type: 'bandpass', f0: 3200 * o.p, q: 3, attack: 0.0005 }); },
   /** Landed: the splash on the way out and the pip on the way into the bucket. */
   hook: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 1.2, f: 600, vol: 0.2, splash: 0.24 }); whoosh(c, d, t + 0.05, { v: o.v, p: o.p, f0: 800, f1: 3000, dur: 0.2, vol: 0.14 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.3 }); },
+  /** A trunk shaken: a rustle of leaves, highpassed noise that swells and falls, replayed while the hold runs. */
+  shake: (c, d, t, o) => noise(c, d, t, { dur: 0.22, vol: 0.09 * o.v, type: 'highpass', f0: 2600 * o.p, f1: 3400 * o.p, attack: 0.06 }),
+  /** A nut into the basket: a small hard knock and the pip. */
+  nut: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 700, dur: 0.04, vol: 0.2 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.05 }); },
+  /** The squirrel, indignant on a head: a run of quick square chitters going up. */
+  chitter: (c, d, t, o) => { for (let i = 0; i < 5; i++) osc(c, d, t + i * 0.05, { type: 'square', f0: (1400 + i * 120) * o.p, dur: 0.025, vol: 0.05 * o.v, attack: 0.002, lp: 4000 }); return t + 0.3; },
+  /** The pot lid rattling: a run of tinny knocks on an enamel lid, uneven. */
+  rattle: (c, d, t, o) => { const at = [0, 0.07, 0.12, 0.2, 0.25, 0.34, 0.42]; for (const a of at) knock(c, d, t + a, { v: o.v, p: o.p, f: 1300, dur: 0.03, vol: 0.14 }); return t + 0.5; },
+  /** The oven's flour cloud: a soft puff of lowpassed noise. */
+  poof: (c, d, t, o) => noise(c, d, t, { dur: 0.3, vol: 0.16 * o.v, type: 'lowpass', f0: 1200 * o.p, f1: 400 * o.p, attack: 0.01 }),
+  /** The shears: two quick high knocks, the blades closing. */
+  snip: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 2200, dur: 0.02, vol: 0.18 }); return knock(c, d, t + 0.04, { v: o.v, p: o.p, f: 2600, dur: 0.02, vol: 0.18 }); },
+  /** The hedgehog woken: three snuffles of lowpassed noise, and a tiny sneeze on the end. */
+  snuffle: (c, d, t, o) => { for (let i = 0; i < 3; i++) noise(c, d, t + i * 0.09, { dur: 0.06, vol: 0.09 * o.v, type: 'lowpass', f0: 900 * o.p, f1: 500 * o.p, attack: 0.01 }); return osc(c, d, t + 0.3, { type: 'square', f0: 1200 * o.p, f1: 600 * o.p, glide: 0.06, dur: 0.07, vol: 0.05 * o.v, attack: 0.002, lp: 3000 }); },
+  /** Leaves brushed aside: a short, low rustle. */
+  brush: (c, d, t, o) => noise(c, d, t, { dur: 0.16, vol: 0.12 * o.v, type: 'bandpass', f0: 1800 * o.p, f1: 900 * o.p, q: 0.8, attack: 0.02 }),
+  /** The toadstool: a wrinkled-nose 'pooh', a sine sliding down with a wobble on it. */
+  pooh: (c, d, t, o) => osc(c, d, t, { type: 'sine', f0: 520 * o.p, f1: 220 * o.p, glide: 0.25, dur: 0.3, vol: 0.1 * o.v, attack: 0.01, vib: { rate: 12, depth: 20 } }),
+  /** The flock across the lane: a bleat, a wobbly square wave that dips and comes back up. */
+  baa: (c, d, t, o) => osc(c, d, t, { type: 'square', f0: 330 * o.p, f1: 290 * o.p, glide: 0.2, dur: 0.32, vol: 0.08 * o.v, attack: 0.02, lp: 1500, vib: { rate: 14, depth: 25 } }),
+  /** The duck parade: two quacks, a nasal sawtooth each, the second a step lower. */
+  quack: (c, d, t, o) => { osc(c, d, t, { type: 'sawtooth', f0: 420 * o.p, f1: 300 * o.p, glide: 0.08, dur: 0.1, vol: 0.07 * o.v, attack: 0.005, lp: 1800 }); return osc(c, d, t + 0.14, { type: 'sawtooth', f0: 380 * o.p, f1: 270 * o.p, glide: 0.08, dur: 0.1, vol: 0.07 * o.v, attack: 0.005, lp: 1800 }); },
+  /** A crab's claw on the paw: a hard click and a squawk going down. */
+  pinch: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1900, dur: 0.03, vol: 0.24 }); return osc(c, d, t + 0.04, { type: 'square', f0: 900 * o.p, f1: 380 * o.p, glide: 0.14, dur: 0.18, vol: 0.07 * o.v, attack: 0.004, lp: 2200 }); },
+  /** The seventh wave up the sand: a long swell of lowpassed noise that rises, breaks and hisses back. */
+  wave: (c, d, t, o) => { noise(c, d, t, { dur: 0.7, vol: 0.2 * o.v, type: 'lowpass', f0: 500 * o.p, f1: 2200 * o.p, attack: 0.35 }); return noise(c, d, t + 0.5, { dur: 0.6, vol: 0.12 * o.v, type: 'highpass', f0: 1800 * o.p, f1: 3500 * o.p, attack: 0.05 }); },
+  /** A thorn in the paw: one tiny high tick, and a squeak sliding up after it. */
+  prick: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 2600, dur: 0.02, vol: 0.18 }); return osc(c, d, t + 0.04, { type: 'sine', f0: 700 * o.p, f1: 1300 * o.p, glide: 0.1, dur: 0.14, vol: 0.09 * o.v, attack: 0.004 }); },
+  /** ACHOO: a rising breath of noise, a bark of square wave, and a puff of lowpassed dust after it. */
+  sneeze: (c, d, t, o) => { noise(c, d, t, { dur: 0.1, vol: 0.08 * o.v, type: 'highpass', f0: 1200 * o.p, f1: 2400 * o.p, attack: 0.08 }); osc(c, d, t + 0.1, { type: 'square', f0: 520 * o.p, f1: 180 * o.p, glide: 0.1, dur: 0.14, vol: 0.09 * o.v, attack: 0.003, lp: 1800 }); return noise(c, d, t + 0.12, { dur: 0.22, vol: 0.14 * o.v, type: 'lowpass', f0: 1400 * o.p, f1: 300 * o.p, attack: 0.005 }); },
+  /** One bee, close: a sawtooth drone with a wobble, swelling in and fading, right at the nose. */
+  buzz: (c, d, t, o) => osc(c, d, t, { type: 'sawtooth', f0: 210 * o.p, f1: 240 * o.p, glide: 0.5, dur: 0.6, vol: 0.07 * o.v, attack: 0.12, lp: 1400, vib: { rate: 18, depth: 12 } }),
+  /** The cow's tail across the face: one quick whoosh of air, falling. */
+  swish: (c, d, t, o) => whoosh(c, d, t, { v: o.v, p: o.p, f0: 1800, f1: 400, dur: 0.16, vol: 0.2 }),
+  /** The broody hen's peck: one hard high knock, dry, and a short squawk after it. */
+  peck: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.035, vol: 0.26 }); return osc(c, d, t + 0.05, { type: 'square', f0: 900 * o.p, f1: 1300 * o.p, glide: 0.05, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2400 }); },
+  /** The hen hops off the nest: two clucks, a wobble of pitch on each, and a flap of noise. */
+  cluck: (c, d, t, o) => { osc(c, d, t, { type: 'square', f0: 700 * o.p, f1: 520 * o.p, glide: 0.06, dur: 0.08, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); osc(c, d, t + 0.11, { type: 'square', f0: 760 * o.p, f1: 560 * o.p, glide: 0.06, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); return noise(c, d, t + 0.02, { dur: 0.16, vol: 0.06 * o.v, type: 'bandpass', f0: 1800 * o.p, f1: 900 * o.p, q: 0.7, attack: 0.01 }); },
+  /** The old boot comes up on the line: a hollow rubber thunk with a slosh of water out of it, and no pip at all. */
+  boot: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 90, lp: 500, dur: 0.12, vol: 0.26 }); return noise(c, d, t + 0.1, { dur: 0.28, vol: 0.1 * o.v, type: 'bandpass', f0: 1400 * o.p, f1: 500 * o.p, q: 0.8, attack: 0.03 }); },
   /** The trout drops into the bucket: a tin thump. */
   bucket: (c, d, t, o) => { ring(c, d, t, { type: 'triangle', f0: 320 * o.p, modF: 900 * o.p, dur: 0.1, vol: 0.14 * o.v, attack: 0.001 }); return thump(c, d, t, { v: o.v, p: o.p, f: 150, lp: 1600, dur: 0.07, vol: 0.24 }); },
   /** An egg into the basket: a soft click of shell on straw and the pip. */
@@ -250,5 +290,5 @@ export const CANONICAL_SFX: readonly string[] = Object.freeze(Object.keys(SFX_DE
 
 /** Names that get +/-4% random pitch per play, so a mashed button and a run of catches do not sound like a machine. */
 export const JITTERED = new Set([
-  'catch', 'wormy', 'splat', 'reel', 'egg', 'squirt', 'pour', 'heave', 'chop', 'stir', 'sizzle', 'chew', 'type', 'bite', 'grip',
+  'catch', 'wormy', 'splat', 'reel', 'egg', 'squirt', 'pour', 'heave', 'chop', 'stir', 'sizzle', 'chew', 'type', 'bite', 'grip', 'nut', 'shake',
 ]);

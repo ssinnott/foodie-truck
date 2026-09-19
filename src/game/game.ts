@@ -31,7 +31,7 @@ export type Audio = typeof import('../engine/audio.ts')['audio'];
 const SCREEN_MUSIC: Record<string, string> = Object.freeze({
   title: 'title', lobby: 'title', select: 'title', controls: 'title', gallery: 'title',
   stage: 'board', map: 'drive', line: 'line', kitchen: 'kitchen', results: 'results',
-  orchard: 'gather', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', bramble: 'gather',
+  orchard: 'gather', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', bramble: 'gather', holt: 'gather', wood: 'gather', terrace: 'gather',
   pond: 'pond', beach: 'pond',
 });
 
@@ -50,11 +50,16 @@ export interface Order {
   dish: string;
   /** The village diner who ordered it ('owl', content/critters/customers.js). */
   customer: string;
-  /** What they said at the hatch. */
+  /** What they said at the hatch (the recipe's line, with the twist's words on the end). */
   line: string;
   /** Kitchen stations in order (content/places.js STATIONS). */
   steps: string[];
   needs: OrderNeed[];
+  /** Taps the CHOP step takes: CHOP_TAPS, or CHOP_TAPS_CRUNCHY on an EXTRA CRUNCHY order. */
+  chops: number;
+  /** The twist on this order ('' | 'crunchy' | 'big' | 'herb', game/run.ts TWISTS) and the herb it asks for. */
+  twist: string;
+  extra: string;
 }
 
 /** One seat of the party, in slot order. */
@@ -72,6 +77,9 @@ export interface RunCustomer {
   customer: string;
   /** ORDERS id ('applePie'). */
   recipe: string;
+  /** The twist on their order ('' for none; game/run.ts TWISTS), and the herb a 'herb' twist asks for. */
+  twist: string;
+  extra: string;
   /** 0 until served, then 1..3. */
   stars: number;
 }
@@ -88,14 +96,57 @@ export interface RunLine {
 /** One line as `planDay` lays it out, before the run adds the served state. */
 export interface DayPlanLine {
   place: string;
-  customers: { customer: string; recipe: string }[];
+  customers: { customer: string; recipe: string; twist: string; extra: string }[];
 }
 
-/** What `planDay` draws from a seed: the menu and the lines. */
+/** One crossing as `planDay` lays it out: which lane spot, sheep or ducks, and how many of them. */
+export interface DayPlanCrossing {
+  /** Index into art/backgrounds/map.ts CROSSING_SPOTS. */
+  spot: number;
+  /** 0 sheep, 1 ducks. */
+  kind: number;
+  /** How many are in the herd (5..9 sheep; a mother and six ducklings). */
+  herd: number;
+}
+
+/** What `planDay` draws from a seed: the menu, the lines and the day's crossings. */
 export interface DayPlan {
   /** ORDERS ids on the day's menu. */
   recipes: string[];
   lines: DayPlanLine[];
+  crossings: DayPlanCrossing[];
+  /** The tipped cart's lane spot (an index into CROSSING_SPOTS, never one a crossing uses), or -1 for no cart today. */
+  cart: number;
+  /** WEATHER_CLEAR, WEATHER_DRIZZLE or WEATHER_FOG (game/run.ts). */
+  weather: number;
+  /** The mud patch's lane spot on a drizzle day (another CROSSING_SPOTS index), or -1. */
+  mud: number;
+}
+
+/** The tipped cart on the road: a hand cart on the verge with its load across the lane; driving over it is +1 of something the list is short of. */
+export interface Cart {
+  x: number;
+  y: number;
+  /** 1 once the truck has been over it. */
+  taken: number;
+}
+
+/**
+ * A crossing on the road (docs/CONTENT_ROADMAP.md section B): a herd across a lane that blocks the truck the way
+ * water does, until a honk scatters it or it clears on its own. Run state, stepped by the map screen.
+ */
+export interface Crossing extends DayPlanCrossing {
+  /** World position of the spot, and the lane's unit direction there (copied off CROSSING_SPOTS so the map never looks it up). */
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  /** 0 pending (not out yet) | 1 on the lane | 2 clearing (scattering off it) | 3 done. */
+  state: number;
+  /** On the lane: frames since the truck first ran up against it (0 until it has). Clearing: frames left of the scatter. */
+  t: number;
+  /** 1 once Barley has waved at this flock (a sheep crossing, with the hungry one aboard). */
+  waved: number;
 }
 
 /** Where the truck is on the world map, kept between visits to the map screen. */
@@ -134,6 +185,16 @@ export interface Run {
   lastServed: number;
   score: number;
   truck: TruckState;
+  /** The day's crossings on the road, in the order they come out. */
+  crossings: Crossing[];
+  /** The tipped cart, or null on a day without one. */
+  cart: Cart | null;
+  /** The day's weather (game/run.ts WEATHER_*). */
+  weather: number;
+  /** The mud patch on a drizzle day, or null. */
+  mud: { x: number; y: number } | null;
+  /** 1 once the truck has been through the mud: it wears the splatter for the rest of the day. */
+  muddy: number;
   /** Frames spent in the run. */
   frame: number;
   /** The shopping-list line for an ingredient, or null when the day never asks for it. */

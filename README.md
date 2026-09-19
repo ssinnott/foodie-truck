@@ -6,14 +6,18 @@ customers will order. They drive round the countryside gathering it all — a sh
 until the pantry is full, then drive to the queues of villagers lined up at three of those landmarks and cook for
 them one at a time, order by order, until the third line has been served. Then the truck closes for the night.
 
-Twenty-two recipes, twenty-three ingredients, nine landmarks, and **nine mini-games** — each with its own verb:
-catch, fish, collect, pump, fill, creep, pull, pick, chase. A landmark can supply several things, and every visit
+Sixty-three recipes, forty ingredients, twelve landmarks, and **twelve mini-games** — each with its own verb:
+catch, fish, collect, pump, fill, creep, pull, pick, chase, shake, forage, snip. A landmark can supply several things, and every visit
 looks like what it is for: the orchard drops pears, peaches and avocados from their own trees; the farm's bed grows
 six vegetables besides the carrot, each its own plant; the dairy milks, and churns the milk into butter; the mill
 fills rice sacks as well as flour; Bramble Bank's strawberries and blueberries are picked off the bushes; and at
-Cockle Cove crabs are chased along the sand, weed raked off the strand and salt scraped from the pans. Every one of them is played with the same three inputs — move left and right, tap the
+Cockle Cove crabs are chased along the sand, weed raked off the strand, salt scraped from the pans and cockles dug
+out of the wet sand where they spit; nuts are shaken down at Hazel Holt, mushrooms brushed out of the leaves in
+Tangle Wood, and herbs snipped on Thyme Terrace. Every one of them is played with the same three inputs — move left and right, tap the
 action button over and over, or hold it down — with no timing windows and nothing to lose, so a small child can play
-the whole game.
+the whole game. Every mini-game has a joke in it - the old boot on the line, the hen sat on the egg, the cow's
+tail, the flour sneeze, the bee on the nose, the whopper of a carrot, the thorn, the crab that pinches back and
+the wave that soaks everyone - and none of them costs more than a moment.
 
 Every day is laid out from a seed: which three recipes are on the menu, which three landmarks the lines form at,
 who is in each line and what they order. The **day board** pins the whole plan up before the truck opens; the
@@ -34,8 +38,8 @@ and forty-odd effects, all data in `src/engine/audio/`), so the repository stays
 | Part | Screen | What happens |
 |---|---|---|
 | **Day board** | `stage` | The day's plan on paper: the three lines (where each waits, who is in it, what they order) and the shopping list they add up to. Confirm opens the truck. After the last line it comes back closed, every customer's stars on it. |
-| **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, arriving at a landmark with a line opens the queue. |
-| **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden`, `bramble`, `beach` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows (and crank the churn for butter), hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, tap to pull carrots out of the farm's bed, pick berries off the bank's bushes, and chase crabs along the cove's beach. Everyone seated plays at once and the party's total counts. |
+| **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. A flock of sheep or a duck parade may be across the lane: honk (ALT) and they scatter. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, arriving at a landmark with a line opens the queue. |
+| **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden`, `bramble`, `beach`, `holt`, `wood`, `terrace` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows (and crank the churn for butter), hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, tap to pull carrots out of the farm's bed, pick berries off the bank's bushes, and chase crabs along the cove's beach. Everyone seated plays at once and the party's total counts. |
 | **The line** | `line` | The truck pulled up at a queue: the customer at its front steps up and says what they want. Take the order into the kitchen. |
 | **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to pull each ingredient out of the fridge; tap to chop; hold to mix, cook and bake; ring the bell to plate), serve, and watch the customer eat. The next in line steps up; when the line is empty, the truck drives to the next one. |
 

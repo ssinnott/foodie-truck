@@ -15,6 +15,8 @@ const R = Math.round;
 /** The pastry, bread and batter tones every baked thing shares, and the crockery a soup comes in. */
 const CRUST = '#D9A25A', CRUST_DARK = '#B07A3A', TOAST = '#C98A4B', BATTER = '#EBCB8A', CREAM = '#FFF6E0';
 const BOWL = '#9DB5B2', BOWL_DARK = '#76908C', SEAWEED = '#3F7A4E', GREEN = '#5FA652', CHEESE = '#F5D66B';
+/** A leek soup's pale green and a brownie's dark chocolate: neither is any ingredient's own hex. */
+const PALE_LEEK = '#C9D9A0', BROWNIE = '#5A3A2E';
 const hexOf = (id: string) => INGREDIENTS[id].hex;
 
 type DishDraw = (ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) => void;
@@ -184,6 +186,300 @@ export const DISHES: Record<string, DishDraw> = {
     soupBowl(ctx, cx, cy, s, hexOf('pumpkin'), (c, x, y) => { flecks(c, x, y, s, CREAM, [-0.5, -0.5, 0.35, -0.45]); });   // the seeds
   },
   cabbageRolls(ctx, cx, cy, s) { rolls(ctx, cx, cy, s, 3, hexOf('cabbage'), hexOf('rice')); },
+  // ---- the third menu (docs/CONTENT_ROADMAP.md section C) ----
+  honeyCakes(ctx, cx, cy, s) {
+    cakeStack(ctx, cx, cy, s, 2, s * 0.8, s * 0.3, BATTER, (c, x, y) => {
+      c.fillStyle = hexOf('honey'); c.fillRect(R(x - s * 0.6), R(y - 1), R(s * 1.2), 2); c.fillRect(R(x + s * 0.3), R(y), 2, R(s * 0.45));   // the drizzle running off
+    });
+  },
+  troutPie(ctx, cx, cy, s) {
+    pieDish(ctx, cx, cy, s, CRUST, (c, x, y) => {
+      // the pastry fish on the lid: a small oval and a notch of tail, one shade darker than the crust
+      c.fillStyle = CRUST_DARK;
+      c.beginPath(); c.ellipse(x - s * 0.1, y - s * 0.95, s * 0.4, s * 0.2, 0, 0, TAU); c.fill();
+      c.beginPath(); c.moveTo(x + s * 0.25, y - s * 0.95); c.lineTo(x + s * 0.5, y - s * 1.15); c.lineTo(x + s * 0.5, y - s * 0.75); c.closePath(); c.fill();
+    });
+    flecks(ctx, cx, cy, s, hexOf('fish'), [-0.85, -0.5, 0.75, -0.45]);
+  },
+  fishAndChips(ctx, cx, cy, s) {
+    // the chips first (behind), a fan of potato-coloured sticks, then the battered fish lying across them
+    const p = foodTones(hexOf('potato'));
+    ctx.fillStyle = INK;
+    for (let i = 0; i < 4; i++) ctx.fillRect(R(cx - s * 0.9 + i * s * 0.45), R(cy - s * 0.9 + (i & 1) * s * 0.2), 5, R(s * 1.2));
+    ctx.fillStyle = p.hi;
+    for (let i = 0; i < 4; i++) ctx.fillRect(R(cx - s * 0.9 + i * s * 0.45) + 1, R(cy - s * 0.9 + (i & 1) * s * 0.2) + 1, 3, R(s * 1.2) - 2);
+    const t = foodTones(TOAST);
+    oval(ctx, cx, cy + s * 0.15, s * 1.05, s * 0.45, t.base);
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.15, s * 1.05, s * 0.45, 0, 0, TAU); ctx.clip(); ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s), R(cy + s * 0.3), R(s * 2.2), R(s * 0.4)); ctx.restore();
+    ctx.fillStyle = GREEN; ctx.fillRect(R(cx - s * 1.05), R(cy + s * 0.35), 3, 3); ctx.fillRect(R(cx - s * 0.85), R(cy + s * 0.45), 3, 3);   // the peas
+  },
+  carrotCake(ctx, cx, cy, s) {
+    // a corner slice: a tall wedge of dark sponge under a cap of white icing, carrot showing in the crumb
+    const t = foodTones(CRUST_DARK);
+    box(ctx, cx - s * 0.75, cy - s * 0.5, s * 1.5, s * 1.1, t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.75) + 1, R(cy + s * 0.25), R(s * 1.5) - 2, R(s * 0.35));
+    box(ctx, cx - s * 0.8, cy - s * 0.85, s * 1.6, s * 0.4, CREAM);
+    flecks(ctx, cx, cy, s, hexOf('carrot'), [-0.45, -0.2, 0.15, 0.05, 0.45, -0.25]);
+    ctx.fillStyle = hexOf('carrot'); ctx.fillRect(R(cx - 1), R(cy - s * 1.05), 3, 3);   // the marzipan carrot on the icing
+    ctx.fillStyle = GREEN; ctx.fillRect(R(cx + 1), R(cy - s * 1.15), 2, 2);
+  },
+  strawberryMilkshake(ctx, cx, cy, s) {
+    // a tall glass, pink to the brim, a cream cap and two straws. Glyph height stays 2.4 s so the bite clip reaches.
+    const t = foodTones(hexOf('strawberry'));
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.65, cy - s * 1.1); ctx.lineTo(cx + s * 0.65, cy - s * 1.1); ctx.lineTo(cx + s * 0.5, cy + s * 0.6); ctx.lineTo(cx - s * 0.5, cy + s * 0.6); ctx.closePath(); inkFill(ctx, t.hi);
+    ctx.save(); ctx.clip(); ctx.fillStyle = t.base; ctx.fillRect(R(cx - s * 0.7), R(cy - s * 0.2), R(s * 1.4), R(s)); ctx.restore();
+    oval(ctx, cx, cy - s * 1.1, s * 0.55, s * 0.25, CREAM);
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - s * 0.35), R(cy - s * 1.7), 2, R(s * 0.7)); ctx.fillRect(R(cx + s * 0.15), R(cy - s * 1.75), 2, R(s * 0.75));   // the straws
+    ctx.fillStyle = hexOf('strawberry'); ctx.fillRect(R(cx - s * 0.35), R(cy - s * 1.6), 2, 2); ctx.fillRect(R(cx + s * 0.15), R(cy - s * 1.5), 2, 2);   // their stripes
+    shine(ctx, cx - s * 0.4, cy - s * 0.6);
+  },
+  coleslaw(ctx, cx, cy, s) {
+    // a bowl heaped with shreds: the cabbage's own green in the bowl, carrot threads and a cream dressing over it
+    soupBowl(ctx, cx, cy, s, hexOf('cabbage'), (c, x, y) => {
+      c.fillStyle = hexOf('carrot'); c.fillRect(R(x - s * 0.6), R(y - s * 0.5), R(s * 0.35), 2); c.fillRect(R(x + s * 0.2), R(y - s * 0.4), R(s * 0.4), 2);
+      c.fillStyle = CREAM; c.fillRect(R(x - s * 0.2), R(y - s * 0.6), R(s * 0.3), 2);
+    });
+  },
+  bakedApples(ctx, cx, cy, s) {
+    // two apples in an enamel dish, gone soft and wrinkled at the shoulder, honey pooled in the cored middle
+    box(ctx, cx - s, cy - s * 0.1, s * 2, s * 0.7, BOWL);
+    ctx.fillStyle = BOWL_DARK; ctx.fillRect(R(cx - s) + 1, R(cy + s * 0.3), R(s * 2) - 2, R(s * 0.3));
+    const t = foodTones(hexOf('apple'));
+    for (let i = 0; i < 2; i++) {
+      const x = cx - s * 0.5 + i * s;
+      oval(ctx, x, cy - s * 0.35, s * 0.48, s * 0.5, t.base);
+      ctx.save(); ctx.beginPath(); ctx.ellipse(x, cy - s * 0.35, s * 0.48, s * 0.5, 0, 0, TAU); ctx.clip(); ctx.fillStyle = t.sh; ctx.fillRect(R(x - s * 0.5), R(cy - s * 0.15), R(s), R(s * 0.4)); ctx.restore();
+      ctx.fillStyle = hexOf('honey'); ctx.fillRect(R(x - 2), R(cy - s * 0.85), 4, 3);   // the honey in the core
+    }
+  },
+  pearsInHoney(ctx, cx, cy, s) {
+    // two pear halves lying in a pool of honey: a small round over a bigger one, cut face up, the pool over the rim
+    soupBowl(ctx, cx, cy, s, hexOf('honey'), (c, x, y) => {
+      const t = foodTones(hexOf('pear'));
+      for (let i = 0; i < 2; i++) {
+        const px = x - s * 0.45 + i * s * 0.9;
+        c.fillStyle = t.hi;
+        c.beginPath(); c.ellipse(px, y - s * 0.4, s * 0.3, s * 0.2, 0, 0, TAU); c.fill();
+        c.beginPath(); c.arc(px - s * 0.15, y - s * 0.55, s * 0.14, 0, TAU); c.fill();
+        c.fillStyle = CRUST_DARK; c.fillRect(R(px), R(y - s * 0.45), 2, 2);   // the pip
+      }
+    });
+  },
+  crabChowder(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, CREAM, (c, x, y) => { flecks(c, x, y, s, hexOf('crab'), [-0.5, -0.5, 0.1, -0.6, 0.45, -0.4]); flecks(c, x, y, s, hexOf('potato'), [-0.15, -0.35, 0.3, -0.25]); });
+  },
+  pumpkinPie(ctx, cx, cy, s) {
+    tart(ctx, cx, cy, s, hexOf('pumpkin'), (c, x, y) => { c.fillStyle = CREAM; c.beginPath(); c.arc(x + s * 0.35, y - s * 0.25, s * 0.18, 0, TAU); c.fill(); });   // the dollop
+  },
+  leekPotatoSoup(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, PALE_LEEK, (c, x, y) => { flecks(c, x, y, s, hexOf('leek'), [-0.55, -0.45, 0.05, -0.55, 0.5, -0.4]); c.fillStyle = CREAM; c.fillRect(R(x - s * 0.15), R(y - s * 0.35), R(s * 0.4), 2); });
+  },
+  eggFriedRice(ctx, cx, cy, s) {
+    // a mound on the plate: rice-white, with the egg's yellow and the leek's green through it
+    const t = foodTones(hexOf('rice'));
+    ctx.beginPath(); ctx.moveTo(cx - s * 1.1, cy + s * 0.6); ctx.quadraticCurveTo(cx, cy - s * 1.2, cx + s * 1.1, cy + s * 0.6); ctx.closePath(); inkFill(ctx, t.base);
+    ctx.save(); ctx.clip(); ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 1.1), R(cy + s * 0.25), R(s * 2.2), R(s * 0.4)); ctx.restore();
+    flecks(ctx, cx, cy, s, CHEESE, [-0.6, 0.05, -0.1, -0.5, 0.45, -0.1, 0.2, 0.25]);
+    flecks(ctx, cx, cy, s, hexOf('leek'), [-0.35, -0.2, 0.25, -0.4, 0.65, 0.2]);
+  },
+  blueberryPancakes(ctx, cx, cy, s) {
+    cakeStack(ctx, cx, cy, s, 3, s * 0.9, s * 0.25, BATTER, (c, x, y) => { c.fillStyle = hexOf('butter'); c.fillRect(R(x - 2), R(y - 3), 5, 3); });
+    // the berries INSIDE, showing at the edges of every cake
+    flecks(ctx, cx, cy, s, hexOf('blueberry'), [-0.7, 0.35, 0.5, 0.3, -0.5, -0.05, 0.7, -0.1, -0.2, -0.45]);
+  },
+  avocadoCrabSalad(ctx, cx, cy, s) {
+    // a bed of leaves with avocado slices fanned over it, the crab in pink flecks, salt on top
+    const g = foodTones(GREEN);
+    oval(ctx, cx, cy + s * 0.1, s * 1.1, s * 0.5, g.base);
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.1, s * 1.1, s * 0.5, 0, 0, TAU); ctx.clip(); ctx.fillStyle = g.sh; ctx.fillRect(R(cx - s * 1.1), R(cy + s * 0.3), R(s * 2.2), R(s * 0.4)); ctx.restore();
+    const a = foodTones(hexOf('avocado'));
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(cx - s * 0.5 + i * s * 0.5, cy - s * 0.15, s * 0.22, s * 0.4, 0, 0, TAU); inkFill(ctx, a.hi); }
+    flecks(ctx, cx, cy, s, hexOf('crab'), [-0.8, 0.1, 0.75, 0.15, 0.05, 0.35]);
+    flecks(ctx, cx, cy, s, hexOf('salt'), [-0.25, -0.5, 0.3, -0.55]);
+  },
+  seaweedCrisps(ctx, cx, cy, s) {
+    // a heap of dark flakes, each an outlined leaf lying at its own angle, salt sparkling on them
+    const t = foodTones(SEAWEED);
+    const leaves = [[-0.6, 0.2, 0.5, 0.3], [0.5, 0.15, 0.45, 0.32], [-0.1, -0.3, 0.55, 0.3], [0.15, 0.3, 0.4, 0.25]];
+    for (const l of leaves) { ctx.beginPath(); ctx.ellipse(cx + l[0] * s, cy + l[1] * s, l[2] * s, l[3] * s, 0, 0, TAU); inkFill(ctx, t.base); ctx.fillStyle = t.sh; ctx.fillRect(R(cx + l[0] * s - l[2] * s * 0.5), R(cy + l[1] * s), R(l[2] * s), 2); }
+    flecks(ctx, cx, cy, s, hexOf('salt'), [-0.55, 0.05, -0.05, -0.45, 0.45, 0.0, 0.2, 0.25]);
+  },
+  onionTart(ctx, cx, cy, s) {
+    tart(ctx, cx, cy, s, hexOf('onion'), (c, x, y) => {
+      // the onion rings on the custard: two small ink circles, open in the middle
+      c.strokeStyle = CRUST_DARK; c.lineWidth = 2;
+      c.beginPath(); c.arc(x - s * 0.3, y - s * 0.2, s * 0.16, 0, TAU); c.stroke();
+      c.beginPath(); c.arc(x + s * 0.3, y - s * 0.1, s * 0.16, 0, TAU); c.stroke();
+    });
+  },
+  beetrootBrownies(ctx, cx, cy, s) {
+    // two dark squares, one leaning on the other, the beetroot showing as a crimson fleck in the crumb
+    const t = foodTones(BROWNIE);
+    box(ctx, cx - s * 0.95, cy - s * 0.2, s * 0.95, s * 0.8, t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.95) + 1, R(cy + s * 0.3), R(s * 0.95) - 2, R(s * 0.3));
+    box(ctx, cx - s * 0.1, cy - s * 0.55, s * 0.95, s * 0.8, t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.1) + 1, R(cy - s * 0.05), R(s * 0.95) - 2, R(s * 0.3));
+    flecks(ctx, cx, cy, s, hexOf('beetroot'), [-0.65, 0.05, 0.2, -0.35, 0.55, -0.2]);
+    shine(ctx, cx + s * 0.05, cy - s * 0.4);
+  },
+  honeyToffee(ctx, cx, cy, s) {
+    // three toffees in a row on a square of paper, each with a shine, salt on the middle one
+    box(ctx, cx - s * 1.1, cy - s * 0.3, s * 2.2, s * 0.9, CREAM);
+    const t = foodTones(hexOf('honey'));
+    for (let i = 0; i < 3; i++) {
+      const x = cx - s * 0.7 + i * s * 0.7;
+      box(ctx, x - s * 0.28, cy - s * 0.55, s * 0.56, s * 0.56, t.base);
+      ctx.fillStyle = t.sh; ctx.fillRect(R(x - s * 0.28) + 1, R(cy - s * 0.2), R(s * 0.56) - 2, R(s * 0.2));
+      shine(ctx, x - s * 0.2, cy - s * 0.48);
+    }
+    flecks(ctx, cx, cy, s, hexOf('salt'), [-0.1, -0.5, 0.1, -0.35]);
+  },
+  // ---- the fourth menu (docs/CONTENT_ROADMAP.md section D) ----
+  cherryPie(ctx, cx, cy, s) {
+    pieDish(ctx, cx, cy, s, CRUST, lattice);
+    flecks(ctx, cx, cy, s, hexOf('cherry'), [-0.7, -0.75, 0.05, -1.0, 0.6, -0.7]);
+  },
+  clafoutis(ctx, cx, cy, s) {
+    // a baked custard in its dish, the cherries sunk in it as dark rounds
+    pieDish(ctx, cx, cy, s, BATTER, (c, x, y) => { c.fillStyle = hexOf('cherry'); for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(x - s * 0.6 + i * s * 0.6, y - s * 0.85, s * 0.2, 0, TAU); c.fill(); } });
+  },
+  plumCrumble(ctx, cx, cy, s) {
+    pieDish(ctx, cx, cy, s, BATTER, (c, x, y) => { flecks(c, x, y, s, CRUST_DARK, [-0.8, -0.6, -0.35, -1.0, 0.1, -0.7, 0.5, -1.0, 0.8, -0.55]); });
+    flecks(ctx, cx, cy, s, hexOf('plum'), [-0.15, -0.35, 0.35, -0.3]);
+  },
+  cheeseToastie(ctx, cx, cy, s) {
+    // two slices of toast with the cheese pressed out between them, cut on the diagonal
+    const t = foodTones(TOAST), ch = foodTones(hexOf('cheese'));
+    box(ctx, cx - s * 0.95, cy - s * 0.1, s * 1.9, s * 0.7, t.base);
+    ctx.fillStyle = ch.base; ctx.fillRect(R(cx - s * 0.9), R(cy - s * 0.25), R(s * 1.8), 4); ctx.fillRect(R(cx + s * 0.6), R(cy + s * 0.05), 3, R(s * 0.4));   // the cheese, and a string of it
+    box(ctx, cx - s * 0.95, cy - s * 0.85, s * 1.9, s * 0.65, t.hi);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.7), R(cy - s * 0.75), R(s * 0.4), 2); ctx.fillRect(R(cx + s * 0.2), R(cy - s * 0.6), R(s * 0.5), 2);   // the griddle marks
+  },
+  macAndCheese(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('cheese'), (c, x, y) => {
+      c.strokeStyle = CRUST_DARK; c.lineWidth = 2;
+      for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(x - s * 0.5 + i * s * 0.5, y - s * 0.4, s * 0.16, Math.PI * 0.2, Math.PI * 1.4); c.stroke(); }   // the macaroni
+    });
+  },
+  porridge(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('oats'), (c, x, y) => { c.fillStyle = hexOf('honey'); c.beginPath(); c.arc(x, y - s * 0.4, s * 0.3, 0, TAU); c.fill(); c.fillStyle = CREAM; c.fillRect(R(x - s * 0.7), R(y - s * 0.55), R(s * 0.3), 2); });
+  },
+  flapjacks(ctx, cx, cy, s) {
+    // two golden bars, one leaning on the other, the oats as pale flecks
+    const t = foodTones(CRUST);
+    box(ctx, R(cx - s * 1.2), R(cy - s * 0.4), R(s * 1.3), R(s * 1.0), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 1.2) + 1, R(cy + s * 0.3), R(s * 1.3) - 2, R(s * 0.25));
+    box(ctx, cx - s * 0.2, cy - s * 0.8, s * 1.2, s * 1.0, t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.2) + 1, R(cy - s * 0.1), R(s * 1.2) - 2, R(s * 0.25));
+    flecks(ctx, cx, cy, s, hexOf('oats'), [-0.8, 0.1, -0.5, 0.25, 0.05, -0.3, 0.4, -0.2, 0.7, -0.35]);
+  },
+  tomatoSoup(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('tomato'), (c, x, y) => { c.fillStyle = CREAM; c.fillRect(R(x - s * 0.3), R(y - s * 0.55), R(s * 0.6), 2); c.fillRect(R(x - s * 0.1), R(y - s * 0.4), 2, 2); });
+  },
+  peaSoup(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('pea'), (c, x, y) => { flecks(c, x, y, s, CREAM, [-0.45, -0.5, 0.3, -0.45]); c.fillStyle = hexOf('leek'); c.fillRect(R(x - s * 0.1), R(y - s * 0.6), R(s * 0.35), 2); });
+  },
+  jamTarts(ctx, cx, cy, s) {
+    // three little tarts in a row, each a ring of crust round a pool of jam
+    const j = foodTones(hexOf('raspberry'));
+    for (let i = 0; i < 3; i++) {
+      const x = cx - s * 0.75 + i * s * 0.75, y = cy + s * 0.15 - (i & 1) * s * 0.3;
+      oval(ctx, x, y, s * 0.4, s * 0.28, CRUST);
+      ctx.fillStyle = j.base; ctx.beginPath(); ctx.ellipse(x, y - 1, s * 0.24, s * 0.15, 0, 0, TAU); ctx.fill();
+      shine(ctx, x - s * 0.15, y - 3);
+    }
+  },
+  cockleStew(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, CREAM, (c, x, y) => {
+      // the shells standing in the broth: three small fans in the cockle's own hex, inked at the hinge
+      c.fillStyle = hexOf('cockle');
+      for (let i = 0; i < 3; i++) { const sx = x - s * 0.55 + i * s * 0.55, sy = y - s * 0.4 + (i & 1) * s * 0.1; c.beginPath(); c.moveTo(sx, sy + 3); c.arc(sx, sy, s * 0.24, Math.PI * 1.15, Math.PI * 1.85); c.closePath(); c.fill(); }
+      flecks(c, x, y, s, hexOf('potato'), [-0.25, -0.25, 0.4, -0.2]);
+    });
+  },
+  // ---- Hazel Holt's menu ----
+  hazelnutBrownies(ctx, cx, cy, s) {
+    const t = foodTones(BROWNIE);
+    box(ctx, R(cx - s * 1.0), R(cy - s * 0.2), R(s * 0.95), R(s * 0.8), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 1.0) + 1, R(cy + s * 0.3), R(s * 0.95) - 2, R(s * 0.3));
+    box(ctx, R(cx - s * 0.1), R(cy - s * 0.55), R(s * 0.95), R(s * 0.8), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.1) + 1, R(cy - s * 0.05), R(s * 0.95) - 2, R(s * 0.3));
+    flecks(ctx, cx, cy, s, hexOf('hazelnut'), [-0.7, 0.0, -0.35, 0.25, 0.2, -0.35, 0.55, -0.15]);
+    shine(ctx, cx + s * 0.05, cy - s * 0.4);
+  },
+  walnutLoaf(ctx, cx, cy, s) {
+    const t = foodTones(CRUST_DARK);
+    ctx.beginPath(); ctx.moveTo(cx - s, cy + s * 0.6); ctx.lineTo(cx - s, cy - s * 0.2); ctx.quadraticCurveTo(cx, cy - s * 1.3, cx + s, cy - s * 0.2); ctx.lineTo(cx + s, cy + s * 0.6); ctx.closePath(); inkFill(ctx, t.base);
+    ctx.save(); ctx.clip(); ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s), R(cy + s * 0.2), R(s * 2), R(s * 0.5)); ctx.restore();
+    flecks(ctx, cx, cy, s, hexOf('walnut'), [-0.55, -0.5, 0.0, -0.8, 0.5, -0.45, -0.2, -0.1, 0.35, 0.1]);
+    shine(ctx, cx - s * 0.55, cy - s * 0.55);
+  },
+  roastChestnuts(ctx, cx, cy, s) {
+    // a paper bag with the split chestnuts heaped in the top of it
+    box(ctx, R(cx - s * 0.8), R(cy - s * 0.3), R(s * 1.6), R(s * 0.9), CREAM);
+    ctx.fillStyle = '#D8C093'; ctx.fillRect(R(cx - s * 0.8) + 1, R(cy + s * 0.3), R(s * 1.6) - 2, R(s * 0.25));
+    const t = foodTones(hexOf('chestnut'));
+    for (let i = 0; i < 3; i++) { const x = cx - s * 0.5 + i * s * 0.5, y = cy - s * 0.45 - (i & 1) * s * 0.25; ctx.beginPath(); ctx.arc(x, y, s * 0.3, 0, TAU); inkFill(ctx, t.base); ctx.fillStyle = CREAM; ctx.fillRect(R(x - 1), R(y - s * 0.3), 2, R(s * 0.3)); }   // the split, showing pale inside
+  },
+  nutRoast(ctx, cx, cy, s) {
+    // a slice on the plate: a dark brown slab with the nuts and the carrot showing in it, gravy pooled beside
+    const t = foodTones(BROWNIE);
+    ctx.fillStyle = CRUST_DARK; ctx.beginPath(); ctx.ellipse(cx + s * 0.3, cy + s * 0.45, s * 0.8, s * 0.2, 0, 0, TAU); ctx.fill();   // the gravy
+    box(ctx, R(cx - s * 0.9), R(cy - s * 0.6), R(s * 1.5), R(s * 1.1), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.9) + 1, R(cy + s * 0.15), R(s * 1.5) - 2, R(s * 0.3));
+    flecks(ctx, cx, cy, s, hexOf('walnut'), [-0.6, -0.35, -0.1, -0.1, 0.3, -0.4]);
+    flecks(ctx, cx, cy, s, hexOf('carrot'), [-0.35, 0.05, 0.15, -0.3]);
+  },
+  // ---- Tangle Wood's menu ----
+  mushroomSoup(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('mushroom'), (c, x, y) => { flecks(c, x, y, s, CRUST_DARK, [-0.5, -0.5, 0.1, -0.6, 0.45, -0.4]); c.fillStyle = CREAM; c.fillRect(R(x - s * 0.3), R(y - s * 0.35), R(s * 0.5), 2); });
+  },
+  mushroomsOnToast(ctx, cx, cy, s) {
+    const t = foodTones(TOAST), m = foodTones(hexOf('mushroom'));
+    box(ctx, R(cx - s * 0.95), R(cy - s * 0.5), R(s * 1.9), R(s * 1.1), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.95) + 1, R(cy + s * 0.3), R(s * 1.9) - 2, R(s * 0.3));
+    for (let i = 0; i < 3; i++) { const x = cx - s * 0.55 + i * s * 0.55, y = cy - s * 0.35 - (i & 1) * s * 0.15; ctx.beginPath(); ctx.ellipse(x, y, s * 0.3, s * 0.2, 0, 0, TAU); inkFill(ctx, m.base); ctx.fillStyle = m.sh; ctx.fillRect(R(x - s * 0.2), R(y), R(s * 0.4), 2); }
+    ctx.fillStyle = hexOf('butter'); ctx.fillRect(R(cx + s * 0.4), R(cy - s * 0.6), 3, 3);
+  },
+  garlicButter(ctx, cx, cy, s) {
+    // a pat of butter gone green with the garlic, on a paper, a flower on top
+    box(ctx, R(cx - s * 1.0), R(cy - s * 0.1), R(s * 2.0), R(s * 0.7), CREAM);
+    const g = foodTones('#B8C874');
+    box(ctx, R(cx - s * 0.75), R(cy - s * 0.6), R(s * 1.5), R(s * 0.9), g.base);
+    ctx.fillStyle = g.sh; ctx.fillRect(R(cx - s * 0.75) + 1, R(cy), R(s * 1.5) - 2, R(s * 0.25));
+    flecks(ctx, cx, cy, s, hexOf('leek'), [-0.5, -0.4, 0.0, -0.2, 0.4, -0.45]);
+    ctx.fillStyle = CREAM; ctx.fillRect(R(cx + s * 0.2), R(cy - s * 0.85), 3, 3);
+  },
+  blackberryApplePie(ctx, cx, cy, s) {
+    pieDish(ctx, cx, cy, s, CRUST, lattice);
+    flecks(ctx, cx, cy, s, hexOf('blackberry'), [-0.7, -0.75, 0.6, -0.7]);
+    flecks(ctx, cx, cy, s, hexOf('apple'), [0.05, -1.0]);
+  },
+  // ---- Thyme Terrace's menu ----
+  mintSauce(ctx, cx, cy, s) {
+    // a small jug of it, green to the lip, a sprig standing in it
+    const g = foodTones(hexOf('mint'));
+    ctx.beginPath(); ctx.moveTo(cx - s * 1.1, cy - s * 0.6); ctx.lineTo(cx + s * 0.5, cy - s * 0.6); ctx.lineTo(cx + s * 0.4, cy + s * 0.6); ctx.lineTo(cx - s * 1.0, cy + s * 0.6); ctx.closePath(); inkFill(ctx, CREAM);
+    ctx.fillStyle = g.base; ctx.fillRect(R(cx - s * 1.0), R(cy - s * 0.45), R(s * 1.45), R(s * 0.3));
+    ctx.fillStyle = INK; ctx.fillRect(R(cx + s * 0.6), R(cy - s * 0.45), 3, R(s * 0.4)); ctx.fillRect(R(cx + s * 0.6), R(cy - s * 0.1), 4, 2);   // the handle
+    ctx.fillStyle = g.hi; ctx.fillRect(R(cx - s * 0.15), R(cy - s * 0.95), 2, R(s * 0.5)); ctx.fillRect(R(cx - s * 0.35), R(cy - s * 0.95), 6, 2);
+  },
+  chiveOmelette(ctx, cx, cy, s) {
+    const t = foodTones(hexOf('egg'));
+    ctx.beginPath(); ctx.moveTo(cx - s * 1.1, cy + s * 0.4); ctx.quadraticCurveTo(cx, cy - s * 1.2, cx + s * 1.1, cy + s * 0.4); ctx.closePath(); inkFill(ctx, CHEESE);
+    ctx.save(); ctx.clip(); ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 1.1), R(cy + s * 0.1), R(s * 2.2), R(s * 0.4)); ctx.restore();
+    flecks(ctx, cx, cy, s, hexOf('chive'), [-0.5, 0.0, 0.05, -0.3, 0.5, 0.05, -0.15, -0.55]);
+    shine(ctx, cx - s * 0.45, cy - s * 0.45);
+  },
+  rosemaryPotatoes(ctx, cx, cy, s) {
+    // a heap of golden wedges with the rosemary needles through it
+    const p = foodTones(CRUST);
+    for (let i = 0; i < 4; i++) { const x = cx - s * 0.85 + i * s * 0.5, y = cy + s * 0.1 - (i & 1) * s * 0.4; ctx.beginPath(); ctx.ellipse(x, y, s * 0.45, s * 0.28, (i & 1) ? 0.5 : -0.4, 0, TAU); inkFill(ctx, p.base); ctx.fillStyle = p.sh; ctx.fillRect(R(x - s * 0.2), R(y + 1), R(s * 0.4), 2); }
+    flecks(ctx, cx, cy, s, hexOf('rosemary'), [-0.6, -0.2, -0.1, 0.25, 0.4, -0.35, 0.7, 0.1]);
+  },
+  peaMintSoup(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('pea'), (c, x, y) => { c.fillStyle = CREAM; c.fillRect(R(x - s * 0.3), R(y - s * 0.55), R(s * 0.6), 2); flecks(c, x, y, s, hexOf('mint'), [-0.5, -0.4, 0.4, -0.45]); });
+  },
 };
 
 /**

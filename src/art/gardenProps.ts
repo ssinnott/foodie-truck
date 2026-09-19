@@ -28,6 +28,8 @@ const R = Math.round, TAU = Math.PI * 2;
  */
 export const CROP = Object.freeze({
   leaf: '#7FA850', leafSh: '#55763A', leafHi: '#A6C877',
+  /** A stake or a stick the tomatoes and peas climb: the trunk brown. */
+  stake: '#6B4E3A',
   /**
    * The other crops' foliage, so eight plants of one green is not what a row of leeks looks like. All of them sit
    * between the fern's green and the hedge's, with the same top-left highlight in `leafHi`: a potato's haulm is a
@@ -319,8 +321,33 @@ function drawCabbage(ctx, x, y, sway, variant) {
  * pointed at this screen grows SOMETHING on its first day. The berries are not here: Bramble Bank picks them off
  * its own bushes (art/brambleProps.js), and a strawberry plant in a farm row was the visit that said it should.
  */
+/** The tomato: a stake with the vine tied up it, three fruit hanging red off it, the top leaves over the stake. */
+function drawTomato(ctx, x, y, sway, variant) {
+  x = R(x); y = R(y);
+  const m = variant ? -1 : 1, hex = INGREDIENTS.tomato.hex;
+  ctx.fillStyle = INK; ctx.fillRect(x - 2, y - 36, 4, 36); ctx.fillStyle = CROP.stake; ctx.fillRect(x - 1, y - 35, 2, 34);
+  stem(ctx, x, y, m * 3, -14, m, sway, CROP.leafSh); stem(ctx, x, y - 12, -m * 4, -12, m, sway, CROP.leafSh);
+  ctx.fillStyle = INK; ctx.fillRect(x + m * 4 + sway - 4, y - 32, 8, 5); ctx.fillStyle = CROP.leaf; ctx.fillRect(x + m * 4 + sway - 3, y - 31, 6, 3);
+  drawFood(ctx, 'tomato', x - m * 5 + sway, y - 20, 4, hex); drawFood(ctx, 'tomato', x + m * 6 + sway, y - 12, 4, hex); drawFood(ctx, 'tomato', x - m * 2 + sway, y - 7, 4, hex);
+  cap(ctx, x + m * 3 + sway, y - 31);
+}
+/** The peas: a wigwam of two crossed sticks with the vine up them and the pods hanging in the middle. */
+function drawPea(ctx, x, y, sway, variant) {
+  x = R(x); y = R(y);
+  const m = variant ? -1 : 1, hex = INGREDIENTS.pea.hex;
+  ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - 9, y); ctx.lineTo(x + 2, y - 36); ctx.moveTo(x + 9, y); ctx.lineTo(x - 2, y - 36); ctx.stroke();
+  ctx.strokeStyle = CROP.stake; ctx.lineWidth = 2; ctx.stroke();
+  stem(ctx, x - 6, y, m * 5, -22, m, sway, CROP.leafSh); stem(ctx, x + 6, y, -m * 5, -26, m, sway, CROP.leafSh);
+  ctx.fillStyle = CROP.leaf; ctx.fillRect(x - 5 + sway, y - 30, 4, 3); ctx.fillRect(x + 2 + sway, y - 24, 4, 3);
+  drawFood(ctx, 'pea', x - 4 + sway, y - 16, 4, hex); drawFood(ctx, 'pea', x + 5 + sway, y - 9, 4, hex);
+  cap(ctx, x - 4 + sway, y - 29);
+}
+
 export const PLANTS = Object.freeze({
   carrot: { h: FERN_H, draw: drawFern },
+  tomato: { h: 38, draw: drawTomato },
+  pea: { h: 38, draw: drawPea },
   potato: { h: 28, draw: drawPotato },
   onion: { h: 37, draw: drawOnion },
   leek: { h: 38, draw: drawLeek },
@@ -516,5 +543,16 @@ export const GARDEN_ANIMS = Object.freeze({
     F(4, { armR: [104, 18], armL: [88, 24], weapon: 90, torso: -24, head: -12, legR: [32, 6], legL: [-32, 32], root: [-5, -2], stretch: 1.05, face: 'shout' }, { ease: 'out' }),
     F(6, { armR: [92, 24], armL: [74, 30], weapon: 90, torso: -10, head: -4, legR: [20, 16], legL: [-20, 24], root: [-2, 2], squash: 1.05, face: 'happy' }, { ease: 'inout' }),
     F(4, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 2, head: 0, root: [0, 0], face: 'happy' }, { ease: 'out' }),
+  ] },
+  /**
+   * The whopper (the farm's joke, game/screens/garden.ts): the root comes out so big the puller goes over
+   * backwards - the heave, then flat on the back with the legs in the air and the arms out, `dazed`, then a
+   * scramble back up onto the carry stance. Thirty frames, none of them lost.
+   */
+  overBackwards: { loop: false, frames: [
+    F(4, { armR: [104, 18], armL: [88, 24], weapon: 90, torso: -30, head: -14, legR: [32, 6], legL: [-32, 32], root: [-6, -3], stretch: 1.06, face: 'shout' }, { ease: 'out' }),
+    F(5, { armR: [-60, -30], armL: [-70, -30], weapon: 90, torso: -84, head: -20, legR: [-70, 40], legL: [-80, 40], root: [-14, 10], squash: 1.1, face: 'dazed' }, { ease: 'in', smear: { from: -20, to: -90, a: 0.35 } }),
+    F(14, { armR: [-64, -30], armL: [-74, -30], weapon: 90, torso: -86, head: -22, legR: [-66, 44], legL: [-84, 36], root: [-14, 12], squash: 1.1, face: 'dazed' }),
+    F(7, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 2, head: 0, root: [0, 0], face: 'happy' }, { ease: 'out' }),
   ] },
 });

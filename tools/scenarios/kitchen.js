@@ -108,7 +108,7 @@ export const SCENARIOS = {
         });
         return { n: ids.length, missing, extra, blank, errors };
       });
-      assert(r.n === 22 && r.missing.length === 0, `every order has a dish glyph (${r.n} orders, missing: ${r.missing.join() || 'none'})`);
+      assert(r.n === 63 && r.missing.length === 0, `every order has a dish glyph (${r.n} orders, missing: ${r.missing.join() || 'none'})`);
       assert(r.extra.length === 0, `no dish glyph is for an order that does not exist (${r.extra.join() || 'none'})`);
       assert(r.errors.length === 0, `every dish draws at every bite stage (${r.errors.join('; ') || 'no errors'})`);
       assert(r.blank.length === 0, `every dish is visible on the plate until the last bite, and gone after it (${r.blank.join() || 'all fine'})`);

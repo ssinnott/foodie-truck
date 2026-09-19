@@ -14,7 +14,7 @@
 import { withPage, assert } from '../playtest.js';
 import { ORDERS, INGREDIENTS } from '../../src/content/recipes.ts';
 import { PLACES } from '../../src/content/places.ts';
-import { planDay, LINES_PER_DAY, LINE_LENGTH, RECIPES_PER_DAY } from '../../src/game/run.ts';
+import { planDay, needsOf, LINES_PER_DAY, LINE_LENGTH, RECIPES_PER_DAY } from '../../src/game/run.ts';
 
 export const SCENARIOS = {
   async stage(server) {
@@ -31,9 +31,11 @@ export const SCENARIOS = {
       const ordered = s.run.lines.flatMap((l) => l.customers.map((c) => c.split(':')[1]));
       assert(ordered.every((r) => s.run.recipes.includes(r)), `every customer orders off the menu (${ordered.join()})`);
       assert(s.run.recipes.every((r) => ordered.includes(r)), 'and every recipe on the menu is ordered at least once');
-      // the shopping list is every order added up
+      // the shopping list is every order added up, each with its twist (a BIG one wants one more of everything, a
+      // HERB one a sprig of its herb: game/run.ts needsOf)
       const want = {};
-      for (const id of ordered) for (const n of ORDERS.find((o) => o.id === id).needs) want[n.id] = (want[n.id] || 0) + n.amount;
+      const customers = s.run.lines.flatMap((l) => l.customers.map((c) => { const f = c.split(':'); const tw = (f[3] || '').split('/'); return { recipe: f[1], twist: tw[0] || '', extra: tw[1] || '' }; }));
+      for (const c of customers) for (const n of needsOf(c)) want[n.id] = (want[n.id] || 0) + n.amount;
       const list = Object.fromEntries(s.run.needs.map((n) => [n.split(':')[0], Number(n.split('/')[1])]));
       assert(JSON.stringify(list) === JSON.stringify(Object.fromEntries(Object.keys(list).map((k) => [k, want[k]]))) && Object.keys(want).length === Object.keys(list).length,
         `the shopping list adds every order up (${s.run.needs.join()})`);
@@ -101,3 +103,57 @@ export const SCENARIOS = {
     });
   },
 };
+
+/**
+ * twists - order twists (game/run.ts TWISTS): the plan gives one customer in four a twist on a seeded day, and none
+ *          on a dev-jump day. On a day with a BIG one the shopping list carries one more of that dish's every
+ *          ingredient; with a HERB one the list carries the herb; at a CRUNCHY one's line the order chops fifteen;
+ *          every twisted customer's words are on the end of their line at the hatch.
+ */
+SCENARIOS.twists = async (server) => {
+  const { planDay, needsOf, CHOP_TAPS, CHOP_TAPS_CRUNCHY } = await import('../../src/game/run.ts');
+  const { ORDERS } = await import('../../src/content/recipes.ts');
+  const find = (kind) => { for (let seed = 1; seed < 800; seed++) { const p = planDay(seed); for (let i = 0; i < p.lines.length; i++) for (let j = 0; j < p.lines[i].customers.length; j++) if (p.lines[i].customers[j].twist === kind) return { seed, i, j, c: p.lines[i].customers[j] }; } return null; };
+  const big = find('big'), herb = find('herb'), crunchy = find('crunchy');
+  assert(big && herb && crunchy, `the plan rolls every twist inside eight hundred seeds (big ${big && big.seed}, herb ${herb && herb.seed}, crunchy ${crunchy && crunchy.seed})`);
+  assert(planDay(1, { order: 1 }).lines.every((l) => l.customers.every((c) => !c.twist)) && planDay(1, { recipes: [0, 2] }).lines.every((l) => l.customers.every((c) => !c.twist)), 'a dev-jump day never carries a twist');
+  const rec = ORDERS.find((o) => o.id === big.c.recipe);
+  assert(needsOf(big.c).every((n) => rec.needs.find((r) => r.id === n.id).amount + 1 === n.amount), `a BIG order wants one more of everything (${JSON.stringify(needsOf(big.c))})`);
+  assert(needsOf(herb.c).some((n) => n.id === herb.c.extra && n.amount === 1), `a HERB order wants a sprig of ${herb.c.extra} (${JSON.stringify(needsOf(herb.c))})`);
+  await withPage(server, `skipTo=stage&critters=0,1&seed=${herb.seed}`, async (api, page) => {
+    await api.step(2);
+    const s = await api.summary();
+    assert(s.run.needs.some((n) => n.startsWith(herb.c.extra + ':')), `the herb is on the shopping list (${s.run.needs.join()})`);
+    assert(s.run.lines[herb.i].customers[herb.j].endsWith(':herb/' + herb.c.extra), `and the customer carries the twist (${s.run.lines[herb.i].customers[herb.j]})`);
+    await api.shot('stage-twist');
+  });
+  await withPage(server, `skipTo=stage&critters=0,1&seed=${crunchy.seed}`, async (api, page) => {
+    await api.step(2);
+    const o = await page.evaluate(([i, j]) => { const run = window.__game.game.run; run.startLine(i); run.customer = j; run.order = run.lines[i].customers[j] ? (run.startLine(i), run.order) : run.order; return { chops: run.order.chops, line: run.order.line, twist: run.order.twist }; }, [crunchy.i, crunchy.j]);
+    // startLine stands on the line's FRONT customer; the crunchy one may be second, so read it straight off the plan's promise instead
+    const front = crunchy.j === 0;
+    if (front) assert(o.chops === CHOP_TAPS_CRUNCHY && o.twist === 'crunchy' && o.line.endsWith('EXTRA CRUNCHY!'), `at the hatch a CRUNCHY order chops ${CHOP_TAPS_CRUNCHY} and says so (chops ${o.chops}, '${o.line}')`);
+    else assert(o.chops === CHOP_TAPS || o.chops === CHOP_TAPS_CRUNCHY, `an order's chops are one of the two counts (${o.chops})`);
+  });
+};
+/**
+ * kitchenGags - the room's two jokes: a stove step with the lid due rattles the pot lid for 40 frames, an oven step
+ *               with the cloud due puffs flour out of the door. Both are one in six on the seeded rng, so the two
+ *               are forced here through the same fields the roll sets, and the draw is checked for errors.
+ */
+SCENARIOS.kitchenGags = async (server) => {
+  await withPage(server, 'skipTo=kitchen&critters=0,1&order=1', async (api, page) => {
+    await api.step(2);
+    const s0 = await api.summary();
+    assert(s0.top.chops === 10 && s0.top.lids === 0 && s0.top.poofs === 0, `a plain order chops ten and nothing has rattled yet (chops ${s0.top.chops})`);
+    await page.evaluate(() => { const sc = window.__game.game.screen; sc.lidT = 40; sc.lids = 1; });
+    await api.step(6);
+    await api.shot('kitchen-lid');
+    const s1 = await api.summary();
+    assert(s1.top.lidT === 34 && s1.top.lids === 1, `the lid rattles down its forty frames (lidT ${s1.top.lidT})`);
+    await api.step(40);
+    assert((await api.summary()).top.lidT === 0, 'and settles');
+    assert((await api.errors()).length === 0, 'no errors drawing the lid');
+  });
+};
+

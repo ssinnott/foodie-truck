@@ -25,6 +25,16 @@ export const PLACES = Object.freeze([
   // keeps the farm's rose and gold, its neighbour on the south lane (docs/ART_STYLE.md section 4).
   { id: 'shore', name: 'COCKLE COVE', sign: 'SHORE', x: 1760, y: 520, screen: 'beach', accent: '#5FD3C0' },
   { id: 'bramble', name: 'BRAMBLE BANK', sign: 'BERRIES', x: 1180, y: 880, screen: 'bramble', accent: '#C96B7A' },
+  // The third pass's landmarks (docs/CONTENT_ROADMAP.md section E). Hazel Holt is the nut grove in the north-west
+  // corner, up a lane from the orchard: nuts are SHAKEN down. Its accent is the mill's straw gold (a nut is a
+  // grain's cousin, and the two never share a screen).
+  { id: 'holt', name: 'HAZEL HOLT', sign: 'NUTS', x: 180, y: 150, screen: 'holt', accent: '#E3C68F' },
+  // Tangle Wood is the dark wood in the north-east corner, on the coop's side of the river: things hide under the
+  // leaves and are FORAGED. Its accent is the avocado's deep green.
+  { id: 'wood', name: 'TANGLE WOOD', sign: 'WOOD', x: 1760, y: 180, screen: 'wood', accent: '#5C7A3B' },
+  // Thyme Terrace is the walled herb bed between home and the orchard, up a spur off the orchard lane: herbs are
+  // SNIPPED and grow back. Its accent is the leek's green.
+  { id: 'terrace', name: 'THYME TERRACE', sign: 'HERBS', x: 680, y: 440, screen: 'terrace', accent: '#7DB35A' },
 ]);
 
 /** Kitchen stations, left to right along the truck's counter. `verb` is the interaction the station asks for. */

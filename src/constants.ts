@@ -52,6 +52,9 @@ export const SIGNAL = Object.freeze({
   mill: '#F2C14E',     // the chute that is pouring NOW (the map/coop gold: "the thing you want")
   hive: '#F2C14E',     // the skep with honey left in it; the swarm's alert is SIGNAL.hot, as on the rooster's comb
   garden: '#F2C14E',   // the ripe root's sparkle, the same mark the coop's fresh egg wears
+  holt: '#F2C14E',     // a nut tree with nuts still in it: the same "the thing you want" gold
+  wood: '#F2C14E',     // a bump in the leaves that is showing: the same gold, the one bright thing in a dark wood
+  terrace: '#F2C14E',  // a herb clump with a snip left on it: the same gold
   hot: '#E23A2E',      // burner, boil-over, burnt, the rooster's comb, the swarm on the turn: never anywhere else
   good: '#5FA652',     // "good timing" fills on paper UI, always ink-outlined (= UI.green)
 });

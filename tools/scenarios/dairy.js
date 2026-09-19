@@ -28,9 +28,13 @@ const CHURN_PRESSES = 12;
 /** The frame of the squirt the pump shot is taken on: the jet is still up and the ring has opened. */
 const PUMP_SHOT = 3;
 
-/** Hold the finish line out of reach so a +1 cannot end the round mid-test (run.gather still clamps to the order). */
+/**
+ * Hold the finish line out of reach so a +1 cannot end the round mid-test (run.gather still clamps to the order), and
+ * hold every cow's tail: the swish locks the buttons for 20 frames, which would break a count of taps. dairySwish
+ * tests the tail on its own.
+ */
 function holdTarget(page) {
-  return page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(sc.target, sc.total + 4); sc.setTotal(sc.total); });
+  return page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(sc.target, sc.total + 4); sc.setTotal(sc.total); for (const s of sc.seats) s.swishIn = 999; });
 }
 /** Seat 0 as the sim holds it. */
 function seat0(page) {
@@ -110,6 +114,34 @@ export const SCENARIOS = {
     });
   },
 
+  /**
+   * dairySwish - the joke: seat 0's cow is set to swish on the third squirt. Three taps: fill 3, the swish is up
+   *              (swishT 20, bumpT 20, swishes 1); a tap during it does nothing; after it the pail still holds its
+   *              three and nine more taps bank it. Writes dairy-swish.
+   */
+  async dairySwish(server) {
+    await withPage(server, BOOT, async (api, page) => {
+      await api.step(2);
+      await holdTarget(page);
+      await page.evaluate(() => { window.__game.game.screen.seats[0].swishIn = 3; });
+      for (let i = 0; i < 3; i++) await api.press(0, { action: true }, 1, 3);
+      const sw = await api.summary();
+      const s = sw.top.seats[0];
+      assert(s.fill === 3 && s.swishT > 0 && s.bumpT > 0 && sw.top.swishes === 1, `the third squirt brings the tail across (fill ${s.fill}, swishT ${s.swishT}, bumpT ${s.bumpT}, swishes ${sw.top.swishes})`);
+      await api.step(2);
+      await api.shot('dairy-swish');
+      await api.press(0, { action: true }, 1, 0);
+      const locked = await api.summary();
+      assert(locked.top.seats[0].fill === 3, `a tap during the swish is nothing (fill ${locked.top.seats[0].fill})`);
+      await api.step(20);
+      const after = await api.summary();
+      assert(after.top.seats[0].swishT === 0 && after.top.seats[0].bumpT === 0 && after.top.seats[0].fill === 3, `the swish is over and the pail kept its three (swishT ${after.top.seats[0].swishT}, fill ${after.top.seats[0].fill})`);
+      assert(after.top.seats[0].swishIn >= 20 && after.top.seats[0].swishIn <= 40, `the next swish is seeded 20..40 squirts off (${after.top.seats[0].swishIn})`);
+      for (let i = 0; i < 9; i++) await api.press(0, { action: true }, 1, 3);
+      const banked = await api.summary();
+      assert(banked.top.seats[0].count === 1 && banked.top.total === 1, `nine more taps bank the pail (count ${banked.top.seats[0].count})`);
+    });
+  },
   async dairyButter(server) {
     await withPage(server, BOOT_BUTTER, async (api, page) => {
       await api.step(2);

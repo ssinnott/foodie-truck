@@ -26,7 +26,7 @@ import { Screen } from '../game.ts';
 import type { Game, Input, ScreenParams } from '../game.ts';
 import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
-import { blitAt } from '../../art/layers.ts';
+import { blitAt, INK } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt, burstSparkle } from '../../art/fx.ts';
 import { drawFood } from '../../art/food.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
@@ -75,6 +75,9 @@ const RIPEN_MIN = 70, RIPEN_MAX = 120, SEED_RIPE = 6;
 const REACH = 34;
 /** The pick beat, in frames: the anim's own length. */
 const REACH_FRAMES = 12;
+/** The thorn: one berry in THORN_ODDS ripens with a bramble across it; the first reach at it is the prick, PRICK_FRAMES long, and the thorn is gone after. */
+const THORN_ODDS = 8, PRICK_FRAMES = 24;
+const OW = 'OW!';
 /** Cosmetic pool: the picked berry's hop into the basket. */
 const HOP_FRAMES = 12, HOP_LIFT = 14, MAX_HOPS = 4;
 /** The sparkle's blink, index-hashed per bush so the bank never blinks as one object. */
@@ -93,6 +96,8 @@ export interface BrambleSeat extends Seat {
 export interface Bush {
   /** Bit k set = spot k holds a ripe berry. */
   ripe: number;
+  /** Bit k set = a thorn lies across spot k's berry: the first reach at it is the prick, and clears the bit. */
+  thorn: number;
 }
 
 /** A picked berry hopping from its spot into a seat's basket (cosmetic). */
@@ -128,6 +133,8 @@ export class BrambleScreen extends Screen {
   declare seats: BrambleSeat[];
   /** The six bushes, one per BUSH_X, built in enter() and never grown. */
   declare bushes: Bush[];
+  /** Pricks taken this round (the joke's count, for the tests and the desync canary). */
+  declare pricks: number;
   /**
    * What the bank grows this visit (game/run.js gatherTarget): strawberries or blueberries. `icon`/`hex` are its
    * glyph, the sign prefix its name, the title the landmark's.
@@ -193,7 +200,8 @@ export class BrambleScreen extends Screen {
     }
 
     this.bushes = [];
-    for (let i = 0; i < BUSH_X.length; i++) this.bushes.push({ ripe: 0 });
+    for (let i = 0; i < BUSH_X.length; i++) this.bushes.push({ ripe: 0, thorn: 0 });
+    this.pricks = 0;
     this.seedBank();
     this.nextRipen = rng.int(RIPEN_MIN, RIPEN_MAX);
 
@@ -221,7 +229,9 @@ export class BrambleScreen extends Screen {
     const start = rng.int(0, this.bushes.length - 1);
     for (let k = 0; k < SEED_RIPE; k++) {
       const b = this.bushes[(start + k) % this.bushes.length];
-      b.ripe |= 1 << rng.int(0, SPOTS - 1);
+      const spot = rng.int(0, SPOTS - 1);
+      b.ripe |= 1 << spot;
+      if (rng.int(1, THORN_ODDS) === 1) b.thorn |= 1 << spot;   // the deal: one berry in THORN_ODDS has a bramble across it
     }
   }
 
@@ -281,8 +291,9 @@ export class BrambleScreen extends Screen {
     const b = this.bushes[best];
     let k = 0;
     while (!(b.ripe & (1 << k))) k++;
-    b.ripe &= ~(1 << k);
     const bx = BUSH_X[best], sx = bx + SPOT[k * 2], sy = BUSH_Y + SPOT[k * 2 + 1];
+    if (b.thorn & (1 << k)) { b.thorn &= ~(1 << k); this.prick(s, sx, sy, bx); return; }
+    b.ripe &= ~(1 << k);
     s.count++; this.setTotal(this.total + 1);
     s.reachT = REACH_FRAMES; s.moving = false;
     s.facing = bx >= s.x ? 1 : -1;
@@ -293,6 +304,17 @@ export class BrambleScreen extends Screen {
     burstSparkle(sx, sy - 4, 3, UI.cream, true);
     floatText(sx, sy - 14, PLUS_ONE, s.colour, 1, true);
     this.game.audio.play('catch');   // the orchard's basket and its pip: a berry lands in the same basket
+  }
+
+  /** The joke: a thorn across the berry. The reach gets the prick, the paw goes to the mouth, and the berry is there for the next reach. */
+  prick(s: BrambleSeat, sx: number, sy: number, bx: number): void {
+    this.pricks++;
+    s.reachT = PRICK_FRAMES; s.moving = false;
+    s.facing = bx >= s.x ? 1 : -1;
+    seatAnim(s, 'pricked', true);
+    ringAt(sx, sy, 3, 10, UI.cream, 2, 10, false, true);   // cream, not SIGNAL.hot: nothing on this bank is a danger, a thorn is a joke
+    floatText(s.x, s.y - 66, OW, UI.cream, 1, true);
+    this.game.audio.play('prick');
   }
 
   /** Ripen one more berry, on a seeded bush that has a green spot, on a seeded spot of it. */
@@ -306,6 +328,7 @@ export class BrambleScreen extends Screen {
       let k = rng.int(0, SPOTS - 1);
       while (b.ripe & (1 << k)) k = (k + 1) % SPOTS;
       b.ripe |= 1 << k;
+      if (rng.int(1, THORN_ODDS) === 1) b.thorn |= 1 << k; else b.thorn &= ~(1 << k);
       return;
     }
   }
@@ -329,7 +352,13 @@ export class BrambleScreen extends Screen {
     blitAt(ctx, L.mid.L, 0, L.mid.y);
     // the bushes stand on the bank's foot behind the whole cast: ground contact, then each one with its berries
     for (let i = 0; i < this.bushes.length; i++) drawShadow(ctx, BUSH_X[i], BUSH_Y, 52, 0.3, 0);
-    for (let i = 0; i < this.bushes.length; i++) drawBush(ctx, BUSH_X[i], BUSH_Y, i & 1, this.bushes[i].ripe, this.icon, this.hex, ((f + i * 7) >> 3) & 1);
+    for (let i = 0; i < this.bushes.length; i++) {
+      const b = this.bushes[i];
+      drawBush(ctx, BUSH_X[i], BUSH_Y, i & 1, b.ripe, this.icon, this.hex, ((f + i * 7) >> 3) & 1);
+      // a thorn across a ripe berry is drawn, so a sharp-eyed picker can see it coming: one inked bramble stroke
+      // with a spike on it, laid over the berry's spot
+      for (let k = 0; k < SPOTS; k++) if ((b.ripe & b.thorn) & (1 << k)) this.drawThorn(ctx, BUSH_X[i] + SPOT[k * 2], BUSH_Y + SPOT[k * 2 + 1]);
+    }
     blitAt(ctx, L.ground.L, 0, L.ground.y);
     particles.draw(ctx, null, 'back');
     // ground contact first, then the cast back lane to front lane
@@ -344,6 +373,13 @@ export class BrambleScreen extends Screen {
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
     if (this.game.options.debug) this.drawWindows(ctx);
+  }
+
+  /** The bramble across a berry: a 2 px ink cane at a slant with one spike standing off it. */
+  drawThorn(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 7, y + 4); ctx.lineTo(x + 7, y - 3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 1, y); ctx.lineTo(x + 3, y - 5); ctx.stroke();
   }
 
   drawSeat(ctx: CanvasRenderingContext2D, s: BrambleSeat): void {
@@ -370,22 +406,24 @@ export class BrambleScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, pricks: this.pricks,
       seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), count: s.count, reachT: s.reachT, anim: s.anim })),
       /** The ripe mask per bush, in BUSH_X order. */
       bushes: this.bushes.map((b) => b.ripe),
+      /** The thorn mask per bush. */
+      thorns: this.bushes.map((b) => b.thorn),
     };
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextRipen);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextRipen, this.pricks);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       f.push(s.x, s.facing, s.count, s.reachT, s.moving ? 1 : 0);
     }
-    for (let i = 0; i < this.bushes.length; i++) f.push(this.bushes[i].ripe);
+    for (let i = 0; i < this.bushes.length; i++) f.push(this.bushes[i].ripe, this.bushes[i].thorn);
     return f;
   }
 }

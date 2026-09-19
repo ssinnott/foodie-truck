@@ -26,6 +26,7 @@ import { mix } from './palettes.ts';
 import { pathGear } from '../lib/art/shapes.ts';
 import { celPath, pathRR, LIGHT_X, LIGHT_Y } from '../lib/art/shading.ts';
 import { MILL, RICE, ROWS, WINDOW } from './backgrounds/mill.ts';
+import { INGREDIENTS } from '../content/recipes.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
 
@@ -225,6 +226,8 @@ const POUR_CORE = mix(MILL.dust, MILL.timber, 0.15);
 const RICE_CORE = mix(MILL.hessian, MILL.timber, 0.35), RICE_EDGE = mix(RICE_CORE, PLUM.deep, 0.35);
 /** The heap loose rice makes on the planks: the grain toned toward the hessian, a lit cap of the grain itself. */
 const RICE_HEAP = mix(RICE.grain, MILL.hessian, 0.4);
+/** The oat flake: the ingredient's own buff, heaped a step darker; the sack packs a shade lighter than jute. */
+const OAT = INGREDIENTS.oats.hex, OAT_HEAP = mix(OAT, MILL.hessian, 0.4), OAT_PACKED = mix(OAT, PACKED, 0.3), OAT_PACKED_SH = mix(OAT_PACKED, PLUM.shadow, 0.26);
 /**
  * The grains in a pouring rice chute: GRAIN_N 2x3 ovals (the smallest oval that reads at 1x, ART_STYLE 0.8), each
  * on its own index-hashed beat down the column and at its own fixed lateral slot from GRAIN_DX, in thirds of the
@@ -257,6 +260,12 @@ export const GRAINS = Object.freeze({
     id: 'rice', grains: 1, lit: RICE.grain, core: RICE_CORE, edge: RICE_EDGE, heap: RICE_HEAP, heapCap: RICE.grain,
     packed: RICE_PACKED, packedSh: RICE_PACKED_SH, band: 1, mote: RICE.straw, moteSize: 2,
     puffKind: 'crumb', puff: RICE.grain, puffSize: 3, puffGravity: 0.12, puffLife: 22,
+  }),
+  /** Oats: the flour room (the chutes pour flakes, separate like grains but the flour's own colour), and a banded jute sack. */
+  oats: Object.freeze({
+    id: 'oats', grains: 1, lit: OAT, core: RICE_CORE, edge: RICE_EDGE, heap: OAT_HEAP, heapCap: OAT,
+    packed: OAT_PACKED, packedSh: OAT_PACKED_SH, band: 1, mote: OAT, moteSize: 3,
+    puffKind: 'crumb', puff: OAT, puffSize: 3, puffGravity: 0.08, puffLife: 24,
   }),
 });
 /** The record for an ingredient id; anything the mill does not know how to pour is poured as flour. */

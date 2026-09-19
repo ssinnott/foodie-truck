@@ -130,4 +130,14 @@ export const BRAMBLE_ANIMS = Object.freeze({
     F(5, { armL: [-150, -10], armR: [56, 44], weapon: 90, torso: -4, head: -8, root: [0, -1], stretch: 1.02, face: 'happy' }, { ease: 'in' }),
     F(7, { armL: [-158, -14], armR: [50, 40], weapon: 90, torso: -6, head: -10, root: [0, -2], stretch: 1.04, face: 'happy' }, { ease: 'out' }),
   ] },
+  /**
+   * The thorn (the bank's joke, game/screens/bramble.ts): the reach up, the prick, the far paw whipped back down
+   * and up to the mouth to be sucked, `hurt`, then a shake of it and back to the carry stance.
+   */
+  pricked: { loop: false, frames: [
+    F(3, { armL: [-150, -10], armR: [56, 44], weapon: 90, torso: -4, head: -8, root: [0, -1], stretch: 1.02, face: 'happy' }, { ease: 'in' }),
+    F(3, { armL: [-30, -140], armR: [56, 44], weapon: 90, torso: 6, head: 10, root: [0, 1], squash: 1.04, face: 'hurt' }, { ease: 'out', smear: { from: -150, to: -30, a: 0.3 } }),
+    F(12, { armL: [-34, -142], armR: [56, 44], weapon: 90, torso: 6, head: 12, root: [0, 1], face: 'hurt' }),
+    F(6, { armL: [-18, 8], armR: [56, 44], weapon: 90, torso: 2, head: 0, root: [0, 0], face: 'hurt' }, { ease: 'inout' }),
+  ] },
 });

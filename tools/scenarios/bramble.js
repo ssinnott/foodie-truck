@@ -28,7 +28,44 @@ function holdTarget(page) {
   return page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(sc.target, sc.total + 6); sc.setTotal(sc.total); });
 }
 
+/** The thorn (screens/bramble.ts): the prick beat. */
+const PRICK_FRAMES = 24;
+
 export const SCENARIOS = {
+  /**
+   * brambleThorn - the joke: a thorn is laid across the first ripe berry on a bush, seat 0 stands under it and
+   *                reaches: no berry, a prick (pricks 1, reachT 24, anim pricked), the berry still ripe; the thorn
+   *                is gone with the prick and the next reach picks the berry. Writes bramble-thorn.
+   */
+  async brambleThorn(server) {
+    await withPage(server, 'skipTo=bramble&critters=0,1&recipes=13', async (api, page) => {
+      await api.step(2);
+      await holdTarget(page);
+      const b = await page.evaluate(() => {
+        const sc = window.__game.game.screen; sc.nextRipen = 100000;
+        for (const b of sc.bushes) b.thorn = 0;
+        const i = sc.bushes.findIndex((b) => b.ripe), bush = sc.bushes[i];
+        let k = 0; while (!(bush.ripe & (1 << k))) k++;
+        bush.thorn = 1 << k;
+        return { i, k, ripe: bush.ripe };
+      });
+      // stand under that bush
+      await page.evaluate(([i, xs]) => { window.__game.game.screen.seats[0].x = xs[i]; }, [b.i, BUSH_X]);
+      await api.press(0, { action: true }, 1, 0);
+      await api.step(2);
+      const p = await api.summary();
+      assert(p.top.pricks === 1 && p.top.seats[0].count === 0 && p.top.total === 0, `the reach gets a prick and no berry (pricks ${p.top.pricks}, count ${p.top.seats[0].count})`);
+      assert(p.top.seats[0].reachT === PRICK_FRAMES - 2 && p.top.seats[0].anim === 'pricked', `the paw goes to the mouth for ${PRICK_FRAMES} frames (reachT ${p.top.seats[0].reachT}, anim '${p.top.seats[0].anim}')`);
+      assert(p.top.bushes[b.i] === b.ripe && p.top.thorns[b.i] === 0, `the berry is still ripe and the thorn is gone (ripe ${p.top.bushes[b.i]}, thorns ${p.top.thorns[b.i]})`);
+      await api.step(6);
+      await api.shot('bramble-thorn');
+      await api.step(PRICK_FRAMES);
+      await api.press(0, { action: true }, 1, 0);
+      await api.step(2);
+      const got = await api.summary();
+      assert(got.top.seats[0].count === 1 && got.top.total === 1, `and the next reach picks it (count ${got.top.seats[0].count})`);
+    });
+  },
   async bramble(server) {
     await withPage(server, BOOT, async (api, page) => {
       await api.step(2);
@@ -52,7 +89,7 @@ export const SCENARIOS = {
 
       // --- walk under the nearest bush with a ripe berry and pick it
       // ripening is paused first, so the count of ripe berries is the count the pick changes and nothing else
-      await page.evaluate(() => { window.__game.game.screen.nextRipen = 100000; });
+      await page.evaluate(() => { const sc = window.__game.game.screen; sc.nextRipen = 100000; for (const b of sc.bushes) b.thorn = 0; });   // the thorn has a scenario of its own
       let best = -1, bd = 1e9;
       for (let i = 0; i < BUSH_X.length; i++) { const d = Math.abs(BUSH_X[i] - last.top.seats[0].x); if (last.top.bushes[i] && d < bd) { bd = d; best = i; } }
       assert(best >= 0, 'a bush with a ripe berry is standing somewhere along the bank');

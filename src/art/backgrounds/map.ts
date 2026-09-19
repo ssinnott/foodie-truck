@@ -61,6 +61,12 @@ export const LANES = Object.freeze([
   // the second pass: the farm lane carries on east to the cove; a spur drops off the pond lane to the berry bank
   [1500, 520, 1760, 520],
   [1150, 700, 1150, 850, 1180, 880],
+  // the third pass: the holt's lane climbs north-west out of the orchard; the wood's runs east out of the coop
+  [420, 300, 180, 150],
+  // ...and the wood's runs east out of the coop's yard and climbs, keeping clear of the coop's own signpost
+  [1500, 280, 1560, 310, 1760, 180],
+  // ...and the terrace's spur climbs off the orchard lane's bend
+  [720, 600, 680, 440],
 ]);
 /** The river's centreline, top to bottom, splitting the coop and pond off on the east bank. */
 export const RIVER = Object.freeze([1340, HORIZON_H - 10, 1340, 120, 1370, 220, 1340, 340, 1330, 470, 1370, 600, 1350, 720, 1360, 860, 1330, WORLD_H + 10]);
@@ -109,7 +115,7 @@ export function riverBlocked(px, py) { return riverDist(px, py) < RIVER_BLOCK &&
 // ---------------------------------------------------------------- authored world content
 const place = (id) => PLACES.find((p) => p.id === id);
 const HOME = place('home'), ORCHARD = place('orchard'), POND = place('pond'), COOP = place('coop'), DAIRY = place('dairy'), MILL = place('mill'), HIVE = place('hive'), FARM = place('garden');
-const SHORE = place('shore'), BRAMBLE = place('bramble');
+const SHORE = place('shore'), BRAMBLE = place('bramble'), HOLT = place('holt'), WOOD = place('wood'), TERRACE = place('terrace');
 /** Wheat fields (hand-placed so no landmark sits in one); lanes cut gates through their hedges. */
 const WHEAT = [[1020, 130, 260, 120], [110, 420, 230, 160], [1580, 860, 280, 180], [60, 960, 200, 90]];
 /** The animated bits the map screen draws per frame, in world coordinates. */
@@ -178,6 +184,7 @@ export const SIGN_AT = Object.freeze({
   coop: { x: COOP.x + 52, y: COOP.y - 18 }, dairy: { x: DAIRY.x - 52, y: DAIRY.y - 18 }, mill: { x: MILL.x - 40, y: MILL.y - 18 },
   hive: { x: HIVE.x - 30, y: HIVE.y - 18 }, garden: { x: FARM.x, y: FARM.y - 28 },
   shore: { x: SHORE.x - 34, y: SHORE.y - 26 }, bramble: { x: BRAMBLE.x + 40, y: BRAMBLE.y - 18 },
+  holt: { x: HOLT.x + 44, y: HOLT.y - 10 }, wood: { x: WOOD.x - 50, y: WOOD.y - 6 }, terrace: { x: TERRACE.x + 46, y: TERRACE.y - 8 },
 });
 /** Every signpost clears this much lane: LANE_HALF plus half a truck, so nothing is driven through (scenarios/map.js). */
 export const SIGN_CLEAR = LANE_HALF + 8;
@@ -414,6 +421,34 @@ function paintLandmarks(g) {
   boxShaded(g, BRAMBLE.x - 50, BRAMBLE.y - 24, 28, 6, MAP.wood, MAP.woodDark);   // the bench is on the gate's far side from the signpost
   boxOutlined(g, BRAMBLE.x - 48, BRAMBLE.y - 31, 9, 7, MAP.wall); g.fillStyle = SIGNAL.orchard; g.fillRect(BRAMBLE.x - 46, BRAMBLE.y - 33, 5, 3);
   boxOutlined(g, BRAMBLE.x - 35, BRAMBLE.y - 31, 9, 7, MAP.wall); g.fillStyle = MAP.blueberry; g.fillRect(BRAMBLE.x - 33, BRAMBLE.y - 33, 5, 3);
+  // hazel holt: three round nut trees in a huddle on a shade of leaf litter, a sack of nuts leaning on the near trunk
+  groundShade(g, HOLT.x, HOLT.y - 18, 110, 0.12, 4);
+  const holtTrees = [[-34, -30, 17], [30, -34, 19], [-2, -46, 15]];
+  for (const t of holtTrees) {
+    const tx = HOLT.x + t[0], ty = HOLT.y + t[1], r = t[2];
+    g.fillStyle = INK; g.fillRect(tx - 3, ty - 4, 6, 14); g.fillStyle = MAP.trunk; g.fillRect(tx - 2, ty - 3, 4, 12);
+    discShaded(g, tx, ty - r + 2, r, '#6E8A4A', '#4F6838');
+    g.fillStyle = '#B07A3A'; for (let k = 0; k < 3; k++) g.fillRect(tx - 8 + k * 7, ty - r + 4 + (k & 1) * 6, 3, 3);   // the nuts in the leaves
+  }
+  boxOutlined(g, HOLT.x + 6, HOLT.y - 12, 10, 10, MAP.wall); g.fillStyle = '#B07A3A'; g.fillRect(HOLT.x + 8, HOLT.y - 14, 6, 3);
+  // tangle wood: a dark huddle of tall trees with a gap for the path, toadstools at their feet
+  groundShade(g, WOOD.x, WOOD.y - 20, 120, 0.14, 4);
+  const woodTrees = [[-42, -26, 16, 22], [-14, -38, 15, 26], [16, -30, 17, 24], [44, -24, 14, 20]];
+  for (const t of woodTrees) {
+    const tx = WOOD.x + t[0], ty = WOOD.y + t[1], r = t[2], hh = t[3];
+    g.fillStyle = INK; g.fillRect(tx - 3, ty - 6, 6, hh); g.fillStyle = MAP.woodDark; g.fillRect(tx - 2, ty - 5, 4, hh - 2);
+    discShaded(g, tx, ty - hh + 4, r, '#4E6040', '#3C4A34');
+    discShaded(g, tx - 4, ty - hh - 6, r - 5, '#4E6040', '#3C4A34');
+  }
+  for (let k = 0; k < 3; k++) { const mx = WOOD.x - 30 + k * 28, my = WOOD.y - 4 + (k & 1) * 4; g.fillStyle = INK; g.fillRect(mx - 1, my - 5, 3, 5); g.fillStyle = MAP.wall; g.fillRect(mx - 1, my - 4, 2, 4); discShaded(g, mx, my - 5, 4, MAP.roof, MAP.roofShade); g.fillStyle = MAP.wall; g.fillRect(mx - 1, my - 7, 1, 1); }
+  // thyme terrace: two stepped stone walls with the herb beds green along them, and a potting shed at the end
+  groundShade(g, TERRACE.x, TERRACE.y - 22, 120, 0.12, 4);
+  boxShaded(g, TERRACE.x - 58, TERRACE.y - 44, 96, 8, MAP.wallShade, MAP.hillFar);
+  boxShaded(g, TERRACE.x - 58, TERRACE.y - 26, 96, 8, MAP.wallShade, MAP.hillFar);
+  for (let k = 0; k < 5; k++) { discShaded(g, TERRACE.x - 48 + k * 20, TERRACE.y - 47, 7, '#7FA850', '#55763A'); discShaded(g, TERRACE.x - 44 + k * 20, TERRACE.y - 29, 7, k & 1 ? '#4E6B4A' : '#7FA850', '#3C5238'); }
+  boxShaded(g, TERRACE.x + 40, TERRACE.y - 40, 24, 22, MAP.wood, MAP.woodDark);
+  polyOutlined(g, [TERRACE.x + 36, TERRACE.y - 40, TERRACE.x + 52, TERRACE.y - 52, TERRACE.x + 68, TERRACE.y - 40], MAP.roof, INK, 1);
+  g.fillStyle = MAP.woodDark; g.fillRect(TERRACE.x + 48, TERRACE.y - 30, 8, 12);
 }
 
 function paintHorizon(g, rnd) {
@@ -547,6 +582,54 @@ export function drawHen(ctx, sx, sy, peck, facing = 1) {
   ctx.fillStyle = MAP.mustard; ctx.fillRect(sx + facing * 3 + (facing > 0 ? 5 : -2), sy - 10 + peck * 2, 2, 2);
   ctx.fillStyle = MAP.roof; ctx.fillRect(sx + facing * 3 + 1, sy - 14 + peck * 2, 3, 2);   // comb: roof red, never the reserved HOT
 }
+/**
+ * Where a crossing may stand (docs/CONTENT_ROADMAP.md section B): the midpoint of every lane segment that is
+ * neither a bridge (within RIVER_BLOCK + 20 of the river's centreline) nor within CROSSING_CLEAR of a landmark's
+ * door, so a herd never stands where the truck arrives. Each spot carries the lane's unit direction there, so a
+ * herd can be laid ACROSS the lane. Pure data: the day plan (game/run.ts planDay) picks from it by index.
+ */
+export const CROSSING_CLEAR = 140;
+export const CROSSING_SPOTS = (() => {
+  const out = [];
+  for (let i = 0; i < LANES.length; i++) {
+    const L = LANES[i];
+    for (let k = 0; k + 3 < L.length; k += 2) {
+      const ax = L[k], ay = L[k + 1], bx = L[k + 2], by = L[k + 3];
+      const mx = (ax + bx) / 2, my = (ay + by) / 2, len = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
+      if (len < 100 || riverDist(mx, my) < RIVER_BLOCK + 20) continue;
+      let clear = true;
+      for (const p of PLACES) { const dx = p.x - mx, dy = p.y - my; if (dx * dx + dy * dy < CROSSING_CLEAR * CROSSING_CLEAR) clear = false; }
+      if (!clear) continue;
+      out.push(Object.freeze({ x: R(mx), y: R(my), dx: (bx - ax) / len, dy: (by - ay) / len }));
+    }
+  }
+  return Object.freeze(out);
+})();
+
+/** A sheep on the lane, feet at (sx, sy): a cream woolly oval, a dark face the way it is facing, four ink legs. 18 wide, 14 tall. */
+export function drawSheep(ctx, sx, sy, facing = 1, walk = 0) {
+  ctx.fillStyle = INK; ctx.fillRect(sx - 6, sy - 4, 2, 4); ctx.fillRect(sx - 2 + walk, sy - 4, 2, 4); ctx.fillRect(sx + 2 - walk, sy - 4, 2, 4); ctx.fillRect(sx + 5, sy - 4, 2, 4);
+  ctx.beginPath(); ctx.ellipse(sx, sy - 9, 9, 6, 0, 0, Math.PI * 2); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#F1E4C8'; ctx.fill();
+  ctx.fillStyle = '#D8C093'; ctx.fillRect(sx - 6, sy - 7, 12, 2);
+  boxOutlined(ctx, sx + facing * 7 - 3, sy - 15, 6, 7, '#4A3038');
+  ctx.fillStyle = '#F1E4C8'; ctx.fillRect(sx + facing * 7 + (facing > 0 ? 1 : -2), sy - 13, 1, 1);   // the eye
+}
+/** A duck, feet at (sx, sy): `big` is the mother (12 px), else a duckling (7 px of mustard). */
+export function drawDuck(ctx, sx, sy, facing = 1, big = 0, walk = 0) {
+  if (big) {
+    ctx.fillStyle = '#E2B44A'; ctx.fillRect(sx - 3, sy - 3, 2, 3); ctx.fillRect(sx + 1 + walk, sy - 3, 2, 3);
+    boxOutlined(ctx, sx - 6, sy - 9, 12, 6, '#F1E4C8');
+    boxOutlined(ctx, sx + facing * 5 - 2, sy - 14, 5, 5, '#F1E4C8');
+    ctx.fillStyle = '#E2B44A'; ctx.fillRect(sx + facing * 5 + (facing > 0 ? 3 : -3), sy - 12, 3, 2);
+    ctx.fillStyle = INK; ctx.fillRect(sx + facing * 5 + (facing > 0 ? 1 : 0), sy - 13, 1, 1);
+    return;
+  }
+  ctx.fillStyle = '#E2B44A'; ctx.fillRect(sx - 1 + walk, sy - 2, 1, 2); ctx.fillRect(sx + 1 - walk, sy - 2, 1, 2);
+  boxOutlined(ctx, sx - 3, sy - 7, 7, 5, MAP.mustard);
+  ctx.fillStyle = '#E2B44A'; ctx.fillRect(sx + facing * 3 + (facing > 0 ? 1 : -1), sy - 6, 2, 1);
+  ctx.fillStyle = INK; ctx.fillRect(sx + facing * 2, sy - 6, 1, 1);
+}
+
 /** A bee: 3x2 gold with a 2x2 ink tail. */
 export function drawBee(ctx, x, y) { ctx.fillStyle = MAP.mustard; ctx.fillRect(x, y, 3, 2); ctx.fillStyle = INK; ctx.fillRect(x - 2, y, 2, 2); }
 /** The telephone ringing: two 2 px ink arcs each side of the box top (the box itself is baked; `shake` offsets it). */

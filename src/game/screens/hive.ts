@@ -5,6 +5,9 @@
 // climbs onto it over DIP_HOLD frames of holding, and on the last one it is +1, a ring, a jar in the party's crate,
 // and that skep goes empty for REFILL_FRAMES. Letting go early puts the dipper back at no cost; the next hold starts
 // again. The bees drone over the bench the whole time and never turn: there is nothing in this meadow that stings.
+// THE JOKE: one dip in BEE_ODDS, one bee leaves the swarm and lands on the dipping critter's nose at BEE_AT frames
+// into the hold: the critter goes cross-eyed and freezes for BEE_FRAMES, the hold PAUSES (the bar keeps its fill,
+// as letting go does), then the bee flies off and the hold carries on from where it was. Nothing is lost.
 // The round ends when the party's total reaches the order's remainder, and not before (there is no clock to run
 // out); the HONEY sign drops, is held, then run.gather() and back to the map.
 //
@@ -23,10 +26,11 @@ import { blitAt } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt, burstDust, burstSparkle } from '../../art/fx.ts';
 import { drawFood } from '../../art/food.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
+import type { Point } from '../../lib/art/rigParts.ts';
 import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { hiveLayers, HIVE, ROWS, SKEP_X, CRATE_X } from '../../art/backgrounds/hive.ts';
-import { drawSkep, drawSwarm, drawHoneyCrate, drawHoneyStrand, HONEY_DIPPER, SWARM_SHAPE, SWARM_SPIN, SKEP_H } from '../../art/hiveProps.ts';
+import { drawSkep, drawSwarm, drawBee, drawHoneyCrate, drawHoneyStrand, HONEY_DIPPER, SWARM_SHAPE, SWARM_SPIN, SKEP_H } from '../../art/hiveProps.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -58,6 +62,8 @@ const REACH = 36, DIP_HOLD = 60;
  * ALONG the bench rather than parked at one skep, which is the movement this mini-game is made of.
  */
 const REFILL_FRAMES = 150;
+/** The curious bee: one dip in BEE_ODDS, landing BEE_AT frames into the hold and staying BEE_FRAMES; it flies in over BEE_IN and off over the last BEE_OUT. */
+const BEE_ODDS = 6, BEE_AT = 20, BEE_FRAMES = 40, BEE_IN = 8, BEE_OUT = 8;
 /**
  * The swarm: one cloud of bees drifting over the bench for the whole round, calm from the first frame to the last.
  * It is scenery that moves - the meadow would be dead without it - and nothing a seat does changes it.
@@ -100,7 +106,14 @@ const HIVE_ANIMS = Object.freeze({
     F(10, { armR: [122, 16], armL: [-150, -18], weapon: -34, torso: -7, head: -13, root: [0, -2], stretch: 1.04, face: 'happy' }, { ease: 'out' }),
     F(10, { armR: [120, 18], armL: [-148, -16], weapon: -40, torso: -6, head: -12, root: [0, -1], stretch: 1.03, face: 'happy' }, { ease: 'inout' }),
   ] },
+  /** The bee on the nose: the dip stance held dead still, the head pulled back a touch, `dazed` (the x eyes read as crossed on the bee). */
+  beeNose: { loop: true, frames: [
+    F(6, { armR: [122, 16], armL: [-150, -18], weapon: -34, torso: -9, head: -18, root: [0, -2], stretch: 1.04, face: 'dazed' }, { ease: 'out' }),
+    F(30, { armR: [122, 16], armL: [-150, -18], weapon: -34, torso: -9, head: -19, root: [0, -2], stretch: 1.04, face: 'dazed' }),
+  ] },
 });
+/** Scratch for the bee's landing spot: the head joint of the seat being drawn. */
+const NOSE: Point = { x: 0, y: 0 };
 
 function clockIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void { drawFood(ctx, 'jar', x, y, 4, HONEY_HEX); }
 
@@ -132,6 +145,10 @@ export interface HiveSeat extends Seat {
   dipT: number;
   /** The skep being dipped (an index into SKEP_X), or -1. */
   dipSkep: number;
+  /** 1 while this hold has a bee coming (rolled when the hold starts; it lands at BEE_AT). */
+  beeDue: number;
+  /** Frames left of the bee on the nose: the hold is paused and the stick ignored while it is above 0. */
+  beeT: number;
 }
 
 /** One straw skep on the bench, indexed like SKEP_X. */
@@ -174,6 +191,8 @@ export class HiveScreen extends Screen {
   declare skeps: Skep[];
   /** The swarm drifting over the bench for the whole round. */
   declare swarm: Swarm;
+  /** Bees that have landed on a nose this round (the joke's count, for the tests and the desync canary). */
+  declare bees: number;
   /** Honey the round is played to: what the order still needs, or FALLBACK_TARGET with no run. */
   declare target: number;
   /** Honey in the party's crate right now. */
@@ -208,9 +227,10 @@ export class HiveScreen extends Screen {
       s.x = SKEP_X[n === 1 ? 2 : R(i * (SKEP_X.length - 1) / (n - 1))];
       s.rig.weapon = HONEY_DIPPER; s.rig.dipperWet = 0;
       s.player.setOverlay(HIVE_ANIMS);
-      s.dipT = 0; s.dipSkep = -1;
+      s.dipT = 0; s.dipSkep = -1; s.beeDue = 0; s.beeT = 0;
       seatAnim(s, 'carry');
     }
+    this.bees = 0;
     this.skeps = [];
     for (let i = 0; i < SKEP_X.length; i++) this.skeps.push({ refill: 0, held: 0 });
     this.swarm = { phase: 0, x: VIEW_W / 2, tx: VIEW_W / 2 };
@@ -268,6 +288,8 @@ export class HiveScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.bumpT > 0) { s.bumpT--; s.moving = false; s.player.tick(); continue; }
+      // the bee on the nose: everything waits, the hold included, until it flies off
+      if (s.beeT > 0) { if (--s.beeT === 0) seatAnim(s, s.dipT > 0 ? 'dip' : 'carry', true); s.moving = false; s.player.tick(); continue; }
       const held = input.held(s.slot, 'action');
       if (held) {
         // holding at a full skep: the first held frame takes the skep (dipT 1), every one after it climbs the
@@ -275,6 +297,7 @@ export class HiveScreen extends Screen {
         const was = s.dipT;
         if (was === 0) this.tryDip(s);
         else if (++s.dipT >= DIP_HOLD) this.landDip(s);
+        else if (s.beeDue && s.dipT === BEE_AT) this.beeLands(s);
         if (was > 0 || s.dipT > 0) { s.moving = false; s.player.tick(); continue; }
       } else if (s.dipT > 0) this.letGo(s);
       const ax = input.axisX(s.slot);
@@ -304,6 +327,7 @@ export class HiveScreen extends Screen {
     if (best < 0) return;
     this.skeps[best].held = 1;
     s.dipT = 1; s.dipSkep = best; s.moving = false;
+    s.beeDue = rng.int(1, BEE_ODDS) === 1 ? 1 : 0;   // the deal: one dip in BEE_ODDS has a visitor
     s.facing = SKEP_X[best] >= s.x ? 1 : -1;
     seatAnim(s, 'dip', true);
     burstDust(SKEP_X[best], ROWS.bench - 4, 2, 0.9, true);
@@ -315,6 +339,13 @@ export class HiveScreen extends Screen {
     if (s.dipSkep >= 0) this.skeps[s.dipSkep].held = 0;
     s.dipT = 0; s.dipSkep = -1;
     seatAnim(s, 'carry', true);
+  }
+
+  /** The joke: a bee lands on the nose. The hold pauses where it is (dipT keeps its count, the skep stays claimed) for BEE_FRAMES. */
+  beeLands(s: HiveSeat): void {
+    s.beeDue = 0; s.beeT = BEE_FRAMES; this.bees++;
+    seatAnim(s, 'beeNose', true);
+    this.game.audio.play('buzz');
   }
 
   /** The dipper comes out full: +1 to the seat and to the party, a ring at the doorway, a jar in the crate, and that skep empties. */
@@ -369,6 +400,7 @@ export class HiveScreen extends Screen {
     // the honey runs AFTER the plates, the pond's rule for its caught trout: the payoff of the only beat that
     // scores must never be hidden by a name card, and the strand's whole job is to be read
     for (let i = 0; i < this.seats.length; i++) this.drawStrand(ctx, this.seats[i]);
+    for (let i = 0; i < this.seats.length; i++) if (this.seats[i].beeT > 0) this.drawNoseBee(ctx, this.seats[i], f);
     drawClock(ctx, this.countStr, this.total / this.target, clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
@@ -401,6 +433,22 @@ export class HiveScreen extends Screen {
   }
 
   /**
+   * The curious bee: down from the swarm to the tip of the nose over BEE_IN frames, sat there grooming (the wing
+   * flip every four frames), and back up and away over the last BEE_OUT. The nose is the head joint pushed out a
+   * head's radius the way the critter is facing, read off the rig's last drawRig as the strand reads the tip.
+   */
+  drawNoseBee(ctx: CanvasRenderingContext2D, s: HiveSeat, f: number): void {
+    const rig = s.rig, head = jointScreen(rig, 'head', NOSE);
+    const nx = R(head.x + s.facing * (rig.p.headR * rig.scale + 3)), ny = R(head.y + 1);
+    const gone = BEE_FRAMES - s.beeT, sw = this.swarm, sh = SWARM_SHAPE[CALM];
+    const fx = R(sw.x + (VIEW_W / 2 - sw.x) * sh.centre), fy = sh.cy;
+    let x = nx, y = ny;
+    if (gone < BEE_IN) { const k = gone / BEE_IN; x = R(fx + (nx - fx) * k); y = R(fy + (ny - fy) * k); }
+    else if (s.beeT < BEE_OUT) { const k = 1 - s.beeT / BEE_OUT; x = R(nx + (fx - nx) * k); y = R(ny + (fy - ny) * k - k * 20); }
+    drawBee(ctx, x, y, (f >> 2) & 1);
+  }
+
+  /**
    * A skep, and - when it still has honey - the SIGNAL.hive sparkle above its knob: the same 6x6 gold mark the
    * coop's fresh egg wears, on the same index-hashed blink, because it means the same thing. The index hash keeps
    * the five skeps off one beat, so the bench twinkles instead of flashing.
@@ -424,9 +472,9 @@ export class HiveScreen extends Screen {
   override summary() {
     const sw = this.swarm;
     return {
-      honey: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
+      honey: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, bees: this.bees,
       swarm: { x: R(sw.x) },
-      seats: this.seats.map((s) => [s.slot, R(s.x), s.count, s.dipT, s.bumpT]),
+      seats: this.seats.map((s) => [s.slot, R(s.x), s.count, s.dipT, s.bumpT, s.beeT]),
       // [x, refill] per skep: a headless test needs the x to drive a seat to one, and the refill to see it empty
       skeps: this.skeps.map((k, i) => [SKEP_X[i], k.refill]),
     };
@@ -436,12 +484,12 @@ export class HiveScreen extends Screen {
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
     const sw = this.swarm;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.bees);
     // the swarm's whole state: its x is rng-driven, so these three numbers reproduce the drawn cloud
     f.push(sw.phase, sw.x, sw.tx);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      f.push(s.x, s.facing, s.count, s.dipT, s.dipSkep, s.bumpT, s.moving ? 1 : 0);
+      f.push(s.x, s.facing, s.count, s.dipT, s.dipSkep, s.bumpT, s.moving ? 1 : 0, s.beeDue, s.beeT);
     }
     for (let i = 0; i < this.skeps.length; i++) f.push(this.skeps[i].refill, this.skeps[i].held);
     return f;

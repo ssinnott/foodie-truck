@@ -27,7 +27,7 @@ import { drawTicket, drawSign, drawSlate, drawStamp, drawStars, drawHint, drawDi
 import { confirmPressed, cancelPressed } from '../menuinput.ts';
 import { drawLane } from '../../art/logo.ts';
 import { TRUCK } from '../../art/truck.ts';
-import { recipeOf } from '../run.ts';
+import { recipeOf, twistTag } from '../run.ts';
 
 /** One card per line across the top: three of the select screen's own card width and gap. */
 const CARD_Y = 46, CARD_H = 124;
@@ -198,7 +198,7 @@ export class StageScreen extends Screen {
         place: place ? place.name : ln.place.toUpperCase(),
         customers: ln.customers.map((c) => {
           const bi = bustOf(c.customer);
-          return { bust: bi, name: this.busts[bi].def.name, lines: wrapDish(recipeOf(c.recipe).dish) };
+          return { bust: bi, name: this.busts[bi].def.name, lines: wrapDish(recipeOf(c.recipe).dish + twistTag(c)) };
         }),
       };
     });

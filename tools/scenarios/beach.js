@@ -28,8 +28,11 @@ const POUNCE_FRAMES = 12, DART_R = 46, DART_FRAMES = 14, TIRED_FRAMES = 36, CRUS
 
 /** Hold the finish line out of reach so a +1 can never end the round mid-test (run.gather still clamps to the order). */
 function holdTarget(page) {
-  return page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(sc.target, sc.total + 6); sc.setTotal(sc.total); });
+  // ...and hold the tide: the wave locks every seat for 40 frames, and the beats under test count frames
+  return page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(sc.target, sc.total + 6); sc.setTotal(sc.total); sc.waveIn = 100000; });
 }
+/** The jokes (screens/beach.ts). */
+const PINCH_FRAMES = 40, WAVE_FRAMES = 40;
 /** The strand's things as the sim holds them. */
 function things(page) {
   return page.evaluate(() => window.__game.game.screen.things.map((t) => ({ active: t.active, x: t.x, dir: t.dir, state: t.state, t: t.t, dartT: t.dartT, cool: t.cool })));
@@ -37,6 +40,65 @@ function things(page) {
 const nearest = (ts, x) => { let b = -1, bd = 1e9; for (let i = 0; i < ts.length; i++) { if (!ts[i].active) continue; const d = Math.abs(ts[i].x - x); if (d < bd) { bd = d; b = i; } } return b; };
 
 export const SCENARIOS = {
+  /**
+   * beachPinch - the pinch: a crab still running is grabbed. It grabs back: no +1, the crab is 'held' on the paw,
+   *              the seat runs its circle for 40 frames (pinches 1), then the crab drops to the sand beside the
+   *              seat, stopped and tired, and the next grab takes it. Writes beach-pinch.
+   */
+  async beachPinch(server) {
+    await withPage(server, BOOT, async (api, page) => {
+      await api.step(2);
+      await holdTarget(page);
+      const c = await page.evaluate(() => {
+        const sc = window.__game.game.screen, i = sc.things.findIndex((t) => t.active), t = sc.things[i];
+        sc.nextSpawn = 100000;
+        for (const o of sc.things) if (o !== t) o.active = false;
+        t.state = 1; t.t = 300; t.dartT = 0; t.cool = 500; t.dir = 1; t.x = 300;
+        sc.seats[0].x = 306; sc.seats[1].x = 560;
+        return i;
+      });
+      await api.press(0, { action: true }, 1, 0);
+      await api.step(1);
+      const p = await api.summary();
+      assert(p.top.pinches === 1 && p.top.seats[0].count === 0 && p.top.total === 0, `a running crab grabs back (pinches ${p.top.pinches}, count ${p.top.seats[0].count})`);
+      assert(p.top.seats[0].pinchT === PINCH_FRAMES - 1 && p.top.seats[0].anim === 'run', `the seat runs its circle (pinchT ${p.top.seats[0].pinchT}, anim '${p.top.seats[0].anim}')`);
+      let ts = await things(page);
+      assert(ts[c].active && ts[c].state === 4, `the crab is on the paw (state ${ts[c].state})`);
+      await api.step(10);
+      await api.shot('beach-pinch');
+      await api.step(PINCH_FRAMES - 11);
+      ts = await things(page);
+      const s = (await api.summary()).top.seats[0];
+      assert(s.pinchT === 0 && ts[c].active && ts[c].state === 2 && ts[c].cool > 0 && Math.abs(ts[c].x - s.x) <= 24, `the crab drops beside the seat, tired (state ${ts[c].state}, cool ${ts[c].cool}, x ${ts[c].x} vs seat ${s.x})`);
+      await page.evaluate((x) => { window.__game.game.screen.seats[0].x = x; }, ts[c].x);
+      await api.press(0, { action: true }, 1, 0);
+      const got = await api.summary();
+      assert(got.top.seats[0].count === 1, `and the next grab takes it (count ${got.top.seats[0].count})`);
+    });
+  },
+  /**
+   * beachWave - the seventh wave: the tide is brought in. Everyone hops and drips for 40 frames with the stick
+   *             locked (waves 1, waveT 40, wetT 40 on every seat), nothing is lost, and it goes out again.
+   *             Writes beach-wave.
+   */
+  async beachWave(server) {
+    await withPage(server, BOOT, async (api, page) => {
+      await api.step(2);
+      await holdTarget(page);
+      await page.evaluate(() => { window.__game.game.screen.waveIn = 1; });
+      await api.step(1);
+      const w = await api.summary();
+      assert(w.top.waves === 1 && w.top.waveT === WAVE_FRAMES && w.top.seats.every((s) => s.wetT === WAVE_FRAMES && s.anim === 'hop'), `the wave rolls up and everyone hops (waves ${w.top.waves}, waveT ${w.top.waveT}, wetT ${w.top.seats.map((s) => s.wetT).join()})`);
+      const x0 = w.top.seats[0].x;
+      await api.hold(0, { right: true }); await api.step(12); await api.release(0);
+      await api.shot('beach-wave');
+      const mid = await api.summary();
+      assert(mid.top.seats[0].x === x0, `the stick does nothing while the seat drips (x ${x0} -> ${mid.top.seats[0].x})`);
+      await api.step(WAVE_FRAMES);
+      const out = await api.summary();
+      assert(out.top.waveT === 0 && out.top.seats.every((s) => s.wetT === 0) && out.top.total === 0, `the wave has gone out and nothing was lost (waveT ${out.top.waveT}, total ${out.top.total})`);
+    });
+  },
   async beach(server) {
     await withPage(server, BOOT, async (api, page) => {
       await api.step(2);

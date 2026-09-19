@@ -112,6 +112,9 @@ const PULL_PRESSES = 12, PULL_STEP = GAUGE_UNITS / PULL_PRESSES;
 const GRIP_TIMEOUT = 150;
 /** The pull beat, in frames: the anim's own length. */
 const PULL_FRAMES = 14;
+/** The whopper: one top in WHOPPER_ODDS has a root WHOPPER_SCALE times the size under it, and the puller goes over backwards for WHOPPER_FRAMES. */
+const WHOPPER_ODDS = 8, WHOPPER_FRAMES = 30, WHOPPER_SCALE = 2.6;
+const WHOA = 'WHOA!';
 
 /**
  * Cosmetic pools, both fixed and neither in the checksum: the hole a pulled root leaves (four steps of 10 frames,
@@ -195,6 +198,8 @@ export interface CropTop {
   x: number;
   /** 1 while a seat has hold of it. A number, not a boolean: checksumFields() hashes it. */
   held: number;
+  /** 1 when the root under it is the whopper (rolled when it is planted; nothing above ground gives it away). */
+  whopper: number;
 }
 
 /** The hole a pulled root leaves, in four stepped frames. Cosmetic: a fixed pool, out of the checksum. */
@@ -214,6 +219,8 @@ export interface RootFlight {
   y0: number;
   /** Party index of the seat whose trug it is flying to (an index into `seats`). */
   seat: number;
+  /** 1 for the whopper: drawn WHOPPER_SCALE times the size on its way to the trug. */
+  big: number;
 }
 
 /**
@@ -280,6 +287,8 @@ export class GardenScreen extends Screen {
   declare total: number;
   /** Roots pulled this round (summary / checksum only). */
   declare pulls: number;
+  /** Whoppers pulled this round (the joke's count, for the tests and the desync canary). */
+  declare whoppers: number;
   /** The clock's count, rebuilt by setTotal(): 'total/target'. */
   declare countStr: string;
   /** The hint line under the row, built once in enter() with the seat's own action key. */
@@ -336,7 +345,7 @@ export class GardenScreen extends Screen {
     }
 
     this.tops = [];
-    for (let i = 0; i < MAX_TOPS; i++) this.tops.push({ active: false, x: 0, held: 0 });
+    for (let i = 0; i < MAX_TOPS; i++) this.tops.push({ active: false, x: 0, held: 0, whopper: 0 });
     this.plantBed();
     this.nextSpawn = rng.int(SPAWN_MIN, SPAWN_MAX);
 
@@ -344,14 +353,14 @@ export class GardenScreen extends Screen {
     for (let i = 0; i < MAX_HOLES; i++) this.holes.push({ t: HOLE_FRAMES, x: 0 });
     this.holeCursor = 0;
     this.flights = [];
-    for (let i = 0; i < MAX_FLIGHTS; i++) this.flights.push({ t: FLIGHT_FRAMES, x0: 0, y0: 0, seat: 0 });
+    for (let i = 0; i < MAX_FLIGHTS; i++) this.flights.push({ t: FLIGHT_FRAMES, x0: 0, y0: 0, seat: 0, big: 0 });
     this.flightCursor = 0;
 
     const need = run ? run.need(this.ing) : null;
     // the REMAINDER, not the whole line: the map may already have banked some (the other six mini-games agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;
-    this.pulls = 0;
+    this.pulls = 0; this.whoppers = 0;
     this.countStr = '0/' + this.target;
     this.hint = 'MOVE: LEFT/RIGHT   PULL: TAP ' + game.input.keyText(0, 'action') + ' OVER AND OVER';
     this.cardKey = game.input.keyText(0, 'action');
@@ -370,7 +379,7 @@ export class GardenScreen extends Screen {
     const span = TOP_X_MAX - TOP_X_MIN;
     for (let i = 0; i < SEED_TOPS; i++) {
       const t = this.tops[i];
-      t.active = true; t.held = 0;
+      t.active = true; t.held = 0; t.whopper = rng.int(1, WHOPPER_ODDS) === 1 ? 1 : 0;
       t.x = TOP_X_MIN + R(i * span / (SEED_TOPS - 1)) + rng.int(-10, 10);
       if (t.x < TOP_X_MIN) t.x = TOP_X_MIN; else if (t.x > TOP_X_MAX) t.x = TOP_X_MAX;
     }
@@ -487,12 +496,15 @@ export class GardenScreen extends Screen {
   pullRoot(s: GardenSeat, t: CropTop): void {
     t.active = false;   // the root is out, so the slot is free and the spawner replants it elsewhere
     s.count++; this.setTotal(this.total + 1);
-    s.state = PULL; s.t = PULL_FRAMES; s.pull = 0; seatAnim(s, 'pullOut', true);
     this.pulls++;
+    // the whopper: the same +1, but the root is enormous and the puller goes over backwards with it
+    const big = t.whopper;
+    if (big) { this.whoppers++; s.state = PULL; s.t = WHOPPER_FRAMES; s.pull = 0; seatAnim(s, 'overBackwards', true); floatText(s.x, s.y - 70, WHOA, UI.cream, 1, true); }
+    else { s.state = PULL; s.t = PULL_FRAMES; s.pull = 0; seatAnim(s, 'pullOut', true); }
     this.openHole(t.x);
     const fl = this.flights[this.flightCursor]; this.flightCursor = (this.flightCursor + 1) % this.flights.length;
-    fl.t = 0; fl.x0 = t.x; fl.y0 = ROOT_Y - 12; fl.seat = s.index;
-    burstCrumbs(t.x, ROOT_Y - 2, ROOT_Y + 6, CROP.soil, 8, true);
+    fl.t = 0; fl.x0 = t.x; fl.y0 = ROOT_Y - 12; fl.seat = s.index; fl.big = big;
+    burstCrumbs(t.x, ROOT_Y - 2, ROOT_Y + 6, CROP.soil, big ? 20 : 8, true);
     ringAt(t.x, ROOT_Y - 4, 3, 13, UI.cream, 2, 12, true, true);
     burstSparkle(t.x, ROOT_Y - 18, 4, SIGNAL.garden, true);
     floatText(t.x + s.facing * 14, ROOT_Y - 54, PLUS_ONE, s.colour, 1, true);
@@ -524,7 +536,7 @@ export class GardenScreen extends Screen {
     const x = this.freeX();
     if (x < 0) return;
     const t = this.tops[slot];
-    t.active = true; t.held = 0; t.x = x;
+    t.active = true; t.held = 0; t.x = x; t.whopper = rng.int(1, WHOPPER_ODDS) === 1 ? 1 : 0;
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
@@ -592,7 +604,11 @@ export class GardenScreen extends Screen {
     if (fl.t >= FLIGHT_FRAMES) return;
     const s = this.seats[fl.seat], k = fl.t / FLIGHT_FRAMES;
     const tx = s.trugPt.x, ty = s.trugPt.y + 10;
-    drawPulledRoot(ctx, R(fl.x0 + (tx - fl.x0) * k), R(fl.y0 + (ty - fl.y0) * k - Math.sin(k * Math.PI) * FLIGHT_LIFT), this.icon, this.hex);
+    const x = R(fl.x0 + (tx - fl.x0) * k), y = R(fl.y0 + (ty - fl.y0) * k - Math.sin(k * Math.PI) * FLIGHT_LIFT);
+    if (!fl.big) { drawPulledRoot(ctx, x, y, this.icon, this.hex); return; }
+    // the whopper: the same root blown up about its own middle, shrinking back to trug size as it lands
+    const sc = 1 + (WHOPPER_SCALE - 1) * (1 - k);
+    ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); drawPulledRoot(ctx, 0, 0, this.icon, this.hex); ctx.restore();
   }
 
   /**
@@ -627,27 +643,27 @@ export class GardenScreen extends Screen {
   override summary() {
     return {
       total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
-      pulls: this.pulls,
+      pulls: this.pulls, whoppers: this.whoppers,
       // pull is the gauge, 0..GAUGE_UNITS, meaningful while the seat has hold of something (top >= 0)
       seats: this.seats.map((s) => ({
         slot: s.slot, x: R(s.x), count: s.count, state: STATE_NAMES[s.state], t: s.t, pull: s.pull, top: s.top, grip: s.grip,
       })),
-      /** [x, held] per standing top. */
-      tops: this.tops.filter((t) => t.active).map((t) => [t.x, t.held]),
+      /** [x, held, whopper] per standing top. */
+      tops: this.tops.filter((t) => t.active).map((t) => [t.x, t.held, t.whopper]),
     };
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pulls);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pulls, this.whoppers);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       f.push(s.x, s.facing, s.count, s.state, s.t, s.grip, s.gripX, s.pull, s.top, s.moving ? 1 : 0);
     }
     for (let i = 0; i < this.tops.length; i++) {
       const t = this.tops[i];
-      f.push(t.active ? 1 : 0, t.x, t.held);
+      f.push(t.active ? 1 : 0, t.x, t.held, t.whopper);
     }
     return f;
   }
