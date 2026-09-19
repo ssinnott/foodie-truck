@@ -21,6 +21,11 @@ whole game stands on**:
 
 ## A. A joke for every mini-game
 
+> **Done.** Every row below shipped (`docs/GDD.md` section 5 has the table as built). Two things changed on the
+> way: the cove's pinch is for a crab grabbed while it is still *running* - the sparkle already says pounce on a
+> stopped one, so the joke is the greedy grab - and the dairy's tail is a count of squirts across pails, not
+> inside one. The kitchen's two extra beats at the foot of this section are not built.
+
 The orchard's wormy apple and its bomb (`screens/orchard.ts`, `boomT` on the seat) are the pattern: a seeded
 chance on the thing you were going to catch anyway, a short held animation on that seat, a sound, and then carry
 on. Each joke below follows it exactly. **Cost per joke:** one seat timer in the screen's `update()`, one pose or
@@ -73,6 +78,8 @@ change, and the tipped cart gives the same "something good on the road" feeling 
 ---
 
 ## C. More recipes on the ingredients we have
+
+> **Done.** All eighteen shipped, with a dish drawing each; the menu is forty.
 
 Sixteen of the twenty-three ingredients appear in exactly one recipe, and honey, trout and carrots, three of the
 first seven, are among them. A recipe costs one row in `content/recipes.ts` and one dish drawing in `art/dishes.ts`;

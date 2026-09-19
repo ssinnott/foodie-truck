@@ -133,6 +133,28 @@ never changes — a pear is caught like an apple — but the visit looks like it
 farm's plants, the mill's grain) and where the ingredient is a different kind of thing it plays as one: butter is
 milk and then the churn, salt is a pan that has to crust before it can be scraped.
 
+**Every mini-game has one joke** (the orchard has two), built the same way as the orchard's bomb: a seeded chance
+on the thing you were going to gather anyway, a short held beat on that seat with the stick locked, a sound, and
+then carry on. A joke costs a moment and never a point, and each one is drawn from `rng` inside `update()`, so
+four peers in lockstep see the same hen.
+
+| Landmark | The joke | The deal | What plays |
+|---|---|---|---|
+| Orchard | The wormy apple; the bomb | 1 in 10 each | The bump beat; the fuse, the bang, the soot (above) |
+| Pond | The old boot | 1 bite in 8, never two in a row | The same twelve taps; the boot comes up the line to the paw, the rod is set down, it is held out and tipped (drips off the toe) for 30 frames, then lobbed back with a splash. No +1 |
+| Coop | The broody hen | 1 nest egg in 8, sat on for 90 frames | The reach gets a peck: the paw is yanked back, a hop on one foot for 24 frames, OW!; the hen clucks and hops off when her time is up and the egg is there for the next reach. No floor cue under a sat-on nest |
+| Dairy | The tail | Every 20..40 squirts per stall, never on a pail's twelfth | The tail comes across the face: rocked back on the stool and dazed for 20 frames, the pail keeps its count |
+| Mill | The sneeze | 1 sack tied in 6 | As the tie beat ends, 24 frames of wind-up (head back, eyes shut) then ACHOO: the body snaps forward and a cloud of the visit's own dust (chaff on a rice visit) goes up; 36 frames locked, the fresh sack untouched |
+| Hives | The curious bee | 1 dip in 6, 20 frames into the hold | One bee leaves the swarm and lands on the nose: cross-eyed and frozen for 40 frames with the hold paused where it was (the bar keeps its fill, as letting go does), then the bee goes and the hold runs on |
+| Farm | The whopper | 1 top in 8; nothing above ground gives it away | The twelfth press brings out a root nearly three times the size, still +1, and the puller goes over backwards with it for 30 frames, WHOA! |
+| Bramble Bank | The thorn | 1 berry in 8 ripens with a bramble drawn across it | The first reach gets the prick: the paw whipped to the mouth for 24 frames, OW!; the thorn is gone with it and the berry is picked on the next reach. The ring is cream, never `SIGNAL.hot`: nothing on the bank is a danger |
+| Cockle Cove | The pinch | Always, for a crab grabbed while it is still RUNNING (the sparkle says pounce on one that has stopped) | The crab hangs off the paw while the critter runs a circle on the spot for 40 frames, OW!, then drops to the sand beside them, tired, which makes it the easy grab next |
+| Cockle Cove | The seventh wave | Every 600..900 frames | One wave rolls up over the strand line: everyone on the sand hops and drips for 40 frames with the stick locked, and a clump of weed lands on one head |
+
+Every joke has a scenario of its own in `tools/scenarios/` (`pondBoot`, `coopBroody`, `dairySwish`, `millSneeze`,
+`hiveBee`, `gardenWhopper`, `brambleThorn`, `beachPinch`, `beachWave`), and the rules' own scenarios hold the
+jokes off (a boot in the reel test would read as a lost fish).
+
 **Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
 kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
 part of the critter overlaps the thing, the seat can use it. Nobody has to find an exact spot.

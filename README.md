@@ -13,7 +13,9 @@ six vegetables besides the carrot, each its own plant; the dairy milks, and chur
 fills rice sacks as well as flour; Bramble Bank's strawberries and blueberries are picked off the bushes; and at
 Cockle Cove crabs are chased along the sand, weed raked off the strand and salt scraped from the pans. Every one of them is played with the same three inputs — move left and right, tap the
 action button over and over, or hold it down — with no timing windows and nothing to lose, so a small child can play
-the whole game.
+the whole game. Every mini-game has a joke in it - the old boot on the line, the hen sat on the egg, the cow's
+tail, the flour sneeze, the bee on the nose, the whopper of a carrot, the thorn, the crab that pinches back and
+the wave that soaks everyone - and none of them costs more than a moment.
 
 Every day is laid out from a seed: which three recipes are on the menu, which three landmarks the lines form at,
 who is in each line and what they order. The **day board** pins the whole plan up before the truck opens; the
