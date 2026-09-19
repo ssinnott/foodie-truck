@@ -201,8 +201,11 @@ fridge sends them to the first cooking step, and the frame a step completes, eve
 and the item on the board, what is in the bowl, in the pot, on the oven's tray - takes off one item every four
 frames and arcs into the next step's prop: the tenth chop clears the board and the dice fly into the bowl, the
 finished stir empties the bowl into the pot or the oven, and the bake drops the dish onto the plate at the hatch,
-where it is stacked before the bell is rung. A prop only draws itself loaded while the batch is in it (lumps in the
-bowl, the ingredient's colour over the pot's rim, the tray in the oven window). This is a graphic: no step waits
+where it is stacked before the bell is rung - and the moment the last item lands, the stack becomes **the finished
+dish**: every recipe has a picture of its own (`art/dishes.ts`: the pie under its lattice, the soup in its bowl, the
+stack of griddle cakes with the butter on top), so what sits at the hatch is what the customer asked for, and it is
+that picture they are seen eating on results, a bite out of it per chew. A prop only draws itself loaded while the
+batch is in it (lumps in the bowl, the ingredient's colour over the pot's rim, the tray in the oven window). This is a graphic: no step waits
 for a landing, and nothing about it is simulated (`kitchen.ts` flights are cosmetic).
 
 Nothing can burn or be missed: every completed step scores its full 2, so stars = round(total / max × 3) is always

@@ -8,6 +8,7 @@
 import { INK, boxOutlined, polyOutlined, discShaded, makeGlowSprite, pulse } from './layers.ts';
 import { UI, SIGNAL, PLUM, PLAYER_COLORS } from '../constants.ts';
 import { drawFood, foodTones } from './food.ts';
+import { drawDish } from './dishes.ts';
 import { steamPuff } from './fx.ts';
 import { pathRR } from '../lib/art/shading.ts';
 import { drawText } from '../engine/text.ts';
@@ -393,14 +394,23 @@ export function drawOvenWindow(ctx, heat, tray) {
   ctx.restore();
 }
 
+/** The finished dish's size on the plate: 14 px wide inside the plate's 26, standing on its rim. */
+const DISH_S = 7, DISH_DY = -5;
 /**
- * The plate on the shelf with `n` of the order's components stacked on it in recipe order; `squash` > 1 is the
- * landing beat of the last one. `icons` / `hexes` are the order's ingredient glyph ids and colours.
+ * The plate on the shelf. With `dish` (an ORDERS id, art/dishes.ts) it carries the FINISHED DISH, `bites` of it
+ * eaten; without, `n` of the order's components stacked on it in recipe order (`icons` / `hexes` are the order's
+ * ingredient glyph ids and colours) while they are still arriving. `squash` > 1 is the landing beat.
  */
-export function drawPlate(ctx, x, y, icons, hexes, n, squash) {
+export function drawPlate(ctx, x, y, icons, hexes, n, squash, dish = null, bites = 0) {
   ctx.fillStyle = INK; ctx.fillRect(x - 14, y - 1, 28, 8);
   ctx.fillStyle = PROPS.plate; ctx.fillRect(x - 13, y, 26, 6);
   ctx.fillStyle = PROPS.plateRim; ctx.fillRect(x - 12, y + 4, 24, 2);
+  if (dish) {
+    if (squash !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(squash, 1 / squash); ctx.translate(-x, -y); }
+    drawDish(ctx, dish, x, y + DISH_DY, DISH_S, bites);
+    if (squash !== 1) ctx.restore();
+    return;
+  }
   for (let i = 0; i < n && i < icons.length; i++) {
     const last = i === n - 1, k = last ? squash : 1;
     const cx = plateSlotX(x, i), cy = plateSlotY(y, i);

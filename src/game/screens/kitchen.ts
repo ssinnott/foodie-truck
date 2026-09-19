@@ -227,6 +227,8 @@ export class KitchenScreen extends Screen {
   declare waiting: number;
   /** Frames since a unit last landed on the plate (the squash), capped. */
   declare landT: number;
+  /** The order's id: which finished dish (art/dishes.ts) the plate shows once the whole batch has landed on it. */
+  declare dishId: string;
   /** Scratch for the intake points, refilled by fly(); never reallocated. */
   declare pt: Point;
   /** Per-ingredient glyph and hex tables for the order ticket (game/ui.ts drawOrderTicket). */
@@ -301,6 +303,7 @@ export class KitchenScreen extends Screen {
     // the batch is bound for the fridge's destination from the first frame; nothing is in the air yet
     for (const fl of this.flights) fl.active = false;
     this.batchAt = this.pullDest; this.batchFrom = FRIDGE_S; this.landed = 0; this.waiting = 0; this.landT = LAND_SQUASH;
+    this.dishId = order.id;
     this.ticketOpts = { icons: {}, hexes: {} };
     this.ticketHead = [`FOR ${getCustomer(order.customer).name}`, order.dish];
     for (const n of order.needs) { const ing = INGREDIENTS[n.id]; if (ing) { this.ticketOpts.icons[n.id] = ing.icon; this.ticketOpts.hexes[n.id] = ing.hex; } }
@@ -522,13 +525,20 @@ export class KitchenScreen extends Screen {
     if (this.landT < LAND_SQUASH) this.landT++;
   }
 
-  /** A unit lands: it joins what is at its station (if the batch is still bound there), with a ring, and a puff of steam off the pot. */
+  /** A unit lands: it joins what is at its station (if the batch is still bound there), with a ring, and a puff of
+   *  steam off the pot. The last one onto the plate turns the stack into the finished dish, with a sparkle. */
   land(fl: Flight): void {
     fl.active = false;
-    if (fl.dest === this.batchAt) { this.landed++; if (fl.dest === PLATE_S) this.landT = 0; }
+    if (fl.dest === this.batchAt) {
+      this.landed++;
+      if (fl.dest === PLATE_S) { this.landT = 0; if (this.dished()) burstSparkle(fl.x1, fl.y1 - 6, 6, UI.cream, true); }
+    }
     ringAt(fl.x1, fl.y1, 2, 9, UI.cream, 2, 10, false, true);
     if (fl.dest === STOVE) burstSteam(fl.x1, fl.y1 - 4, 2, true);
   }
+
+  /** True once the whole batch is on the plate: it is the dish now, not a stack of what went into it. */
+  dished(): boolean { return this.batchAt === PLATE_S && this.landed >= this.pullIcons.length; }
 
   /** True while station `k`'s prop has the batch in it: bound there with something landed, or still seeing it off. */
   loaded(k: number): boolean { return (this.batchAt === k && this.landed > 0) || (this.batchFrom === k && this.waiting > 0); }
@@ -602,10 +612,11 @@ export class KitchenScreen extends Screen {
     // the tray is in the window while the batch is in the oven; the glow follows the hold and lingers after it
     const baking = station === OVEN_S && st.t > 0;
     drawOvenWindow(ctx, baking ? st.t / OVEN_FRAMES : this.ovenGlow / 60, this.loaded(OVEN_S));
-    // the plate: a component is on it once the first unit of that ingredient has landed there
+    // the plate: a component is on it once the first unit of that ingredient has landed there, and the whole
+    // batch landed is the finished dish itself (art/dishes.ts)
     let plated = 0;
     if (this.batchAt === PLATE_S) for (let j = 0; j < this.dishFirst.length; j++) if (this.landed > this.dishFirst[j]) plated++;
-    drawPlate(ctx, PLATE.x + 13, PLATE.y, this.icons, this.hexes, plated, plated > 0 && this.landT < LAND_SQUASH ? 1.25 : 1);
+    drawPlate(ctx, PLATE.x + 13, PLATE.y, this.icons, this.hexes, plated, plated > 0 && this.landT < LAND_SQUASH ? 1.25 : 1, this.dished() ? this.dishId : null);
     drawBellRing(ctx, this.ringT);
     drawKettleSteam(ctx, f);   // the room's pilot light: one plume that never stops, whatever the party is doing
   }
@@ -674,7 +685,7 @@ export class KitchenScreen extends Screen {
     return {
       step: this.stepIdx, steps: this.stepNames, scores: this.scores.slice(), owners: this.owners.slice(), total: this.total, stars: this.stars, served: this.served,
       phase: this.st.phase, t: this.st.t, count: this.st.count, pulled: this.pulled, pulls: this.pullIcons.length, pullDest: this.pullDest,
-      batchAt: this.batchAt, landed: this.landed, flying: this.flights.reduce((n, fl) => n + (fl.active ? 1 : 0), 0),
+      batchAt: this.batchAt, landed: this.landed, flying: this.flights.reduce((n, fl) => n + (fl.active ? 1 : 0), 0), dish: this.dished() ? this.dishId : '',
       seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
     };
   }

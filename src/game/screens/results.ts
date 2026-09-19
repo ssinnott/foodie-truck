@@ -1,5 +1,6 @@
 // RESULTS (docs/GDD.md section 7): the customer at the hatch eating, the plate sliding out to them over 10 frames
-// with the dish on it, three chews (the customer's `eat` anim three times, a component off the plate on each), then a
+// with the dish on it (the recipe's own picture, art/dishes.ts), three chews (the customer's `eat` anim three
+// times, a bite out of the dish on each), then a
 // paper receipt carrying the stars, the tip in coins and - slammed across its foot - the red DELICIOUS / TASTY /
 // EDIBLE stamp, and PRESS Z blinking. Confirm (or 600 frames) banks the customer with run.serve(stars) and calls the
 // next one in line (the `line` screen), or, when they were the last in it, sends the truck back to the map for the
@@ -118,6 +119,8 @@ export class ResultsScreen extends Screen {
   declare icons: string[];
   /** Those ingredients' base hexes, in the same order. */
   declare hexes: string[];
+  /** The order's id: the finished dish (art/dishes.ts) on the plate and in the customer's paw. */
+  declare dishId: string;
   /** The customer at the hatch: their rig, with the dish in its paw until the last bite, ... */
   declare rig: CritterRig;
   /** ... the player driving the idle, the three chews and the cheer, ... */
@@ -164,7 +167,8 @@ export class ResultsScreen extends Screen {
     // `as RigWeapon`: content/critters/items.ts is not typed yet, so its `attach: 'handR'` widens to `string` and
     // its entries miss RigWeapon's `attach?: HandName` by that one field. The table IS a table of rig weapons -
     // rig.ts reads exactly these keys back off it - so the assertion says what items.ts cannot yet.
-    this.rig.weapon = ITEMS.food as RigWeapon; this.rig.heldIcon = this.icons[0]; this.rig.heldHex = this.hexes[0];
+    this.dishId = order.id;
+    this.rig.weapon = ITEMS.dish as RigWeapon; this.rig.heldIcon = this.dishId; this.rig.heldHex = this.hexes[0];
     // the party, watching from along the counter: one rig per seat in its own apron, every idle started a few
     // frames apart so the row does not breathe in lockstep, and one cheer each on a stagger
     this.crew.length = 0;
@@ -240,7 +244,8 @@ export class ResultsScreen extends Screen {
     drawBust(ctx, this.rig, this.player.pose, this.anchor, BUST.x, BUST.y, BUST.w, BUST.h, BUST.scale, this.bustOpts);
     const k = f >= SLIDE_FRAMES ? 1 : f / SLIDE_FRAMES;
     const px = R(PLATE_X0 + (PLATE_X1 - PLATE_X0) * (1 - (1 - k) * (1 - k)));
-    drawPlate(ctx, px, PLATE.y, this.icons, this.hexes, Math.max(0, this.icons.length - this.eaten), 1);
+    // the finished dish, a bite out of it per chew; `eaten` (components) is what the summary reports
+    drawPlate(ctx, px, PLATE.y, this.icons, this.hexes, Math.max(0, this.icons.length - this.eaten), 1, this.dishId, this.chews);
     drawBellRing(ctx, f < 8 ? f : -1);
     (particles as ParticlesDraw).draw(ctx, null);   // every kind in one pass: see ParticlesDraw
     if (f >= RECEIPT_AT) this.drawReceipt(ctx);

@@ -21,7 +21,12 @@
 //   results - opens straight onto results and calls the next in line on action, with the customer banked; and the party
 //             is IN the room, one rig per seat facing the hatch, every one of them cheering on a stagger once the
 //             stars have landed. Writes tools/screens/results-crew.png.
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { withPage, assert } from '../playtest.js';
+
+/** Where the harness writes its screenshots (tools/playtest.js SHOTS). */
+const SHOTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'screens');
 
 /** The standing spots (art/backgrounds/kitchen.js STATION_X); the scenario walks by summary, not by geometry. */
 const STATION_X = [36, 122, 214, 306, 398, 490];
@@ -69,6 +74,48 @@ async function chopAndMix(api) {
 }
 
 export const SCENARIOS = {
+  /**
+   * Every ORDERS entry has a finished-dish glyph of its own (art/dishes.ts), and every one of them draws whole and
+   * at each of the three bite stages without an error and without vanishing: a dish that fell back to the pie, or
+   * a bite clip that ate the whole thing, would put the wrong picture on the plate. Writes tools/screens/dishes.png,
+   * the contact sheet of all of them.
+   */
+  async dishes(server) {
+    await withPage(server, 'skipTo=title', async (api, page) => {
+      const r = await page.evaluate(async () => {
+        const { DISHES, drawDish } = await import('/src/art/dishes.ts');
+        const { ORDERS } = await import('/src/content/recipes.ts');
+        const missing = ORDERS.filter((o) => !DISHES[o.id]).map((o) => o.id);
+        const extra = Object.keys(DISHES).filter((id) => !ORDERS.some((o) => o.id === id));
+        const ids = ORDERS.map((o) => o.id);
+        const c = document.createElement('canvas'); c.id = 'dishes'; c.width = 40 * ids.length + 8; c.height = 96;
+        c.style.cssText = 'position:fixed;left:0;top:0;width:' + c.width * 2 + 'px;height:192px;image-rendering:pixelated;z-index:99';
+        document.body.appendChild(c);
+        const g = c.getContext('2d');
+        g.fillStyle = '#4F5A62'; g.fillRect(0, 0, c.width, c.height);
+        const blank = [], errors = [];
+        ids.forEach((id, i) => {
+          for (let b = 0; b < 4; b++) {
+            const x = 24 + i * 40, y = 14 + b * 22;
+            g.fillStyle = '#FFF6E0'; g.fillRect(x - 13, y + 5, 26, 6);
+            try { drawDish(g, id, x, y, 7, b); } catch (e) { errors.push(`${id}/${b}: ${e.message}`); continue; }
+            // over the plate's cream: any inked pixel means the dish drew; the fourth stage (3 bites) must draw nothing
+            const px = g.getImageData(x - 13, y - 12, 26, 17).data;
+            let ink = 0; for (let k = 0; k < px.length; k += 4) if (px[k] < 0x60 && px[k + 1] < 0x50) ink++;
+            if (b < 3 && ink < 8) blank.push(`${id}/${b}`);
+            if (b === 3 && ink > 0) blank.push(`${id}/3 drew ${ink}`);
+          }
+        });
+        return { n: ids.length, missing, extra, blank, errors };
+      });
+      assert(r.n === 22 && r.missing.length === 0, `every order has a dish glyph (${r.n} orders, missing: ${r.missing.join() || 'none'})`);
+      assert(r.extra.length === 0, `no dish glyph is for an order that does not exist (${r.extra.join() || 'none'})`);
+      assert(r.errors.length === 0, `every dish draws at every bite stage (${r.errors.join('; ') || 'no errors'})`);
+      assert(r.blank.length === 0, `every dish is visible on the plate until the last bite, and gone after it (${r.blank.join() || 'all fine'})`);
+      await page.locator('#dishes').screenshot({ path: path.join(SHOTS, 'dishes.png') });
+    });
+  },
+
   async kitchen(server) {
     await withPage(server, 'skipTo=kitchen&critters=0,1,2,3&order=1', async (api) => {
       await api.step(2);
@@ -147,6 +194,7 @@ export const SCENARIOS = {
       await api.step(10);
       s = await api.summary();
       assert(s.top.batchAt === PLATE && s.top.landed === 6 && s.top.flying === 0, `the dish is on the plate before the bell (at ${s.top.batchAt}, landed ${s.top.landed}, flying ${s.top.flying})`);
+      assert(s.top.dish === 'applePie', `and it is THE PIE, not a stack of apples and eggs (dish '${s.top.dish}')`);
       await api.shot('kitchen-plate');
       await api.press(0, { action: true }, 1, 0);
       s = await api.summary();
