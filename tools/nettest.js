@@ -7,6 +7,7 @@ import { encodeInput, encodeChecksum, encodeStart, encodeDrop, encodeRelay, enco
 import { runChecksum } from '../src/net/checksum.ts';
 import { makeMember, packSeats, freeSlot, uniquePicks, critterTaken, firstFreeCritter, picksDistinct, sortRoster, resetSeats, releaseSeats } from '../src/net/roster.ts';
 import { LOCAL_PLAYERS, MAX_PLAYERS } from '../src/constants.ts';
+import { DAYS_PER_WEEK, DAY_SHAPES, planWeek, planDay, shapeOf, dishesIn } from '../src/game/run.ts';
 import * as bindings from '../src/engine/bindings.ts';
 import { createNetSession, delayForRtt } from '../src/net/session.ts';
 
@@ -25,12 +26,58 @@ const inp = decodeMessage(encodeInput(2, 1000, [1, 2, 3, 255]));
 assert(inp && inp.type === MSG.INPUT && inp.slot === 2 && inp.baseFrame === 1000 && inp.masks.join() === '1,2,3,255', 'INPUT round trip');
 const cs = decodeMessage(encodeChecksum(1, 30, 0xdeadbeef));
 assert(cs && cs.slot === 1 && cs.frame === 30 && cs.sum === 0xdeadbeef, 'CHECKSUM round trip');
-const st = decodeMessage(encodeStart({ seed: 123456789, scene: 3, delay: 4, critters: [0, 2, 1] }));
+const st = decodeMessage(encodeStart({ seed: 123456789, scene: 3, delay: 4, critters: [0, 2, 1], day: 3 }));
 assert(st && st.seed === 123456789 && st.scene === 3 && st.delay === 4 && st.critters.join() === '0,2,1', 'START round trip');
+assert(st && st.day === 3, 'START carries the host\'s day of the week');
+const st0 = decodeMessage(encodeStart({ seed: 1, scene: 0, delay: 1, critters: [0] }));
+assert(st0 && st0.day === 0, 'a START built without a day opens on day 0');
+const stLast = decodeMessage(encodeStart({ seed: 1, scene: 0, delay: 1, critters: [0, 1, 2, 3], day: DAYS_PER_WEEK - 1 }));
+assert(stLast && stLast.day === DAYS_PER_WEEK - 1 && stLast.critters.length === 4, 'the last day of a four-seat week round trips');
+// a START cut short anywhere must decode to null rather than to a half-read day or party
+const full = encodeStart({ seed: 5, scene: 2, delay: 3, critters: [1, 2], day: 4 });
+let truncOk = true;
+for (let i = 1; i < full.length; i++) if (decodeMessage(full.subarray(0, i)) !== null) truncOk = false;
+assert(truncOk, 'every truncation of a START decodes to null');
 const dr = decodeMessage(encodeDrop(3, 777)); assert(dr && dr.slot === 3 && dr.frame === 777, 'DROP round trip');
 const rl = decodeMessage(encodeRelay(1, encodePing(2, 9))); assert(rl && rl.to === 1 && decodeMessage(rl.payload).id === 9, 'RELAY carries an inner packet');
 const hj = decodeMessage(encodeJson(MSG.HELLO, { v: PROTOCOL_VERSION, id: 'abc' })); assert(hj && hj.v === PROTOCOL_VERSION && hj.id === 'abc', 'HELLO json');
 assert(decodeMessage(new Uint8Array([99])) === null && decodeMessage(new Uint8Array(0)) === null, 'unknown / empty packets decode to null');
+
+// ---- game/run.js planWeek: the week is a PURE function of the seed, which is what the one day byte rests on ----
+{
+  const a = planWeek(481920), b = planWeek(481920), c = planWeek(7);
+  assert(JSON.stringify(a) === JSON.stringify(b), 'the same seed lays the same week out');
+  assert(JSON.stringify(a) !== JSON.stringify(c), 'another seed lays another week out');
+  assert(a.length === DAYS_PER_WEEK && DAYS_PER_WEEK === DAY_SHAPES.length, `a week is ${DAYS_PER_WEEK} days`);
+  for (let d = 0; d < DAYS_PER_WEEK; d++) {
+    const shape = DAY_SHAPES[d], plan = a[d];
+    assert(plan.lines.length === shape.lines.length, `day ${d} forms ${shape.lines.length} queues`);
+    assert(plan.lines.every((l, i) => l.customers.length === shape.lines[i]), `day ${d}'s queues are ${shape.lines.join()} long`);
+    assert(plan.recipes.length === shape.recipes, `day ${d}'s menu is ${shape.recipes} recipes`);
+    const places = plan.lines.map((l) => l.place);
+    assert(new Set(places).size === places.length && places.every((x) => x !== 'home'), `day ${d}'s queues are at distinct landmarks, none of them home`);
+    const ordered = plan.lines.flatMap((l) => l.customers.map((cu) => cu.recipe));
+    assert(ordered.every((r) => plan.recipes.includes(r)), `day ${d}: every customer orders off the menu`);
+    assert(plan.recipes.every((r) => ordered.includes(r)), `day ${d}: every recipe on the menu is ordered`);
+    if (!shape.twists) assert(plan.lines.every((l) => l.customers.every((cu) => !cu.twist)), `day ${d} deals no twists`);
+    if (shape.weather === 'clear') assert(plan.weather === 0, `day ${d} is always clear`);
+    if (shape.weather === 'wet') assert(plan.weather === 1 || plan.weather === 2, `day ${d} is always wet (got ${plan.weather})`);
+    assert(shapeOf(d) === shape && dishesIn(shape) === shape.lines.reduce((t, n) => t + n, 0), `day ${d}'s shape reads back`);
+  }
+  // THE FETE cooks the week again: nothing on its menu is a dish the week has not already served
+  const fete = DAY_SHAPES.findIndex((sh) => sh.fromWeek);
+  if (fete > 0) {
+    const before = new Set(a.slice(0, fete).flatMap((p) => p.recipes));
+    assert(a[fete].recipes.every((r) => before.has(r)), 'the fete draws its menu from what the week already served');
+  }
+  // the dev jumps land on the day they name and leave the rest of the week alone
+  const jumped = planWeek(481920, { recipes: [0, 2], day: 2 });
+  assert(jumped[2].recipes.length === 2 && jumped[2].recipes[0] !== undefined, '?recipes= fixes the menu of the day it names');
+  assert(jumped[2].lines.every((l) => l.customers.every((cu) => !cu.twist)), 'a dev-jump day carries no twist');
+  // planDay on its own is still the ordinary day, unchanged
+  const one = planDay(99);
+  assert(one.lines.length === DAY_SHAPES[1].lines.length && one.recipes.length === DAY_SHAPES[1].recipes, 'a bare planDay() is still the ordinary day');
+}
 
 // ---- net/checksum.js: must catch every divergence of the run and produce ZERO false positives ----
 const fakeGame = (screen = { id: 'map', checksumFields: () => [1.5, 2] }) => ({

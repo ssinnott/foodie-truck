@@ -18,6 +18,7 @@ import { AnimPlayer } from '../../lib/art/animation.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import type { PartialPose } from '../../lib/art/poses.ts';
 import { startRun } from '../run.ts';
+import { clearWeek } from '../week.ts';
 import { freshSeed } from '../../lib/engine/rng.ts';
 import { CARD_H, BUST_H, drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.ts';
 import { drawLane, drawPorthole, PORT_R } from '../../art/logo.ts';
@@ -230,6 +231,11 @@ export class SelectScreen extends Screen {
       this.game.rng.seed(opts.seed);
       // the two dev jumps ride along so a capture or a scenario that walks in through the front door still gets its day
       startRun(this.game, { seed: opts.seed, critters: picks, order: opts.order, recipes: opts.recipes });
+      // PLAY is a FRESH WEEK, so the one in progress is forgotten here rather than at the first closed board: a
+      // player who starts a new week and walks away before Monday shuts must not be offered last week's Thursday
+      // by CONTINUE. This is a WRITE, which cannot diverge two peers the way a read could (docs/MULTIPLAYER.md's
+      // rule is about the simulation reading storage), and the select screen is never in a lockstep match.
+      clearWeek();
       audio.play('menu_confirm');
       this.game.fadeTo(() => this.game.replace('stage'));
     }

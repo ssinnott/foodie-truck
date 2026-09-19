@@ -29,7 +29,7 @@ export type Audio = typeof import('../engine/audio.ts')['audio'];
  * same waltz).
  */
 const SCREEN_MUSIC: Record<string, string> = Object.freeze({
-  title: 'title', lobby: 'title', select: 'title', controls: 'title', gallery: 'title',
+  title: 'title', lobby: 'title', select: 'title', controls: 'title', gallery: 'title', book: 'title',
   stage: 'board', map: 'drive', line: 'line', kitchen: 'kitchen', results: 'results',
   orchard: 'gather', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', bramble: 'gather', holt: 'gather', wood: 'gather', terrace: 'gather',
   pond: 'pond', beach: 'pond',
@@ -109,6 +109,26 @@ export interface DayPlanCrossing {
   herd: number;
 }
 
+/**
+ * THE SHAPE OF A DAY (docs/GDD.md section 3, game/run.ts DAY_SHAPES). A week's days differ by shape and not only
+ * by seed: how many queues form and how long each is, how big the menu is, whether twists are dealt at all, and
+ * what the weather is allowed to do.
+ */
+export interface DayShape {
+  /** The name the board prints over the day ('MARKET DAY'), or '' for an ordinary one. */
+  name: string;
+  /** One entry per queue, each the number of customers in it: [2, 2, 2] is the ordinary day. */
+  lines: readonly number[];
+  /** How many recipes the menu draws. */
+  recipes: number;
+  /** false deals no order twists at all, so the opening day reads plainly. */
+  twists: boolean;
+  /** 'clear' | 'roll' (three in five clear, one drizzle, one fog) | 'wet' (drizzle or fog, never clear). */
+  weather: 'clear' | 'roll' | 'wet';
+  /** The menu is drawn from what the week has already served rather than from the whole book. */
+  fromWeek?: boolean;
+}
+
 /** What `planDay` draws from a seed: the menu, the lines and the day's crossings. */
 export interface DayPlan {
   /** ORDERS ids on the day's menu. */
@@ -167,6 +187,14 @@ export interface TruckState {
 export interface Run {
   seed: number;
   party: PartySeat[];
+  /** Which day of the week the truck is on, 0-based (game/run.ts DAY_SHAPES). */
+  day: number;
+  /** The whole week, planned once from the seed before day 0 opens: `week[run.day]` is today. */
+  week: DayPlan[];
+  /** The stars each finished day earned, one entry per day closed so far, in day order. */
+  weekStars: number[];
+  /** The takings each finished day earned, in day order; `score` is this week's running total. */
+  weekTakings: number[];
   /** The day's menu: ORDERS ids, in the order the board prints them. */
   recipes: string[];
   /** The queues, one per landmark that has one. */
@@ -227,6 +255,20 @@ export interface Run {
   stars(): number;
   /** The day is done when every line has been served. */
   dayComplete(): boolean;
+  /** The shape of the day the truck is on: its name, its queues, its menu size (game/run.ts DAY_SHAPES). */
+  shape(): DayShape;
+  /** Bank today's stars and takings into the week's record. Idempotent: banking twice is banking once. */
+  closeDay(): boolean;
+  /** The week's stars so far, every day `closeDay` has banked. */
+  weekStarsTotal(): number;
+  /** True once the LAST day of the week has been served: the end of the game. */
+  weekComplete(): boolean;
+  /**
+   * Close today and open tomorrow: bank the day's stars and takings, then rebuild every per-day field from
+   * `week[day + 1]` - a fresh menu, a fresh shopping list, an empty pantry and the truck back in the yard.
+   * Refuses on the last day of the week, where `weekComplete()` is the answer instead.
+   */
+  nextDay(): boolean;
   /** The run as plain data for window.__game.summary() and the playtest; keys are run.js's own. */
   summary(): Record<string, unknown>;
 }

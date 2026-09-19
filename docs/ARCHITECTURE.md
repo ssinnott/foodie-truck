@@ -66,7 +66,9 @@ src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
                fishing + hens + kitchenProps + dairyProps + millProps + hiveProps + gardenProps (per-scene props),
                logo, backgrounds/ (one pre-rendered scene each)
-src/game/      game (screen stack), run (the day plan + party + shopping list, the only cross-screen state), animation, menuinput,
+src/game/      game (screen stack), run (the week's plan + the day + party + shopping list, the only cross-screen state),
+               week (the week in progress, saved between sittings), book (the recipe book: written by the game,
+               read only by screens/book), animation, menuinput,
                ui (the paper/chalk/wood kit), minigame (shared mini-game furniture), maphud, touchpad (the
                on-screen controls, drawn), screens/ (one per screen)
 src/content/   critters/ (the cast: common rig hooks + one file per critter + items + customers), recipes, places
@@ -75,7 +77,7 @@ src/net/       signal (room codes over MQTT / BroadcastChannel), mqtt-codec, pee
 tools/         server, build, check, capture (screenshots of any screen), sheet (critter contact sheets),
                playtest + scenarios/ (headless scenarios, one module per feature owner), nettest (pure node),
                art-check (data-tier art invariants), browser (Playwright lookup)
-docs/          this file, GDD, ART_STYLE, ART_PRINCIPLES, MULTIPLAYER
+docs/          this file, GDD, ART_STYLE, ART_PRINCIPLES, MULTIPLAYER, CONTENT_ROADMAP, EXPANSION_ROADMAP
 ```
 
 Every module imports only from `engine/`, `art/`, `game/`, `content/`, `net/` — never from `tools/`.
@@ -251,26 +253,45 @@ and `FOOD.<icon>` for `apple egg fish milk sack jar carrot`.
 `Game.update()` ticks only the TOP screen; overlays set `transparent = true` so the screen below still draws.
 
 ### `game/run.js` — the run
-`planDay(seed, { order?, recipes? })` lays a day out from a seed on its own `makeRng` stream (never the gameplay
-singleton, whose call count the canary hashes): `RECIPES_PER_DAY` recipe ids, and `LINES_PER_DAY` lines of
-`LINE_LENGTH` `{ customer, recipe }` at distinct supply landmarks. `order` (1-based, `?order=`) forces a recipe onto
-the menu and into the first customer's paws; `recipes` (0-based ORDERS indices, `?recipes=`) fixes the menu.
-`startRun(game, { seed, critters, order, recipes })` creates `game.run`, plain data: `party[{ slot, critter, score }]`,
+`planWeek(seed, { order?, recipes?, day? })` lays the WHOLE WEEK out from a seed on ONE `makeRng` stream (never the
+gameplay singleton, whose call count the canary hashes), in day order, before day 0 opens: `DAYS_PER_WEEK` day
+plans, each shaped by its `DAY_SHAPES` row (how many queues and how deep, how big the menu, whether twists are
+dealt, what the weather may do). All of them up front because THE FETE draws its menu from what the earlier days
+serve, and because resuming is then `planWeek(seed)[day]` — two integers rebuild any day, which is why the save
+record holds no plan. `planDay(seed, { order?, recipes? }, shape?)` is the single-day door the scenarios and
+captures use and defaults to the ordinary day's shape. `order` (1-based, `?order=`) forces a recipe onto the menu
+and into the first customer's paws; `recipes` (0-based ORDERS indices, `?recipes=`) fixes the menu; both apply to
+the day `day` names (`?day=`, 1-based) and to no other.
+`startRun(game, { seed, critters, order, recipes, day })` creates `game.run`, plain data: `party[{ slot, critter, score }]`,
+`day` / `week[]` / `weekStars[]` / `weekTakings[]` (which day of the week, the whole plan, and what the closed days were worth),
 `recipes[]`, `lines[{ place, served, customers[{ customer, recipe, stars }] }]`, `needs[{ id, amount, have, used }]`
 (the shopping list: every order summed; `have` gathered, `used` cooked), `line` / `customer` (who is at the hatch),
 `order { id, dish, customer, line, steps, needs }` (that customer's, rebuilt by `startLine` and `serve`),
 `truck { x, y, heading, at }`, `served`, `lastServed` (the line finished last), `score`.
 Mutators: `need(id)`, `have(id)`, `stock(id)`, `gather(id, n)`, `complete()`, `missing()`, `placeFor(id)`,
 `lineAt(placeId)`, `screenForPlace(placeId)`, `startLine(i)`, `serve(stars)`, `lineDone()`, `linesServed()`,
-`stars()`, `dayComplete()`, `summary()`.
-`SCENES = ['map','orchard','pond','coop','kitchen','dairy','mill','hive','garden','stage','line']` are the
+`stars()`, `dayComplete()`, `shape()`, `closeDay()`, `weekStarsTotal()`, `weekComplete()`, `nextDay()`, `summary()`.
+`SCENES = ['map','orchard','pond','coop','kitchen','dairy','mill','hive','garden','stage','line','bramble','beach','holt','wood','terrace']` are the
 START-packet scene indices; scenes finished after the first pass are **appended**, never filed next to their
 neighbours, because the index is what crosses the wire. `START_SCENE` is the index an online match opens on (the
 day board), which is what `net/session.js` seeds `lobby.scene` with.
 The run is the ONLY state shared between screens; it is rebuilt identically on every peer from seed + party.
-A run is FINITE: the plan is fixed at `startRun`, `serve()` banks stars against the customer at the hatch rather
-than rolling a fresh order, and once `dayComplete()` is true the day board closes the day out and the only way on
-is the title screen.
+A run is FINITE: the week is fixed at `startRun`, `serve()` banks stars against the customer at the hatch rather
+than rolling a fresh order, and once `dayComplete()` is true the day board closes the day out — `nextDay()` rolls
+the run into tomorrow (a new menu, a new list, an empty pantry, the truck re-parked), and once `weekComplete()` is
+true the only way on is the title screen.
+
+### `game/week.js` and `game/book.js` — the two saved files
+`week.js` is the WEEK IN PROGRESS: `{ seed, day, critters, stars, takings }` under `foodie-truck.week`, written at
+the closed day board and read by the title's `enter()` to turn PLAY into CONTINUE. It stores nothing derivable —
+`planWeek(seed)[day]` rebuilds the rest. Online peers do NOT write it (`saveWeek(rec, online)` refuses): a guest
+plays the host's week, which arrives in START.
+`book.js` is the RECIPE BOOK under `foodie-truck.book`, and it carries **the invariant**: written by the game
+(`recordDay`, importable anywhere) and read only by `screens/book.js` (`readBook`). Nothing it holds may reach
+`planWeek`, `planDay`, `gatherTarget` or any `update()`, because two peers with different books must play
+byte-identical days. `tools/check.js` fails the build on any other module importing the read side, and the
+`bookInvariant` playtest scenario proves the same thing from outside. Both obey `engine/bindings.js`'s storage
+rules: fragile on purpose, and touched from screen `enter()` / `exit()` only.
 
 ### Flow
 ```
@@ -332,7 +353,7 @@ URL params: `?autotest=1` (test mode: no rAF loop, seeded rng, `window.__game` p
 (pins the seed for every run on the page; without it each run the select screen starts draws its own, `rng.freshSeed`),
 `?skipTo=<screen>` (straight into a screen with a run started), `?critters=0,1,2,3` (party for skipTo), `?place=coop`,
 `?order=N` (force recipe N onto the day's menu and into the first customer's paws), `?recipes=0,2` (fix the menu to
-those ORDERS indices), `?room=CODE` / `?host=1` (online), `?transport=broadcast` (same-machine netplay for tests),
+those ORDERS indices), `?day=N` (open on day N of the week, 1-based, game/run.js DAY_SHAPES), `?room=CODE` / `?host=1` (online), `?transport=broadcast` (same-machine netplay for tests),
 `?netrelay=1`, `?defaults=1` (boot on stock key/button bindings without clearing the saved ones).
 
 ```js

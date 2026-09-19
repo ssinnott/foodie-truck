@@ -27,7 +27,9 @@ import { drawTicket, drawSign, drawSlate, drawStamp, drawStars, drawHint, drawDi
 import { confirmPressed, cancelPressed } from '../menuinput.ts';
 import { drawLane } from '../../art/logo.ts';
 import { TRUCK } from '../../art/truck.ts';
-import { recipeOf, twistTag } from '../run.ts';
+import { recipeOf, twistTag, DAYS_PER_WEEK, shapeOf, dishesIn } from '../run.ts';
+import { recordDay } from '../book.ts';
+import { saveWeek, clearWeek } from '../week.ts';
 
 /** One card per line across the top: three of the select screen's own card width and gap. */
 const CARD_Y = 46, CARD_H = 124;
@@ -53,10 +55,30 @@ const LIST = { x: 60, y: 182, w: 520 }, LIST_COLS = 4, LIST_COL_W = 128, LIST_RO
 /** The pad under the list (PAD_GAP below it): the day's menu on one row and how the day goes on the other. */
 const PAD = { x: 60, w: 520, h: 30 }, PAD_GAP = 8;
 const HOW_TEXT = 'FILL THE PANTRY, THEN SERVE THE LINES';
-const HEAD_TEXT = 'TODAY AT THE TRUCK', LIST_TITLE = 'SHOPPING LIST', MENU_LABEL = 'ON THE MENU: ';
-/** Closing time: the slate that ends the day, and the rows printed on it. */
-const SLATE = { x: 176, y: 100, w: 288, h: 136 };
-const CLOSE_TITLE = 'CLOSING TIME', CLOSE_ROW = 16, CLOSE_Y = 44, CLOSED_TEXT = 'THE TRUCK IS CLOSED FOR THE NIGHT';
+const LIST_TITLE = 'SHOPPING LIST', MENU_LABEL = 'ON THE MENU: ';
+/** The sign over the board says which day of the week this is, and names the ones that have a name. */
+function headFor(day: number): string {
+  const name = shapeOf(day).name;
+  return `DAY ${day + 1} OF ${DAYS_PER_WEEK}` + (name ? ` - ${name}` : '');
+}
+/**
+ * Closing time: the slate that ends the day. It is taller than the day's four rows need, because under them it
+ * carries THE WEEK STRIP - one chip per day of the week, the ones already closed carrying their stars - which is
+ * what turns a closed board from the end of the game into the hinge between two days.
+ */
+const SLATE = { x: 152, y: 84, w: 336, h: 172 };
+const CLOSE_TITLE = 'CLOSING TIME', CLOSE_ROW = 16, CLOSE_Y = 40;
+/** The night's last word: one more day to open, or the week finished. */
+const CLOSED_TEXT = 'THE TRUCK IS CLOSED FOR THE NIGHT', WEEK_TEXT = 'THAT IS THE WEEK';
+/**
+ * THE WEEK STRIP: DAYS_PER_WEEK chips across the foot of the slate. A day already closed is inked - its number
+ * and the stars it earned; the day just finished lands with the same stamp beat the SERVED cards use; a day still
+ * to come is drawn in pencil, so the week reads as a week from the first night.
+ */
+const STRIP_Y = 106, STRIP_H = 30, STRIP_W = 56, STRIP_GAP = 8;
+const STRIP_NUM_DY = 5, STRIP_STARS_DY = 17;
+/** The week's own total, under the strip. */
+const WEEK_ROW_DY = 142;
 const BLINK_PERIOD = 60, BLINK_ON = 40;
 /** The card's inner width a dish name has to fit in, right of the portrait. */
 const DISH_W = CARD_W - TEXT_X - 6;
@@ -152,6 +174,14 @@ export class StageScreen extends Screen {
   declare fields: number[];
   /** True once every line has been served: the board closes the truck for the night instead of opening it. */
   declare closed: boolean;
+  /** True on the closed board of the LAST day: the week is over and the only way on is the title. */
+  declare weekDone: boolean;
+  /** The sign over the board: which day of the week this is, and its name where it has one. */
+  declare head: string;
+  /** One chip per day of the week: its stars, its best possible, and whether it has been closed yet. */
+  declare strip: { stars: number; max: number; done: boolean }[];
+  /** The week's own line under the strip, on the closed board. */
+  declare weekRow: string;
   /** The line results just finished (run.lastServed), whose stamp is still slamming; -1 before the first one. */
   declare justServed: number;
   /** 1 once confirm has opened the truck and the fade is running; 0 until then. */
@@ -168,7 +198,7 @@ export class StageScreen extends Screen {
   /** The drawHeadPortrait options, reused by every card (this file allocates nothing in draw()). */
   declare portOpts: PortraitDrawOpts;
 
-  constructor(game: Game) { super(game, 'stage'); this.cards = []; this.busts = []; this.list = []; this.rows = []; this.fields = []; }
+  constructor(game: Game) { super(game, 'stage'); this.cards = []; this.busts = []; this.list = []; this.rows = []; this.fields = []; this.strip = []; }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -210,14 +240,40 @@ export class StageScreen extends Screen {
     this.padY = LIST.y + this.listH + PAD_GAP;
     this.menuText = MENU_LABEL + run.recipes.map((id) => recipeOf(id).dish).join(', ');
     this.closed = run.dayComplete();
+    this.weekDone = this.closed && run.weekComplete();
+    this.head = headFor(run.day);
     this.justServed = run.lastServed;
     this.chosen = 0;
     this.stampT = 0;
+    // THE ONE WRITE OF THE NIGHT. Banking the day, the book and the week all happen here, at a screen boundary
+    // and never in update() (docs/MULTIPLAYER.md: no localStorage on the simulation path). `closeDay` and
+    // `recordDay` are both keyed on the day, so a board that opens closed twice counts once.
+    if (this.closed) {
+      run.closeDay();
+      recordDay(run, this.weekDone);
+      const online = !!(game.net && game.net.active);
+      if (this.weekDone) clearWeek();
+      else saveWeek({ seed: run.seed, day: run.day + 1, critters: run.party.map((p) => Math.max(0, game.critters.findIndex((c) => c.id === p.critter))), stars: run.weekStars.slice(), takings: run.weekTakings.slice() }, online);
+    }
+    // the week strip: every day of the week, the closed ones carrying what they earned
+    this.strip.length = 0;
+    for (let d = 0; d < DAYS_PER_WEEK; d++) {
+      // A chip is inked only where the WEEK ACTUALLY BANKED that day (`closeDay` writes by day index), never
+      // merely because the truck has got past it. In play the two are the same thing; they part company on a
+      // `?day=` dev jump, where days nobody played would otherwise be chalked up as nought out of twelve.
+      const done = run.weekStars[d] != null;
+      this.strip.push({ stars: run.weekStars[d] || 0, max: dishesIn(shapeOf(d)) * 3, done });
+    }
     this.rows.length = 0;
-    this.rows.push(`LINES SERVED ${run.linesServed()} OF ${n}`, `DISHES ${run.served}`, `STARS ${run.stars()} OF ${run.lines.reduce((t, l) => t + l.customers.length * 3, 0)}`, `TAKINGS ${run.score}`);
-    this.hint = this.closed
-      ? `${game.input.keyText(0, 'action')}: TITLE`
-      : `${game.input.keyText(0, 'action')}: OPEN THE TRUCK    ${game.input.keyText(0, 'cancel')}: BACK`;
+    const todayTakings = run.weekTakings[run.day] || 0;
+    this.rows.push(`LINES SERVED ${run.linesServed()} OF ${n}`, `DISHES ${run.served}`, `STARS ${run.stars()} OF ${run.lines.reduce((t, l) => t + l.customers.length * 3, 0)}`, `TAKINGS ${todayTakings}`);
+    const weekMax = this.strip.reduce((t, c) => t + c.max, 0);
+    this.weekRow = this.weekDone
+      ? `THE WEEK: ${run.weekStarsTotal()} OF ${weekMax} STARS, ${run.score} TAKEN`
+      : `THE WEEK SO FAR: ${run.weekStarsTotal()} STARS, ${run.score} TAKEN`;
+    this.hint = !this.closed
+      ? `${game.input.keyText(0, 'action')}: OPEN THE TRUCK    ${game.input.keyText(0, 'cancel')}: BACK`
+      : this.weekDone ? `${game.input.keyText(0, 'action')}: TITLE` : `${game.input.keyText(0, 'action')}: NEXT DAY`;
     this.portOpts = { bg: PLUM.shadow, fill: 0.6, facing: 1 };
     // the SERVED stamp lands as its slam finishes; at closing time the night's little bell follows it
     if (this.justServed >= 0) game.audio.play('stamp', { delay: STAMP_FRAMES / 60 });
@@ -229,9 +285,16 @@ export class StageScreen extends Screen {
     const game = this.game, inp = game.input;
     for (const b of this.busts) { b.player.tick(); if (b.player.done) b.player.play('idle', { restart: true }); }
     if (this.stampT < STAMP_FRAMES) this.stampT++;
-    // the night is over: the only thing left on the board is the way out
+    // The night is over. On the last day of the week that is the end of the game and the one press goes to the
+    // title; on any other it OPENS TOMORROW - the run rolls over (run.nextDay) and the board comes straight back
+    // up open, on a new menu and a new shopping list, with the pantry empty and the truck in the yard.
     if (this.closed) {
-      if (confirmPressed(inp) >= 0) { game.audio.play('menu_confirm'); this.quit(); }
+      if (confirmPressed(inp) < 0 || this.chosen) return;
+      if (this.weekDone) { game.audio.play('menu_confirm'); this.quit(); return; }
+      this.chosen = 1;
+      game.audio.play('menu_confirm');
+      // the roll-over is driven from update() through fadeTo, so every peer in a match changes day on one frame
+      game.fadeTo(() => { game.run.nextDay(); game.replace('stage'); });
       return;
     }
     if (this.chosen) return;                            // the truck is opening, the fade is running
@@ -303,15 +366,46 @@ export class StageScreen extends Screen {
     for (let i = 0; i < this.rows.length; i++) {
       drawText(ctx, this.rows[i], SLATE.x + SLATE.w / 2, SLATE.y + CLOSE_Y + i * CLOSE_ROW, { size: 1, color: UI.chalk, align: 'center', shadow: false });
     }
+    this.week(ctx);
     if (this.frame % BLINK_PERIOD < BLINK_ON) {
-      drawText(ctx, CLOSED_TEXT, SLATE.x + SLATE.w / 2, SLATE.y + SLATE.h - 18, { size: 1, color: UI.chalk, align: 'center', shadow: false });
+      const text = this.weekDone ? WEEK_TEXT : CLOSED_TEXT;
+      drawText(ctx, text, SLATE.x + SLATE.w / 2, SLATE.y + SLATE.h - 16, { size: 1, color: UI.chalk, align: 'center', shadow: false });
     }
+  }
+
+  /**
+   * THE WEEK STRIP on the closing slate: one chip per day. A day already closed is chalked up with its number
+   * and the stars it took; TONIGHT'S chip comes in on the same stamp beat the SERVED cards use, so the day the
+   * player has just finished lands in front of them; a day still to come is a pencilled outline, which is what
+   * says the week is not over.
+   */
+  week(ctx: CanvasRenderingContext2D): void {
+    const run = this.game.run;
+    const total = this.strip.length * STRIP_W + (this.strip.length - 1) * STRIP_GAP;
+    const x0 = Math.round(SLATE.x + (SLATE.w - total) / 2), y = SLATE.y + STRIP_Y;
+    for (let d = 0; d < this.strip.length; d++) {
+      const chip = this.strip[d], x = x0 + d * (STRIP_W + STRIP_GAP);
+      // tonight's chip lands with the stamp; every other closed one is already down
+      const t = chip.done && d === run.day && this.closed ? Math.min(1, this.stampT / STAMP_FRAMES) : 1;
+      ctx.fillStyle = chip.done ? UI.chalk : UI.paperDark;
+      ctx.globalAlpha = chip.done ? 0.18 * t : 0.1;
+      ctx.fillRect(x, y, STRIP_W, STRIP_H);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = chip.done ? UI.chalk : UI.paperDark;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, STRIP_W - 1, STRIP_H - 1);
+      const ink = chip.done ? UI.chalk : UI.paperDark;
+      drawText(ctx, `DAY ${d + 1}`, x + STRIP_W / 2, y + STRIP_NUM_DY, { size: 1, color: ink, align: 'center', shadow: false });
+      const under = chip.done ? `${chip.stars} OF ${chip.max}` : `- OF ${chip.max}`;
+      drawText(ctx, under, x + STRIP_W / 2, y + STRIP_STARS_DY, { size: 1, color: ink, align: 'center', shadow: false });
+    }
+    drawText(ctx, this.weekRow, SLATE.x + SLATE.w / 2, SLATE.y + WEEK_ROW_DY, { size: 1, color: UI.chalk, align: 'center', shadow: false });
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
     drawLane(ctx);
     drawDim(ctx, 0.62);
-    drawSign(ctx, VIEW_W / 2, 2, measureText(HEAD_TEXT, 2) + 18, 24, HEAD_TEXT, { size: 2 });
+    drawSign(ctx, VIEW_W / 2, 2, measureText(this.head, 2) + 18, 24, this.head, { size: 2 });
     for (let i = 0; i < this.cards.length; i++) this.card(ctx, i);
     this.shopping(ctx);
     if (!this.closed) this.pad(ctx);
@@ -323,6 +417,8 @@ export class StageScreen extends Screen {
     const run = this.game.run;
     return {
       lines: this.cards.length, places: this.cards.map((c) => c.place), chosen: this.chosen, closed: this.closed,
+      day: run.day, days: DAYS_PER_WEEK, dayName: shapeOf(run.day).name, head: this.head, weekDone: this.weekDone,
+      strip: this.strip.map((c) => `${c.done ? c.stars : '-'}/${c.max}`), weekStars: run.weekStarsTotal(), takings: run.score,
       list: this.list.map((e) => e.text), menu: run.recipes.slice(),
       linesServed: run.linesServed(), served: run.served, stars: run.stars(),
     };
@@ -330,7 +426,7 @@ export class StageScreen extends Screen {
   /** Every number that could differ between two machines: the opening press and the closing card. */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.chosen, this.closed ? 1 : 0);
+    f.push(this.chosen, this.closed ? 1 : 0, this.weekDone ? 1 : 0);
     return f;
   }
 }

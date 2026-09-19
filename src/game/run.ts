@@ -24,7 +24,7 @@ import { PLACES } from '../content/places.ts';
 import { CROSSING_SPOTS } from '../art/backgrounds/map.ts';
 import { makeRng } from '../lib/engine/rng.ts';
 import type { RngInstance } from '../lib/engine/rng.ts';
-import type { Order, OrderNeed, Run, RunLine, RunCustomer, DayPlan, DayPlanLine, DayPlanCrossing, Crossing, Cart } from './game.ts';
+import type { Order, OrderNeed, Run, RunLine, RunCustomer, DayPlan, DayPlanLine, DayPlanCrossing, DayShape, Crossing, Cart } from './game.ts';
 
 /**
  * Scene indices for the START packet (net/protocol.js): the screen a match opens on. Scenes finished after the
@@ -37,6 +37,38 @@ export const START_SCENE = SCENES.indexOf('stage');
 
 /** The day's shape (docs/GDD.md section 3): how many recipes are on the menu, how many lines form, how long each is. */
 export const RECIPES_PER_DAY = 3, LINES_PER_DAY = 3, LINE_LENGTH = 2;
+/**
+ * THE WEEK (docs/GDD.md section 3). A run is DAYS_PER_WEEK days, and what makes one day different from the last
+ * is its SHAPE and not only its seed: how many queues form and how long each is, how big the menu is, whether
+ * twists are dealt at all, and what the weather is allowed to do.
+ *
+ * Day 1 is short and plain, so a first day teaches the loop without being labelled a tutorial. MARKET DAY keeps
+ * three queues but cuts the menu, so the village wants the same things and the day is two long gathers instead
+ * of eight short ones. Day 4 is always wet, so the fog and the mud patch - one day in five by chance today - are
+ * guaranteed once a week. THE FETE is four queues, one of them three deep, on a menu drawn from what this week
+ * has already served: the last customer of the week orders Monday's dish.
+ *
+ * Shapes are APPENDED, never filed in between: the day index crosses the wire (net/protocol.ts) and is written
+ * into the save record (game/week.ts), so inserting a day would move every week already in progress.
+ */
+/** The ordinary day's queues, built from the constants above so those three numbers stay load-bearing. */
+const ORDINARY_LINES: readonly number[] = Object.freeze(new Array(LINES_PER_DAY).fill(LINE_LENGTH));
+export const DAY_SHAPES: readonly DayShape[] = Object.freeze([
+  Object.freeze({ name: 'OPENING DAY', lines: Object.freeze([2, 2]), recipes: 2, twists: false, weather: 'clear' }),
+  Object.freeze({ name: '', lines: ORDINARY_LINES, recipes: RECIPES_PER_DAY, twists: true, weather: 'roll' }),
+  Object.freeze({ name: 'MARKET DAY', lines: ORDINARY_LINES, recipes: 2, twists: true, weather: 'roll' }),
+  Object.freeze({ name: '', lines: ORDINARY_LINES, recipes: RECIPES_PER_DAY, twists: true, weather: 'wet' }),
+  Object.freeze({ name: 'THE FETE', lines: Object.freeze([...ORDINARY_LINES, LINE_LENGTH + 1]), recipes: RECIPES_PER_DAY, twists: true, weather: 'clear', fromWeek: true }),
+]) as readonly DayShape[];
+export const DAYS_PER_WEEK = DAY_SHAPES.length;
+/** The ordinary day, and the shape a bare `planDay()` lays out: today's game, unchanged. */
+export const NORMAL_DAY = 1;
+/** A drizzle day and a fog day are equally likely on a shape that is always wet. */
+export const WET_DRIZZLE_ODDS = 0.5;
+/** The shape of day `d`, clamped into the week. */
+export function shapeOf(day: number): DayShape { return DAY_SHAPES[Math.max(0, Math.min(DAYS_PER_WEEK - 1, day | 0))]; }
+/** How many dishes a day's shape asks for, which is how many customers queue across all of its lines. */
+export function dishesIn(shape: DayShape): number { let n = 0; for (const len of shape.lines) n += len; return n; }
 /** Crossings on the road per day (docs/CONTENT_ROADMAP.md section B): distinct lane spots, one out at a time, in this order. */
 export const CROSSINGS_PER_DAY = 3;
 /** Sheep: 0, ducks: 1. About a third of crossings are the duck parade; a flock is 5..9, the ducks a mother and six. */
@@ -98,50 +130,58 @@ function shuffle<T>(r: RngInstance, list: readonly T[]): T[] {
  * replaces the draw with exactly those recipes, so a scenario can keep a day to the landmarks it can play.
  * Every recipe on the menu is ordered at least once (the orders are the menu dealt round until the lines are full).
  */
-export function planDay(seed: number, o: { order?: number; recipes?: number[] } = {}): DayPlan {
-  const r = makeRng((((seed | 0) ^ PLAN_SALT) >>> 0) || 1);
+function planOneDay(r: RngInstance, shape: DayShape, o: { order?: number; recipes?: number[] }, weekMenu?: readonly string[]): DayPlan {
   const n = ORDERS.length;
+  const want = Math.max(1, Math.min(shape.recipes, n));
   let recipes: number[];
   if (o.recipes && o.recipes.length) {
     recipes = [];
     for (const i of o.recipes) { const k = ((i % n) + n) % n; if (recipes.indexOf(k) < 0) recipes.push(k); }
+  } else if (shape.fromWeek && weekMenu && weekMenu.length) {
+    // the fete cooks the week again: the menu is drawn from what days before it already served
+    const pool: number[] = [];
+    for (const id of weekMenu) { const i = ORDERS.findIndex((x) => x.id === id); if (i >= 0) pool.push(i); }
+    recipes = shuffle(r, pool).slice(0, Math.min(want, pool.length));
   } else {
-    recipes = shuffle(r, ORDERS.map((_, i) => i)).slice(0, Math.min(RECIPES_PER_DAY, n));
+    recipes = shuffle(r, ORDERS.map((_, i) => i)).slice(0, want);
   }
   if (o.order != null && o.order > 0) {
     const forced = (o.order - 1) % n;
     const at = recipes.indexOf(forced);
-    if (at >= 0) recipes.splice(at, 1); else if (recipes.length >= RECIPES_PER_DAY) recipes.pop();
+    if (at >= 0) recipes.splice(at, 1); else if (recipes.length >= want) recipes.pop();
     recipes.unshift(forced);
   }
-  // the lines: LINES_PER_DAY distinct supply landmarks (never home: the truck's own yard has no queue)
+  // the lines: one per entry of the shape, each at a distinct supply landmark (never home: the truck's own yard has no queue)
   const supply = PLACES.filter((p) => p.id !== 'home').map((p) => p.id);
-  const places = shuffle(r, supply).slice(0, Math.min(LINES_PER_DAY, supply.length));
+  const places = shuffle(r, supply).slice(0, Math.min(shape.lines.length, supply.length));
   // the orders: the menu dealt round until every seat in every line has one, then shuffled - except that a forced
   // recipe stays at the front of the first line, which is what ?order= promises
   const fixed = !!(o.order != null && o.order > 0) || !!(o.recipes && o.recipes.length);
-  const total = places.length * LINE_LENGTH, dealt: number[] = [];
+  let total = 0;
+  for (let i = 0; i < places.length; i++) total += shape.lines[i];
+  const dealt: number[] = [];
   for (let k = 0; k < total; k++) dealt.push(recipes[k % recipes.length]);
   const orders = o.order != null && o.order > 0 ? [dealt[0]].concat(shuffle(r, dealt.slice(1))) : shuffle(r, dealt);
   const lines: DayPlanLine[] = [];
   let k = 0, last = -1;
-  for (const place of places) {
+  for (let li = 0; li < places.length; li++) {
     const customers: { customer: string; recipe: string; twist: string; extra: string }[] = [];
-    for (let c = 0; c < LINE_LENGTH; c++) {
+    for (let c = 0; c < shape.lines[li]; c++) {
       let d = r.int(0, DINERS.length - 1);
       if (d === last) d = (d + 1) % DINERS.length;    // nobody queues behind their own twin
       last = d;
       const rec = ORDERS[orders[k++]];
-      // the twist: one customer in TWIST_ODDS, never on a dev-jump day; crunchy only on a dish that chops
+      // the twist: one customer in TWIST_ODDS, never on a dev-jump day and never on a shape that deals none;
+      // crunchy only on a dish that chops
       let twist = '', extra = '';
-      if (!fixed && r.int(1, TWIST_ODDS) === 1) {
+      if (!fixed && shape.twists && r.int(1, TWIST_ODDS) === 1) {
         const kind = r.int(0, 2);
         twist = kind === 0 ? (rec.steps.indexOf('chop') >= 0 ? 'crunchy' : 'big') : kind === 1 ? 'big' : 'herb';
         if (twist === 'herb') extra = HERBS[r.int(0, HERBS.length - 1)];
       }
       customers.push({ customer: DINERS[d], recipe: rec.id, twist, extra });
     }
-    lines.push({ place, customers });
+    lines.push({ place: places[li], customers });
   }
   // the crossings: CROSSINGS_PER_DAY distinct lane spots, drawn after the lines so an older seed's lines are unmoved
   const spots = shuffle(r, CROSSING_SPOTS.map((_, i) => i)).slice(0, Math.min(CROSSINGS_PER_DAY, CROSSING_SPOTS.length));
@@ -152,10 +192,47 @@ export function planDay(seed: number, o: { order?: number; recipes?: number[] } 
   // the tipped cart: one more lane spot, never one a crossing stands on (the spots were shuffled above, so it is the next one along)
   const rest = shuffle(r, CROSSING_SPOTS.map((_, i) => i)).filter((i) => spots.indexOf(i) < 0);
   const cart = rest.length ? rest[0] : -1;
-  // the weather, and on a drizzle day the mud patch on one more spot
-  const w = r.int(0, 4), weather = w === 3 ? WEATHER_DRIZZLE : w === 4 ? WEATHER_FOG : WEATHER_CLEAR;
+  // the weather, and on a drizzle day the mud patch on one more spot. A shape that is always wet never draws
+  // clear; a clear shape draws nothing at all.
+  let weather = WEATHER_CLEAR;
+  if (shape.weather === 'wet') weather = r.chance(WET_DRIZZLE_ODDS) ? WEATHER_DRIZZLE : WEATHER_FOG;
+  else if (shape.weather === 'roll') { const w = r.int(0, 4); weather = w === 3 ? WEATHER_DRIZZLE : w === 4 ? WEATHER_FOG : WEATHER_CLEAR; }
   const mud = weather === WEATHER_DRIZZLE && rest.length > 1 ? rest[1] : -1;
   return { recipes: recipes.map((i) => ORDERS[i].id), lines, crossings, cart, weather, mud };
+}
+
+/**
+ * Lay ONE ordinary day out from a seed, which is what this function has always done. `planWeek` is what a run
+ * uses; this is the single-day door the scenarios and the captures come in by, and a shape can be named to lay
+ * any day of the week out on its own.
+ */
+export function planDay(seed: number, o: { order?: number; recipes?: number[] } = {}, shape: DayShape = DAY_SHAPES[NORMAL_DAY]): DayPlan {
+  return planOneDay(makeRng((((seed | 0) ^ PLAN_SALT) >>> 0) || 1), shape, o);
+}
+
+/**
+ * Lay the WHOLE WEEK out from a seed, purely, before day 0 opens.
+ *
+ * All five days are planned up front for two reasons. THE FETE draws its menu from the recipes days 1-4 actually
+ * serve, which is only possible if those days are already on the table - a planner that laid day N out when day N
+ * opened would have to read play state to do it. And resuming a week is then `planWeek(seed)[day]`: two integers
+ * rebuild any day of any week, which is why the save record (game/week.ts) holds no plan at all.
+ *
+ * Every day is drawn from ONE stream in day order, so a day is a pure function of the seed and the days before
+ * it, and four peers given the same seed lay the same week out. The dev jumps (`?order=`, `?recipes=`) apply to
+ * the day `o.day` names - the one being jumped to - and never to the rest of the week.
+ */
+export function planWeek(seed: number, o: { order?: number; recipes?: number[]; day?: number } = {}): DayPlan[] {
+  const r = makeRng((((seed | 0) ^ PLAN_SALT) >>> 0) || 1);
+  const jump = Math.max(0, Math.min(DAYS_PER_WEEK - 1, (o.day || 0) | 0));
+  const week: DayPlan[] = [];
+  for (let d = 0; d < DAYS_PER_WEEK; d++) {
+    const shape = DAY_SHAPES[d];
+    let served: string[] | undefined;
+    if (shape.fromWeek) { served = []; for (const p of week) for (const id of p.recipes) if (served.indexOf(id) < 0) served.push(id); }
+    week.push(planOneDay(r, shape, d === jump ? o : {}, served));
+  }
+  return week;
 }
 
 /**
@@ -163,28 +240,82 @@ export function planDay(seed: number, o: { order?: number; recipes?: number[] } 
  * @param {object} game
  * @param {{ seed?: number, critters: number[], order?: number, recipes?: number[] }} o critters = cast index per seat, in slot order
  */
-export function startRun(game, o) {
-  const cast = game.critters;
-  const party = o.critters.slice(0, 4).map((ci, slot) => ({ slot, critter: cast[ci % cast.length].id, score: 0 }));
-  const seed = o.seed || 1;
-  const plan = planDay(seed, { order: o.order, recipes: o.recipes });
-  const lines: RunLine[] = plan.lines.map((l) => ({ place: l.place, served: false, customers: l.customers.map((c) => ({ customer: c.customer, recipe: c.recipe, twist: c.twist, extra: c.extra, stars: 0 })) }));
-  // the shopping list: every line of every order in every queue, summed per ingredient, in INGREDIENTS order
+/**
+ * The shopping list for a set of queues: every ingredient of every order in every one of them, summed per
+ * ingredient, in INGREDIENTS order.
+ */
+function listFor(lines: RunLine[]): OrderNeed[] {
   const needs: OrderNeed[] = [];
   for (const id of Object.keys(INGREDIENTS)) {
     let amount = 0;
     for (const l of lines) for (const c of l.customers) for (const n of needsOf(c)) if (n.id === id) amount += n.amount;
     if (amount > 0) needs.push({ id, amount, have: 0, used: 0 });
   }
+  return needs;
+}
+
+/** A day plan's queues as the run holds them: nobody served and nobody rated yet. */
+function linesFor(plan: DayPlan): RunLine[] {
+  return plan.lines.map((l) => ({ place: l.place, served: false, customers: l.customers.map((c) => ({ customer: c.customer, recipe: c.recipe, twist: c.twist, extra: c.extra, stars: 0 })) }));
+}
+
+/** The road as a day plan lays it out: the crossings (the first already on its lane), the cart, the mud patch. */
+function roadFor(run: Run, plan: DayPlan): void {
+  run.crossings = plan.crossings.map((c, i): Crossing => { const sp = CROSSING_SPOTS[c.spot]; return { ...c, x: sp.x, y: sp.y, dx: sp.dx, dy: sp.dy, state: i === 0 ? 1 : 0, t: 0, waved: 0 }; });
+  run.cart = plan.cart >= 0 ? ({ x: CROSSING_SPOTS[plan.cart].x, y: CROSSING_SPOTS[plan.cart].y, taken: 0 } as Cart) : null;
+  run.weather = plan.weather;
+  run.mud = plan.mud >= 0 ? { x: CROSSING_SPOTS[plan.mud].x, y: CROSSING_SPOTS[plan.mud].y } : null;
+  run.muddy = 0;
+}
+
+/**
+ * OPEN A DAY on a run that is already going: its menu, its queues, its shopping list, an empty pantry, the road
+ * laid out fresh, and the truck back in the yard. `nextDay` is the only caller; `startRun` builds day 0 inline
+ * from the same three helpers.
+ *
+ * `run.truck` is mutated in PLACE rather than replaced, because the map screen keeps a reference to it between
+ * visits (screens/map.ts) and a fresh object would leave it steering yesterday's truck. Zeroing x and y is what
+ * parks it: the map re-parks a truck that is sitting at the origin.
+ */
+function loadDay(run: Run, plan: DayPlan): void {
+  run.recipes = plan.recipes;
+  run.lines = linesFor(plan);
+  run.needs = listFor(run.lines);
+  run.line = 0;
+  run.customer = 0;
+  run.order = makeOrder(run.lines[0].customers[0]);
+  run.served = 0;
+  run.lastServed = -1;
+  run.truck.x = 0; run.truck.y = 0; run.truck.heading = 0; run.truck.at = 'home';
+  roadFor(run, plan);
+}
+
+export function startRun(game, o) {
+  const cast = game.critters;
+  const party = o.critters.slice(0, 4).map((ci, slot) => ({ slot, critter: cast[ci % cast.length].id, score: 0 }));
+  const seed = o.seed || 1;
+  const day = Math.max(0, Math.min(DAYS_PER_WEEK - 1, (o.day || 0) | 0));
+  // the WHOLE WEEK, laid out before the first day opens: the run carries the plan and re-derives nothing
+  const week = planWeek(seed, { order: o.order, recipes: o.recipes, day });
+  const plan = week[day];
+  const lines = linesFor(plan);
   const run: Run = {
     seed,
     party,
+    /** Which day of the week the truck is on, 0-based (DAY_SHAPES). A resumed week opens on its saved day. */
+    day,
+    /** The week, planned once from the seed before day 0 opened: `week[day]` is today. */
+    week,
+    /** The stars each CLOSED day earned, in day order; today's land in it as the board shuts. */
+    weekStars: [],
+    /** The takings each CLOSED day earned, in day order. */
+    weekTakings: [],
     /** The day's menu: the ORDERS ids on it, in the order the board prints them. */
     recipes: plan.recipes,
-    /** The queues, one per LINES_PER_DAY landmark: where each waits, who is in it and what they ordered. */
+    /** The queues, one per entry of the day's shape: where each waits, who is in it and what they ordered. */
     lines,
     /** The shopping list: `have` is what the pantry holds, `used` what the kitchen has taken back out of it. */
-    needs,
+    needs: listFor(lines),
     /** The line the truck is serving (an index into `lines`): the last one it pulled up at. */
     line: 0,
     /** The customer at the hatch (an index into that line's customers). */
@@ -195,7 +326,7 @@ export function startRun(game, o) {
     served: 0,
     /** The line `serve()` finished last, so the map can say so on arrival; -1 before the first one. */
     lastServed: -1,
-    /** Total run score. */
+    /** The week's takings: every day's, running. */
     score: 0,
     /** World-map state the map screen keeps between visits (truck position, heading, which place it is at). */
     truck: { x: 0, y: 0, heading: 0, at: 'home' },
@@ -266,11 +397,46 @@ export function startRun(game, o) {
     /** How many lines have been served, and the day's star total. */
     linesServed() { let n = 0; for (const l of run.lines) if (l.served) n++; return n; },
     stars() { let n = 0; for (const l of run.lines) for (const c of l.customers) n += c.stars; return n; },
-    /** The day is done when every line has been served: the game's end. */
+    /** The day is done when every line has been served. */
     dayComplete() { return run.lines.every((l) => l.served); },
+    /** The shape of the day the truck is on (DAY_SHAPES): its name, its queues, how big its menu is. */
+    shape() { return shapeOf(run.day); },
+    /**
+     * Bank today's stars and takings into the week's record, by DAY INDEX rather than by pushing, so calling it
+     * twice is calling it once: the board can open closed, be left and be come back to without double-counting.
+     */
+    closeDay() {
+      if (!run.dayComplete()) return false;
+      run.weekStars[run.day] = run.stars();
+      let prior = 0;
+      for (let i = 0; i < run.day; i++) prior += run.weekTakings[i] || 0;
+      run.weekTakings[run.day] = run.score - prior;
+      return true;
+    },
+    /** The week's stars so far: every day banked by `closeDay`, today included once its board has shut. */
+    weekStarsTotal() { let n = 0; for (const v of run.weekStars) n += v || 0; return n; },
+    /** The week is over when the LAST day has been served: the end of the game. */
+    weekComplete() { return run.day >= DAYS_PER_WEEK - 1 && run.dayComplete(); },
+    /**
+     * Close tonight and open tomorrow. Banks the day first (`closeDay`), then rebuilds every per-day field from
+     * the week's own plan - a new menu, a new shopping list, an empty pantry, the road laid out again and the
+     * truck back in the yard. What carries is the week's record, the takings and the party, and nothing else:
+     * the pantry deliberately does not, or the board would stop being the whole truth about the day.
+     *
+     * Refuses on the last day of the week, where `weekComplete()` is the answer instead.
+     */
+    nextDay() {
+      if (!run.dayComplete() || run.day >= DAYS_PER_WEEK - 1) return false;
+      run.closeDay();
+      run.day++;
+      loadDay(run, run.week[run.day]);
+      return true;
+    },
     summary() {
       return {
         seed: run.seed, party: run.party.map((p) => p.critter), phase: run.dayComplete() ? 'closed' : run.complete() ? 'serve' : 'gather',
+        day: run.day, days: DAYS_PER_WEEK, dayName: run.shape().name, weekStars: run.weekStars.slice(), weekTakings: run.weekTakings.slice(),
+        weekComplete: run.weekComplete(),
         recipes: run.recipes.slice(), lines: run.lines.map((l) => ({ place: l.place, served: l.served, customers: l.customers.map((c) => `${c.customer}:${c.recipe}:${c.stars}` + (c.twist ? `:${c.twist}${c.extra ? '/' + c.extra : ''}` : '')) })),
         twist: run.order.twist, extra: run.order.extra, chops: run.order.chops,
         line: run.line, customer: run.customer, dish: run.order.dish, customerId: run.order.customer,

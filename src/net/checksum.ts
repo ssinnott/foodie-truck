@@ -30,6 +30,12 @@ export function runChecksum(game) {
   if (run) {
     h = mix(h, 1);
     h = mixNum(h, run.seed); h = mix(h, run.line | 0); h = mix(h, run.customer | 0); h = mix(h, run.served | 0);
+    // the DAY of the week, beside the seed: two peers on different days are cooking different menus off the same
+    // seed, and this catches it on the frame the board rolls over rather than when the queues disagree
+    h = mix(h, run.day | 0);
+    const ws = run.weekStars || [];
+    h = mix(h, ws.length);
+    for (const v of ws) h = mix(h, v | 0);
     // the day's plan and how far it has got: the menu, every line's place and every customer's stars, so a peer
     // that banked a different rating - or pulled up at a different line - is caught on the frame it happens
     const recipes = run.recipes || [];

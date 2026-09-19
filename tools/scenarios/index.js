@@ -21,7 +21,9 @@ import { SCENARIOS as pads } from './pads.js';
 import { SCENARIOS as touch } from './touch.js';
 import { SCENARIOS as controls } from './controls.js';
 import { SCENARIOS as stage } from './stage.js';
+import { SCENARIOS as week } from './week.js';
+import { SCENARIOS as book } from './book.js';
 import { SCENARIOS as playthrough } from './playthrough.js';
 import { SCENARIOS as audio } from './audio.js';
 
-export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...beach, ...holt, ...wood, ...terrace, ...kitchen, ...ui, ...pads, ...touch, ...controls, ...stage, ...playthrough, ...audio };
+export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...beach, ...holt, ...wood, ...terrace, ...kitchen, ...ui, ...pads, ...touch, ...controls, ...stage, ...week, ...book, ...playthrough, ...audio };

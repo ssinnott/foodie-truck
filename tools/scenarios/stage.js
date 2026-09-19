@@ -14,7 +14,7 @@
 import { withPage, assert } from '../playtest.js';
 import { ORDERS, INGREDIENTS } from '../../src/content/recipes.ts';
 import { PLACES } from '../../src/content/places.ts';
-import { planDay, needsOf, LINES_PER_DAY, LINE_LENGTH, RECIPES_PER_DAY } from '../../src/game/run.ts';
+import { planDay, planWeek, needsOf, DAY_SHAPES, DAYS_PER_WEEK, dishesIn } from '../../src/game/run.ts';
 
 export const SCENARIOS = {
   async stage(server) {
@@ -22,12 +22,15 @@ export const SCENARIOS = {
       await api.step(5);
       let s = await api.summary();
       assert(s.screen === 'stage', `the board comes up (on ${s.screen})`);
-      assert(s.top.lines === LINES_PER_DAY && s.run.lines.length === LINES_PER_DAY, `${LINES_PER_DAY} lines are pinned to it (${s.top.lines})`);
+      const shape = DAY_SHAPES[0];
+      assert(s.top.lines === shape.lines.length && s.run.lines.length === shape.lines.length, `the opening day pins up ${shape.lines.length} lines (${s.top.lines})`);
       assert(s.top.closed === false && s.top.chosen === 0, 'it opens open: the truck is not yet on the road');
+      assert(s.run.day === 0 && s.run.days === DAYS_PER_WEEK, `a fresh run opens on day 1 of ${DAYS_PER_WEEK} (${s.run.day + 1})`);
+      assert(s.top.head === `DAY 1 OF ${DAYS_PER_WEEK} - ${shape.name}`, `the sign over the board names the day (${s.top.head})`);
       const places = s.run.lines.map((l) => l.place);
       assert(new Set(places).size === places.length && places.every((p) => p !== 'home' && PLACES.some((x) => x.id === p)), `every line waits at a different landmark, none of them home (${places.join()})`);
-      assert(s.run.lines.every((l) => l.customers.length === LINE_LENGTH), `every line is ${LINE_LENGTH} customers long (${s.run.lines.map((l) => l.customers.length).join()})`);
-      assert(s.run.recipes.length === RECIPES_PER_DAY && new Set(s.run.recipes).size === RECIPES_PER_DAY, `the menu is ${RECIPES_PER_DAY} different recipes (${s.run.recipes.join()})`);
+      assert(s.run.lines.every((l, i) => l.customers.length === shape.lines[i]), `its lines are ${shape.lines.join()} customers long (${s.run.lines.map((l) => l.customers.length).join()})`);
+      assert(s.run.recipes.length === shape.recipes && new Set(s.run.recipes).size === shape.recipes, `the menu is ${shape.recipes} different recipes (${s.run.recipes.join()})`);
       const ordered = s.run.lines.flatMap((l) => l.customers.map((c) => c.split(':')[1]));
       assert(ordered.every((r) => s.run.recipes.includes(r)), `every customer orders off the menu (${ordered.join()})`);
       assert(s.run.recipes.every((r) => ordered.includes(r)), 'and every recipe on the menu is ordered at least once');
@@ -58,9 +61,13 @@ export const SCENARIOS = {
     const a = planDay(1), b = planDay(1), c = planDay(2);
     assert(JSON.stringify(a) === JSON.stringify(b), 'the same seed lays the same day out');
     assert(JSON.stringify(a) !== JSON.stringify(c), 'another seed lays another day out');
-    const forced = planDay(1, { order: 4 });
+    // and the WEEK, which is what a run actually plays: five days off one seed, every one of them pure
+    const wa = planWeek(1), wb = planWeek(1), wc = planWeek(2);
+    assert(JSON.stringify(wa) === JSON.stringify(wb) && JSON.stringify(wa) !== JSON.stringify(wc), 'the same seed lays the same week out, another another');
+    assert(wa.length === DAYS_PER_WEEK, `a week is ${DAYS_PER_WEEK} days (${wa.length})`);
+    const forced = planWeek(1, { order: 4 })[0];
     assert(forced.recipes[0] === ORDERS[3].id && forced.lines[0].customers[0].recipe === ORDERS[3].id, `?order=4 puts ${ORDERS[3].id} on the menu and in the first customer's paws (${forced.recipes.join()}; first ${forced.lines[0].customers[0].recipe})`);
-    const fixed = planDay(1, { recipes: [0, 2] });
+    const fixed = planWeek(1, { recipes: [0, 2] })[0];
     assert(fixed.recipes.join() === `${ORDERS[0].id},${ORDERS[2].id}`, `?recipes=0,2 fixes the menu (${fixed.recipes.join()})`);
     assert(fixed.lines.every((l) => l.customers.every((cu) => cu.recipe === ORDERS[0].id || cu.recipe === ORDERS[2].id)), 'and nobody orders off it');
     // in the browser too: the run the page starts carries the forced recipe on its first ticket
@@ -87,7 +94,7 @@ export const SCENARIOS = {
         for (const n of run.needs) { n.have = n.amount; n.used = n.amount; }
         for (const l of run.lines) { l.served = true; for (const c of l.customers) c.stars = 2; }
         run.lines[0].customers[0].stars = 3;
-        run.served = run.lines.length * run.lines[0].customers.length;
+        run.served = run.lines.reduce((t, l) => t + l.customers.length, 0);
         run.score = 1300;
         run.lastServed = run.lines.length - 1;
       });
@@ -96,10 +103,48 @@ export const SCENARIOS = {
       const s = await api.summary();
       assert(s.top.closed === true, 'a board with every line served closes the truck for the night');
       assert(s.run.dayComplete === true && s.run.linesServed === s.run.lines.length && s.run.phase === 'closed', `the day is done (${s.run.linesServed} of ${s.run.lines.length} lines, ${s.run.phase})`);
-      assert(s.run.stars === 13, `the day's stars are every customer's added up (${s.run.stars})`);
+      const want = 3 + (s.run.served - 1) * 2;
+      assert(s.run.stars === want, `the day's stars are every customer's added up (${s.run.stars} of a wanted ${want})`);
+      assert(s.top.weekDone === false, 'the FIRST day closing is not the week closing');
+      assert(s.top.strip.length === DAYS_PER_WEEK && s.top.strip[0] === `${want}/${dishesIn(DAY_SHAPES[0]) * 3}`, `the week strip carries tonight's stars (${s.top.strip.join(' ')})`);
+      assert(s.top.strip.slice(1).every((c) => c.startsWith('-')), 'and the days still to come are blank');
       await api.shot('stage-closing');
+      // the hinge: the one press opens TOMORROW, not the title
       await api.press(0, { action: true }, 2, 6);
-      assert((await api.screen()) === 'title', `and the last press goes back to the title (on ${await api.screen()})`);
+      await api.step(70);
+      const t = await api.summary();
+      assert(t.screen === 'stage', `the press off a closed first day opens the next board (on ${t.screen})`);
+      assert(t.run.day === 1 && t.top.closed === false, `which is day 2, open (day ${t.run.day + 1}, closed ${t.top.closed})`);
+      assert(t.run.needs.every((n) => n.split(':')[1].startsWith('0/')), 'with an empty pantry: nothing carries between days');
+      assert(t.run.truckAt === 'home' && t.run.served === 0 && t.run.linesServed === 0, 'the truck back in the yard and nothing served');
+      assert(t.top.strip[0] === `${want}/${dishesIn(DAY_SHAPES[0]) * 3}`, 'and yesterday still on the strip');
+    });
+  },
+
+  /** The LAST day of the week is the one that ends the game: its board goes back to the title, not on to day six. */
+  async stageWeekEnd(server) {
+    await withPage(server, `skipTo=stage&critters=0,1&day=${DAYS_PER_WEEK}`, async (api, page) => {
+      await api.step(2);
+      let s = await api.summary();
+      assert(s.run.day === DAYS_PER_WEEK - 1, `?day= opens the last day (${s.run.day + 1} of ${DAYS_PER_WEEK})`);
+      assert(s.run.lines.length === DAY_SHAPES[DAYS_PER_WEEK - 1].lines.length, `with the fete's ${DAY_SHAPES[DAYS_PER_WEEK - 1].lines.length} queues (${s.run.lines.length})`);
+      await page.evaluate(() => {
+        const run = window.__game.game.run;
+        for (const n of run.needs) { n.have = n.amount; n.used = n.amount; }
+        for (const l of run.lines) { l.served = true; for (const c of l.customers) c.stars = 3; }
+        run.served = run.lines.reduce((t, l) => t + l.customers.length, 0);
+        run.score = 4200;
+        run.lastServed = run.lines.length - 1;
+      });
+      await api.goto('stage');
+      await api.step(20);
+      s = await api.summary();
+      assert(s.top.closed === true && s.top.weekDone === true, 'the last day closing closes the WEEK');
+      assert(s.run.weekComplete === true, 'and the run says so');
+      await api.shot('stage-week');
+      await api.press(0, { action: true }, 2, 6);
+      await api.step(10);
+      assert((await api.screen()) === 'title', `the last press of the week goes back to the title (on ${await api.screen()})`);
     });
   },
 };
@@ -111,23 +156,35 @@ export const SCENARIOS = {
  *          every twisted customer's words are on the end of their line at the hatch.
  */
 SCENARIOS.twists = async (server) => {
-  const { planDay, needsOf, CHOP_TAPS, CHOP_TAPS_CRUNCHY } = await import('../../src/game/run.ts');
+  const { planDay, planWeek, needsOf, CHOP_TAPS, CHOP_TAPS_CRUNCHY, DAYS_PER_WEEK } = await import('../../src/game/run.ts');
   const { ORDERS } = await import('../../src/content/recipes.ts');
-  const find = (kind) => { for (let seed = 1; seed < 800; seed++) { const p = planDay(seed); for (let i = 0; i < p.lines.length; i++) for (let j = 0; j < p.lines[i].customers.length; j++) if (p.lines[i].customers[j].twist === kind) return { seed, i, j, c: p.lines[i].customers[j] }; } return null; };
+  // a twist lives on a day whose shape deals them, so the search walks the WEEK and remembers which day it found
+  // one on - the page is then opened on that day with ?day=
+  const find = (kind) => {
+    for (let seed = 1; seed < 800; seed++) {
+      const week = planWeek(seed);
+      for (let d = 0; d < week.length; d++) {
+        const p = week[d];
+        for (let i = 0; i < p.lines.length; i++) for (let j = 0; j < p.lines[i].customers.length; j++) if (p.lines[i].customers[j].twist === kind) return { seed, day: d, i, j, c: p.lines[i].customers[j] };
+      }
+    }
+    return null;
+  };
   const big = find('big'), herb = find('herb'), crunchy = find('crunchy');
   assert(big && herb && crunchy, `the plan rolls every twist inside eight hundred seeds (big ${big && big.seed}, herb ${herb && herb.seed}, crunchy ${crunchy && crunchy.seed})`);
+  assert(planWeek(1)[0].lines.every((l) => l.customers.every((c) => !c.twist)), 'and the opening day, whose shape deals none, never carries one');
   assert(planDay(1, { order: 1 }).lines.every((l) => l.customers.every((c) => !c.twist)) && planDay(1, { recipes: [0, 2] }).lines.every((l) => l.customers.every((c) => !c.twist)), 'a dev-jump day never carries a twist');
   const rec = ORDERS.find((o) => o.id === big.c.recipe);
   assert(needsOf(big.c).every((n) => rec.needs.find((r) => r.id === n.id).amount + 1 === n.amount), `a BIG order wants one more of everything (${JSON.stringify(needsOf(big.c))})`);
   assert(needsOf(herb.c).some((n) => n.id === herb.c.extra && n.amount === 1), `a HERB order wants a sprig of ${herb.c.extra} (${JSON.stringify(needsOf(herb.c))})`);
-  await withPage(server, `skipTo=stage&critters=0,1&seed=${herb.seed}`, async (api, page) => {
+  await withPage(server, `skipTo=stage&critters=0,1&seed=${herb.seed}&day=${herb.day + 1}`, async (api, page) => {
     await api.step(2);
     const s = await api.summary();
     assert(s.run.needs.some((n) => n.startsWith(herb.c.extra + ':')), `the herb is on the shopping list (${s.run.needs.join()})`);
     assert(s.run.lines[herb.i].customers[herb.j].endsWith(':herb/' + herb.c.extra), `and the customer carries the twist (${s.run.lines[herb.i].customers[herb.j]})`);
     await api.shot('stage-twist');
   });
-  await withPage(server, `skipTo=stage&critters=0,1&seed=${crunchy.seed}`, async (api, page) => {
+  await withPage(server, `skipTo=stage&critters=0,1&seed=${crunchy.seed}&day=${crunchy.day + 1}`, async (api, page) => {
     await api.step(2);
     const o = await page.evaluate(([i, j]) => { const run = window.__game.game.run; run.startLine(i); run.customer = j; run.order = run.lines[i].customers[j] ? (run.startLine(i), run.order) : run.order; return { chops: run.order.chops, line: run.order.line, twist: run.order.twist }; }, [crunchy.i, crunchy.j]);
     // startLine stands on the line's FRONT customer; the crunchy one may be second, so read it straight off the plan's promise instead

@@ -32,6 +32,7 @@ import { KitchenScreen } from './game/screens/kitchen.ts';
 import { ResultsScreen } from './game/screens/results.ts';
 import { LineScreen } from './game/screens/line.ts';
 import { GalleryScreen } from './game/screens/gallery.ts';
+import { BookScreen } from './game/screens/book.ts';
 import { ControlsScreen } from './game/screens/controls.ts';
 import * as bindings from './engine/bindings.ts';
 import { PauseScreen } from './game/screens/pause.ts';
@@ -57,6 +58,8 @@ export function parseOptions(search = window.location.search) {
     order: devOnly ? (parseInt(q.get('order') || '0', 10) || 0) : 0,
     // ?recipes=0,2 fixes the day's menu to those ORDERS indices (a scenario keeps a day to the landmarks it can play)
     recipes: devOnly ? (q.get('recipes') || '').split(',').map((s) => parseInt(s, 10)).filter((n) => Number.isFinite(n) && n >= 0) : [],
+    // ?day=3 opens on that day of the week (game/run.ts DAY_SHAPES), 1-based to match what the board prints
+    day: devOnly ? Math.max(0, (parseInt(q.get('day') || '0', 10) || 0) - 1) : 0,
     // Online co-op invite links: ?room=CODE joins that room, ?host=1 hosts one.
     room: (q.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8),
     host: flag('host'),
@@ -121,6 +124,7 @@ function boot() {
   game.registerScreen('results', (g) => new ResultsScreen(g));
   game.registerScreen('line', (g) => new LineScreen(g));
   game.registerScreen('gallery', (g) => new GalleryScreen(g));
+  game.registerScreen('book', (g) => new BookScreen(g));
   game.registerScreen('controls', (g) => new ControlsScreen(g));
   game.registerScreen('pause', (g) => new PauseScreen(g));
 
@@ -157,7 +161,7 @@ function boot() {
   // Opening screen: a dev/test jump lands on any screen with a run already started (game/run.js).
   const skip = options.skipTo;
   if (skip && game.factories[skip] && skip !== 'title') {
-    if (skip !== 'gallery' && skip !== 'lobby' && skip !== 'controls') startRun(game, { seed: options.seed, critters: options.critters, order: options.order, recipes: options.recipes });
+    if (skip !== 'gallery' && skip !== 'book' && skip !== 'lobby' && skip !== 'controls') startRun(game, { seed: options.seed, critters: options.critters, order: options.order, recipes: options.recipes, day: options.day });
     game.reset(skip, { place: options.place, autoRoom: skip === 'lobby' });
   } else if (options.room || options.host) {
     game.reset('lobby', { autoRoom: true });
@@ -179,7 +183,7 @@ function boot() {
     /** Jump to a screen with a run started (tests, captures). */
     goto(id, params = {}) {
       if (!game.factories[id]) throw new Error('no screen ' + id);
-      if (!game.run && id !== 'title' && id !== 'gallery' && id !== 'lobby') startRun(game, { seed: options.seed, critters: options.critters, order: options.order, recipes: options.recipes });
+      if (!game.run && id !== 'title' && id !== 'gallery' && id !== 'book' && id !== 'lobby') startRun(game, { seed: options.seed, critters: options.critters, order: options.order, recipes: options.recipes, day: options.day });
       game.reset(id, params);
     },
     setInput(p, actions) { input.setVirtual(p, actions); },
