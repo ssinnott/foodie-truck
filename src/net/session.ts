@@ -26,7 +26,7 @@
 // those packets on (MSG.RELAY). The host is the one peer everybody must reach: they are also the
 // authority for the roster and the START parameters, and the session ends for everyone if they leave.
 
-import { rng } from '../lib/engine/rng.ts';
+import { rng, freshSeed } from '../lib/engine/rng.ts';
 import { NET_PLAYERS, NET_MIN_PLAYERS } from '../constants.ts';
 import { startRun, SCENES, START_SCENE } from '../game/run.ts';
 import { createLockstep } from '../lib/net/lockstep.ts';
@@ -459,7 +459,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
     const worst = list.reduce((w, m) => Math.max(w, m && m.rtt != null ? m.rtt : 0), net.rtt || 0);
     if (net.rttReady) net.rtt = worst;
     const seed = game.options && game.options.autotest ? (game.options.seed | 0) >>> 0 || 1
-      : (Math.floor(Math.random() * 0x7fffffff) | 0) >>> 0 || 1;   // chosen once, before any simulation
+      : freshSeed();   // chosen once, before any simulation
     const params = {
       seed,
       scene: Math.max(0, Math.min(SCENES.length - 1, scene | 0)),

@@ -264,7 +264,8 @@ implemented (a paused peer would stall the room) — the pause overlay is refuse
 
 ## 6. Debug & test hooks (`src/main.js`)
 
-URL params: `?autotest=1` (test mode: no rAF loop, seeded rng, `window.__game` populated), `?debug=1`, `?seed=N`,
+URL params: `?autotest=1` (test mode: no rAF loop, seeded rng, `window.__game` populated), `?debug=1`, `?seed=N`
+(pins the seed for every run on the page; without it each run the select screen starts draws its own, `rng.freshSeed`),
 `?skipTo=<screen>` (straight into a screen with a run started), `?critters=0,1,2,3` (party for skipTo), `?place=coop`,
 `?order=N` (force recipe N onto the day's menu and into the first customer's paws), `?recipes=0,2` (fix the menu to
 those ORDERS indices), `?room=CODE` / `?host=1` (online), `?transport=broadcast` (same-machine netplay for tests),
