@@ -20,34 +20,41 @@ export type { Decoded } from '../lib/net/protocol.ts';
  * on yesterday's bundle, and a shifted bit would silently turn their 'action' into someone's 'cancel'.
  * 2: the cast grew to five (content/critters/index.ts). A START packet's cast index 4 is the head chef on this
  * build and wraps to Barley on the last one - whose kitchen gag then fires on one machine only.
+ * 3: START carries the host's DAY of the week (game/run.ts DAY_SHAPES). A peer that ignores the byte plans day 0
+ * while the host plans day 3 - a different menu, a different shopping list and a different number of queues, so
+ * the two would disagree about the whole day from frame 0 rather than drift into it.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 if (ACTIONS.length > 16) throw new Error('net/protocol: more than 16 actions no longer fit a uint16 mask');
 /**
  * START: the host's authoritative session parameters. Every peer seeds from this and begins at
  * frame 0. `critters` is one cast index per slot and its length IS the party size; `scene` is the
- * screen the match opens on (a map / mini-game / kitchen index, see game/run.js SCENES).
+ * screen the match opens on (a map / mini-game / kitchen index, see game/run.js SCENES); `day` is which day of
+ * the host's week the match opens on (game/run.js DAY_SHAPES), so a host resuming a week takes the party into
+ * the day they are actually on. The whole week is a pure function of the seed, so that one byte is the entire
+ * cost of the week on the wire.
  */
-export function encodeStart({ seed, scene, delay, critters }) {
+export function encodeStart({ seed, scene, delay, critters, day = 0 }) {
   const n = critters.length;
-  const { b, v } = packet(9 + n);
+  const { b, v } = packet(10 + n);
   v.setUint8(0, MSG.START);
   v.setUint32(1, seed >>> 0, true);
   v.setUint8(5, scene & 0xff);
   v.setUint16(6, delay & 0xffff, true);
-  v.setUint8(8, n & 0xff);
-  for (let i = 0; i < n; i++) v.setUint8(9 + i, critters[i] & 0xff);
+  v.setUint8(8, day & 0xff);
+  v.setUint8(9, n & 0xff);
+  for (let i = 0; i < n; i++) v.setUint8(10 + i, critters[i] & 0xff);
   return new Uint8Array(b);
 }
 
 /** The START half of `decodeMessage`: the library frames everything else. */
 const decodeStart: StartDecoder = (u, v) => {
-  if (u.length < 9) return null;
-  const n = v.getUint8(8);
-  if (u.length < 9 + n) return null;
+  if (u.length < 10) return null;
+  const n = v.getUint8(9);
+  if (u.length < 10 + n) return null;
   const critters = new Array<number>(n);
-  for (let i = 0; i < n; i++) critters[i] = v.getUint8(9 + i);
-  return { seed: v.getUint32(1, true), scene: v.getUint8(5), delay: v.getUint16(6, true), critters };
+  for (let i = 0; i < n; i++) critters[i] = v.getUint8(10 + i);
+  return { seed: v.getUint32(1, true), scene: v.getUint8(5), delay: v.getUint16(6, true), day: v.getUint8(8), critters };
 };
 
 /**

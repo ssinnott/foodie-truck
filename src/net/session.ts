@@ -28,7 +28,7 @@
 
 import { rng, freshSeed } from '../lib/engine/rng.ts';
 import { NET_PLAYERS, NET_MIN_PLAYERS } from '../constants.ts';
-import { startRun, SCENES, START_SCENE } from '../game/run.ts';
+import { startRun, SCENES, START_SCENE, DAYS_PER_WEEK } from '../game/run.ts';
 import { createLockstep } from '../lib/net/lockstep.ts';
 import { runChecksum } from './checksum.ts';
 import { broadcastSignal, mqttSignal, makeRoomCode, createSignalMux } from './signal.ts';
@@ -126,6 +126,8 @@ export interface NetLobby {
   myReady: boolean;
   /** The host's opening scene: an index into game/run.ts SCENES. */
   scene: number;
+  /** The host's opening day: an index into game/run.ts DAY_SHAPES. */
+  day: number;
   /** The host's roster, indexed by slot. */
   members: RosterMember[];
 }
@@ -167,6 +169,12 @@ export interface StartParams {
   delay: number;
   /** One cast index per seat, in slot order; its length IS the party size. */
   critters: number[];
+  /**
+   * Which day of the host's week the match opens on (game/run.ts DAY_SHAPES). The week itself is a pure
+   * function of the seed, so this one byte is all the week costs the wire: every peer plans the same five days
+   * and this says which of them the truck is standing in.
+   */
+  day: number;
 }
 
 /**
@@ -281,7 +289,7 @@ export interface NetSession {
   /** Begin connecting. Resolves once signalling is up; the other players arrive asynchronously. */
   start(): Promise<boolean>;
   /** Host only: fix the session parameters and tell the party. False when the party is not startable. */
-  beginMatch(scene?: number): boolean;
+  beginMatch(scene?: number, day?: number): boolean;
   /** Come off lockstep and put the party back in the lobby, keeping every link and every pick. */
   matchOver(): boolean;
   /** Gate for createLoop's canUpdate: false while somebody's input for this frame has not arrived. */
@@ -341,7 +349,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
     versionMismatch: false,
     /** Lobby state. `members` is the host's roster, indexed by slot; `scene` the host's opening scene (game/run.js
      *  SCENES), which is the DAY BOARD by default so an online party reads the day's plan together and opens the truck. */
-    lobby: { myCritter: 0, myReady: false, scene: START_SCENE, members: [] },
+    lobby: { myCritter: 0, myReady: false, scene: START_SCENE, day: 0, members: [] },
     ls: null,
     /** pid -> link record, one per pairing (roster.js createLinks). */
     links: null,
@@ -452,8 +460,9 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
    * ready; a lobby screen (or the test hooks) may call it directly to start a party that is seated and
    * reachable, with whatever latency has been measured so far.
    * @param {number} scene index into game/run.js SCENES
+   * @param {number} day index into game/run.js DAY_SHAPES: which day of the host's week the party opens on
    */
-  net.beginMatch = function beginMatch(scene = net.lobby.scene) {
+  net.beginMatch = function beginMatch(scene = net.lobby.scene, day = net.lobby.day) {
     const list = net.lobby.members;
     if (!isHost || !stateIs('lobby') || list.length < NET_MIN_PLAYERS || !room.reachable()) return false;
     const worst = list.reduce((w, m) => Math.max(w, m && m.rtt != null ? m.rtt : 0), net.rtt || 0);
@@ -465,6 +474,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
       scene: Math.max(0, Math.min(SCENES.length - 1, scene | 0)),
       delay: delayForRtt(net.rttReady ? worst : null),
       critters: list.map((m) => m.critter | 0),
+      day: Math.max(0, Math.min(DAYS_PER_WEEK - 1, day | 0)),
     };
     broadcast(encodeStart(params), true);
     applyStart(params);
@@ -472,7 +482,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
   };
 
   /** Every peer runs this with byte-identical parameters. Everything after it is lockstep. */
-  function applyStart({ seed, scene, delay, critters }: StartParams) {
+  function applyStart({ seed, scene, delay, critters, day }: StartParams) {
     const players = Math.max(NET_MIN_PLAYERS, Math.min(NET_PLAYERS, critters.length));
     net.players = players;
     net.delay = Math.max(1, delay | 0);
@@ -486,7 +496,12 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
     // blocks the top screen's update (game/game.js) and one peer may be mid-fade when START lands;
     // and every seat must be joined, un-claimed, un-driven and free of buffered menu presses.
     (game.rng || rng).seed(seed);
-    ourRun = startRun(game, { seed, critters: critters.slice(0, players) });
+    // A FRESH run on every peer, which is also what keeps the WEEK'S RECORD out of the match. `run.weekStars` is
+    // hashed by the canary, and a host who reached this room through CONTINUE is carrying days already banked
+    // that no guest can know about - so the record must not survive into the match, and `startRun` starting it
+    // empty on every peer is what guarantees that. The host's saved week is untouched on disk; `day` alone says
+    // which day of it the party is standing in, and the board's week strip shows what THIS match has banked.
+    ourRun = startRun(game, { seed, critters: critters.slice(0, players), day: day | 0 });
     game.frame = 0;
     if (game.fade && game.fade.dir === 1) { game.fade.dir = -1; game.fade.then = null; }
     resetSeats(input, players);
@@ -768,7 +783,7 @@ export function createNetSession({ game, input, isHost, room: roomCode = '', tra
       state: net.state, room: net.room, pid: net.pid, slot: net.localSlot, players: net.players, delay: net.delay,
       rtt: net.rtt, rttReady: net.rttReady, waiting: net.waiting, missing: net.missing.slice(),
       frame: net.ls ? net.ls.frame : -1, desync: net.desync, reason: net.endReason, error: net.error,
-      scene: net.lobby.scene, myCritter: net.lobby.myCritter, myReady: net.lobby.myReady,
+      scene: net.lobby.scene, day: net.lobby.day, myCritter: net.lobby.myCritter, myReady: net.lobby.myReady,
       party: net.party(),
       dropped: net.ls ? net.lobby.members.filter((m) => m && net.ls.dropFrameOf(m.slot) >= 0).map((m) => m.slot) : [],
       lastDrop: net.lastDrop,
@@ -806,6 +821,6 @@ export function installNetHooks(hooks: any, game: Game, input: Input): void {
     netJoin: (code: string, { transport = game.options.transport } = {}) => open({ isHost: false, room: String(code || '').toUpperCase(), transport }),
     netSetCritter: (i) => !!(game.net && game.net.setCritter(i)),
     netReady: (on = true) => !!(game.net && game.net.setReady(on)),
-    netBegin: (scene = 0) => !!(game.net && game.net.beginMatch(scene)),
+    netBegin: (scene = 0, day = 0) => !!(game.net && game.net.beginMatch(scene, day)),
   });
 }

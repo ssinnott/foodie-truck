@@ -1,12 +1,18 @@
 # Foodie Truck — Expansion Roadmap
 
 > **Precedence:** this is a plan, not a rule book. `docs/GDD.md` owns the design of anything that ships; when a
-> thing on this list is built, its numbers move into the GDD and its row here is struck through. Nothing below is
-> in the game yet.
+> thing on this list is built, its numbers move into the GDD and its row here is struck through.
 >
 > `docs/CONTENT_ROADMAP.md` is the previous plan and is now entirely built. It made **one day** wider — sixty-three
 > recipes, forty ingredients, twelve landmarks, twelve verbs, a joke in every scene, weather on the road. This one
 > makes the **game** longer, and it is deliberately not more content.
+>
+> **Both sections are now built.** Their numbers live in `docs/GDD.md` — section 3 for the week, section 12 for the
+> book — and the GDD wins on any disagreement with what is written below. 8 claims in the first draft of this plan
+> were wrong about the game as it stood: it counted a day's six orders as six recipes, promised that the existing
+> scenarios would be unmoved, and got the weather odds, the save record's own example, the session length and the
+> cost of the wire wrong besides. Each is corrected in place and marked **[corrected]**, so what the plan got wrong
+> is on the record rather than quietly rewritten.
 
 The game is wide and flat. A run is one day (`run.ts`: "when the third line has been served the day is done — that
 is the game's end"), about half an hour, and then the title screen. Three things follow from that:
@@ -16,8 +22,10 @@ is the game's end"), about half an hour, and then the title screen. Three things
 - **Every closed board is identical.** `screens/stage.ts:217` prints `LINES SERVED 3 OF 3 / DISHES 6 /
   STARS 18 OF 18 / TAKINGS 1800` on every run ever played, because nothing can burn (`docs/GDD.md` section 6) so
   stars are always 3. The board is a receipt, not a result.
-- **Sixty-three recipes is a week's worth of dishes shown six at a time.** At `LINES_PER_DAY` × `LINE_LENGTH` = 6
-  orders a day, a player sees under a tenth of the menu per run, and has no way to know the rest is there.
+- **Sixty-three recipes is twenty days of dishes shown three at a time.** [corrected] `RECIPES_PER_DAY` is 3, and
+  the `LINES_PER_DAY` × `LINE_LENGTH` = 6 orders a day are that three-recipe menu dealt round — so a run shows
+  **three distinct dishes**, under a twentieth of the menu, and has no way to say the rest is there. The first
+  draft of this line counted orders as recipes and said "six at a time, under a tenth".
 
 The two extensions below are the spine: **A** gives the game a shape, **B** gives it a reason to come back. Neither
 touches the rules the whole game stands on:
@@ -34,6 +42,9 @@ touches the rules the whole game stands on:
 
 ## A. The Week
 
+> **Done.** Built as described, with one correction and one change of approach, both marked below. The numbers are
+> in `docs/GDD.md` section 3; the day shapes are `game/run.ts DAY_SHAPES` and the save record is `game/week.ts`.
+
 A run becomes **five days** instead of one, resumable between them. `dayComplete()` stops being the end of the
 game; `weekComplete()` becomes it. The closed board stops being terminal and becomes the hinge between days.
 
@@ -48,8 +59,16 @@ stream. The whole week is laid out **up front**, before day 1 opens, for two rea
 2. **Resuming is trivial.** `planWeek(seed)[day]` rebuilds any day of any week from two integers. The save record
    below is small precisely because the plan is never saved — it is re-derived.
 
-`planDay` keeps its signature and its dev jumps (`?order=`, `?recipes=`); it gains a shape argument. A bare
-`?skipTo=` still starts on day 1 of a fresh week, so every existing scenario is unmoved.
+`planDay` keeps its signature and its dev jumps (`?order=`, `?recipes=`); it gains a shape argument defaulting to
+the ordinary day, so calling it with two arguments still lays out exactly today's day.
+
+**[corrected]** The first draft claimed "a bare `?skipTo=` still starts on day 1 of a fresh week, so every existing
+scenario is unmoved". That was wrong, and in exactly the way the day shapes make obvious: day 1 is **not** the
+shape that shipped, so a bare `?skipTo=stage` now opens a two-queue, two-recipe, twistless board and four
+scenarios that asserted the ordinary day's numbers failed. The fix was not to reshape day 1 but to make the
+scenarios read the shape they are standing in (`stage`, `stageClosing`, `twists`, `playthrough`), plus a `?day=N`
+dev jump so a scenario can open any day of the week — which is what `twists` now uses to find a day that deals
+them.
 
 ### The days have shapes, not just seeds
 
@@ -62,10 +81,14 @@ weather does.
 | 1 | **OPENING DAY** | 2 × 2 | 2 recipes | off | clear | 4 | The gentle one. A short list, a short drive, no twist to read. A child's first day is the tutorial and is never labelled one. |
 | 2 | — | 3 × 2 | 3 recipes | on | rolled | 6 | Today's day, exactly as it ships now. |
 | 3 | **MARKET DAY** | 3 × 2 | **2 recipes** | on | rolled | 6 | The village wants the same things: a short shopping list with deep amounts, so the day is two or three long gathers instead of eight short ones. The same six orders feel completely different. |
-| 4 | — | 3 × 2 | 3 recipes | on | **drizzle or fog** | 6 | The weather day. Fog makes the compass and the lanterns do the steering; the mud patch is on the lane. All of it already exists and fires one day in five by chance — here it is guaranteed once a week. |
+| 4 | — | 3 × 2 | 3 recipes | on | **drizzle or fog** | 6 | The weather day. Fog makes the compass and the lanterns do the steering; a drizzle day puts the mud patch on the lane. Both already exist and each fires one day in five by chance (so two in five are not clear) — here a wet day is guaranteed once a week. [corrected: the first draft said the pair fired one day in five.] |
 | 5 | **THE FÊTE** | 2, 2, 2, **3** | **the week's** | on | clear | 9 | Four lines, one of them three deep, and the menu is drawn from what this week actually cooked. The last customer of the week orders something you made on Monday. |
 
-**Thirty-one dishes a week**, against six today. Two weeks is most of the sixty-three-recipe book.
+**Thirty-one dishes a week**, against six today — and **ten different recipes a week against three**, since a
+day's orders are its menu dealt round and THE FETE re-cooks what the week already served. [corrected] The first
+draft said "two weeks is most of the sixty-three-recipe book", which counted servings as recipes: a fortnight is
+under a third of it, and the whole book is six or seven weeks of trading. That is a longer collection curve than
+the draft claimed, and a better one — it is what section B is for.
 
 A shape is data, so a sixth day or a different week is a row, not a rewrite. `DAYS_PER_WEEK` is
 `DAY_SHAPES.length`.
@@ -83,12 +106,17 @@ plays `day_done`. Three changes:
 
 ### Resuming, and the save record
 
-A week is two hours of play across five sittings, so it has to be resumable — and the elegant part is that at a
-day boundary the run holds nothing that is not derivable. The whole record is:
+A week is about two and a half hours of play across five sittings (this document's own half-hour day, five
+times), so it has to be resumable — and the elegant part is that at a day boundary the run holds nothing that is
+not derivable. The whole record is:
 
 ```json
-{ "v": 1, "seed": 481920, "day": 2, "critters": [0, 3], "stars": [12, 17], "takings": 2900 }
+{ "v": 1, "seed": 481920, "day": 2, "critters": [0, 3], "stars": [12, 18], "takings": 3000 }
 ```
+
+[corrected] The first draft wrote `"stars": [12, 17], "takings": 2900`. Seventeen is unreachable: day 2 is a
+six-dish day and nothing can burn, so the only total it can bank is eighteen — and the takings follow from the
+stars at a hundred each, so they were wrong by the same hundred.
 
 Written **at the closed board only** — one write, at a screen boundary, off the simulation path, exactly as
 `engine/bindings.ts` writes (`docs/MULTIPLAYER.md`: no `localStorage` inside `update()`). Key
@@ -121,8 +149,10 @@ The week costs **one byte on the wire and a version bump**, and nothing else:
 - `net/protocol.ts encodeStart` gains `day` after `scene`; `decodeStart` reads it. `PROTOCOL_VERSION` → **3**, with
   the reason written next to it as version 2's is ("a START packet's day index is a different day's plan on a peer
   that ignores it").
-- `net/checksum.ts` hashes `run.day` beside `run.seed`, so a peer on the wrong day is caught on the frame it
-  happens rather than when the lines disagree.
+- `net/checksum.ts` hashes `run.day` beside `run.seed` (and the week's banked stars). [corrected] The first draft
+  said this catches a peer on the wrong day "rather than when the lines disagree" — but the canary already walks
+  the whole plan, so a wrong day would have tripped it anyway. What `run.day` actually buys is that the mismatch
+  is *named*: a one-field divergence on the day index instead of an unexplained whole-plan disagreement.
 - **Days advance from simulation state.** `NEXT DAY` is a confirm inside `update()` driving `game.replace(...)`,
   which is how every other scene change already works, so peers roll over together on the same frame.
 - A host who resumes a week sends `day` in START; guests play the host's week and save nothing. One player owns
@@ -136,13 +166,18 @@ The week costs **one byte on the wire and a version bump**, and nothing else:
 | The week strip, `NEXT DAY`, the day heading | `game/screens/stage.ts` |
 | The save record | a new `game/week.ts` (the bindings' shape), `main.ts` hook |
 | `CONTINUE` | `game/screens/title.ts` |
-| The wire | `net/protocol.ts`, `net/checksum.ts`, `docs/MULTIPLAYER.md` |
+| The wire | `net/protocol.ts` (the byte, `PROTOCOL_VERSION` 3), **`net/session.ts`** (`StartParams`, `beginMatch`, `applyStart`, the lobby), `net/checksum.ts`, `tools/nettest.js`, `docs/MULTIPLAYER.md` [corrected: the first draft left `session.ts` out, and it owns the START parameters end to end] |
 | Tests | a `week` scenario (five days head to head, asserting each shape), `playthrough` extended to the day-2 board, two golden frames (the week strip, the fête board) |
 | Docs | `docs/GDD.md` section 3 rewritten around the week; section 10's `stage` entry |
 
 ---
 
 ## B. The Recipe Book
+
+> **Done.** Built as described. The numbers are in `docs/GDD.md` section 12; the store is `game/book.ts`, the
+> screen is `game/screens/book.ts`, and the invariant is enforced by `tools/check.js` and proved from outside by
+> the `bookInvariant` playtest scenario. The "no new art" claim held: `art/dishes.ts` has a distinct drawing for
+> all sixty-three recipes, checked rather than assumed.
 
 A book that **records and never unlocks**. Sixty-three dishes, forty ingredients, twelve landmarks and three
 diners are already in the game and a player has no way to see that they exist. The book is where the day's real
@@ -185,11 +220,13 @@ reverse.
 pages, up/down through rows, CANCEL out, `title` music. It is reachable from the title and from nowhere else, so
 it can never be open while a run is live.
 
-**The title menu is the one layout problem.** `ROWS` is `PLAY / ONLINE / CONTROLS / CREW / SOURCE` and the box is
-sized for five (`title.ts:26,30` — the widest row, CONTROLS, is 48 px of 140). The week adds `CONTINUE` and the
-book adds `BOOK`, which is seven. Either the box grows and the crew lineup beside it shrinks, or `CONTINUE`
-replaces `PLAY` in place (it should — they are the same row in two states) and `BOOK` sits next to `CREW`, which
-makes six. Six is the design to try first.
+**The title menu is the one layout problem.** `ROWS` was `PLAY / ONLINE / CONTROLS / CREW / SOURCE` and the box
+was sized for five. The week adds `CONTINUE` and the book adds `BOOK`, which is seven. `CONTINUE` replaces `PLAY`
+in place — they are the same row in two states — and `BOOK` sits next to `CREW`, which makes six.
+
+**Built as:** six rows, and the A-frame grew from 104 px to 122 and moved up 14, because six rows at the menu's
+14 px pitch do not clear 104 and a row clipped by its own frame is worse than a slightly taller A-frame. The
+legs land within 4 px of where they did, and the board still starts where the crew lineup stops.
 
 ### Cost
 
@@ -213,6 +250,8 @@ nobody asked for.
 
 ## C. Order of work
 
+> **Done.** Every row is built. What follows is the order it was actually done in, which was the order below.
+
 Cheapest and most load-bearing first. Rows 1–3 ship a playable week with no save and no book, which is a complete
 change on its own; rows 4–5 make it resumable; rows 6–8 are the book.
 
@@ -222,7 +261,7 @@ change on its own; rows 4–5 make it resumable; rows 6–8 are the book.
 | 2 | The closed board's `NEXT DAY` and the week strip; the open board's day heading | `game/screens/stage.ts` | A session, mostly drawing |
 | 3 | The `week` scenario and the two golden frames | `tools/scenarios/` | A short session |
 | 4 | The save record and `CONTINUE` | `game/week.ts`, `game/screens/title.ts`, `main.ts` | A session |
-| 5 | The wire: the `day` byte, `PROTOCOL_VERSION` 3, the checksum field | `net/protocol.ts`, `net/checksum.ts`, `tools/nettest.js` | Small, and the nettest covers it |
+| 5 | The wire: the `day` byte, `PROTOCOL_VERSION` 3, the checksum field | `net/protocol.ts`, `net/session.ts`, `net/checksum.ts`, `tools/nettest.js` | Small, and the nettest covers it |
 | 6 | The book's store and `recordDay` | `game/book.ts`, one call in `stage.ts` | A session |
 | 7 | The book screen | `game/screens/book.ts`, `title.ts`, the menu layout | The biggest drawing job on the list; the dish pictures exist |
 | 8 | The invariant's check rule, the `book` scenario, the golden frame | `tools/check.js`, `tools/scenarios/` | A short session |
