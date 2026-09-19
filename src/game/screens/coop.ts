@@ -338,6 +338,7 @@ export class CoopScreen extends Screen {
     ringAt(e.x, e.y, 3, 10, UI.cream, 2, 12, false, true);
     floatText(e.x, e.y - 12, PLUS_ONE, s.colour, 1, true);
     if (e.nest >= 0) burstDust(e.x, e.y + 4, 3, 1, true);
+    this.game.audio.play('egg');
   }
 
   /**
@@ -382,7 +383,7 @@ export class CoopScreen extends Screen {
   /** The round is over: drop the sign; a seat with eggs cheers, one without sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, SIGN_PREFIX + this.total);
+    endRound(this.clock, SIGN_PREFIX + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.moving = false; s.reachT = 0; seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true); }
   }
 

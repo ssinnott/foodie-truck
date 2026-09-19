@@ -92,6 +92,8 @@ const CATCH_HALF = 36;
  * there" before the tie beat lands.
  */
 const FILL_RATE = 1 / 90, FULL = 1, BRIM_BAND = 0.35;
+/** Frames between replays of the pour's hush while a sack is under a running chute. */
+const POUR_EVERY = 12;
 const BRIM_AT = FULL - BRIM_BAND;
 /** The tie beat (18 frames of the `tie` anim) and the frame of it the sack leaves the paw on. */
 const TIE_FRAMES = 18, TIE_TOSS = 9;
@@ -511,6 +513,7 @@ export class MillScreen extends Screen {
           s.chute = c;
           if (this.chutes[c].seat < 0) this.chutes[c].seat = i;
           s.fill += FILL_RATE;
+          if ((this.frame % POUR_EVERY) === 0) this.game.audio.play('pour');
           // the brim ties the sack off by itself: there is no release to time and nothing to overfill
           if (s.fill >= FULL) this.tie(s);
         }
@@ -538,6 +541,7 @@ export class MillScreen extends Screen {
     h.t = -(TIE_FRAMES - TIE_TOSS); h.x0 = mx; h.y0 = my; h.slot = s.slot;
     ringAt(mx, my, 4, 16, UI.cream, 2, 14, false, true);
     floatText(mx, my - 26, PLUS_ONE, s.colour, 1, true);
+    this.game.audio.play('tie');
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
@@ -545,7 +549,7 @@ export class MillScreen extends Screen {
   /** The round is over: drop the sign; a seat that tied a sack cheers, one that never did sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.moving = false; s.bumpT = 0; s.tieT = 0; s.chute = -1;

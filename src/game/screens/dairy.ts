@@ -352,6 +352,7 @@ export class DairyScreen extends Screen {
     s.squirtT = SQUIRT_FRAMES;
     seatAnim(s, down === 0 ? 'pumpR' : 'pumpL', true);
     ringAt(s.pailX, s.pailY - PAIL_H, 3, 10, UI.cream, 2, 10, true, true);
+    this.game.audio.play('squirt');
     if (s.fill >= PUMP_PER_PAIL) this.bank(s);
   }
 
@@ -367,6 +368,7 @@ export class DairyScreen extends Screen {
     h.t = 0; h.x0 = s.pailX; h.y0 = s.pailY; h.tx = CHURN_X[slot]; h.ty = ROWS.rack; h.slot = s.slot;
     ringAt(s.pailX, s.pailY - PAIL_H, 4, 18, SIGNAL.dairy, 2, 16, false, true);
     floatText(s.pailX, s.pailY - PAIL_H - 16, PLUS_ONE, s.colour, 1, true);
+    this.game.audio.play('pail');
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
@@ -374,7 +376,7 @@ export class DairyScreen extends Screen {
   /** The round is over: drop the sign; a seat that banked anything cheers, one that did not sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.bumpT = 0; s.squirtT = 0;

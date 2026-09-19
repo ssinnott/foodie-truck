@@ -18,6 +18,20 @@ import type { RigBuild } from '../lib/art/rig.ts';
  * module screens actually call (`game.input.pressed(slot, 'action')`).
  */
 export type Input = typeof import('../engine/input.ts')['input'];
+/** The audio service: engine/audio.ts's singleton, the same way (`game.audio.play('catch')`). */
+export type Audio = typeof import('../engine/audio.ts')['audio'];
+
+/**
+ * The track each screen plays, started by `push` BEFORE the screen's `enter()` runs, so a screen that wants
+ * something else for one visit (the day board when the truck is closed) overrides it from enter(). A screen
+ * missing from here leaves the music alone: the pause overlay sits over its scene's track. The seven mini-games
+ * share one round track, bar the pond, which is water and waltzes.
+ */
+const SCREEN_MUSIC: Record<string, string> = Object.freeze({
+  title: 'title', lobby: 'title', select: 'title', controls: 'title', gallery: 'title',
+  stage: 'board', map: 'drive', line: 'line', kitchen: 'kitchen', results: 'results',
+  orchard: 'gather', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', pond: 'pond',
+});
 
 /** One line of an order or of the shopping list: an ingredient (content/recipes.js INGREDIENTS), how many are wanted, how many are in. */
 export interface OrderNeed {
@@ -241,6 +255,7 @@ export interface GameOptions {
 /** What the shell is constructed with (main.ts boot). */
 export interface GameServices {
   input: Input;
+  audio: Audio;
   rng: Rng;
   options?: Partial<GameOptions>;
 }
@@ -282,12 +297,20 @@ export class Screen {
    * the method before it calls it, so this is a signature for the checker and not a member that exists.
    */
   checksumFields?(): readonly unknown[];
+  /**
+   * True while the screen is reading `input.typedCodes()` as TEXT (the lobby spelling a host key), so main.ts's
+   * global keys stand down: M is a letter of a room code before it is the mute key. Declared, not set - only a
+   * screen that types has it, and main.ts reads it off whatever screen is on top.
+   */
+  declare typing?: boolean;
 }
 
-/** Game shell: owns the screen stack and the shared services (input, rng, options, net, run). */
+/** Game shell: owns the screen stack and the shared services (input, audio, rng, options, net, run). */
 export class Game {
   /** Keyboard / gamepad / netplay input (engine/input.ts). */
   declare input: Input;
+  /** Synthesized SFX and music (engine/audio.ts): `play(name)` from any screen, the track by SCREEN_MUSIC. */
+  declare audio: Audio;
   /** The seeded RNG every gameplay draw goes through (lib/engine/rng.ts). */
   declare rng: Rng;
   /** The shell's defaults with main.ts's parsed URL options over them. */
@@ -314,10 +337,11 @@ export class Game {
   declare fade: Fade;
 
   /**
-   * @param {{ input: object, rng: object, options?: object }} services
+   * @param {{ input: object, audio: object, rng: object, options?: object }} services
    */
-  constructor({ input, rng, options = {} }: GameServices) {
+  constructor({ input, audio, rng, options = {} }: GameServices) {
     this.input = input;
+    this.audio = audio;
     this.rng = rng;
     this.options = { debug: false, autotest: false, seed: 1, skipTo: '', room: '', host: false, transport: 'mqtt', ...options };
     this.screens = [];
@@ -345,10 +369,11 @@ export class Game {
   get screen(): Screen | null { return this.screens.length ? this.screens[this.screens.length - 1] : null; }
   /** Id of the top screen ('' when empty). */
   screenId(): string { return this.screen ? this.screen.id : ''; }
-  /** Push a screen on top (overlay if it declares `transparent`). */
+  /** Push a screen on top (overlay if it declares `transparent`). Its SCREEN_MUSIC track starts before its enter(). */
   push(id: string, params: ScreenParams = {}): Screen {
     const s = this._make(id);
     this.screens.push(s);
+    if (SCREEN_MUSIC[id]) this.audio.music.play(SCREEN_MUSIC[id]);
     s.enter(params);
     return s;
   }

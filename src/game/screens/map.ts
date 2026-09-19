@@ -396,6 +396,7 @@ export class MapScreen extends Screen {
         if (this.splashCd === 0) {
           ringAt(nx + COS[truck.heading] * RIVER_BLOCK, ny + SIN[truck.heading] * RIVER_BLOCK, 4, 18, MAP.skyTop, 2, 16, true);
           floatText(nx, ny - 40, 'SPLASH', MAP.skyTop); this.splashCd = 30;
+          game.audio.play('splash');
         }
       } else if (wallBlocked(nx, ny)) { this.speed = 0; this.blocked = true; } else { truck.x = nx; truck.y = ny; }
       this.wheelAcc += this.speed; this.wheelStep = Math.floor(this.wheelAcc / 5) & 3;
@@ -409,7 +410,7 @@ export class MapScreen extends Screen {
     if (this.reopen > 0 && --this.reopen === 0) truck.at = '';
     if (near < 0) truck.at = '';
     else if (truck.at !== PLACES[near].id) { truck.at = PLACES[near].id; this.arrive(near); }
-    if (inp.anyPressed('alt') >= 0) { this.honk = HONK_FRAMES; this.squashT = SQUASH_FRAMES; }
+    if (inp.anyPressed('alt') >= 0) { this.honk = HONK_FRAMES; this.squashT = SQUASH_FRAMES; game.audio.play('honk'); }
     if (this.honk > 0) this.honk--;
     if (this.squashT > 0) this.squashT--;
     if (this.signTimer > 0) this.signTimer--;
@@ -422,6 +423,7 @@ export class MapScreen extends Screen {
     if (screen) {
       // pulling up at a queue: the run stands on that line before its screen opens, so the first customer is at the hatch
       if (screen === 'line') run.startLine(run.lineAt(id));
+      this.game.audio.play('truck_stop');
       this.game.fadeTo(() => this.game.replace(screen, { place: id }));
       return;
     }
@@ -433,6 +435,7 @@ export class MapScreen extends Screen {
     this.signText = text;
     this.signW = measureText(text, 1) + 24;
     this.signTimer = SIGN_FRAMES;
+    this.game.audio.play('sign_drop');
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
