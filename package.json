@@ -15,7 +15,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "art-check": "node tools/art-check.js",
     "golden": "node tools/golden.js --check",
-    "check": "npm run lint && npm run class-fields && npm run art-check && npm run nettest && npm run golden",
+    "check": "npm run lint && npm run class-fields && npm run lib-check && npm run art-check && npm run nettest && npm run golden",
+    "lib-check": "node tools/lib-check.js",
     "class-fields": "node tools/class-fields.js"
   },
   "license": "MIT",
