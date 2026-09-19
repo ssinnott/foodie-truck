@@ -6,7 +6,7 @@ customers will order. They drive round the countryside gathering it all — a sh
 until the pantry is full, then drive to the queues of villagers lined up at three of those landmarks and cook for
 them one at a time, order by order, until the third line has been served. Then the truck closes for the night.
 
-Forty recipes, twenty-three ingredients, nine landmarks, and **nine mini-games** — each with its own verb:
+Fifty-one recipes, thirty-one ingredients, nine landmarks, and **nine mini-games** — each with its own verb:
 catch, fish, collect, pump, fill, creep, pull, pick, chase. A landmark can supply several things, and every visit
 looks like what it is for: the orchard drops pears, peaches and avocados from their own trees; the farm's bed grows
 six vegetables besides the carrot, each its own plant; the dairy milks, and churns the milk into butter; the mill

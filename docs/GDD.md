@@ -67,12 +67,17 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   ingredient is somewhere a day can send the truck; and the eighteen after those (honey cakes, trout pie, fish and
   chips, carrot cake, strawberry milkshake, coleslaw, baked apples, pears in honey, crab chowder, pumpkin pie, leek
   and potato soup, egg fried rice, blueberry pancakes, avocado and crab salad, seaweed crisps, onion tart, beetroot
-  brownies, honey toffee) give every ingredient a second dish, so no landmark is a rare visit. Three of them never
+  brownies, honey toffee) give every ingredient a second dish, so no landmark is a rare visit; and the eleven after
+  those (cherry pie, cherry clafoutis, plum crumble, cheese toastie, mac and cheese, porridge, flapjacks, tomato
+  soup, pea soup, raspberry jam tarts, cockle stew) are what the third pass's eight ingredients - cherries, plums,
+  cheese, oats, tomatoes, peas, raspberries, cockles - are for. Fifty-one in all. Three of them never
   touch the stove or the oven and baked apples is two steps long: the kitchen's variety is which stations a recipe
   skips. Recipes are only ever appended, because `?order=N` and the scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
-  orchard drops pears, peaches and avocados as well as apples; the farm pulls six vegetables besides the
-  carrot; the dairy's pails go on through the churn to butter; the mill's chutes fill rice sacks. A mini-game gathers whichever of
+  orchard drops pears, peaches, avocados, cherries and plums as well as apples; the farm pulls six vegetables
+  besides the carrot and grows tomatoes and peas up stakes; the dairy's pails go on through the churn to butter
+  and through the press to cheese; the mill's chutes fill rice and oat sacks; the bank has raspberries beside its
+  strawberries and blueberries; the cove has cockles in its wet sand. Thirty-one ingredients ship. A mini-game gathers whichever of
   its landmark's ingredients the list is still short of (`run.js gatherTarget`: the first short one in
   `INGREDIENTS` order, else the first the list asks for, else the landmark's first — so a bare dev jump still
   catches apples), and draws that ingredient's glyph and colour on the tally ticket, in the basket and on the end sign.

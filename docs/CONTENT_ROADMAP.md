@@ -120,6 +120,11 @@ Each customer line and a new customer assignment are needed per row; the three d
 
 ## D. New ingredients at the landmarks we have
 
+> **Done.** All eight shipped with eleven recipes between them (`docs/GDD.md` section 3). Cheese rides the
+> butter's own milk-then-churn code with the hint reading PRESS; a cockle never moves and the spit of water off
+> its bump is what gives it away; cherries are one catch, one +1 (the two-on-a-stem catch was not worth a second
+> catch rule).
+
 A new ingredient at an existing landmark costs a glyph in `art/food.ts`, a visit look at that landmark (a plant in
 `gardenProps.ts PLANTS`, a canopy in the orchard's backdrop, a bush on the bank, a sack band at the mill), and at
 least one recipe to send the truck for it. No screen logic changes: `gatherTarget` already routes any ingredient
