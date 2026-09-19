@@ -106,7 +106,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
   south lane (strawberries, blueberries) and Hazel Holt in the north-west corner (hazelnuts, walnuts, chestnuts,
-  shaken down). **All ten supply landmarks open a mini-game** while the list is short
+  shaken down) and Tangle Wood in the north-east (mushrooms, wild garlic, blackberries, foraged out of the leaf
+  litter). **All eleven supply landmarks open a mini-game** while the list is short
   of what they supply — the cove its beach (crabs chased along the sand), the bank its bushes — and **any
   of them can hold a line** once it is full; arriving where there is nothing to do shows a sign instead
   (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
@@ -268,6 +269,15 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   nuts in the canopy, in the shower and in the crate wear that nut's glyph. **The joke:** one shake in six brings
   the squirrel down with the nuts; it lands on the shaker's head, sits there indignant for 40 frames with the stick
   locked (the nuts still falling), then runs off. Nothing is lost.
+
+- **Tangle Wood — FORAGE** (*move + tap*). A dark wood in the north-east corner, on the coop's side of the river:
+  things hide in the leaf litter along the band. A **bump** lifts in the leaves every 70..120 frames at a free x
+  (four are already showing when the truck pulls up), takes 20 frames to rise, and then SHOWS with the gold
+  sparkle over it; `action` with a showing bump anywhere under the critter (34 px either side) brushes the leaves
+  off it (a 12-frame crouch), the thing hops into the basket, +1. A showing bump nobody wants sinks back after 900
+  frames. A visit is for mushrooms, wild garlic or blackberries. **The joke:** one bump in eight lifts as a
+  toadstool, red with white spots; brushing it is a step back with the nose wrinkled, POOH!, 20 frames, and it
+  sinks back. Nothing is lost.
 
 - **Cockle Cove — CHASE** (*move + tap*). The crew runs along the dry sand with the sea behind it and the strand
   line in front. Crabs come up out of burrows (three at the start, another every 50–100 frames, five at most) and

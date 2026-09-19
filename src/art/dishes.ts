@@ -430,6 +430,31 @@ export const DISHES: Record<string, DishDraw> = {
     flecks(ctx, cx, cy, s, hexOf('walnut'), [-0.6, -0.35, -0.1, -0.1, 0.3, -0.4]);
     flecks(ctx, cx, cy, s, hexOf('carrot'), [-0.35, 0.05, 0.15, -0.3]);
   },
+  // ---- Tangle Wood's menu ----
+  mushroomSoup(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('mushroom'), (c, x, y) => { flecks(c, x, y, s, CRUST_DARK, [-0.5, -0.5, 0.1, -0.6, 0.45, -0.4]); c.fillStyle = CREAM; c.fillRect(R(x - s * 0.3), R(y - s * 0.35), R(s * 0.5), 2); });
+  },
+  mushroomsOnToast(ctx, cx, cy, s) {
+    const t = foodTones(TOAST), m = foodTones(hexOf('mushroom'));
+    box(ctx, R(cx - s * 0.95), R(cy - s * 0.5), R(s * 1.9), R(s * 1.1), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.95) + 1, R(cy + s * 0.3), R(s * 1.9) - 2, R(s * 0.3));
+    for (let i = 0; i < 3; i++) { const x = cx - s * 0.55 + i * s * 0.55, y = cy - s * 0.35 - (i & 1) * s * 0.15; ctx.beginPath(); ctx.ellipse(x, y, s * 0.3, s * 0.2, 0, 0, TAU); inkFill(ctx, m.base); ctx.fillStyle = m.sh; ctx.fillRect(R(x - s * 0.2), R(y), R(s * 0.4), 2); }
+    ctx.fillStyle = hexOf('butter'); ctx.fillRect(R(cx + s * 0.4), R(cy - s * 0.6), 3, 3);
+  },
+  garlicButter(ctx, cx, cy, s) {
+    // a pat of butter gone green with the garlic, on a paper, a flower on top
+    box(ctx, R(cx - s * 1.0), R(cy - s * 0.1), R(s * 2.0), R(s * 0.7), CREAM);
+    const g = foodTones('#B8C874');
+    box(ctx, R(cx - s * 0.75), R(cy - s * 0.6), R(s * 1.5), R(s * 0.9), g.base);
+    ctx.fillStyle = g.sh; ctx.fillRect(R(cx - s * 0.75) + 1, R(cy), R(s * 1.5) - 2, R(s * 0.25));
+    flecks(ctx, cx, cy, s, hexOf('leek'), [-0.5, -0.4, 0.0, -0.2, 0.4, -0.45]);
+    ctx.fillStyle = CREAM; ctx.fillRect(R(cx + s * 0.2), R(cy - s * 0.85), 3, 3);
+  },
+  blackberryApplePie(ctx, cx, cy, s) {
+    pieDish(ctx, cx, cy, s, CRUST, lattice);
+    flecks(ctx, cx, cy, s, hexOf('blackberry'), [-0.7, -0.75, 0.6, -0.7]);
+    flecks(ctx, cx, cy, s, hexOf('apple'), [0.05, -1.0]);
+  },
 };
 
 /**

@@ -29,6 +29,9 @@ export const PLACES = Object.freeze([
   // corner, up a lane from the orchard: nuts are SHAKEN down. Its accent is the mill's straw gold (a nut is a
   // grain's cousin, and the two never share a screen).
   { id: 'holt', name: 'HAZEL HOLT', sign: 'NUTS', x: 180, y: 150, screen: 'holt', accent: '#E3C68F' },
+  // Tangle Wood is the dark wood in the north-east corner, on the coop's side of the river: things hide under the
+  // leaves and are FORAGED. Its accent is the avocado's deep green.
+  { id: 'wood', name: 'TANGLE WOOD', sign: 'WOOD', x: 1760, y: 180, screen: 'wood', accent: '#5C7A3B' },
 ]);
 
 /** Kitchen stations, left to right along the truck's counter. `verb` is the interaction the station asks for. */

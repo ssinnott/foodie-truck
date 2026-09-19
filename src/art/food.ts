@@ -295,6 +295,30 @@ export const FOOD = {
     ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.35), R(cy - s * 0.45), 2, 2);
     ctx.fillStyle = INK; ctx.fillRect(R(cx - 1), R(cy - s * 1.05), 2, 2);
   },
+  // ---- Tangle Wood ----
+  /** A mushroom: a domed cap on a pale stem, the gills as a shade band under the cap. */
+  mushroom(ctx, cx, cy, s, hex = '#C9A57C') {
+    const t = foodTones(hex);
+    ctx.beginPath(); ctx.rect(R(cx - s * 0.3), R(cy - s * 0.1), R(s * 0.6), R(s * 1.0)); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#F1E4C8'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx - s, cy); ctx.quadraticCurveTo(cx, cy - s * 1.7, cx + s, cy); ctx.closePath(); ctx.stroke(); ctx.fillStyle = t.base; ctx.fill();
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.85), R(cy - s * 0.25), R(s * 1.7), R(s * 0.25));
+    if (s >= 4) { ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.45), R(cy - s * 0.85), 2, 2); }
+  },
+  /** Wild garlic: a starburst of white flowers over two broad green leaves. */
+  garlic(ctx, cx, cy, s, hex = '#E8EFD6') {
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - s * 0.7), R(cy - s * 0.1), R(s * 0.5), R(s * 1.1)); ctx.fillRect(R(cx + s * 0.2), R(cy - s * 0.1), R(s * 0.5), R(s * 1.1));
+    ctx.fillStyle = '#5FA652'; ctx.fillRect(R(cx - s * 0.7) + 1, R(cy - s * 0.1) + 1, R(s * 0.5) - 2, R(s * 1.1) - 2); ctx.fillRect(R(cx + s * 0.2) + 1, R(cy - s * 0.1) + 1, R(s * 0.5) - 2, R(s * 1.1) - 2);
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - 1), R(cy - s * 0.9), 2, R(s * 0.9));
+    ball(ctx, cx, cy - s * 0.75, s * 0.5, hex, false);
+    if (s >= 4) { ctx.fillStyle = INK; ctx.fillRect(R(cx - 1), R(cy - s * 0.8), 2, 2); }
+  },
+  /** A blackberry: a dark cluster of drupelets, a few of them lit, on a green calyx. */
+  blackberry(ctx, cx, cy, s, hex = '#3B2A4A') {
+    ball(ctx, cx, cy + s * 0.1, s * 0.85, hex, false);
+    const t = foodTones(hex);
+    if (s >= 4) { ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.4), R(cy - s * 0.2), 2, 2); ctx.fillRect(R(cx + s * 0.1), R(cy + s * 0.2), 2, 2); ctx.fillRect(R(cx - s * 0.1), R(cy - s * 0.5), 2, 2); ctx.fillRect(R(cx + s * 0.35), R(cy - s * 0.25), 2, 2); }
+    ctx.fillStyle = '#5FA652'; ctx.fillRect(R(cx - s * 0.5), R(cy - s * 0.85), R(s), R(s * 0.3));
+  },
 };
 
 /** Draw an ingredient by icon id; unknown ids get a plain ball. */

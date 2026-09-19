@@ -55,6 +55,10 @@ export const INGREDIENTS = Object.freeze({
   hazelnut: { name: 'HAZELNUTS', place: 'holt', hex: '#B07A3A', icon: 'hazelnut' },
   walnut: { name: 'WALNUTS', place: 'holt', hex: '#8C6A48', icon: 'walnut' },
   chestnut: { name: 'CHESTNUTS', place: 'holt', hex: '#6E3B2A', icon: 'chestnut' },
+  // Tangle Wood: what hides under the leaves and on the wood's edge, brushed out and picked
+  mushroom: { name: 'MUSHROOMS', place: 'wood', hex: '#C9A57C', icon: 'mushroom' },
+  wildGarlic: { name: 'WILD GARLIC', place: 'wood', hex: '#E8EFD6', icon: 'garlic' },
+  blackberry: { name: 'BLACKBERRIES', place: 'wood', hex: '#3B2A4A', icon: 'blackberry' },
 });
 
 /** Every ingredient id a landmark supplies, in INGREDIENTS order (the first is the landmark's fallback). */
@@ -196,4 +200,13 @@ export const ORDERS = Object.freeze([
     needs: [{ id: 'chestnut', amount: 3 }], steps: ['fridge', 'oven', 'plate'] },
   { id: 'nutRoast', dish: 'NUT ROAST', customer: 'goat', line: 'A NUT ROAST. WITH GRAVY, IF YOU HAVE IT.',
     needs: [{ id: 'walnut', amount: 2 }, { id: 'carrot', amount: 1 }, { id: 'onion', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
+  // Tangle Wood's menu
+  { id: 'mushroomSoup', dish: 'MUSHROOM SOUP', customer: 'goat', line: 'MUSHROOM SOUP. THE PROPER EARTHY KIND.',
+    needs: [{ id: 'mushroom', amount: 3 }, { id: 'onion', amount: 1 }, { id: 'milk', amount: 1 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
+  { id: 'mushroomsOnToast', dish: 'MUSHROOMS ON TOAST', customer: 'otter', line: 'MUSHROOMS ON TOAST! BUTTERY!',
+    needs: [{ id: 'mushroom', amount: 2 }, { id: 'flour', amount: 2 }, { id: 'butter', amount: 1 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
+  { id: 'garlicButter', dish: 'WILD GARLIC BUTTER', customer: 'owl', line: 'WILD GARLIC BUTTER. A GOOD GREEN PAT OF IT.',
+    needs: [{ id: 'wildGarlic', amount: 2 }, { id: 'butter', amount: 2 }], steps: ['fridge', 'chop', 'mix', 'plate'] },
+  { id: 'blackberryApplePie', dish: 'BLACKBERRY AND APPLE PIE', customer: 'owl', line: 'BLACKBERRY AND APPLE. THE PIE OF PIES.',
+    needs: [{ id: 'blackberry', amount: 2 }, { id: 'apple', amount: 2 }, { id: 'flour', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
 ]);

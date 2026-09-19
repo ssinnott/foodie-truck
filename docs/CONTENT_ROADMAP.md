@@ -171,6 +171,9 @@ the wheat, river and lane tables go; the map's tree scatter (`nearLandmark`) wil
 
 ### Tangle Wood — FORAGE (*move + tap*)
 
+> **Built** (`docs/GDD.md` section 5). Every bump hides the visit's own thing (garlic and blackberries lift out
+> of the litter like the mushrooms do, rather than growing at the wood's edge).
+
 - **Where:** the north-east corner, about (1760, 180), on a lane east from the coop; on the coop's side of the
   river so no new bridge is needed.
 - **Gathers:** mushrooms, wild garlic, and (in place of a fourth orchard tree) blackberries on the wood's edge.

@@ -212,6 +212,10 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   nut: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 700, dur: 0.04, vol: 0.2 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.05 }); },
   /** The squirrel, indignant on a head: a run of quick square chitters going up. */
   chitter: (c, d, t, o) => { for (let i = 0; i < 5; i++) osc(c, d, t + i * 0.05, { type: 'square', f0: (1400 + i * 120) * o.p, dur: 0.025, vol: 0.05 * o.v, attack: 0.002, lp: 4000 }); return t + 0.3; },
+  /** Leaves brushed aside: a short, low rustle. */
+  brush: (c, d, t, o) => noise(c, d, t, { dur: 0.16, vol: 0.12 * o.v, type: 'bandpass', f0: 1800 * o.p, f1: 900 * o.p, q: 0.8, attack: 0.02 }),
+  /** The toadstool: a wrinkled-nose 'pooh', a sine sliding down with a wobble on it. */
+  pooh: (c, d, t, o) => osc(c, d, t, { type: 'sine', f0: 520 * o.p, f1: 220 * o.p, glide: 0.25, dur: 0.3, vol: 0.1 * o.v, attack: 0.01, vib: { rate: 12, depth: 20 } }),
   /** The flock across the lane: a bleat, a wobbly square wave that dips and comes back up. */
   baa: (c, d, t, o) => osc(c, d, t, { type: 'square', f0: 330 * o.p, f1: 290 * o.p, glide: 0.2, dur: 0.32, vol: 0.08 * o.v, attack: 0.02, lp: 1500, vib: { rate: 14, depth: 25 } }),
   /** The duck parade: two quacks, a nasal sawtooth each, the second a step lower. */
