@@ -206,6 +206,10 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   reel: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.02, vol: 0.14 }); return noise(c, d, t, { dur: 0.03, vol: 0.12 * o.v, type: 'bandpass', f0: 3200 * o.p, q: 3, attack: 0.0005 }); },
   /** Landed: the splash on the way out and the pip on the way into the bucket. */
   hook: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 1.2, f: 600, vol: 0.2, splash: 0.24 }); whoosh(c, d, t + 0.05, { v: o.v, p: o.p, f0: 800, f1: 3000, dur: 0.2, vol: 0.14 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.3 }); },
+  /** The flock across the lane: a bleat, a wobbly square wave that dips and comes back up. */
+  baa: (c, d, t, o) => osc(c, d, t, { type: 'square', f0: 330 * o.p, f1: 290 * o.p, glide: 0.2, dur: 0.32, vol: 0.08 * o.v, attack: 0.02, lp: 1500, vib: { rate: 14, depth: 25 } }),
+  /** The duck parade: two quacks, a nasal sawtooth each, the second a step lower. */
+  quack: (c, d, t, o) => { osc(c, d, t, { type: 'sawtooth', f0: 420 * o.p, f1: 300 * o.p, glide: 0.08, dur: 0.1, vol: 0.07 * o.v, attack: 0.005, lp: 1800 }); return osc(c, d, t + 0.14, { type: 'sawtooth', f0: 380 * o.p, f1: 270 * o.p, glide: 0.08, dur: 0.1, vol: 0.07 * o.v, attack: 0.005, lp: 1800 }); },
   /** A crab's claw on the paw: a hard click and a squawk going down. */
   pinch: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1900, dur: 0.03, vol: 0.24 }); return osc(c, d, t + 0.04, { type: 'square', f0: 900 * o.p, f1: 380 * o.p, glide: 0.14, dur: 0.18, vol: 0.07 * o.v, attack: 0.004, lp: 2200 }); },
   /** The seventh wave up the sand: a long swell of lowpassed noise that rises, breaks and hisses back. */

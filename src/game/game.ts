@@ -91,11 +91,38 @@ export interface DayPlanLine {
   customers: { customer: string; recipe: string }[];
 }
 
-/** What `planDay` draws from a seed: the menu and the lines. */
+/** One crossing as `planDay` lays it out: which lane spot, sheep or ducks, and how many of them. */
+export interface DayPlanCrossing {
+  /** Index into art/backgrounds/map.ts CROSSING_SPOTS. */
+  spot: number;
+  /** 0 sheep, 1 ducks. */
+  kind: number;
+  /** How many are in the herd (5..9 sheep; a mother and six ducklings). */
+  herd: number;
+}
+
+/** What `planDay` draws from a seed: the menu, the lines and the day's crossings. */
 export interface DayPlan {
   /** ORDERS ids on the day's menu. */
   recipes: string[];
   lines: DayPlanLine[];
+  crossings: DayPlanCrossing[];
+}
+
+/**
+ * A crossing on the road (docs/CONTENT_ROADMAP.md section B): a herd across a lane that blocks the truck the way
+ * water does, until a honk scatters it or it clears on its own. Run state, stepped by the map screen.
+ */
+export interface Crossing extends DayPlanCrossing {
+  /** World position of the spot, and the lane's unit direction there (copied off CROSSING_SPOTS so the map never looks it up). */
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  /** 0 pending (not out yet) | 1 on the lane | 2 clearing (scattering off it) | 3 done. */
+  state: number;
+  /** On the lane: frames since the truck first ran up against it (0 until it has). Clearing: frames left of the scatter. */
+  t: number;
 }
 
 /** Where the truck is on the world map, kept between visits to the map screen. */
@@ -134,6 +161,8 @@ export interface Run {
   lastServed: number;
   score: number;
   truck: TruckState;
+  /** The day's crossings on the road, in the order they come out. */
+  crossings: Crossing[];
   /** Frames spent in the run. */
   frame: number;
   /** The shopping-list line for an ingredient, or null when the day never asks for it. */

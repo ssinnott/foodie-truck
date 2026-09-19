@@ -110,6 +110,17 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   turning at most 1 heading step per 4 frames. Roads are the fast path; fields are drivable but slow and dusty;
   water is not drivable — the river (its bridges are), the millpond and the cove's sea: the truck stops a
   half-token short of the edge with a splash. Arrival = within 40 px of a landmark's door point.
+- **The road's crossings** (`run.crossings`, `screens/map.ts`). Three a day, laid out by `planDay` from its own
+  stream on distinct lane spots (`art/backgrounds/map.ts CROSSING_SPOTS`: the midpoint of every lane segment
+  that is neither a bridge nor within 140 px of a door), out one at a time in plan order. A crossing is a **flock of
+  sheep** (five to nine, a ragged line across the lane) or, about a third of the time, a **duck parade** (a mother
+  and six ducklings in a file). One that is on its lane blocks the truck exactly as water does, a half-token short
+  of its spot (40 px), with a `SHEEP!` or `DUCKS!` sign and a bleat or a quack. **ALT honks**, and a honk within
+  150 px scatters the herd off the lane over 60 frames, which is the one thing the honk is for. Left alone, a
+  flock clears on its own 600 frames after the truck first ran up against it and ducks finish crossing in 90, so
+  nobody is ever stuck; the moment a crossing is done the next comes out. The scattered herd stands in the field
+  beside the lane for the rest of the day. Nothing is lost by a crossing but the moment, and the whole thing is
+  two integers per crossing (state, timer) on the wire.
 - **HUD**: the shopping list (one row per ingredient, `have/amount`, a tick when full, the gold arrow on the first
   short one) while gathering, then the lines (`sign  N IN LINE`, washed back once served, the arrow on the one the
   compass points at); the steering-wheel widget with one tick per seat that lights while that seat pushes; the

@@ -21,9 +21,10 @@
 // same seed lay the same day out.
 import { ORDERS, INGREDIENTS, ingredientsAt } from '../content/recipes.ts';
 import { PLACES } from '../content/places.ts';
+import { CROSSING_SPOTS } from '../art/backgrounds/map.ts';
 import { makeRng } from '../lib/engine/rng.ts';
 import type { RngInstance } from '../lib/engine/rng.ts';
-import type { Order, OrderNeed, Run, RunLine, RunCustomer, DayPlan, DayPlanLine } from './game.ts';
+import type { Order, OrderNeed, Run, RunLine, RunCustomer, DayPlan, DayPlanLine, DayPlanCrossing, Crossing } from './game.ts';
 
 /**
  * Scene indices for the START packet (net/protocol.js): the screen a match opens on. Scenes finished after the
@@ -36,6 +37,10 @@ export const START_SCENE = SCENES.indexOf('stage');
 
 /** The day's shape (docs/GDD.md section 3): how many recipes are on the menu, how many lines form, how long each is. */
 export const RECIPES_PER_DAY = 3, LINES_PER_DAY = 3, LINE_LENGTH = 2;
+/** Crossings on the road per day (docs/CONTENT_ROADMAP.md section B): distinct lane spots, one out at a time, in this order. */
+export const CROSSINGS_PER_DAY = 3;
+/** Sheep: 0, ducks: 1. About a third of crossings are the duck parade; a flock is 5..9, the ducks a mother and six. */
+export const CROSSING_SHEEP = 0, CROSSING_DUCKS = 1, DUCK_ODDS = 0.35, FLOCK_MIN = 5, FLOCK_MAX = 9, DUCK_FAMILY = 7;
 /** The village diners who queue, by content/critters/customers.js id. */
 export const DINERS = Object.freeze(['owl', 'otter', 'goat']);
 /** Salt mixed into the run seed for the plan's own rng stream, so the same seed never draws the plan and the first apple alike. */
@@ -92,7 +97,13 @@ export function planDay(seed: number, o: { order?: number; recipes?: number[] } 
     }
     lines.push({ place, customers });
   }
-  return { recipes: recipes.map((i) => ORDERS[i].id), lines };
+  // the crossings: CROSSINGS_PER_DAY distinct lane spots, drawn after the lines so an older seed's lines are unmoved
+  const spots = shuffle(r, CROSSING_SPOTS.map((_, i) => i)).slice(0, Math.min(CROSSINGS_PER_DAY, CROSSING_SPOTS.length));
+  const crossings: DayPlanCrossing[] = spots.map((spot) => {
+    const kind = r.chance(DUCK_ODDS) ? CROSSING_DUCKS : CROSSING_SHEEP;
+    return { spot, kind, herd: kind === CROSSING_DUCKS ? DUCK_FAMILY : r.int(FLOCK_MIN, FLOCK_MAX) };
+  });
+  return { recipes: recipes.map((i) => ORDERS[i].id), lines, crossings };
 }
 
 /**
@@ -136,6 +147,8 @@ export function startRun(game, o) {
     score: 0,
     /** World-map state the map screen keeps between visits (truck position, heading, which place it is at). */
     truck: { x: 0, y: 0, heading: 0, at: 'home' },
+    /** The day's crossings: the first is out on its lane from the start, the rest come out one at a time as each clears. */
+    crossings: plan.crossings.map((c, i): Crossing => { const sp = CROSSING_SPOTS[c.spot]; return { ...c, x: sp.x, y: sp.y, dx: sp.dx, dy: sp.dy, state: i === 0 ? 1 : 0, t: 0 }; }),
     /** Frames spent in the run (a clock the kitchen and results can read). */
     frame: 0,
     /** Mutators */
@@ -205,6 +218,7 @@ export function startRun(game, o) {
         needs: run.needs.map((n) => `${n.id}:${n.have}/${n.amount}`), stock: run.needs.map((n) => `${n.id}:${n.have - n.used}`),
         complete: run.complete(), served: run.served, score: run.score, linesServed: run.linesServed(), stars: run.stars(),
         dayComplete: run.dayComplete(), truckAt: run.truck.at,
+        crossings: run.crossings.map((c) => ({ x: c.x, y: c.y, kind: c.kind, herd: c.herd, state: c.state, t: c.t })),
       };
     },
   };

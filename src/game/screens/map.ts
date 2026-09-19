@@ -5,6 +5,14 @@
 // of a landmark's door opens its mini-game while the shopping list is short, or the line waiting there once the
 // pantry is full (docs/GDD.md section 3); otherwise a wooden sign says why not.
 //
+// THE ROAD (docs/CONTENT_ROADMAP.md section B): the day's crossings, `run.crossings`, come out on their lane one at
+// a time - a flock of sheep dawdling across it, or a duck parade in single file. A crossing that is ON its lane
+// blocks the truck exactly as water does, a half-token short, with a SHEEP! or DUCKS! sign; ALT honks, and a honk
+// within HONK_R scatters the herd off the lane over CLEAR_FRAMES (the one thing the honk is for). Left alone, sheep
+// clear on their own AUTO_SHEEP frames after the truck first ran up against them and ducks finish crossing in
+// AUTO_DUCKS, so nobody is ever stuck; once a crossing is done the next one comes out. The herd's walkers are laid
+// out from fixed offset tables about the crossing's spot, so a peer needs only the crossing's state and its timer.
+//
 // Everything in update() is deterministic: input by seat only, distances from + - * / and Math.sqrt, no clock, no
 // Math.random; run.truck { x, y, heading, at } is the state that survives between visits and feeds the desync canary.
 // The camera, the animation players, the sails, the bees, the smoke and the particles are visual and never hashed.
@@ -27,8 +35,9 @@ import { drawTruck } from '../../art/truck.ts';
 import {
   CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, RIVER_BLOCK, SPOTS, SIGN_AT, PARK_AT,
   ROADSIDE_TREES, GLINTS, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, waterBlocked,
-  wallBlocked, drawSails, drawHen, drawBee, drawPhoneRing, MAP,
+  wallBlocked, drawSails, drawHen, drawBee, drawPhoneRing, drawSheep, drawDuck, MAP,
 } from '../../art/backgrounds/map.ts';
+import type { Crossing } from '../game.ts';
 import { drawShoppingHud, drawLinesHud, drawLineTag, drawSeatPlates, drawWheel, drawDestArrow, drawHonk, drawSignPlate, drawMapHint } from '../maphud.ts';
 
 const HEADINGS = 16;
@@ -40,7 +49,20 @@ const BEE_X = new Int8Array(32), BEE_Y = new Int8Array(32);
 for (let i = 0; i < 32; i++) { BEE_X[i] = Math.round(Math.cos(i * Math.PI / 16) * 10); BEE_Y[i] = Math.round(Math.sin(i * Math.PI / 16) * 6); }
 const LANE_SPEED = 2.2, FIELD_SPEED = 1.0, TURN_EVERY = 4, ARRIVE_R = 40, DRIVER = 'chicory', DRIVER_WEIGHT = 1.5;
 const HONK_FRAMES = 30, SQUASH_FRAMES = 4, SIGN_FRAMES = 90, RING_FRAMES = 60, TOKEN_SCALE = 0.5;
-const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3;
+const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3, KIND_HERD = 4;
+/**
+ * The crossings. A crossing ON its lane blocks the truck within BLOCK_R of its spot; a honk within HONK_R scatters
+ * it over CLEAR_FRAMES; left alone, sheep clear AUTO_SHEEP frames after the first block and ducks in AUTO_DUCKS.
+ * The herd is laid out from these tables: each walker OFF_PERP px across the lane and OFF_ALONG px along it from
+ * the spot (the first `herd` entries), so a flock is a ragged line across the road and a duck family a file; the
+ * scatter carries each walker SCATTER px further out on its own side.
+ */
+const CROSS_PENDING = 0, CROSS_ON = 1, CROSS_CLEARING = 2, CROSS_DONE = 3;
+const BLOCK_R = 40, HONK_R = 150, CLEAR_FRAMES = 60, AUTO_SHEEP = 600, AUTO_DUCKS = 90, SCATTER = 64, BAA_CD = 90, HERD_MAX = 9;
+const OFF_PERP = Int8Array.of(-18, -9, 0, 8, 17, -26, 25, -34, 33);
+const OFF_ALONG = Int8Array.of(-10, 12, -2, 14, 4, -16, 10, -6, 2);
+const DUCK_PERP = Int8Array.of(-30, -20, -11, -2, 7, 16, 25);
+const SHEEP_TXT = 'SHEEP!', DUCKS_TXT = 'DUCKS!';
 const DUST = { size: 2, life: 20, vy: -0.15 };
 // The signs an arrival that opens nothing drops in: while the pantry is short, a landmark the list does not need
 // (or home, which has no queue and nothing to gather); once it is full, a landmark with no line, one whose line has
@@ -98,7 +120,7 @@ export interface WorldPoint {
  * themselves, so their `L` is null and `w`/`h` exist only to cull them.
  */
 export interface MapSprite {
-  /** KIND_TREE, KIND_SIGN, KIND_SAILS or KIND_TRUCK. */
+  /** KIND_TREE, KIND_SIGN, KIND_SAILS, KIND_TRUCK or KIND_HERD (one walker of a crossing: `ci` is the crossing, `k` the walker). */
   kind: number;
   /** World position of the anchor: bottom centre of the sprite. */
   x: number;
@@ -110,6 +132,9 @@ export interface MapSprite {
   h: number;
   /** Width of the ground shadow drawn under it; 0 draws none. */
   shadow: number;
+  /** KIND_HERD only: the crossing (an index into run.crossings) and the walker within it. */
+  ci?: number;
+  k?: number;
 }
 
 /** One party member on the map: the rig in the seat's apron colour, its player and its name plate. */
@@ -239,6 +264,10 @@ export class MapScreen extends Screen {
   declare destSign: WorldPoint;
   /** The one entry of `sprites` that moves: the truck, whose x/y are rewritten every update. */
   declare truckSprite: MapSprite;
+  /** One sprite per walker of every crossing, HERD_MAX per crossing, in crossing order; positioned every update. */
+  declare herd: MapSprite[];
+  /** Frames before the herd will bleat or quack at the truck again. */
+  declare baaCd: number;
   /** The lantern glow over the destination's sign. */
   declare glow: MapLayer;
   /** The drifting cloud shadow, blitted three times. */
@@ -261,7 +290,7 @@ export class MapScreen extends Screen {
     this.truck = truck;
     this.speed = 0; this.want = -1; this.turnCd = 0; this.facing = COS[truck.heading] < 0 ? -1 : 1;
     this.honk = 0; this.squashT = 0; this.signTimer = 0; this.signText = ''; this.signW = 0; this.ring = 0; this.splashCd = 0;
-    this.wheelAcc = 0; this.wheelStep = 0; this.lean = 0; this.pushMask = 0; this.blocked = false;
+    this.wheelAcc = 0; this.wheelStep = 0; this.lean = 0; this.pushMask = 0; this.blocked = false; this.baaCd = 0;
     // the crew: one rig per seat in the seat's apron colour, one animation player each; heads ride in the windows
     this.seats.length = 0; this.heads.length = 0;
     for (const p of run.party) {
@@ -336,6 +365,14 @@ export class MapScreen extends Screen {
     this.sprites.push({ kind: KIND_SAILS, x: SPOTS.millHub.x, y: SPOTS.millHub.y + 52, L: null, w: 70, h: 100, shadow: 0 });
     this.truckSprite = { kind: KIND_TRUCK, x: truck.x, y: truck.y, L: null, w: 44, h: 40, shadow: 40 };
     this.sprites.push(this.truckSprite);
+    // the crossings' walkers: a fixed HERD_MAX sprites per crossing, the ones past the herd's count parked off-world
+    this.herd = [];
+    for (let ci = 0; ci < run.crossings.length; ci++) for (let k = 0; k < HERD_MAX; k++) {
+      const sp: MapSprite = { kind: KIND_HERD, x: -1000, y: -1000, L: null, w: 20, h: 16, shadow: 12, ci, k };
+      this.herd.push(sp); this.sprites.push(sp);
+    }
+    this.placeHerds();
+    this.sum.length = 6 + run.crossings.length * 2;
     this.order.length = 0; for (let i = 0; i < this.sprites.length; i++) this.order.push(i);
     this.glow = destGlowSprite(); this.cloud = cloudShadowSprite();
     // dev-only nudge so a capture can show the truck rolling: seat 0 is pushed east for the first two seconds
@@ -398,7 +435,16 @@ export class MapScreen extends Screen {
           floatText(nx, ny - 40, 'SPLASH', MAP.skyTop); this.splashCd = 30;
           game.audio.play('splash');
         }
-      } else if (wallBlocked(nx, ny)) { this.speed = 0; this.blocked = true; } else { truck.x = nx; truck.y = ny; }
+      } else if (wallBlocked(nx, ny)) { this.speed = 0; this.blocked = true; }
+      else if (this.crossingAt(nx, ny) >= 0) {
+        // a herd across the lane: held a half-token short of it, the sign says what, and the herd answers back
+        const c = this.game.run.crossings[this.crossingAt(nx, ny)];
+        this.speed = 0; this.blocked = true;
+        if (c.t === 0) c.t = 1;   // the clock on "it clears on its own" starts the first time the truck runs up against it
+        const txt = c.kind === 0 ? SHEEP_TXT : DUCKS_TXT;
+        if (this.signTimer === 0 || this.signText !== txt) this.raiseSign(txt);
+        if (this.baaCd === 0) { game.audio.play(c.kind === 0 ? 'baa' : 'quack'); this.baaCd = BAA_CD; }
+      } else { truck.x = nx; truck.y = ny; }
       this.wheelAcc += this.speed; this.wheelStep = Math.floor(this.wheelAcc / 5) & 3;
       if (!onLane && (this.frame % 6) === 0) particles.spawn('dust', truck.x - COS[truck.heading] * 12, truck.y, DUST);
     }
@@ -410,7 +456,9 @@ export class MapScreen extends Screen {
     if (this.reopen > 0 && --this.reopen === 0) truck.at = '';
     if (near < 0) truck.at = '';
     else if (truck.at !== PLACES[near].id) { truck.at = PLACES[near].id; this.arrive(near); }
-    if (inp.anyPressed('alt') >= 0) { this.honk = HONK_FRAMES; this.squashT = SQUASH_FRAMES; game.audio.play('honk'); }
+    if (inp.anyPressed('alt') >= 0) { this.honk = HONK_FRAMES; this.squashT = SQUASH_FRAMES; game.audio.play('honk'); this.honkHerd(); }
+    if (this.baaCd > 0) this.baaCd--;
+    this.stepCrossings();
     if (this.honk > 0) this.honk--;
     if (this.squashT > 0) this.squashT--;
     if (this.signTimer > 0) this.signTimer--;
@@ -418,6 +466,62 @@ export class MapScreen extends Screen {
     this.truckSprite.x = truck.x; this.truckSprite.y = truck.y;
     this.snapCamera(false);
   }
+  /** The crossing ON its lane whose spot is within BLOCK_R of (x, y), or -1. */
+  crossingAt(x: number, y: number): number {
+    const cs = this.game.run.crossings;
+    for (let i = 0; i < cs.length; i++) { const c = cs[i]; if (c.state !== CROSS_ON) continue; const dx = c.x - x, dy = c.y - y; if (dx * dx + dy * dy < BLOCK_R * BLOCK_R) return i; }
+    return -1;
+  }
+
+  /** A honk within HONK_R of a crossing on its lane scatters it: the herd runs off the road over CLEAR_FRAMES. */
+  honkHerd(): void {
+    const cs = this.game.run.crossings, t = this.truck;
+    for (let i = 0; i < cs.length; i++) {
+      const c = cs[i];
+      if (c.state !== CROSS_ON) continue;
+      const dx = c.x - t.x, dy = c.y - t.y;
+      if (dx * dx + dy * dy < HONK_R * HONK_R) this.scatter(c);
+    }
+  }
+
+  scatter(c: Crossing): void {
+    c.state = CROSS_CLEARING; c.t = CLEAR_FRAMES;
+    for (let k = 0; k < c.herd; k++) particles.spawn('dust', c.x + c.dx * OFF_ALONG[k] - c.dy * OFF_PERP[k], c.y + c.dy * OFF_ALONG[k] + c.dx * OFF_PERP[k], DUST);
+    this.game.audio.play(c.kind === 0 ? 'baa' : 'quack');
+  }
+
+  /** The crossings' clocks: a blocked herd clears on its own in time, a scattering one finishes, and the next comes out. */
+  stepCrossings(): void {
+    const cs = this.game.run.crossings;
+    for (let i = 0; i < cs.length; i++) {
+      const c = cs[i];
+      if (c.state === CROSS_ON) {
+        if (c.t > 0 && ++c.t >= (c.kind === 0 ? AUTO_SHEEP : AUTO_DUCKS)) this.scatter(c);
+      } else if (c.state === CROSS_CLEARING) {
+        if (--c.t <= 0) { c.state = CROSS_DONE; c.t = 0; const next = cs.find((n) => n.state === CROSS_PENDING); if (next) next.state = CROSS_ON; }
+      }
+    }
+    this.placeHerds();
+  }
+
+  /**
+   * Every walker's world position from its crossing's state: across the lane at its table offset while ON, sliding
+   * SCATTER px further out on its own side through the clear (and standing there once done), and parked off the
+   * world while pending. Ducks are a file straight across the lane; sheep a ragged line.
+   */
+  placeHerds(): void {
+    const cs = this.game.run.crossings;
+    for (let i = 0; i < this.herd.length; i++) {
+      const sp = this.herd[i], c = cs[sp.ci], k = sp.k;
+      if (k >= c.herd || c.state === CROSS_PENDING) { sp.x = -1000; sp.y = -1000; continue; }
+      const perp = c.kind === 0 ? OFF_PERP[k] : DUCK_PERP[k], along = c.kind === 0 ? OFF_ALONG[k] : 0;
+      const side = perp < 0 ? -1 : 1;
+      const out = c.state === CROSS_CLEARING ? SCATTER * (1 - c.t / CLEAR_FRAMES) : c.state === CROSS_DONE ? SCATTER : 0;
+      const off = perp + side * out;
+      sp.x = c.x + c.dx * along - c.dy * off; sp.y = c.y + c.dy * along + c.dx * off;
+    }
+  }
+
   arrive(i: number): void {
     const run = this.game.run, id = PLACES[i].id, screen = run.screenForPlace(id);
     if (screen) {
@@ -465,6 +569,7 @@ export class MapScreen extends Screen {
       const s = sp[ord[i]], sx = s.x - cam.x, sy = s.y - cam.y;
       if (s.kind === KIND_TRUCK) this.drawTruck(ctx, sx, sy);
       else if (s.kind === KIND_SAILS) drawSails(ctx, SPOTS.millHub.x - cam.x, SPOTS.millHub.y - cam.y, f * 0.3);
+      else if (s.kind === KIND_HERD) this.drawWalker(ctx, s, sx, sy, f);
       else ctx.drawImage(s.L.canvas, sx - (s.L.w >> 1), sy - s.L.h);
     }
     // the lantern glow over the destination's sign (the map's one signal colour), then the drifting cloud shadows
@@ -503,6 +608,15 @@ export class MapScreen extends Screen {
     const moving = this.speed > 0.2;
     drawTruck(ctx, sx, sy, this.truckOpts(moving ? ((this.frame >> 2) & 1) : 0));
   }
+  /** One walker of a crossing: a sheep dawdling (the walk beat only while it scatters) or a duck in the file. */
+  drawWalker(ctx: CanvasRenderingContext2D, s: MapSprite, sx: number, sy: number, f: number): void {
+    const c = this.game.run.crossings[s.ci], moving = c.state === CROSS_CLEARING;
+    const facing = c.state === CROSS_ON ? (((s.k + s.ci) & 1) ? -1 : 1) : (c.kind === 0 ? OFF_PERP[s.k] : DUCK_PERP[s.k]) < 0 ? -1 : 1;
+    const walk = moving ? ((f + s.k * 5) >> 2) & 1 : 0;
+    if (c.kind === 0) drawSheep(ctx, sx, sy, facing, walk);
+    else drawDuck(ctx, sx, sy, facing, s.k === 0 ? 1 : 0, walk);
+  }
+
   /** Reuse one options object for drawTruck (zero allocation in draw). */
   truckOpts(bob: number): TruckDrawOpts {
     const o = this._to || (this._to = { scale: TOKEN_SCALE, facing: 1, bob: 0, wheel: 0, squash: 1, heads: this.heads });
@@ -512,12 +626,17 @@ export class MapScreen extends Screen {
 
   override summary() {
     const t = this.truck;
-    return { truck: { x: Math.round(t.x), y: Math.round(t.y), heading: t.heading, at: t.at }, speed: Math.round(this.speed * 100) / 100, dest: this.destId, destLine: this.destLine, serving: this.serving, sign: this.signTimer > 0 ? this.signText : '', honk: this.honk > 0, blocked: this.blocked, seats: this.seats.length };
+    return {
+      truck: { x: Math.round(t.x), y: Math.round(t.y), heading: t.heading, at: t.at }, speed: Math.round(this.speed * 100) / 100, dest: this.destId, destLine: this.destLine, serving: this.serving, sign: this.signTimer > 0 ? this.signText : '', honk: this.honk > 0, blocked: this.blocked, seats: this.seats.length,
+      crossings: this.game.run.crossings.map((c) => ({ x: c.x, y: c.y, kind: c.kind, herd: c.herd, state: c.state, t: c.t })),
+    };
   }
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const t = this.truck, s = this.sum;
     s[0] = t.x; s[1] = t.y; s[2] = t.heading; s[3] = this.speed; s[4] = placeIndex(t.at); s[5] = this.reopen;
+    const cs = this.game.run.crossings;
+    for (let i = 0; i < cs.length; i++) { s[6 + i * 2] = cs[i].state; s[7 + i * 2] = cs[i].t; }
     return s;
   }
 }

@@ -547,6 +547,54 @@ export function drawHen(ctx, sx, sy, peck, facing = 1) {
   ctx.fillStyle = MAP.mustard; ctx.fillRect(sx + facing * 3 + (facing > 0 ? 5 : -2), sy - 10 + peck * 2, 2, 2);
   ctx.fillStyle = MAP.roof; ctx.fillRect(sx + facing * 3 + 1, sy - 14 + peck * 2, 3, 2);   // comb: roof red, never the reserved HOT
 }
+/**
+ * Where a crossing may stand (docs/CONTENT_ROADMAP.md section B): the midpoint of every lane segment that is
+ * neither a bridge (within RIVER_BLOCK + 20 of the river's centreline) nor within CROSSING_CLEAR of a landmark's
+ * door, so a herd never stands where the truck arrives. Each spot carries the lane's unit direction there, so a
+ * herd can be laid ACROSS the lane. Pure data: the day plan (game/run.ts planDay) picks from it by index.
+ */
+export const CROSSING_CLEAR = 140;
+export const CROSSING_SPOTS = (() => {
+  const out = [];
+  for (let i = 0; i < LANES.length; i++) {
+    const L = LANES[i];
+    for (let k = 0; k + 3 < L.length; k += 2) {
+      const ax = L[k], ay = L[k + 1], bx = L[k + 2], by = L[k + 3];
+      const mx = (ax + bx) / 2, my = (ay + by) / 2, len = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
+      if (len < 100 || riverDist(mx, my) < RIVER_BLOCK + 20) continue;
+      let clear = true;
+      for (const p of PLACES) { const dx = p.x - mx, dy = p.y - my; if (dx * dx + dy * dy < CROSSING_CLEAR * CROSSING_CLEAR) clear = false; }
+      if (!clear) continue;
+      out.push(Object.freeze({ x: R(mx), y: R(my), dx: (bx - ax) / len, dy: (by - ay) / len }));
+    }
+  }
+  return Object.freeze(out);
+})();
+
+/** A sheep on the lane, feet at (sx, sy): a cream woolly oval, a dark face the way it is facing, four ink legs. 18 wide, 14 tall. */
+export function drawSheep(ctx, sx, sy, facing = 1, walk = 0) {
+  ctx.fillStyle = INK; ctx.fillRect(sx - 6, sy - 4, 2, 4); ctx.fillRect(sx - 2 + walk, sy - 4, 2, 4); ctx.fillRect(sx + 2 - walk, sy - 4, 2, 4); ctx.fillRect(sx + 5, sy - 4, 2, 4);
+  ctx.beginPath(); ctx.ellipse(sx, sy - 9, 9, 6, 0, 0, Math.PI * 2); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#F1E4C8'; ctx.fill();
+  ctx.fillStyle = '#D8C093'; ctx.fillRect(sx - 6, sy - 7, 12, 2);
+  boxOutlined(ctx, sx + facing * 7 - 3, sy - 15, 6, 7, '#4A3038');
+  ctx.fillStyle = '#F1E4C8'; ctx.fillRect(sx + facing * 7 + (facing > 0 ? 1 : -2), sy - 13, 1, 1);   // the eye
+}
+/** A duck, feet at (sx, sy): `big` is the mother (12 px), else a duckling (7 px of mustard). */
+export function drawDuck(ctx, sx, sy, facing = 1, big = 0, walk = 0) {
+  if (big) {
+    ctx.fillStyle = '#E2B44A'; ctx.fillRect(sx - 3, sy - 3, 2, 3); ctx.fillRect(sx + 1 + walk, sy - 3, 2, 3);
+    boxOutlined(ctx, sx - 6, sy - 9, 12, 6, '#F1E4C8');
+    boxOutlined(ctx, sx + facing * 5 - 2, sy - 14, 5, 5, '#F1E4C8');
+    ctx.fillStyle = '#E2B44A'; ctx.fillRect(sx + facing * 5 + (facing > 0 ? 3 : -3), sy - 12, 3, 2);
+    ctx.fillStyle = INK; ctx.fillRect(sx + facing * 5 + (facing > 0 ? 1 : 0), sy - 13, 1, 1);
+    return;
+  }
+  ctx.fillStyle = '#E2B44A'; ctx.fillRect(sx - 1 + walk, sy - 2, 1, 2); ctx.fillRect(sx + 1 - walk, sy - 2, 1, 2);
+  boxOutlined(ctx, sx - 3, sy - 7, 7, 5, MAP.mustard);
+  ctx.fillStyle = '#E2B44A'; ctx.fillRect(sx + facing * 3 + (facing > 0 ? 1 : -1), sy - 6, 2, 1);
+  ctx.fillStyle = INK; ctx.fillRect(sx + facing * 2, sy - 6, 1, 1);
+}
+
 /** A bee: 3x2 gold with a 2x2 ink tail. */
 export function drawBee(ctx, x, y) { ctx.fillStyle = MAP.mustard; ctx.fillRect(x, y, 3, 2); ctx.fillStyle = INK; ctx.fillRect(x - 2, y, 2, 2); }
 /** The telephone ringing: two 2 px ink arcs each side of the box top (the box itself is baked; `shake` offsets it). */
