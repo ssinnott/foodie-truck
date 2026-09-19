@@ -19,11 +19,11 @@ export const PLACES = Object.freeze([
   // The farm keeps the id `garden`: it is the name of its SCREEN (the walled kitchen garden the crew works a row
   // of), the seed block, the scenario and the dev jump, and the landmark was only ever the place that garden is at.
   { id: 'garden', name: 'FURROW FARM', sign: 'FARM', x: 1250, y: 520, screen: 'garden', accent: '#C96B7A' },
-  // The second pass's landmarks. The cove still BORROWS the pond's jetty (a crab is reeled in like a trout) and
-  // keeps the pond's mint with it (docs/ART_STYLE.md section 4: one signal colour per scene, and it is the same
-  // scene); the bank has a screen of its own - berries are picked off bushes, not pulled out of a bed - and keeps
-  // the farm's rose and gold, its neighbour on the south lane.
-  { id: 'shore', name: 'COCKLE COVE', sign: 'SHORE', x: 1760, y: 520, screen: 'pond', accent: '#5FD3C0' },
+  // The second pass's landmarks, each with a screen of its own now: crabs are chased along the cove's beach, not
+  // reeled in off a jetty like a trout, and berries are picked off the bank's bushes, not pulled out of a bed. The
+  // cove keeps the pond's mint (it is the same sea, and the two coasts share an hour and a sun), and the bank
+  // keeps the farm's rose and gold, its neighbour on the south lane (docs/ART_STYLE.md section 4).
+  { id: 'shore', name: 'COCKLE COVE', sign: 'SHORE', x: 1760, y: 520, screen: 'beach', accent: '#5FD3C0' },
   { id: 'bramble', name: 'BRAMBLE BANK', sign: 'BERRIES', x: 1180, y: 880, screen: 'bramble', accent: '#C96B7A' },
 ]);
 

@@ -147,6 +147,11 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   constraint again), bushes in the orchard's canopy green `#4F6B3A` on dark willow canes, unripe berries a pale
   green pea, ripe ones in the ingredient hex; accent rose on the pick-your-own board only; signal: the farm's gold
   on a ripe berry's sparkle.
+- **Cockle Cove**: the pond's golden hour over the cove's own sea (`art/backgrounds/pond.js COVE`: open water
+  `#5E93A8` to an inked horizon, the near water `#3F7E8E`), a cream breaker line, wet sand `#A88E66`, the dry sand
+  `#D9C393` with the trodden path `#BFA574` (L .63) under the crew's torsos, marram in the corners, a rowing boat
+  and crab pots; the crab in the ingredient's red is the one red object in the scene; signal: the pond's mint on a
+  grab's ring and over a stopped crab or a crusted pan.
 - **Kitchen**: plum wall `#4A3038`, slate counter top `#4F5A62` (rows 200–206), steel counter front `#3E4A55`
   (rows 206–246), floor checker `#4E4450` / `#5A4E5C` (rows 246–340), feet line y 252 so torsos read on the counter
   front and heads on the wall; a floor-standing oven that breaks the counter line; copper pot `#B87333`; paper and
@@ -244,7 +249,7 @@ face (`markings`) or replace the hook; whichever, keep the rows of §0.6 and the
 
 Paint once, blit per frame (`art/layers.js`): every scene pre-renders its layers with a seeded rng (seed blocks:
 map 140–159, orchard 100–109, pond 110–119, coop 120–129, kitchen 130–139,
-title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, farm 200–209, bramble bank 210–219) and blits at integer
+title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, farm 200–209, bramble bank 210–219, beach 220–229) and blits at integer
 offsets; parallax
 `far 0.2 / mid 0.5 / ground 1 / near 1.2` for side views, none in the kitchen, chunks for the map. 16 rows of bleed.
 Nothing solid in the near layer at critter height; walk lanes carry no scatter; the plane behind the critters'

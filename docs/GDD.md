@@ -96,8 +96,7 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
   south lane (strawberries, blueberries). **All nine supply landmarks open a mini-game** while the list is short
-  of what they supply — the cove opens the pond's (crab lines off the jetty), reading the landmark it stands at off
-  its `place` param, and the bank opens its own (berries picked off the bushes) — and **any
+  of what they supply — the cove its beach (crabs chased along the sand), the bank its bushes — and **any
   of them can hold a line** once it is full; arriving where there is nothing to do shows a sign instead
   (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
   `THE LINES ARE WAITING` at home).
@@ -120,13 +119,12 @@ drawn as a paper timer, the target count from the shopping list (that ingredient
 for twelve eggs may take two visits); the scene ends with a sign dropping in (`APPLES: 12`)
 and a 60-frame hold, then `run.gather` and back to the map. All randomness through `rng` inside `update()`.
 
-A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the farm, the bank) and a
-screen two landmarks share (the pond's jetty is the cove's) asks `run.js
-gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the clock and in the basket,
-its name on the end sign, and the landmark's own name on the clock ticket. The mechanic never changes — a pear is
-caught like an apple, a crab reeled in like a trout. The cove repaints the pond's layers in a seaside palette
-(`art/backgrounds/pond.js COVE`: open sea to the horizon, dunes for the tree-line, sand and marram for the turf,
-foam under the deck, no lily pads).
+A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the farm, the bank, the
+cove) asks `run.js gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the clock and
+in the basket, its name on the end sign, and the landmark's own name on the clock ticket. The mechanic's SHAPE never
+changes — a pear is caught like an apple — but the visit looks like its ingredient (the orchard's trees, the farm's
+plants, the mill's grain) and where the ingredient is a different kind of thing it plays as one: butter is milk and
+then the churn, salt is a pan that has to crust before it can be scraped.
 
 **Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
 kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
@@ -195,6 +193,15 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   under the critter (34 px either side) picks its ripe berry (a 12-frame reach up into the bush, the berry hops
   into the basket, +1); a bush with nothing ripe on it does nothing. The bank used to borrow the farm's bed, and a
   strawberry pulled out of the ground by its top was the visit that said it should not.
+
+- **Cockle Cove — CHASE** (*move + tap*). The crew runs along the dry sand with the sea behind it and the strand
+  line in front. Crabs come up out of burrows (three at the start, another every 50–100 frames, five at most) and
+  scuttle along the strand at 1.2 px/frame, stopping now and then with their claws up; a crab that sees a critter
+  within 46 px darts away at 2.8 for 14 frames, then stops, tired, for 36 (the mint sparkle) and will not dart again
+  for 110. `action` with a crab anywhere under the critter (34 px either side) grabs it: a 12-frame pounce, the crab
+  hops into the basket, +1. A crab nobody catches goes back down after 720 frames. Seaweed visits wash clumps up
+  that drift at 0.3 px/frame and are raked with the same grab; salt visits fill four fixed rock pans that crust
+  over 90 frames and are scraped once white. A grab at empty sand does nothing.
 
 ## 6. The kitchen
 

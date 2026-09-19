@@ -240,7 +240,7 @@ title -> lobby (host key) -> select (shared) -> stage ...  (online: the host's S
 
 ### `game/minigame.js` — the shared mini-game furniture (the contract)
 
-All seven mini-games stand on this module, so it is **frozen**: a screen that wants different numbers keeps them in
+All nine mini-games stand on this module, so it is **frozen**: a screen that wants different numbers keeps them in
 its own file (the orchard keeps its catch boxes there, the coop its pluck anims). It owns, and is the only place
 that may define:
 

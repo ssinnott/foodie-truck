@@ -143,9 +143,10 @@ export class PondScreen extends Screen {
   /** "0/3" for the clock ticket, rebuilt by hook() as the count changes. */
   declare countStr: string;
   /**
-   * What this visit reels in (game/run.js gatherTarget): trout off the millpond, or a crab, a rake of seaweed or a
-   * pan of sea salt off the cove's jetty, which borrows this screen. `icon`/`hex` are that ingredient's glyph, the
-   * sign prefix is its name, and the title is the landmark's.
+   * What this visit reels in (game/run.js gatherTarget): trout off the millpond. `icon`/`hex` are that
+   * ingredient's glyph, the sign prefix is its name, and the title is the landmark's. (Cockle Cove borrowed this
+   * jetty for its crabs for a while; it chases them along its own beach now, game/screens/beach.js, and the
+   * `variant` machinery below stays for the cove palette art/backgrounds/pond.js still paints.)
    */
   declare ing: string;
   declare icon: string;

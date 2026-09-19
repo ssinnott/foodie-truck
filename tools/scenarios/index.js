@@ -11,6 +11,7 @@ import { SCENARIOS as mill } from './mill.js';
 import { SCENARIOS as hive } from './hive.js';
 import { SCENARIOS as garden } from './garden.js';
 import { SCENARIOS as bramble } from './bramble.js';
+import { SCENARIOS as beach } from './beach.js';
 import { SCENARIOS as kitchen } from './kitchen.js';
 import { SCENARIOS as ui } from './ui.js';
 import { SCENARIOS as pads } from './pads.js';
@@ -18,4 +19,4 @@ import { SCENARIOS as controls } from './controls.js';
 import { SCENARIOS as stage } from './stage.js';
 import { SCENARIOS as playthrough } from './playthrough.js';
 
-export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...kitchen, ...ui, ...pads, ...controls, ...stage, ...playthrough };
+export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...beach, ...kitchen, ...ui, ...pads, ...controls, ...stage, ...playthrough };
