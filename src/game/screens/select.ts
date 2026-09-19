@@ -318,7 +318,9 @@ export class SelectScreen extends Screen {
     }
     // the drop-in prompt goes on a paper strip like every other hint in the kit: outlined cream on the dimmed
     // lane was the one line on this screen you had to hunt for, and it is the line that invites a second player
-    if (this.joinedCount() < LOCAL_PLAYERS) drawHint(ctx, this.game.input.joined(1) ? this.joinHintPads : this.joinHintKeys, JOIN_Y);
+    // A phone seats the one thumb that holds it, so there are no P2 keys to offer: a pad paired to it is the only
+    // way a second critter gets a driver, and that is the half of the prompt a touch player is told.
+    if (this.joinedCount() < LOCAL_PLAYERS) drawHint(ctx, (this.game.input.joined(1) || this.game.input.touchOn()) ? this.joinHintPads : this.joinHintKeys, JOIN_Y);
     const lead = this.cards[this.seats[0].card];
     drawTicket(ctx, BIO.x, BIO.y, BIO.w, BIO.h, { rules: false, header: false });
     drawText(ctx, lead.def.bio || lead.def.fullName, BIO.x + BIO.w / 2, BIO.y + 11, { size: 1, color: UI.ink, align: 'center', shadow: false });

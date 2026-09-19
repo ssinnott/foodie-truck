@@ -59,14 +59,16 @@ index.html               the page: one canvas, the error box, the module entry
 src/constants.js         every shared number and UI colour (never hardcode these elsewhere)
 src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, actions (the eight, frozen), bindings (which key/button each one is on), input
-               (8-action masks), rng, math, trig, text (5x7 pixel font), audio (the WebAudio facade) +
+               (8-action masks), touch (the on-screen controls a phone presses, and the field it types into),
+               rng, math, trig, text (5x7 pixel font), audio (the WebAudio facade) +
                audio/ (this game's SFX library and its tracks; the primitives and the sequencer are lib/audio/)
 src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (the paper-doll), layers (offscreen
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
                fishing + hens + kitchenProps + dairyProps + millProps + hiveProps + gardenProps (per-scene props),
                logo, backgrounds/ (one pre-rendered scene each)
 src/game/      game (screen stack), run (the day plan + party + shopping list, the only cross-screen state), animation, menuinput,
-               ui (the paper/chalk/wood kit), minigame (shared mini-game furniture), maphud, screens/ (one per screen)
+               ui (the paper/chalk/wood kit), minigame (shared mini-game furniture), maphud, touchpad (the
+               on-screen controls, drawn), screens/ (one per screen)
 src/content/   critters/ (the cast: common rig hooks + one file per critter + items + customers), recipes, places
 src/net/       signal (room codes over MQTT / BroadcastChannel), mqtt-codec, peer (WebRTC), lockstep, protocol,
                checksum, session
@@ -97,7 +99,9 @@ Every module imports only from `engine/`, `art/`, `game/`, `content/`, `net/` �
 gating render — lockstep returns false while waiting for a peer's input.
 
 ### `engine/input.js`
-`ACTIONS = ['left','right','up','down','action','alt','cancel','start']`, bit i of a mask. Four seats (`MAX_PLAYERS`),
+`ACTIONS = ['left','right','up','down','action','alt','cancel','start']`, bit i of a mask. Three device sources —
+keyboard, gamepad, touch — folded into one mask per seat, so nothing downstream can tell which of them a press came
+from. Four seats (`MAX_PLAYERS`),
 and couch play fills all four (`LOCAL_PLAYERS`): P1 arrows/WASD + Z X C Enter, P2 T F G H + V B N 5, and seats 3
 and 4 pad-only. A gamepad claims the LOWEST couch seat that is free — not bound to another pad, not being driven by
 a keyboard block, not virtual — on its first press. Lowest, because a run's party is a dense array indexed by input
@@ -112,7 +116,8 @@ API: `update()` once per step; `held(p,a)`, `pressed(p,a)`, `buffered(p,a,window
 `axisY(p)`, `mask(p)`, `anyPressed(a)` → slot or −1, `typedCodes()` (text entry), `setVirtual(p, mask|actions)` /
 `clearVirtual(p)` (netplay + tests), `pollRaw(p)` (the local devices as a mask, no edge state — netplay samples this
 to send), `joined(p)`, `joinPressed(p)`, `setJoined`, `resetClaims`, `setPadClaims(on)`, `padOf(p)`,
-`device(p)`, `keyText(p,a)`, `padText(a)` (the button an action sits on, for a hint line a pad seat reads —
+`device(p)` (`'keyboard' | 'gamepad' | 'touch' | 'virtual' | 'none'`), `touchOn()` / `touchMask()` (are the
+on-screen controls up, and what is held on them), `keyText(p,a)`, `padText(a)` (the button an action sits on, for a hint line a pad seat reads —
 seats 3 and 4 have no keys to name, so a screen builds both lines in `enter()` and picks one in `draw()` by
 `device(p)`; never read the device in `update()`, see docs/MULTIPLAYER.md), `setPadVirtual(list)` (tests).
 `packMask` / `unpackMask` own the bit layout; `net/protocol.js` sends the mask as is.
@@ -121,6 +126,27 @@ REBINDING goes through a CAPTURE, because a screen otherwise only ever hears "th
 "the player pressed C": `capture()` holds every seat at neutral and reports the first key or button down through
 `capturedKey()` / `capturedButton()`, and `endCapture()` forgets it as held so the press that picked a binding is
 not then played as what it now means. `game/screens/controls.js` is the only caller.
+
+### `engine/touch.js`
+A phone reaches SEAT 0 and only seat 0: four thumbs on one piece of glass is not couch play. `TOUCH_PAD`,
+`TOUCH_BUTTONS` and `TOUCH_LABELS` are the layout — there is nothing for `bindings.js` to own here, because the
+layout IS the binding — and `game/touchpad.js` draws that same exported table, so a control is never seen in one
+place and hit in another. `maskAt(x, y)` is the hit test; `touchMask()` is what `input.js` folds into seat 0 and
+`pollRaw()` puts on the wire; `attachTouch(view)` takes the canvas api (not the element) because a contact is
+mapped through `toInternal` into the 640x360 the layout is written in.
+
+The overlay is offered on `(hover: none) and (pointer: coarse)` — the query `index.html` already asks before it
+tells a portrait phone to turn sideways — so a laptop with a touchscreen is not handed thumb controls. A keyboard
+or pad mask stands it down (`suppressTouch`), the next touch brings it back, and `keyText` names the button on the
+glass while it is up, so the hint lines screens build in `enter()` read as instructions rather than as a keyboard
+nobody in the room has.
+
+The mask is sampled from the live contacts ONCE a step, not on the DOM event, so a seat's input is stable for the
+whole of a fixed step; a press is held until the step after it so a tap shorter than 16 ms is still played
+(`endTouchStep()` is what forgets it). Text is the one thing a thumb cannot spell: `setTouchTyping(on)` — which
+`main.js` drives off the top screen's `typing` flag — raises an off-screen field, and what a soft keyboard puts in
+it comes back out as the `KeyboardEvent.code` stream `screens/lobby.js` already reads. While that field is up the
+X button spells ESCAPE, which a soft keyboard has not got and a player backing out of a room code needs.
 
 ### `engine/actions.js`, `engine/bindings.js`
 `actions.js` is `ACTIONS` (frozen — bit i of a mask, and `net/protocol.js` puts that byte on the wire), `BIT` and
@@ -318,6 +344,9 @@ window.__game = {
   // couch gamepads: stand fake pads in for navigator.getGamepads(), one { down: [buttonIndex], axes: [x, y] }
   // per port (null for an empty one), null to clear them all again
   setPads(specs), padOf(slot),
+  // a phone: stand a list of { x, y } contact points in GAME space for real thumbs (null lets go), read the
+  // layout back rather than copying its coordinates, and read a seat's mask / device / typed codes
+  touch(points), touchLayout(), inputState(slot),
   // online co-op (net/session.js installNetHooks): drive a room without the lobby screen
   netHost({ transport }) -> room code, netJoin(code, { transport }), net(), netState(), netSetCritter(i), netReady(on), netBegin(scene)
 }
@@ -353,6 +382,9 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
   own cannot hand over. The `audio` scenario renders every SFX and every track through an OfflineAudioContext and
   fails on a silent or a throwing one, then walks the screens and reads which track each asked for, presses M for
   real and reads the mute, and opens the closed board for its own track.
+  The `touch` scenario plays the same walk `pads` does — title to day board — on nothing but thumbs, and the
+  `touchtyping` one feeds the off-screen field the way a soft keyboard feeds one (an input event and no keydown at
+  all) to check what comes out is the code stream the lobby reads.
 - `npm run capture -- <dir> [screen[:params]...]` — screenshots of any screen at 2x (`tools/capture.js`).
 - `node tools/sheet-capture.js <dir> critter=<id> [anims,walk,closeup,cast,bench]` — critter contact sheets.
 - `.github/workflows/pages.yml` — lint, art-check, nettest, playtest, build on every push/PR; deploys `main`
