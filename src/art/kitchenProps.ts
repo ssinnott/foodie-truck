@@ -2,11 +2,13 @@
 // FRIDGE / CHOP / MIX / STOVE / OVEN / PLATE, drawn in the rig's ink and three tones from the kitchen palette.
 // `paintStations(g)` paints the static bodies ONCE into the room layer (art/backgrounds/kitchen.js); the exported
 // draw* helpers are the few per-frame marks: the flame glow, the steam, the oven window's heat, the ingredient on the
-// board, the bowl's contents, the plate and the paper timing widgets. Every helper is allocation-free; glow sprites
-// are pre-rendered on first use and alpha-modulated (ART_STYLE section 5). Screen coordinates throughout.
+// board, the bowl's and the pot's contents, the plate, the food on its way between stations (`intake`,
+// `drawFlight`) and the paper timing widgets. Every helper is allocation-free; glow sprites are pre-rendered on
+// first use and alpha-modulated (ART_STYLE section 5). Screen coordinates throughout.
 import { INK, boxOutlined, polyOutlined, discShaded, makeGlowSprite, pulse } from './layers.ts';
 import { UI, SIGNAL, PLUM, PLAYER_COLORS } from '../constants.ts';
 import { drawFood, foodTones } from './food.ts';
+import { drawDish } from './dishes.ts';
 import { steamPuff } from './fx.ts';
 import { pathRR } from '../lib/art/shading.ts';
 import { drawText } from '../engine/text.ts';
@@ -30,13 +32,16 @@ const TOP = ROWS.counterTop;
  *  the floor, breaking the counter line like the range does; its door swings open for a beat on every pull. */
 export const FRIDGE = Object.freeze({ x: PROP_X[FRIDGE_I] - 22, y: 146, w: 44, h: 110, doorY: 172 });
 /**
- * Where a pull LANDS: not beside the fridge but on the counter at the station that uses it next, so the pie's
- * apples pile up by the chopping board and an omelette's eggs by the bowl. One x per station, clear of that
- * station's own prop and of its neighbours' (left of the board, the bowl and the pot; right of the range, which
- * has the pot on its left); two rows of PILE_COLS on PILE_PITCH. The fridge's own entry is never used.
+ * The pile beside the chopping board: the board is the one station that is a flat surface rather than a vessel,
+ * so what waits there is laid out on the counter to its RIGHT - past the round board, short of the bowl - in two
+ * rows of PILE_COLS on PILE_PITCH. To the left it stood exactly where the cook chopping stands, behind their
+ * head for the whole step; on the right only a second cook waiting at the bowl can cover it. Everywhere else the
+ * batch goes INTO the prop (`intake`).
  */
-export const PILE_X = Object.freeze([PROP_X[FRIDGE_I] + 30, PROP_X[CHOP_I] - 56, PROP_X[MIX_I] - 56, PROP_X[STOVE_I] - 62, PROP_X[OVEN_I] + 30, PROP_X[PLATE_I] - 40]);
+export const PILE_X = PROP_X[CHOP_I] + 30;
 const PILE_COLS = 4, PILE_PITCH = 9;
+/** How high a flying item arcs over the counter between two stations, and the size it is drawn at on its way. */
+export const FLY_ARC = 44, FLY_S = 4;
 /** The chopping board: 48x11 on the counter top, with the big round board leaning behind it (the station's
  *  vertical, and what tells CHOP from MIX at 1x over a cook's head) and the knife rack on the wall above it. */
 export const BOARD = Object.freeze({ x: PROP_X[CHOP_I] - 24, y: TOP - 11, w: 48, h: 11 });
@@ -233,24 +238,45 @@ export function drawFridge(ctx, openT, icons, hexes, next) {
   ctx.fillStyle = PROPS.brass; ctx.fillRect(F.x - 7, dy + 8, 2, 22);
 }
 
-/** Where pull `i` lands at station `dest`: two rows of PILE_COLS on the counter, the second behind and above the first. */
-export function pileSlotX(dest, i) { return PILE_X[dest] + (i % PILE_COLS) * PILE_PITCH; }
+/** Slot `i` of the pile beside the board: two rows of PILE_COLS on the counter, the second behind and above the first. */
+export function pileSlotX(i) { return PILE_X + (i % PILE_COLS) * PILE_PITCH; }
 export function pileSlotY(i) { return TOP - 5 - ((i / PILE_COLS) | 0) * 7; }
+/** Where component `j` of the dish sits on a plate drawn at (x, y): three across, the third up on the first two. */
+export function plateSlotX(x, j) { return x - 6 + j * 7 + (j > 1 ? 1 : 0); }
+export function plateSlotY(y, j) { return y - 3 - (j > 1 ? 5 : 0); }
 
 /**
- * The pulls, piled on the counter at the station that uses them next (`dest`): the first `n` of the order's items
- * in order, and - while `flyT` (0..1) runs - the last one still on its arc out of the fridge door and along the
- * counter (Math.sin is fine here: draw only). Nothing is drawn for n = 0.
+ * WHERE THE FOOD GOES at each station: the point unit `unit` of the order's batch flies to when it arrives there,
+ * and flies out of when the step is done. The board is a surface, so its first unit lands on the board itself
+ * (where drawChopItem draws it) and the rest pile up beside it; the bowl, the pot and the oven window are
+ * vessels, so everything drops in at one point; the plate stacks by DISH component (`dish`, the unit's index in
+ * the order's `needs`) where drawPlate stacks it; the fridge's is the open door, where a pull comes out. Written
+ * into `out` so the caller's flight table is filled without allocating.
  */
-export function drawPulls(ctx, icons, hexes, n, dest, flyT) {
-  for (let i = 0; i < n && i < icons.length; i++) {
-    let x = pileSlotX(dest, i), y = pileSlotY(i);
-    if (i === n - 1 && flyT < 1) {
-      const F = FRIDGE, x0 = F.x + F.w / 2, y0 = F.doorY + 20, k = flyT;
-      x = R(x0 + (x - x0) * k); y = R(y0 + (y - y0) * k - 44 * Math.sin(k * Math.PI));
-    }
-    drawFood(ctx, icons[i], x, y, 3, hexes[i]);
+export function intake(station, unit, dish, out) {
+  switch (station) {
+    case CHOP_I: if (unit === 0) { out.x = PROP_X[CHOP_I]; out.y = BOARD.y - 6; } else { out.x = pileSlotX(unit - 1); out.y = pileSlotY(unit - 1); } break;
+    case MIX_I: out.x = BOWL.x + BOWL.w / 2; out.y = BOWL.y + 2; break;
+    case STOVE_I: out.x = POT.x + POT.w / 2; out.y = POT.y + 2; break;
+    case OVEN_I: out.x = OVEN.winX + OVEN.winW / 2; out.y = OVEN.winY + OVEN.winH / 2; break;
+    case PLATE_I: out.x = plateSlotX(PLATE.x + 13, dish); out.y = plateSlotY(PLATE.y, dish); break;
+    default: out.x = FRIDGE.x + FRIDGE.w / 2; out.y = FRIDGE.doorY + 20; break;   // FRIDGE_I
   }
+}
+
+/** The pile beside the board: units 1..n-1 of the batch (unit 0 is ON the board, drawChopItem's). Nothing for n <= 1. */
+export function drawPile(ctx, icons, hexes, n) {
+  for (let i = 1; i < n && i < icons.length; i++) drawFood(ctx, icons[i], pileSlotX(i - 1), pileSlotY(i - 1), FLY_S, hexes[i]);
+}
+
+/**
+ * One item on its arc from (x0, y0) to (x1, y1), `k` (0..1) of the way there: a straight line between the two
+ * points lifted by a FLY_ARC sine hump, so a hop from the board to the bowl and a drop from the oven window
+ * to the plate both read as a toss. Math.sin is fine here: draw only, `k` comes off an integer frame counter.
+ */
+export function drawFlight(ctx, icon, hex, x0, y0, x1, y1, k) {
+  const x = R(x0 + (x1 - x0) * k), y = R(y0 + (y1 - y0) * k - FLY_ARC * Math.sin(k * Math.PI));
+  drawFood(ctx, icon, x, y, FLY_S, hex);
 }
 
 // ---------------------------------------------------------------- per-frame marks
@@ -322,8 +348,9 @@ export function drawBowlContents(ctx, fill) {
   else ctx.fillRect(x, y, 24, 4);
 }
 
-/** The stove: the flame glow under the pot when lit (alpha by heat and pulse), the copper pot, steam over it. */
-export function drawStove(ctx, lit, heat, frame) {
+/** The stove: the flame glow under the pot when lit (alpha by heat and pulse), the copper pot, steam over it.
+ *  `hex` is what is IN the pot, seen over the rim in that ingredient's tones (null = an empty pot). */
+export function drawStove(ctx, lit, heat, frame, hex = null) {
   sprites();
   const P = POT, a = ctx.globalAlpha;
   if (lit) {
@@ -345,6 +372,12 @@ export function drawStove(ctx, lit, heat, frame) {
   ctx.fillStyle = INK; ctx.fillRect(P.x - 3, P.y, P.w + 6, 7);                              // the rim, inked
   ctx.fillStyle = body; ctx.fillRect(P.x - 2, P.y + 1, P.w + 4, 5);
   ctx.fillStyle = PLUM.deep; ctx.fillRect(P.x + 1, P.y + 1, P.w - 2, 3);                    // the dark inside over the rim
+  if (hex) {
+    // what is cooking: the ingredient's own base over its shade, so a carrot soup reads orange over the copper
+    const t = foodTones(hex);
+    ctx.fillStyle = t.sh; ctx.fillRect(P.x + 3, P.y + 1, P.w - 6, 3);
+    ctx.fillStyle = t.base; ctx.fillRect(P.x + 4, P.y + 1, P.w - 8, 2);
+  }
   if (lit && heat > 0.15) { steamPuff(ctx, PROP_X[STOVE_I] - 6, P.y - 2, frame, 20); steamPuff(ctx, PROP_X[STOVE_I] + 7, P.y - 4, frame + 9, 24); }
 }
 
@@ -361,17 +394,26 @@ export function drawOvenWindow(ctx, heat, tray) {
   ctx.restore();
 }
 
+/** The finished dish's size on the plate: 14 px wide inside the plate's 26, standing on its rim. */
+const DISH_S = 7, DISH_DY = -5;
 /**
- * The plate on the shelf with `n` of the order's components stacked on it in recipe order; `squash` > 1 is the
- * landing beat of the last one. `icons` / `hexes` are the order's ingredient glyph ids and colours.
+ * The plate on the shelf. With `dish` (an ORDERS id, art/dishes.ts) it carries the FINISHED DISH, `bites` of it
+ * eaten; without, `n` of the order's components stacked on it in recipe order (`icons` / `hexes` are the order's
+ * ingredient glyph ids and colours) while they are still arriving. `squash` > 1 is the landing beat.
  */
-export function drawPlate(ctx, x, y, icons, hexes, n, squash) {
+export function drawPlate(ctx, x, y, icons, hexes, n, squash, dish = null, bites = 0) {
   ctx.fillStyle = INK; ctx.fillRect(x - 14, y - 1, 28, 8);
   ctx.fillStyle = PROPS.plate; ctx.fillRect(x - 13, y, 26, 6);
   ctx.fillStyle = PROPS.plateRim; ctx.fillRect(x - 12, y + 4, 24, 2);
+  if (dish) {
+    if (squash !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(squash, 1 / squash); ctx.translate(-x, -y); }
+    drawDish(ctx, dish, x, y + DISH_DY, DISH_S, bites);
+    if (squash !== 1) ctx.restore();
+    return;
+  }
   for (let i = 0; i < n && i < icons.length; i++) {
     const last = i === n - 1, k = last ? squash : 1;
-    const cx = x - 6 + i * 7 + (i > 1 ? 1 : 0), cy = y - 3 - (i > 1 ? 5 : 0);
+    const cx = plateSlotX(x, i), cy = plateSlotY(y, i);
     if (k !== 1) { ctx.save(); ctx.translate(cx, cy + 3); ctx.scale(k, 1 / k); ctx.translate(-cx, -cy - 3); }
     drawFood(ctx, icons[i], cx, cy, 4, hexes[i]);
     if (k !== 1) ctx.restore();

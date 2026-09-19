@@ -3,28 +3,35 @@
 // the order's steps are worked IN ORDER. The first seat to interact at the current step's station owns it (its slot
 // colour fills the paper tag over the station); its input alone drives the step:
 //   FRIDGE one press per item the order wants, any rhythm: each tap pulls the next ingredient out of the door and
-//          sends it flying along the counter to the station that uses it next, where it piles up until that step
-//          is done (a graphic, never a choice); the last one closes the door
+//          sends it flying along the counter to the station that uses it next (a graphic, never a choice); the
+//          last one closes the door
 //   CHOP  ten presses, any rhythm: every tap is a chop and the tenth finishes the board
 //   MIX   hold for 240 frames while a dial fills; letting go pauses it, and it picks up where it left off
 //   STOVE hold for 240 frames while a bar fills; letting go pauses it the same way
 //   OVEN  hold for 240 frames while the bake runs; letting go pauses it the same way
 //   PLATE a press at the hatch plates the dish and rings the bell: ORDER UP!, then results
+// THE FOOD MOVES DOWN THE LINE: the order's items are one batch that is always at exactly one station (`batchAt`).
+// The fridge sends them to the first cooking step, and the frame a step completes, everything at its station -
+// the pile and the item on the board, what is in the bowl, in the pot, on the oven's tray - takes off on a
+// stagger and arcs into the next step's prop (`flights`, kitchenProps.ts `intake`), so the board is CLEARED by
+// the tenth chop, the bowl is emptied by the stir, and the plate at the hatch is stacked by the time the bell
+// rings. A prop draws itself loaded only while the batch is in it. A graphic: no step waits for a landing.
 // Every step completed is worth its full 2 (there is no way to burn, miss or spoil anything), so a served dish is
 // always three stars: stars = max(1, round(total / (2 * steps) * 3)). Barley's gag: on every completed step, a
 // seeded one-in-six chance he eats an ingredient (crumbs, NOM, no score change) - and the first push of his stick
 // or press of his button ends it, so the joke never holds a player up.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): every sim field is an integer or a px/frame sum driven by seat input;
-// the only random call is the gag, through `rng`; the steam, glow, rings and float text are cosmetic and stay out of
-// checksumFields(). Rigs are built once in enter(), never in draw().
+// the only random call is the gag, through `rng`; the steam, glow, rings, float text and the flights are cosmetic
+// and stay out of checksumFields() (a flight is launched by a sim event and timed by an integer counter, so every
+// peer draws the same one, but nothing reads it back). Rigs and the flight pool are built once, never in draw().
 import { VIEW_W, UI, SIGNAL, PLAYER_COLORS } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { CritterDef, Game, Input, ScreenParams } from '../game.ts';
 import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
 import { blitAt } from '../../art/layers.ts';
-import { drawShadow, floatText, ringAt, burstCrumbs, burstSparkle } from '../../art/fx.ts';
+import { drawShadow, floatText, ringAt, burstCrumbs, burstSparkle, burstSteam } from '../../art/fx.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import type { DrawRigOpts, Rig, RigWeapon } from '../../lib/art/rig.ts';
 import type { Point } from '../../lib/art/rigParts.ts';
@@ -46,8 +53,8 @@ import { drawText } from '../../engine/text.ts';
 import { kitchenLayer, ROWS, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.ts';
 import {
   paintStations, drawStationFocus, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
-  drawFridge, drawPulls, drawPullBar, drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, drawKettleSteam,
-  PLATE, BELL, POT, OVEN, FRIDGE,
+  drawFridge, drawPile, drawFlight, intake, drawPullBar, drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, drawKettleSteam,
+  PLATE, BELL, POT, OVEN, FRIDGE, BOARD,
 } from '../../art/kitchenProps.ts';
 
 /** The HOW TO PLAY card's pictograms per station (game/controlcard.ts): walk, then the station's own verb. */
@@ -62,13 +69,18 @@ const SPEED = 2.0;
 /** The steps' lengths (docs/GDD.md section 6): taps on the board, frames of holding everywhere else; the fridge
  *  takes as many taps as the order has items. */
 const CHOP_HITS = 10;
-/** The door stands open this long after a pull, and the item is on its arc along the counter for the first PULL_FLY of it. */
-const DOOR_FRAMES = 30, PULL_FLY = 24;
+/** The door stands open this long after a pull. */
+const DOOR_FRAMES = 30;
 const MIX_FRAMES = 240;
 const STOVE_FRAMES = 240;
 const OVEN_FRAMES = 240;
-/** After the bell: one component lands on the plate every DROP_FRAMES, the stamp slams, then results. */
-const SERVE_FRAMES = 96, DROP_FRAMES = 12, STAMP_AT = 40;
+/** A flight between two stations is FLY_FRAMES in the air; a batch takes off one unit every FLY_STAGGER frames.
+ *  The pool holds two batches of the biggest order (six units), which is more than can ever be in the air. */
+const FLY_FRAMES = 28, FLY_STAGGER = 4, FLY_POOL = 16;
+/** The plate squashes for this long under a component that has just landed on it. */
+const LAND_SQUASH = 3;
+/** After the bell: the stamp slams, then results. */
+const SERVE_FRAMES = 96, STAMP_AT = 40;
 /** The sound each hold station makes while its button is down, and the frames between replays (by station). */
 const HOLD_SOUND = { [MIX]: 'stir', [STOVE]: 'sizzle', [OVEN_S]: 'bake' };
 const HOLD_SOUND_EVERY = { [MIX]: 14, [STOVE]: 18, [OVEN_S]: 24 };
@@ -148,6 +160,26 @@ export interface StepState {
   count: number;
 }
 
+/**
+ * One item of the order on its way between two stations: a slot of the pool `fly()` fills and `stepFlights()`
+ * lands. Cosmetic (never checksummed), but timed by an integer counter so every peer draws the same arc.
+ */
+export interface Flight {
+  /** False while the slot is free. */
+  active: boolean;
+  /** Index into `pullIcons` / `pullHexes`: which unit of the order this is. */
+  unit: number;
+  /** Where it took off from and where it lands (kitchenProps.ts `intake`). */
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** Frames since take-off; negative while it waits its turn on the batch's stagger. Lands at FLY_FRAMES. */
+  t: number;
+  /** The station it lands at: counted into `landed` only if the batch is still bound there. */
+  dest: number;
+}
+
 export class KitchenScreen extends Screen {
   // The fields, for the checker only, in constructor then enter() order. `declare` for the reason game.ts gives
   // over its own block: a plain field declaration would emit a class field per name (es2022 defines them before
@@ -178,16 +210,34 @@ export class KitchenScreen extends Screen {
   declare pullHexes: string[];
   /** How many items have been pulled out of the fridge so far (0..pullIcons.length). */
   declare pulled: number;
-  /** The station the pulls fly to and pile up at: the step after the fridge (CHOP for a recipe that chops, else MIX). */
+  /** The station the pulls fly into: the step after the fridge (CHOP for a recipe that chops, else MIX). */
   declare pullDest: number;
-  /** Frames since the last pull (the door's swing and the item's arc are timed off it); large when idle. */
+  /** Frames since the last pull (the door's swing is timed off it); large when idle. */
   declare pullT: number;
+  /** The flight pool, FLY_POOL slots built once in the constructor and reused in place. */
+  declare flights: Flight[];
+  /** Which of the order's `needs` each unit of the batch is: the plate stacks by this. */
+  declare unitDish: number[];
+  /** The first unit of each `needs` entry: a component is on the plate once that unit has landed there. */
+  declare dishFirst: number[];
+  /** The station the batch is at or on its way to: the fridge's destination first, then each completed step's successor. */
+  declare batchAt: number;
+  /** The station the batch last took off from; its prop stays loaded while any unit is still waiting to go. */
+  declare batchFrom: number;
+  /** Units of the batch that have landed at `batchAt` so far. */
+  declare landed: number;
+  /** Flights still waiting on the stagger this frame (recounted by stepFlights). */
+  declare waiting: number;
+  /** Frames since a unit last landed on the plate (the squash), capped. */
+  declare landT: number;
+  /** The order's id: which finished dish (art/dishes.ts) the plate shows once the whole batch has landed on it. */
+  declare dishId: string;
+  /** Scratch for the intake points, refilled by fly(); never reallocated. */
+  declare pt: Point;
   /** Per-ingredient glyph and hex tables for the order ticket (game/ui.ts drawOrderTicket). */
   declare ticketOpts: OrderTicketOpts;
   /** The ticket's two head rows, worded once: whose order it is and the dish. */
   declare ticketHead: string[];
-  /** Which stations this order uses, indexed by station: the stations that draw their per-frame marks. */
-  declare has: boolean[];
   /** The step being worked: an index into `steps`, `steps.length` once every step is done. */
   declare stepIdx: number;
   /** The score banked so far, 0..2 per completed step. */
@@ -223,7 +273,12 @@ export class KitchenScreen extends Screen {
   /** The card's pictograms for the current step. */
   declare schemes: readonly CardScheme[];
 
-  constructor(game: Game) { super(game, 'kitchen'); this.seats = []; this.fields = []; }
+  constructor(game: Game) {
+    super(game, 'kitchen'); this.seats = []; this.fields = [];
+    this.flights = [];
+    for (let i = 0; i < FLY_POOL; i++) this.flights.push({ active: false, unit: 0, x0: 0, y0: 0, x1: 0, y1: 0, t: 0, dest: -1 });
+    this.pt = { x: 0, y: 0 };
+  }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -239,17 +294,22 @@ export class KitchenScreen extends Screen {
     this.icons = order.needs.map((n) => (INGREDIENTS[n.id] || INGREDIENTS.apple).icon);
     this.hexes = order.needs.map((n) => (INGREDIENTS[n.id] || INGREDIENTS.apple).hex);
     // what the fridge holds for this order: one entry per unit, in the order's own order
-    this.pullIcons = []; this.pullHexes = [];
-    for (let i = 0; i < order.needs.length; i++) for (let k = 0; k < order.needs[i].amount; k++) { this.pullIcons.push(this.icons[i]); this.pullHexes.push(this.hexes[i]); }
+    this.pullIcons = []; this.pullHexes = []; this.unitDish = []; this.dishFirst = [];
+    for (let i = 0; i < order.needs.length; i++) {
+      this.dishFirst.push(this.pullIcons.length);
+      for (let k = 0; k < order.needs[i].amount; k++) { this.pullIcons.push(this.icons[i]); this.pullHexes.push(this.hexes[i]); this.unitDish.push(i); }
+    }
     this.pulled = 0; this.pullT = DOOR_FRAMES;
     const fk = this.steps.indexOf(FRIDGE_S);
     this.pullDest = fk >= 0 && fk + 1 < this.steps.length ? this.steps[fk + 1] : (this.steps.length ? this.steps[0] : CHOP);
     if (this.pullDest === FRIDGE_S) this.pullDest = CHOP;
+    // the batch is bound for the fridge's destination from the first frame; nothing is in the air yet
+    for (const fl of this.flights) fl.active = false;
+    this.batchAt = this.pullDest; this.batchFrom = FRIDGE_S; this.landed = 0; this.waiting = 0; this.landT = LAND_SQUASH;
+    this.dishId = order.id;
     this.ticketOpts = { icons: {}, hexes: {} };
     this.ticketHead = [`FOR ${getCustomer(order.customer).name}`, order.dish];
     for (const n of order.needs) { const ing = INGREDIENTS[n.id]; if (ing) { this.ticketOpts.icons[n.id] = ing.icon; this.ticketOpts.hexes[n.id] = ing.hex; } }
-    this.has = [false, false, false, false, false];
-    for (const s of this.steps) this.has[s] = true;
     this.stepIdx = 0; this.total = 0;
     this.st = { phase: 0, t: 0, count: 0 };
     this.served = false; this.serveT = 0; this.stars = 0;
@@ -287,6 +347,7 @@ export class KitchenScreen extends Screen {
     const game = this.game, inp = game.input;
     if (inp.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
+    this.stepFlights();
     this.custPlayer.tick();
     if (this.tak > 0) this.tak--;
     if (this.pullT < DOOR_FRAMES) this.pullT++;
@@ -355,9 +416,11 @@ export class KitchenScreen extends Screen {
     const pressed = s ? inp.pressed(s.slot, 'action') : false, held = s ? inp.held(s.slot, 'action') : false;
     switch (station) {
       case FRIDGE_S:
-        // one item out per tap, in the order's own order; the door swings, the item arcs onto the tray
+        // one item out per tap, in the order's own order; the door swings, the item arcs along the counter into
+        // the first cooking step's prop
         if (pressed) {
-          st.count++; this.pulled = Math.min(this.pullIcons.length, this.pulled + 1); this.pullT = 0;
+          st.count++; this.pullT = 0;
+          if (this.pulled < this.pullIcons.length) { this.fly(this.pulled, FRIDGE_S, this.pullDest, 0); this.pulled++; }
           s.facing = 1; s.actT = ACT_FRAMES; this.playAnim(s, 'reach', true);
           ringAt(FRIDGE.x + FRIDGE.w / 2, FRIDGE.doorY + 20, 3, 12, UI.cream, 2, 10, false, true);
           audio.play('fridge');
@@ -406,6 +469,9 @@ export class KitchenScreen extends Screen {
     this.stepIdx++;
     this.st.phase = 0; this.st.t = 0; this.st.count = 0;
     this.setHint();
+    // the food moves on: everything at this station takes off for the next step's prop (the fridge's items are
+    // already on their way, one per tap, and the plate is the end of the line)
+    if (station !== FRIDGE_S && station !== PLATE_S && idx + 1 < this.steps.length) this.launchBatch(station, this.steps[idx + 1]);
     // the hungry one: a seeded one-in-six bite on every completed step, whoever completed it
     for (let i = 0; i < this.seats.length; i++) {
       const b = this.seats[i];
@@ -432,6 +498,60 @@ export class KitchenScreen extends Screen {
     this.game.audio.play('stamp', { delay: STAMP_AT / 60 });
     void s;
   }
+
+  /**
+   * Send the whole batch from station `from` into station `to`'s prop, one unit every FLY_STAGGER frames: the
+   * board's item and its pile, or what is in the bowl, the pot or the oven, all of it. The batch is bound to
+   * `to` from this frame, so the prop it left draws itself empty (bar the units still waiting their turn) and
+   * the one it is bound for fills as they land.
+   */
+  launchBatch(from: number, to: number): void {
+    this.batchFrom = from; this.batchAt = to; this.landed = 0;
+    for (let u = 0; u < this.pullIcons.length; u++) this.fly(u, from, to, u * FLY_STAGGER);
+    // the board is wiped clean: a few bits of the ingredient hop on it as the dice leave
+    if (from === CHOP) burstCrumbs(PROP_X[CHOP], BOARD.y - 6, BOARD.y - 1, this.hexes[0], 4, true);
+  }
+
+  /** Put unit `u` of the order in the air from station `from`'s intake to station `to`'s, after `delay` frames. */
+  fly(u: number, from: number, to: number, delay: number): void {
+    let fl: Flight | null = null;
+    for (const f of this.flights) if (!f.active) { fl = f; break; }
+    if (!fl) { fl = this.flights[0]; this.land(fl); }   // never in practice (FLY_POOL); the oldest lands early
+    const p = this.pt;
+    intake(from, u, this.unitDish[u], p); fl.x0 = p.x; fl.y0 = p.y;
+    intake(to, u, this.unitDish[u], p); fl.x1 = p.x; fl.y1 = p.y;
+    fl.active = true; fl.unit = u; fl.t = -delay; fl.dest = to;
+  }
+
+  /** Advance every flight a frame; the ones that reach FLY_FRAMES land. */
+  stepFlights(): void {
+    let waiting = 0;
+    for (const fl of this.flights) {
+      if (!fl.active) continue;
+      if (++fl.t < 0) waiting++;
+      else if (fl.t >= FLY_FRAMES) this.land(fl);
+    }
+    this.waiting = waiting;
+    if (this.landT < LAND_SQUASH) this.landT++;
+  }
+
+  /** A unit lands: it joins what is at its station (if the batch is still bound there), with a ring, and a puff of
+   *  steam off the pot. The last one onto the plate turns the stack into the finished dish, with a sparkle. */
+  land(fl: Flight): void {
+    fl.active = false;
+    if (fl.dest === this.batchAt) {
+      this.landed++;
+      if (fl.dest === PLATE_S) { this.landT = 0; if (this.dished()) burstSparkle(fl.x1, fl.y1 - 6, 6, UI.cream, true); }
+    }
+    ringAt(fl.x1, fl.y1, 2, 9, UI.cream, 2, 10, false, true);
+    if (fl.dest === STOVE) burstSteam(fl.x1, fl.y1 - 4, 2, true);
+  }
+
+  /** True once the whole batch is on the plate: it is the dish now, not a stack of what went into it. */
+  dished(): boolean { return this.batchAt === PLATE_S && this.landed >= this.pullIcons.length; }
+
+  /** True while station `k`'s prop has the batch in it: bound there with something landed, or still seeing it off. */
+  loaded(k: number): boolean { return (this.batchAt === k && this.landed > 0) || (this.batchFrom === k && this.waiting > 0); }
 
   playAnim(s: Seat, name: string, restart: boolean): void { s.anim = name; s.player.play(name, { restart, fallback: 'idle' }); }
 
@@ -466,6 +586,7 @@ export class KitchenScreen extends Screen {
       drawRig(ctx, s.rig, s.player.pose, o);
       jointScreen(s.rig, 'head', s.head);
     }
+    this.drawFlights(ctx);   // over the cooks: a tossed apple crosses in front of whoever is at the counter
     particles.draw(ctx, null, 'front');
     for (let i = 0; i < this.steps.length; i++) drawTag(ctx, this.steps[i], this.owners[i], this.segs(this.steps[i]), this.tagFill(i));
     for (let i = this.seats.length - 1; i >= 0; i--) {
@@ -483,24 +604,40 @@ export class KitchenScreen extends Screen {
   done(k: number): boolean { for (let i = 0; i < this.steps.length; i++) if (this.steps[i] === k) return this.scores[i] >= 0; return false; }
 
   drawStations(ctx: CanvasRenderingContext2D, f: number, st: StepState, station: number): void {
-    // the fridge: the door open for a beat after each pull, and the pulls piled at the station that uses them next
-    // until that step has taken them
+    // the fridge: the door open for a beat after each pull
     drawFridge(ctx, DOOR_FRAMES - this.pullT, this.pullIcons, this.pullHexes, this.pulled);
-    if (!this.done(this.pullDest)) drawPulls(ctx, this.pullIcons, this.pullHexes, this.pulled, this.pullDest, this.pullT >= PULL_FLY ? 1 : this.pullT / PULL_FLY);
-    if (this.has[CHOP]) {
-      const cut = this.done(CHOP) ? 2 : station === CHOP ? (st.count < 2 ? 0 : st.count < 4 ? 1 : 2) : 0;
+    // the board: the first unit on it, whole then halves then dice as the chops land, and the rest piled beside
+    // it - while the batch is here. The tenth chop clears it: the dice and the pile are in the air by then, and
+    // the units still waiting their turn sit where they were (drawFlights draws them in place)
+    if (this.batchAt === CHOP && this.landed > 0) {
+      const cut = station === CHOP ? (st.count < 2 ? 0 : st.count < 4 ? 1 : 2) : 0;
       drawChopItem(ctx, this.icons[0], this.hexes[0], cut, 0, this.tak > 0);
+      drawPile(ctx, this.pullIcons, this.pullHexes, this.landed);
     }
-    if (this.has[MIX]) drawBowlContents(ctx, this.done(MIX) ? 1 : station === MIX ? st.t / MIX_FRAMES : 0);
+    // the bowl: lumps once something has dropped in, the stir's own progress while it runs, empty once it has gone
+    const mixFill = !this.loaded(MIX) ? 0 : this.done(MIX) ? 1 : station === MIX ? Math.max(0.1, st.t / MIX_FRAMES) : 0.1;
+    drawBowlContents(ctx, mixFill);
     const stoveOn = station === STOVE || this.done(STOVE);
-    drawStove(ctx, stoveOn, station === STOVE ? st.t / STOVE_FRAMES : 1, f);
-    // the tray is in from the first frame of the bake; the glow follows the hold and lingers after it
+    drawStove(ctx, stoveOn, station === STOVE ? st.t / STOVE_FRAMES : 1, f, this.loaded(STOVE) ? this.hexes[0] : null);
+    // the tray is in the window while the batch is in the oven; the glow follows the hold and lingers after it
     const baking = station === OVEN_S && st.t > 0;
-    drawOvenWindow(ctx, baking ? st.t / OVEN_FRAMES : this.ovenGlow / 60, baking);
-    const plated = this.served ? Math.min(this.icons.length, Math.floor(this.serveT / DROP_FRAMES) + 1) : 0;
-    drawPlate(ctx, PLATE.x + 13, PLATE.y, this.icons, this.hexes, plated, plated > 0 && this.serveT % DROP_FRAMES < 3 ? 1.25 : 1);
+    drawOvenWindow(ctx, baking ? st.t / OVEN_FRAMES : this.ovenGlow / 60, this.loaded(OVEN_S));
+    // the plate: a component is on it once the first unit of that ingredient has landed there, and the whole
+    // batch landed is the finished dish itself (art/dishes.ts)
+    let plated = 0;
+    if (this.batchAt === PLATE_S) for (let j = 0; j < this.dishFirst.length; j++) if (this.landed > this.dishFirst[j]) plated++;
+    drawPlate(ctx, PLATE.x + 13, PLATE.y, this.icons, this.hexes, plated, plated > 0 && this.landT < LAND_SQUASH ? 1.25 : 1, this.dished() ? this.dishId : null);
     drawBellRing(ctx, this.ringT);
     drawKettleSteam(ctx, f);   // the room's pilot light: one plume that never stops, whatever the party is doing
+  }
+
+  /** Every unit in the air on its arc; the ones still waiting their turn off the board sit where they were. */
+  drawFlights(ctx: CanvasRenderingContext2D): void {
+    for (const fl of this.flights) {
+      if (!fl.active) continue;
+      if (fl.t < 0) { if (this.batchFrom === CHOP) drawFlight(ctx, this.pullIcons[fl.unit], this.pullHexes[fl.unit], fl.x0, fl.y0, fl.x1, fl.y1, 0); continue; }
+      drawFlight(ctx, this.pullIcons[fl.unit], this.pullHexes[fl.unit], fl.x0, fl.y0, fl.x1, fl.y1, fl.t / FLY_FRAMES);
+    }
   }
 
   /**
@@ -558,6 +695,7 @@ export class KitchenScreen extends Screen {
     return {
       step: this.stepIdx, steps: this.stepNames, scores: this.scores.slice(), owners: this.owners.slice(), total: this.total, stars: this.stars, served: this.served,
       phase: this.st.phase, t: this.st.t, count: this.st.count, pulled: this.pulled, pulls: this.pullIcons.length, pullDest: this.pullDest,
+      batchAt: this.batchAt, landed: this.landed, flying: this.flights.reduce((n, fl) => n + (fl.active ? 1 : 0), 0), dish: this.dished() ? this.dishId : '',
       seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
     };
   }

@@ -222,12 +222,24 @@ cooked out of thin air - and the recipe card shows them with checks. Interaction
 
 | Station | Verb | Rule |
 |---|---|---|
-| FRIDGE | tap | one `action` press per item the order wants (four apples and two eggs is six taps), any rhythm; each tap swings the door open and the next ingredient, in the order's own order, flies along the counter to the station that uses it next (the board for a recipe that chops, else the bowl) and piles up there until that step is done. Nothing to choose: the fridge holds exactly the order |
+| FRIDGE | tap | one `action` press per item the order wants (four apples and two eggs is six taps), any rhythm; each tap swings the door open and the next ingredient, in the order's own order, flies along the counter into the station that uses it next (onto the board for a recipe that chops, else into the bowl). Nothing to choose: the fridge holds exactly the order |
 | CHOP | tap | ten `action` presses, any rhythm; the pips on the card light one per chop |
 | MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it |
 | STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way |
 | OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way |
 | PLATE | tap | `action` plates the dish and rings the bell; the customer eats |
+
+**The food moves down the line.** The order's items are one batch that is always at exactly one station. The
+fridge sends them to the first cooking step, and the frame a step completes, everything at its station - the pile
+and the item on the board, what is in the bowl, in the pot, on the oven's tray - takes off one item every four
+frames and arcs into the next step's prop: the tenth chop clears the board and the dice fly into the bowl, the
+finished stir empties the bowl into the pot or the oven, and the bake drops the dish onto the plate at the hatch,
+where it is stacked before the bell is rung - and the moment the last item lands, the stack becomes **the finished
+dish**: every recipe has a picture of its own (`art/dishes.ts`: the pie under its lattice, the soup in its bowl, the
+stack of griddle cakes with the butter on top), so what sits at the hatch is what the customer asked for, and it is
+that picture they are seen eating on results, a bite out of it per chew. A prop only draws itself loaded while the
+batch is in it (lumps in the bowl, the ingredient's colour over the pot's rim, the tray in the oven window). This is a graphic: no step waits
+for a landing, and nothing about it is simulated (`kitchen.ts` flights are cosmetic).
 
 Nothing can burn or be missed: every completed step scores its full 2, so stars = round(total / max × 3) is always
 3 for a served dish (minimum 1 by the formula).

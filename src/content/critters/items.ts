@@ -5,6 +5,7 @@
 import { celRect, celCapsule, celPoly, tones, pathRR, band } from '../../lib/art/shading.ts';
 import { LIGHT_X, LIGHT_Y } from '../../lib/art/shading.ts';
 import { drawFood } from '../../art/food.ts';
+import { drawDish } from '../../art/dishes.ts';
 
 const R = Math.round;
 const WOOD = '#C48A52', WOOD_DARK = '#8B5A2B', ROD = '#9A6234';
@@ -67,6 +68,10 @@ export const ITEMS = {
   /** A held apple / egg / fish: `rig.heldIcon` and `rig.heldHex` pick which. */
   food: { attach: 'handR', length: 8, draw(ctx, rig) {
     upright(ctx, rig, () => drawFood(ctx, rig.heldIcon || 'apple', 2, 2, 5, rig.heldHex));
+  } },
+  /** A held FINISHED DISH (art/dishes.ts): `rig.heldIcon` is the ORDERS id. The customer eats it on results. */
+  dish: { attach: 'handR', length: 8, draw(ctx, rig) {
+    upright(ctx, rig, () => drawDish(ctx, rig.heldIcon || 'applePie', 2, 0, 5));
   } },
   /** Bulb horn for the driver's HONK: a brass bell forward along the paw, a plum rubber bulb behind it. */
   horn: { attach: 'handR', length: 12, draw(ctx, rig) {
