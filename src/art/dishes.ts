@@ -397,6 +397,39 @@ export const DISHES: Record<string, DishDraw> = {
       flecks(c, x, y, s, hexOf('potato'), [-0.25, -0.25, 0.4, -0.2]);
     });
   },
+  // ---- Hazel Holt's menu ----
+  hazelnutBrownies(ctx, cx, cy, s) {
+    const t = foodTones(BROWNIE);
+    box(ctx, R(cx - s * 1.0), R(cy - s * 0.2), R(s * 0.95), R(s * 0.8), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 1.0) + 1, R(cy + s * 0.3), R(s * 0.95) - 2, R(s * 0.3));
+    box(ctx, R(cx - s * 0.1), R(cy - s * 0.55), R(s * 0.95), R(s * 0.8), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.1) + 1, R(cy - s * 0.05), R(s * 0.95) - 2, R(s * 0.3));
+    flecks(ctx, cx, cy, s, hexOf('hazelnut'), [-0.7, 0.0, -0.35, 0.25, 0.2, -0.35, 0.55, -0.15]);
+    shine(ctx, cx + s * 0.05, cy - s * 0.4);
+  },
+  walnutLoaf(ctx, cx, cy, s) {
+    const t = foodTones(CRUST_DARK);
+    ctx.beginPath(); ctx.moveTo(cx - s, cy + s * 0.6); ctx.lineTo(cx - s, cy - s * 0.2); ctx.quadraticCurveTo(cx, cy - s * 1.3, cx + s, cy - s * 0.2); ctx.lineTo(cx + s, cy + s * 0.6); ctx.closePath(); inkFill(ctx, t.base);
+    ctx.save(); ctx.clip(); ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s), R(cy + s * 0.2), R(s * 2), R(s * 0.5)); ctx.restore();
+    flecks(ctx, cx, cy, s, hexOf('walnut'), [-0.55, -0.5, 0.0, -0.8, 0.5, -0.45, -0.2, -0.1, 0.35, 0.1]);
+    shine(ctx, cx - s * 0.55, cy - s * 0.55);
+  },
+  roastChestnuts(ctx, cx, cy, s) {
+    // a paper bag with the split chestnuts heaped in the top of it
+    box(ctx, R(cx - s * 0.8), R(cy - s * 0.3), R(s * 1.6), R(s * 0.9), CREAM);
+    ctx.fillStyle = '#D8C093'; ctx.fillRect(R(cx - s * 0.8) + 1, R(cy + s * 0.3), R(s * 1.6) - 2, R(s * 0.25));
+    const t = foodTones(hexOf('chestnut'));
+    for (let i = 0; i < 3; i++) { const x = cx - s * 0.5 + i * s * 0.5, y = cy - s * 0.45 - (i & 1) * s * 0.25; ctx.beginPath(); ctx.arc(x, y, s * 0.3, 0, TAU); inkFill(ctx, t.base); ctx.fillStyle = CREAM; ctx.fillRect(R(x - 1), R(y - s * 0.3), 2, R(s * 0.3)); }   // the split, showing pale inside
+  },
+  nutRoast(ctx, cx, cy, s) {
+    // a slice on the plate: a dark brown slab with the nuts and the carrot showing in it, gravy pooled beside
+    const t = foodTones(BROWNIE);
+    ctx.fillStyle = CRUST_DARK; ctx.beginPath(); ctx.ellipse(cx + s * 0.3, cy + s * 0.45, s * 0.8, s * 0.2, 0, 0, TAU); ctx.fill();   // the gravy
+    box(ctx, R(cx - s * 0.9), R(cy - s * 0.6), R(s * 1.5), R(s * 1.1), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.9) + 1, R(cy + s * 0.15), R(s * 1.5) - 2, R(s * 0.3));
+    flecks(ctx, cx, cy, s, hexOf('walnut'), [-0.6, -0.35, -0.1, -0.1, 0.3, -0.4]);
+    flecks(ctx, cx, cy, s, hexOf('carrot'), [-0.35, 0.05, 0.15, -0.3]);
+  },
 };
 
 /**

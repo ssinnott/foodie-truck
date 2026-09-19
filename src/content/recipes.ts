@@ -51,6 +51,10 @@ export const INGREDIENTS = Object.freeze({
   pea: { name: 'PEAS', place: 'garden', hex: '#7CB342', icon: 'pea' },
   raspberry: { name: 'RASPBERRIES', place: 'bramble', hex: '#C4325F', icon: 'raspberry' },
   cockle: { name: 'COCKLES', place: 'shore', hex: '#E0C9A6', icon: 'cockle' },
+  // Hazel Holt (docs/CONTENT_ROADMAP.md section E): the nuts, shaken down out of their trees
+  hazelnut: { name: 'HAZELNUTS', place: 'holt', hex: '#B07A3A', icon: 'hazelnut' },
+  walnut: { name: 'WALNUTS', place: 'holt', hex: '#8C6A48', icon: 'walnut' },
+  chestnut: { name: 'CHESTNUTS', place: 'holt', hex: '#6E3B2A', icon: 'chestnut' },
 });
 
 /** Every ingredient id a landmark supplies, in INGREDIENTS order (the first is the landmark's fallback). */
@@ -183,4 +187,13 @@ export const ORDERS = Object.freeze([
     needs: [{ id: 'raspberry', amount: 3 }, { id: 'flour', amount: 2 }, { id: 'butter', amount: 1 }], steps: ['fridge', 'mix', 'stove', 'oven', 'plate'] },
   { id: 'cockleStew', dish: 'COCKLE STEW', customer: 'otter', line: 'COCKLE STEW! FROM THE COVE! IN A BOWL!',
     needs: [{ id: 'cockle', amount: 3 }, { id: 'potato', amount: 1 }, { id: 'milk', amount: 1 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
+  // Hazel Holt's menu: what the nuts are for. ROAST CHESTNUTS is the game's one single-ingredient dish.
+  { id: 'hazelnutBrownies', dish: 'HAZELNUT BROWNIES', customer: 'owl', line: 'HAZELNUT BROWNIES. GOOEY IN THE MIDDLE.',
+    needs: [{ id: 'hazelnut', amount: 2 }, { id: 'flour', amount: 2 }, { id: 'egg', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
+  { id: 'walnutLoaf', dish: 'WALNUT LOAF', customer: 'goat', line: 'A WALNUT LOAF. FOR SLICING THIN.',
+    needs: [{ id: 'walnut', amount: 2 }, { id: 'flour', amount: 3 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
+  { id: 'roastChestnuts', dish: 'ROAST CHESTNUTS', customer: 'otter', line: 'ROAST CHESTNUTS! IN A PAPER BAG!',
+    needs: [{ id: 'chestnut', amount: 3 }], steps: ['fridge', 'oven', 'plate'] },
+  { id: 'nutRoast', dish: 'NUT ROAST', customer: 'goat', line: 'A NUT ROAST. WITH GRAVY, IF YOU HAVE IT.',
+    needs: [{ id: 'walnut', amount: 2 }, { id: 'carrot', amount: 1 }, { id: 'onion', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
 ]);

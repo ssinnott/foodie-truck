@@ -270,6 +270,31 @@ export const FOOD = {
     ctx.beginPath(); ctx.moveTo(cx, cy + s * 0.6); ctx.lineTo(cx - s * 0.5, cy - s * 0.45); ctx.moveTo(cx, cy + s * 0.6); ctx.lineTo(cx, cy - s * 0.7); ctx.moveTo(cx, cy + s * 0.6); ctx.lineTo(cx + s * 0.5, cy - s * 0.45); ctx.stroke();
     if (s >= 4) { ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.3), R(cy - s * 0.35), 2, 2); }
   },
+  // ---- Hazel Holt's nuts ----
+  /** A hazelnut: a round nut in a paler cup, the point at the top. */
+  hazelnut(ctx, cx, cy, s, hex = '#B07A3A') {
+    const t = foodTones(hex);
+    ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.9); ctx.quadraticCurveTo(cx + s * 0.95, cy - s * 0.2, cx + s * 0.7, cy + s * 0.6); ctx.lineTo(cx - s * 0.7, cy + s * 0.6); ctx.quadraticCurveTo(cx - s * 0.95, cy - s * 0.2, cx, cy - s * 0.9); ctx.closePath();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = t.base; ctx.fill();
+    ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.75), R(cy + s * 0.2), R(s * 1.5), R(s * 0.4));   // the cup, paler
+    if (s >= 4) { ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.3), R(cy - s * 0.4), 2, 2); }
+  },
+  /** A walnut: a wrinkled round with the seam down the middle. */
+  walnut(ctx, cx, cy, s, hex = '#8C6A48') {
+    ball(ctx, cx, cy, s * 0.9, hex);
+    const t = foodTones(hex);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - 1), R(cy - s * 0.8), 2, R(s * 1.6));
+    if (s >= 4) { ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.6), R(cy - s * 0.2), 2, 2); ctx.fillRect(R(cx + s * 0.35), R(cy + s * 0.2), 2, 2); }
+  },
+  /** A chestnut: a dark glossy dome with a flat pale base and the tuft at the top. */
+  chestnut(ctx, cx, cy, s, hex = '#6E3B2A') {
+    const t = foodTones(hex);
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.85, cy + s * 0.5); ctx.quadraticCurveTo(cx - s * 0.6, cy - s * 0.9, cx, cy - s * 0.85); ctx.quadraticCurveTo(cx + s * 0.6, cy - s * 0.9, cx + s * 0.85, cy + s * 0.5); ctx.closePath();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = t.base; ctx.fill();
+    ctx.fillStyle = '#D9C39A'; ctx.fillRect(R(cx - s * 0.7), R(cy + s * 0.2), R(s * 1.4), R(s * 0.3));
+    ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.35), R(cy - s * 0.45), 2, 2);
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - 1), R(cy - s * 1.05), 2, 2);
+  },
 };
 
 /** Draw an ingredient by icon id; unknown ids get a plain ball. */

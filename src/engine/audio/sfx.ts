@@ -206,6 +206,12 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   reel: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.02, vol: 0.14 }); return noise(c, d, t, { dur: 0.03, vol: 0.12 * o.v, type: 'bandpass', f0: 3200 * o.p, q: 3, attack: 0.0005 }); },
   /** Landed: the splash on the way out and the pip on the way into the bucket. */
   hook: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 1.2, f: 600, vol: 0.2, splash: 0.24 }); whoosh(c, d, t + 0.05, { v: o.v, p: o.p, f0: 800, f1: 3000, dur: 0.2, vol: 0.14 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.3 }); },
+  /** A trunk shaken: a rustle of leaves, highpassed noise that swells and falls, replayed while the hold runs. */
+  shake: (c, d, t, o) => noise(c, d, t, { dur: 0.22, vol: 0.09 * o.v, type: 'highpass', f0: 2600 * o.p, f1: 3400 * o.p, attack: 0.06 }),
+  /** A nut into the basket: a small hard knock and the pip. */
+  nut: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 700, dur: 0.04, vol: 0.2 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.05 }); },
+  /** The squirrel, indignant on a head: a run of quick square chitters going up. */
+  chitter: (c, d, t, o) => { for (let i = 0; i < 5; i++) osc(c, d, t + i * 0.05, { type: 'square', f0: (1400 + i * 120) * o.p, dur: 0.025, vol: 0.05 * o.v, attack: 0.002, lp: 4000 }); return t + 0.3; },
   /** The flock across the lane: a bleat, a wobbly square wave that dips and comes back up. */
   baa: (c, d, t, o) => osc(c, d, t, { type: 'square', f0: 330 * o.p, f1: 290 * o.p, glide: 0.2, dur: 0.32, vol: 0.08 * o.v, attack: 0.02, lp: 1500, vib: { rate: 14, depth: 25 } }),
   /** The duck parade: two quacks, a nasal sawtooth each, the second a step lower. */
@@ -286,5 +292,5 @@ export const CANONICAL_SFX: readonly string[] = Object.freeze(Object.keys(SFX_DE
 
 /** Names that get +/-4% random pitch per play, so a mashed button and a run of catches do not sound like a machine. */
 export const JITTERED = new Set([
-  'catch', 'wormy', 'splat', 'reel', 'egg', 'squirt', 'pour', 'heave', 'chop', 'stir', 'sizzle', 'chew', 'type', 'bite', 'grip',
+  'catch', 'wormy', 'splat', 'reel', 'egg', 'squirt', 'pour', 'heave', 'chop', 'stir', 'sizzle', 'chew', 'type', 'bite', 'grip', 'nut', 'shake',
 ]);

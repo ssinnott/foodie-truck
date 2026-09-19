@@ -61,6 +61,8 @@ export const LANES = Object.freeze([
   // the second pass: the farm lane carries on east to the cove; a spur drops off the pond lane to the berry bank
   [1500, 520, 1760, 520],
   [1150, 700, 1150, 850, 1180, 880],
+  // the third pass: the holt's lane climbs north-west out of the orchard
+  [420, 300, 180, 150],
 ]);
 /** The river's centreline, top to bottom, splitting the coop and pond off on the east bank. */
 export const RIVER = Object.freeze([1340, HORIZON_H - 10, 1340, 120, 1370, 220, 1340, 340, 1330, 470, 1370, 600, 1350, 720, 1360, 860, 1330, WORLD_H + 10]);
@@ -109,7 +111,7 @@ export function riverBlocked(px, py) { return riverDist(px, py) < RIVER_BLOCK &&
 // ---------------------------------------------------------------- authored world content
 const place = (id) => PLACES.find((p) => p.id === id);
 const HOME = place('home'), ORCHARD = place('orchard'), POND = place('pond'), COOP = place('coop'), DAIRY = place('dairy'), MILL = place('mill'), HIVE = place('hive'), FARM = place('garden');
-const SHORE = place('shore'), BRAMBLE = place('bramble');
+const SHORE = place('shore'), BRAMBLE = place('bramble'), HOLT = place('holt');
 /** Wheat fields (hand-placed so no landmark sits in one); lanes cut gates through their hedges. */
 const WHEAT = [[1020, 130, 260, 120], [110, 420, 230, 160], [1580, 860, 280, 180], [60, 960, 200, 90]];
 /** The animated bits the map screen draws per frame, in world coordinates. */
@@ -178,6 +180,7 @@ export const SIGN_AT = Object.freeze({
   coop: { x: COOP.x + 52, y: COOP.y - 18 }, dairy: { x: DAIRY.x - 52, y: DAIRY.y - 18 }, mill: { x: MILL.x - 40, y: MILL.y - 18 },
   hive: { x: HIVE.x - 30, y: HIVE.y - 18 }, garden: { x: FARM.x, y: FARM.y - 28 },
   shore: { x: SHORE.x - 34, y: SHORE.y - 26 }, bramble: { x: BRAMBLE.x + 40, y: BRAMBLE.y - 18 },
+  holt: { x: HOLT.x + 44, y: HOLT.y - 10 },
 });
 /** Every signpost clears this much lane: LANE_HALF plus half a truck, so nothing is driven through (scenarios/map.js). */
 export const SIGN_CLEAR = LANE_HALF + 8;
@@ -414,6 +417,16 @@ function paintLandmarks(g) {
   boxShaded(g, BRAMBLE.x - 50, BRAMBLE.y - 24, 28, 6, MAP.wood, MAP.woodDark);   // the bench is on the gate's far side from the signpost
   boxOutlined(g, BRAMBLE.x - 48, BRAMBLE.y - 31, 9, 7, MAP.wall); g.fillStyle = SIGNAL.orchard; g.fillRect(BRAMBLE.x - 46, BRAMBLE.y - 33, 5, 3);
   boxOutlined(g, BRAMBLE.x - 35, BRAMBLE.y - 31, 9, 7, MAP.wall); g.fillStyle = MAP.blueberry; g.fillRect(BRAMBLE.x - 33, BRAMBLE.y - 33, 5, 3);
+  // hazel holt: three round nut trees in a huddle on a shade of leaf litter, a sack of nuts leaning on the near trunk
+  groundShade(g, HOLT.x, HOLT.y - 18, 110, 0.12, 4);
+  const holtTrees = [[-34, -30, 17], [30, -34, 19], [-2, -46, 15]];
+  for (const t of holtTrees) {
+    const tx = HOLT.x + t[0], ty = HOLT.y + t[1], r = t[2];
+    g.fillStyle = INK; g.fillRect(tx - 3, ty - 4, 6, 14); g.fillStyle = MAP.trunk; g.fillRect(tx - 2, ty - 3, 4, 12);
+    discShaded(g, tx, ty - r + 2, r, '#6E8A4A', '#4F6838');
+    g.fillStyle = '#B07A3A'; for (let k = 0; k < 3; k++) g.fillRect(tx - 8 + k * 7, ty - r + 4 + (k & 1) * 6, 3, 3);   // the nuts in the leaves
+  }
+  boxOutlined(g, HOLT.x + 6, HOLT.y - 12, 10, 10, MAP.wall); g.fillStyle = '#B07A3A'; g.fillRect(HOLT.x + 8, HOLT.y - 14, 6, 3);
 }
 
 function paintHorizon(g, rnd) {

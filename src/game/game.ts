@@ -31,7 +31,7 @@ export type Audio = typeof import('../engine/audio.ts')['audio'];
 const SCREEN_MUSIC: Record<string, string> = Object.freeze({
   title: 'title', lobby: 'title', select: 'title', controls: 'title', gallery: 'title',
   stage: 'board', map: 'drive', line: 'line', kitchen: 'kitchen', results: 'results',
-  orchard: 'gather', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', bramble: 'gather',
+  orchard: 'gather', coop: 'gather', dairy: 'gather', mill: 'gather', hive: 'gather', garden: 'gather', bramble: 'gather', holt: 'gather',
   pond: 'pond', beach: 'pond',
 });
 

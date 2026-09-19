@@ -156,6 +156,8 @@ the wheat, river and lane tables go; the map's tree scatter (`nearLandmark`) wil
 
 ### Hazel Holt — SHAKE (*move + hold*)
 
+> **Built** (`docs/GDD.md` section 5). The chestnut visit drops chestnuts like the others (no spiky cases).
+
 - **Where:** the north-west corner, about (180, 150), on a new lane from the orchard.
 - **Gathers:** hazelnuts, walnuts, chestnuts.
 - **How it plays:** four nut trees along the back. Standing at a trunk (36 px either side) and **holding** ACTION

@@ -105,7 +105,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **Landmarks** (`PLACES`): home (the truck stop), orchard (apples, pears, peaches, avocados), pond (trout), coop
   (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
-  south lane (strawberries, blueberries). **All nine supply landmarks open a mini-game** while the list is short
+  south lane (strawberries, blueberries) and Hazel Holt in the north-west corner (hazelnuts, walnuts, chestnuts,
+  shaken down). **All ten supply landmarks open a mini-game** while the list is short
   of what they supply — the cove its beach (crabs chased along the sand), the bank its bushes — and **any
   of them can hold a line** once it is full; arriving where there is nothing to do shows a sign instead
   (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
@@ -256,6 +257,17 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   under the critter (34 px either side) picks its ripe berry (a 12-frame reach up into the bush, the berry hops
   into the basket, +1); a bush with nothing ripe on it does nothing. The bank used to borrow the farm's bed, and a
   strawberry pulled out of the ground by its top was the visit that said it should not.
+
+- **Hazel Holt — SHAKE** (*move + hold*). A nut grove in the north-west corner: four nut trees stand at fixed x
+  (160 px apart) on the leaf litter, the crew walks the trodden band in front of them, and **holding** `action`
+  anywhere at a trunk (36 px either side) that still has nuts in it shakes it. The shake belongs to the TREE: its
+  canopy sways harder as a bar over it fills over 60 held frames, letting go early keeps the bar for the next hold
+  (and a second seat can carry on where the first left off), and at the top a shower of 5..8 nuts comes down into
+  the shaker's basket one every 5 frames, each one +1 and never past the target; that tree is bare for 150 frames,
+  so the party is pushed along the grove. A visit is for hazelnuts, walnuts or chestnuts (`gatherTarget`), and the
+  nuts in the canopy, in the shower and in the crate wear that nut's glyph. **The joke:** one shake in six brings
+  the squirrel down with the nuts; it lands on the shaker's head, sits there indignant for 40 frames with the stick
+  locked (the nuts still falling), then runs off. Nothing is lost.
 
 - **Cockle Cove — CHASE** (*move + tap*). The crew runs along the dry sand with the sea behind it and the strand
   line in front. Crabs come up out of burrows (three at the start, another every 50–100 frames, five at most) and

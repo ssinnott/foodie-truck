@@ -25,6 +25,10 @@ export const PLACES = Object.freeze([
   // keeps the farm's rose and gold, its neighbour on the south lane (docs/ART_STYLE.md section 4).
   { id: 'shore', name: 'COCKLE COVE', sign: 'SHORE', x: 1760, y: 520, screen: 'beach', accent: '#5FD3C0' },
   { id: 'bramble', name: 'BRAMBLE BANK', sign: 'BERRIES', x: 1180, y: 880, screen: 'bramble', accent: '#C96B7A' },
+  // The third pass's landmarks (docs/CONTENT_ROADMAP.md section E). Hazel Holt is the nut grove in the north-west
+  // corner, up a lane from the orchard: nuts are SHAKEN down. Its accent is the mill's straw gold (a nut is a
+  // grain's cousin, and the two never share a screen).
+  { id: 'holt', name: 'HAZEL HOLT', sign: 'NUTS', x: 180, y: 150, screen: 'holt', accent: '#E3C68F' },
 ]);
 
 /** Kitchen stations, left to right along the truck's counter. `verb` is the interaction the station asks for. */
