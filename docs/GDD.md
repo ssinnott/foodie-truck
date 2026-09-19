@@ -438,7 +438,7 @@ player has bound M to something, while a rebind is listening, and while a host k
 
 ## 10. Screens — what each must do
 
-- **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Six rows, so the A-frame is 18 px taller than it was at five.
+- **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Six rows, so the A-frame is 18 px taller than it was at five. Along the bottom, on one paper strip, the two addresses this game has: the repository - the SOURCE row's other half, lit while that row is selected - and the Ko-fi address beside it, which is a click and nothing else, no row and no key. Both are underlined, and both stay readable to type where a browser refuses the tab (`engine/links.ts`).
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
 - **select**: five 116×200 cards (the kit's 140 fitted four across), one cursor per joined seat, READY stamps;
   `next` = stage (starts the run).

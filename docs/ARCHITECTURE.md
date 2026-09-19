@@ -59,8 +59,9 @@ index.html               the page: one canvas, the error box, the module entry
 src/constants.js         every shared number and UI colour (never hardcode these elsewhere)
 src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, actions (the eight, frozen), bindings (which key/button each one is on), input
-               (8-action masks), rng, math, trig, text (5x7 pixel font), audio (the WebAudio facade) +
-               audio/ (this game's SFX library and its tracks; the primitives and the sequencer are lib/audio/)
+               (8-action masks), links (the only module that navigates anywhere), rng, math, trig, text (5x7
+               pixel font), audio (the WebAudio facade) + audio/ (this game's SFX library and its tracks; the
+               primitives and the sequencer are lib/audio/)
 src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (the paper-doll), layers (offscreen
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
                fishing + hens + kitchenProps + dairyProps + millProps + hiveProps + gardenProps (per-scene props),
@@ -206,6 +207,20 @@ holds the NPC diners.
 Offscreen pre-render: `makeLayer(w, h, paint(g, w, h, rnd), seed)`, `blitTiled`, `blitAt`, `blitWorld(ctx, L, camX,
 camY)`, `vGradient`, `radialGlow`, `makeGlowSprite`, `boxOutlined`, `boxShaded`, `discShaded`, `polyOutlined`,
 `makePool`, `pulse`, `PARALLAX`, `INK`. Backdrops paint ONCE with a seeded rng and blit per frame at integer offsets.
+
+### `engine/links.js` (ported)
+The only module in the build that leaves the page, for the two addresses on one paper strip along the bottom of
+the title: the repository this build came from, and the Ko-fi address beside it.
+`links.setZones([{ x, y, w, h, url, onOpen }, ...])` claims their rects (internal 640x360 px, measured by
+`ui.ts hintSpans` so the paper drawn and the rect clicked are one rectangle); the title claims them in `enter()`
+and releases them with `clearZones()` in `exit()`, one screen's worth at a time. A click lands through a real
+user gesture, so it always opens - and that is the Ko-fi address's ONLY road: it gets no menu row and no key,
+because the eight actions are the game's. `links.open(url)` is the other road, for the SOURCE row: called from
+the fixed step it is a rAF callback rather than a gesture, so a browser may refuse the tab, and it returns
+whether one ACTUALLY opened rather than leaving the row looking broken. `links.hotUrl` is the address the mouse
+rests on, which is what lights that one address up. Either way both stay drawn, so a player whose browser
+refuses the tab can read one off the screen. Nothing here is simulation: no screen's `checksumFields` sees a
+link, and a peer never hears about one (docs/MULTIPLAYER.md).
 
 ### `engine/particles.js`, `art/fx.js` (ported)
 One 600-slot pool, visual only (its own rng stream): `particles.spawn(kind, x, y, opts)`, `burst(kind, x, y, n, opts)`,
