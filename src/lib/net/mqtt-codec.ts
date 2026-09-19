@@ -43,28 +43,28 @@ export function decodeLength(buf: Uint8Array, i: number): DecodedLength | null {
 
 function str(s: string): number[] { const b = enc.encode(s); return [b.length >> 8, b.length & 0xff, ...b]; }
 
-function packet(type: number, flags: number, body: number[]): Uint8Array {
+function packet(type: number, flags: number, body: number[]): Uint8Array<ArrayBuffer> {
   return new Uint8Array([(type << 4) | flags, ...encodeLength(body.length), ...body]);
 }
 
 /** CONNECT with a clean session and no credentials (public brokers accept anonymous clients). */
-export function encodeConnect(clientId: string, keepaliveSec: number = 45): Uint8Array {
+export function encodeConnect(clientId: string, keepaliveSec: number = 45): Uint8Array<ArrayBuffer> {
   return packet(PKT.CONNECT, 0, [...str('MQTT'), 0x04, 0x02, keepaliveSec >> 8, keepaliveSec & 0xff, ...str(clientId)]);
 }
 
 /** SUBSCRIBE at QoS 0. The 0x02 fixed-header flag is required by the spec. */
-export function encodeSubscribe(packetId: number, topic: string): Uint8Array {
+export function encodeSubscribe(packetId: number, topic: string): Uint8Array<ArrayBuffer> {
   return packet(PKT.SUBSCRIBE, 0x02, [packetId >> 8, packetId & 0xff, ...str(topic), 0x00]);
 }
 
 /** PUBLISH at QoS 0 (fire and forget — there is no packet id and no acknowledgement). */
-export function encodePublish(topic: string, payload: string | Uint8Array): Uint8Array {
+export function encodePublish(topic: string, payload: string | Uint8Array): Uint8Array<ArrayBuffer> {
   const body = typeof payload === 'string' ? enc.encode(payload) : payload;
   return packet(PKT.PUBLISH, 0, [...str(topic), ...body]);
 }
 
-export function encodePingReq(): Uint8Array { return packet(PKT.PINGREQ, 0, []); }
-export function encodeDisconnect(): Uint8Array { return packet(PKT.DISCONNECT, 0, []); }
+export function encodePingReq(): Uint8Array<ArrayBuffer> { return packet(PKT.PINGREQ, 0, []); }
+export function encodeDisconnect(): Uint8Array<ArrayBuffer> { return packet(PKT.DISCONNECT, 0, []); }
 
 /** One whole MQTT packet off the stream. `topic` and `payload` are PUBLISH-only. */
 export interface MqttPacket {
