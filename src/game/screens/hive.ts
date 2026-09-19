@@ -307,6 +307,7 @@ export class HiveScreen extends Screen {
     s.facing = SKEP_X[best] >= s.x ? 1 : -1;
     seatAnim(s, 'dip', true);
     burstDust(SKEP_X[best], ROWS.bench - 4, 2, 0.9, true);
+    this.game.audio.play('dip');
   }
 
   /** The button came up short of the honey: the dipper comes out clean and the skep is anyone's again. */
@@ -326,6 +327,7 @@ export class HiveScreen extends Screen {
     floatText(x, y - 14, PLUS_ONE, s.colour, 1, true);
     burstSparkle(CRATE_X, CRATE_Y - 14, 3, UI.cream, true);
     seatAnim(s, 'carry', true);
+    this.game.audio.play('jar');
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
@@ -333,7 +335,7 @@ export class HiveScreen extends Screen {
   /** The round is over: drop the sign; a seat with honey cheers, one with none sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, SIGN_PREFIX + this.total);
+    endRound(this.clock, SIGN_PREFIX + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.dipSkep >= 0) this.skeps[s.dipSkep].held = 0;

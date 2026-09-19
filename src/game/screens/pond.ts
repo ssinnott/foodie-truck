@@ -248,6 +248,7 @@ export class PondScreen extends Screen {
         if (i >= PARA_N - 1) {
           s.fx = s.tx; s.fy = s.sy;
           ringAt(s.fx, s.fy, 3, 9, UI.cream, 2, 12, true, true); burstDrops(s.fx, s.fy, 2, true);
+          this.game.audio.play('cast');
           s.state = WAIT; s.t = rng.int(WAIT_MIN, WAIT_MAX); seatAnim(s, 'rodWait', true);
         }
         break;
@@ -261,7 +262,7 @@ export class PondScreen extends Screen {
         if (pressed) this.reelOnce(s);
         break;
       case HOOKED:
-        if (RESULT_FRAMES - s.t === FISH_ARC) s.landT = LAND_FRAMES;   // the trout drops in: the rim takes the hit
+        if (RESULT_FRAMES - s.t === FISH_ARC) { s.landT = LAND_FRAMES; this.game.audio.play('bucket'); }   // the trout drops in: the rim takes the hit
         if (--s.t <= 0) this.rest(s);
         break;
       default: break;
@@ -271,6 +272,7 @@ export class PondScreen extends Screen {
   /** The trout is on: the float drops, the ring opens, and the seat is told to start tapping. */
   bite(s: PondSeat): void {
     s.state = BITE; s.t = 0; s.reel = 0;
+    this.game.audio.play('bite');
     seatAnim(s, 'rodReel', true);
     ringAt(s.fx, s.fy + 5, 4, 16, SIGNAL.pond, 2, 18, false, true);
     burstDrops(s.fx, s.fy, 3, true);
@@ -280,6 +282,7 @@ export class PondScreen extends Screen {
   /** One turn of the reel: a tug on the rod and the float, and the last one lands the fish. */
   reelOnce(s: PondSeat): void {
     s.reel++; s.t = TUG_FRAMES;
+    this.game.audio.play('reel');
     seatAnim(s, 'rodReel', true);
     burstDrops(s.fx, s.fy, 1, true);
     if (s.reel >= REEL_PRESSES) this.hook(s);
@@ -290,6 +293,7 @@ export class PondScreen extends Screen {
 
   hook(s: PondSeat): void {
     s.state = HOOKED; s.t = RESULT_FRAMES; s.reel = 0; s.count++;
+    this.game.audio.play('hook');
     this.total++; this.countStr = this.total + '/' + this.target;
     seatAnim(s, 'pull', true);
     burstDrops(s.fx, s.fy, 6, true); ringAt(s.fx, s.fy, 4, 14, UI.cream, 2, 14, true, true);
@@ -298,7 +302,7 @@ export class PondScreen extends Screen {
 
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     // everyone holds one pose under the sign: rod up for a full bucket, rod low for an empty one
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.state = IDLE; s.t = 0; s.reel = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; seatAnim(s, s.count > 0 ? 'pull' : 'rodIdle', true); }
   }

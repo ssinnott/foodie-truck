@@ -391,14 +391,17 @@ export class OrchardScreen extends Screen {
           this.setTotal(this.total + 1);
           ringAt(bx, by, 4, 14, UI.cream, 2, 12, false, true);
           floatText(bx, by - 12, PLUS_ONE, s.colour, 1, true);
+          this.game.audio.play('catch');
         } else if (a.kind === WORMY) {
           // the grub: a flinch and a dazed face, and that is all it costs
           s.bumpT = BUMP_FRAMES; s.moving = false;
           seatAnim(s, 'bump', true);
+          this.game.audio.play('wormy');
         } else this.lightFuse(s);
       }
       if (!caught && bottom >= APPLE_FLOOR) {
         a.active = false;
+        this.game.audio.play('splat');
         const sp = this.splats[this.splatCursor]; this.splatCursor = (this.splatCursor + 1) % this.splats.length;
         sp.t = 0; sp.x = R(a.x); sp.y = APPLE_FLOOR;
       }
@@ -410,6 +413,7 @@ export class OrchardScreen extends Screen {
     s.boomT = BOOM_TOTAL; s.moving = false; s.catchT = 0;
     s.rig.weapon = null;
     seatAnim(s, 'holdBomb', true);
+    this.game.audio.play('fuse');
   }
 
   /** One frame of the bomb sequence: the hold, the bang on the one frame it lands, the singed stand, the recovery. */
@@ -430,6 +434,7 @@ export class OrchardScreen extends Screen {
     ringAt(px, py, 4, 20, UI.cream, 2, 10, false, true);
     floatText(px, py - 20, BOOM, UI.cream, 1, true);
     seatAnim(s, 'singed', true);
+    this.game.audio.play('boom');
   }
 
   /** Shaken off: the soot goes, the basket is back in the paw, and the seat is a player again. */
@@ -443,7 +448,7 @@ export class OrchardScreen extends Screen {
   /** The round is over: drop the sign, and every seat with something in its basket cheers. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.moving = false; s.bumpT = 0;

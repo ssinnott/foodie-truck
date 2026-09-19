@@ -2,6 +2,7 @@
 import { VIEW_W, VIEW_H } from './constants.ts';
 import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.ts';
+import { audio } from './engine/audio.ts';
 import { rng } from './lib/engine/rng.ts';
 import { createCanvas } from './lib/engine/canvas.ts';
 import { Game } from './game/game.ts';
@@ -82,8 +83,11 @@ function boot() {
   // stock bindings without touching what is stored - a way back in for a player who has bound themselves out.
   if (!options.defaults) bindings.load();
   input.init(view.canvas);
+  // Sound comes on with the first key or tap (the browser's autoplay rule); in autotest no context is ever made.
+  audio.testMode = options.autotest;
+  audio.init();
 
-  const game = new Game({ input, rng, options });
+  const game = new Game({ input, audio, rng, options });
   game.critters = CRITTERS;
   game.registerScreen('title', (g) => new TitleScreen(g));
   game.registerScreen('lobby', (g) => new LobbyScreen(g));
@@ -111,6 +115,9 @@ function boot() {
         // seat's mask for THIS frame with input.setVirtual, which update() then turns into edges and buffers.
         if (game.net && game.net.beforeStep) game.net.beforeStep();
         input.update();
+        // M mutes, unless a seat has bound M to an action, a rebind is listening for it, or the lobby is spelling a
+        // host key with it. Local only: mute is not simulation state, so a peer never hears about it.
+        if (!input.capturing() && !bindings.isKeyBound('KeyM') && !(game.screen && game.screen.typing) && input.typedCodes().indexOf('KeyM') >= 0) audio.toggleMute();
         game.update();
         if (game.net && game.net.afterStep) game.net.afterStep();
       } catch (e) { recordError(e); }
@@ -134,7 +141,7 @@ function boot() {
   }
 
   Object.assign(hooks, {
-    game, input, rng, options, loop,
+    game, input, audio, rng, options, loop,
     scenes: SCENES,
     step(n = 1) { loop.step(n); },
     screen() { return game.screenId(); },

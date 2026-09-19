@@ -185,7 +185,7 @@ export class SelectScreen extends Screen {
 
   override update() {
     super.update();
-    const inp = this.game.input;
+    const inp = this.game.input, audio = this.game.audio;
     for (const seat of this.seats) {
       // A couch drop-in: engine/input.js joins the seat on its first key or button, and the cursor appears on its
       // own card. The press that SAT THEM DOWN is then eaten - held and buffered - because it is the same press,
@@ -194,19 +194,20 @@ export class SelectScreen extends Screen {
       if (!seat.on && inp.joined(seat.slot)) {
         seat.on = true; seat.card = seat.slot % this.cards.length;
         inp.consume(seat.slot, 'action');
+        audio.play('join');
         continue;
       }
       if (!seat.on) continue;
       if (seat.ready) seat.t++;
       if (this.started) continue;
       if (!seat.ready) {
-        if (inp.pressed(seat.slot, 'right')) seat.card = (seat.card + 1) % this.cards.length;
-        if (inp.pressed(seat.slot, 'left')) seat.card = (seat.card + this.cards.length - 1) % this.cards.length;
-        if (inp.pressed(seat.slot, 'action')) { seat.ready = true; seat.t = 0; }
+        if (inp.pressed(seat.slot, 'right')) { seat.card = (seat.card + 1) % this.cards.length; audio.play('menu_move'); }
+        if (inp.pressed(seat.slot, 'left')) { seat.card = (seat.card + this.cards.length - 1) % this.cards.length; audio.play('menu_move'); }
+        if (inp.pressed(seat.slot, 'action')) { seat.ready = true; seat.t = 0; audio.play('stamp'); }
       }
       if (inp.pressed(seat.slot, 'cancel')) {
-        if (seat.ready) { seat.ready = false; seat.t = 0; }
-        else if (seat.slot === 0 && !this.seats.some((x) => x.on && x.ready)) { this.game.reset('title'); return; }
+        if (seat.ready) { seat.ready = false; seat.t = 0; audio.play('menu_back'); }
+        else if (seat.slot === 0 && !this.seats.some((x) => x.on && x.ready)) { audio.play('menu_back'); this.game.reset('title'); return; }
       }
     }
     for (const c of this.cards) c.player.tick();
@@ -222,6 +223,7 @@ export class SelectScreen extends Screen {
       for (const s of this.seats) if (s.on) picks.push(s.card);
       // the two dev jumps ride along so a capture or a scenario that walks in through the front door still gets its day
       startRun(this.game, { seed: this.game.options.seed, critters: picks, order: this.game.options.order, recipes: this.game.options.recipes });
+      audio.play('menu_confirm');
       this.game.fadeTo(() => this.game.replace('stage'));
     }
   }

@@ -118,12 +118,13 @@ export class ControlsScreen extends Screen {
     if (this.messageT > 0) this.messageT--;
     if (this.listening) { this.listen(); return; }
 
-    const dx = navX(inp), dy = navY(inp);
-    if (dx) this.col = (this.col + dx + COLS.length) % COLS.length;
-    if (dy) this.row = (this.row + dy + ACTIONS.length) % ACTIONS.length;
+    const dx = navX(inp), dy = navY(inp), audio = this.game.audio;
+    if (dx) { this.col = (this.col + dx + COLS.length) % COLS.length; audio.play('menu_move'); }
+    if (dy) { this.row = (this.row + dy + ACTIONS.length) % ACTIONS.length; audio.play('menu_move'); }
     if (inp.anyPressed('action') >= 0 || inp.anyPressed('start') >= 0) {
       this.listening = true; this.listenT = 0;
       inp.capture();
+      audio.play('menu_confirm');
       return;
     }
     // ALT puts THIS COLUMN back to stock - the column the cursor is in, so a player who has tangled one seat's
@@ -134,9 +135,10 @@ export class ControlsScreen extends Screen {
       this.dirty = true;
       this.refresh();
       this.say(`${col.title} BACK TO DEFAULTS`);
+      audio.play('stamp');
       return;
     }
-    if (cancelPressed(inp) >= 0) this.game.reset('title');
+    if (cancelPressed(inp) >= 0) { audio.play('menu_back'); this.game.reset('title'); }
   }
 
   /**
@@ -149,7 +151,7 @@ export class ControlsScreen extends Screen {
     const code = inp.capturedKey(), button = inp.capturedButton();
     const col = COLS[this.col], action = ACTIONS[this.row];
     let done = false;
-    if (code === 'Escape') { this.say('REBIND CANCELLED'); done = true; }
+    if (code === 'Escape') { this.say('REBIND CANCELLED'); this.game.audio.play('menu_back'); done = true; }
     else if (col.seat < 0 && button >= 0) { done = this.apply(bindings.bindPad(action, button)); }
     else if (col.seat >= 0 && code) { done = this.apply(bindings.bindKey(col.seat, action, code)); }
     // a key pressed at the pad column (or a button at a key column) is the wrong device for this cell, and saying
@@ -162,8 +164,8 @@ export class ControlsScreen extends Screen {
 
   /** One binding attempt: keep the refusal on screen, and only a change is worth saving. */
   apply(result) {
-    if (result.ok) { this.dirty = true; this.refresh(); this.say(''); }
-    else this.say(result.reason || 'REBIND REFUSED');
+    if (result.ok) { this.dirty = true; this.refresh(); this.say(''); this.game.audio.play('rebind_ok'); }
+    else { this.say(result.reason || 'REBIND REFUSED'); this.game.audio.play('rebind_refused'); }
     return true;
   }
 

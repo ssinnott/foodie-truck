@@ -318,6 +318,7 @@ export class LobbyScreen extends Screen {
     const s = net.summary();
     const ping = s.rtt == null ? '--' : R(s.rtt);
     if (s.room !== this.sRoom || this.party.length !== this.sParty || ping !== this.sPing || s.delay !== this.sDelay) {
+      if (this.party.length > this.sParty && this.sParty > 0) this.game.audio.play('join');   // somebody sat down (the first count is us)
       this.sRoom = s.room; this.sParty = this.party.length; this.sPing = ping; this.sDelay = s.delay;
       this.statusLine = `TABLE ${s.room}  PARTY ${this.party.length}/${NET_PLAYERS}  PING ${ping}MS  DELAY ${s.delay}F`;
     }
@@ -353,29 +354,31 @@ export class LobbyScreen extends Screen {
       const m = this.party[i];
       this.readyT[i] = m && m.ready ? this.readyT[i] + 1 : 0;
     }
-    const phase = this.phase;
+    const phase = this.phase, audio = this.game.audio;
     if (phase === 'code') { this.updateCode(inp); return; }
     if (phase === 'role') {
       const dy = navY(inp);
-      if (dy) this.sel = (this.sel + dy + ROLE_ROWS.length) % ROLE_ROWS.length;
-      if (cancelPressed(inp) >= 0) { this.game.reset('title'); return; }
+      if (dy) { this.sel = (this.sel + dy + ROLE_ROWS.length) % ROLE_ROWS.length; audio.play('menu_move'); }
+      if (cancelPressed(inp) >= 0) { audio.play('menu_back'); this.game.reset('title'); return; }
       if (confirmPressed(inp) >= 0) {
+        audio.play('menu_confirm');
         if (this.sel === 0) this.open(true, '');
         else { this.typing = true; this.code = ''; this.codeChars = []; this.shownCode = ''; this.codeAt = -1; }
       }
       return;
     }
     if (phase === 'error') {
-      if (confirmPressed(inp) >= 0 || cancelPressed(inp) >= 0) { this.net.leave(); this.game.net = null; this.game.reset('title'); }
+      if (confirmPressed(inp) >= 0 || cancelPressed(inp) >= 0) { audio.play('menu_back'); this.net.leave(); this.game.net = null; this.game.reset('title'); }
       return;
     }
     if (phase === 'starting') return;                 // the session is resetting us to the map
     // connecting / lobby: everyone drives their own seat from keyboard block 0, whatever seat they hold
     const net = this.net;
-    if (inp.pressed(0, 'right')) this.pick(1);
-    if (inp.pressed(0, 'left')) this.pick(-1);
-    if (inp.pressed(0, 'action')) net.setReady(true);
+    if (inp.pressed(0, 'right')) { this.pick(1); audio.play('menu_move'); }
+    if (inp.pressed(0, 'left')) { this.pick(-1); audio.play('menu_move'); }
+    if (inp.pressed(0, 'action')) { if (!net.lobby.myReady) audio.play('stamp'); net.setReady(true); }
     if (inp.pressed(0, 'cancel')) {
+      audio.play('menu_back');
       if (net.lobby.myReady) net.setReady(false);
       else { net.leave(); this.game.net = null; this.game.reset('title'); }
     }
@@ -386,17 +389,17 @@ export class LobbyScreen extends Screen {
    * rather than actions; engine/input.js holds them for the step this update belongs to.
    */
   updateCode(inp: Input): void {
-    const raw = inp.typedCodes();
+    const raw = inp.typedCodes(), audio = this.game.audio;
     for (let i = 0; i < raw.length; i++) {
       const code = raw[i];
-      if (code === 'Escape') { this.typing = false; this.code = ''; this.codeChars = []; break; }
-      if (code === 'Backspace') { this.code = this.code.slice(0, -1); this.codeChars = this.code.split(''); continue; }
+      if (code === 'Escape') { this.typing = false; this.code = ''; this.codeChars = []; audio.play('menu_back'); break; }
+      if (code === 'Backspace') { this.code = this.code.slice(0, -1); this.codeChars = this.code.split(''); audio.play('type'); continue; }
       if (code === 'Enter' || code === 'NumpadEnter') {
-        if (this.code.length >= 4) { this.open(false, this.code); return; }
+        if (this.code.length >= 4) { audio.play('menu_confirm'); this.open(false, this.code); return; }
         continue;
       }
       const ch = codeChar(code);
-      if (ch && this.code.length < MAX_CODE) { this.code += ch; this.codeChars = this.code.split(''); }
+      if (ch && this.code.length < MAX_CODE) { this.code += ch; this.codeChars = this.code.split(''); audio.play('type'); }
     }
   }
 

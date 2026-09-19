@@ -137,13 +137,14 @@ export class LineScreen extends Screen {
     for (const s of this.seats) { s.player.tick(); if (s.player.done) s.player.play('idle', { restart: true }); }
     for (let i = 0; i < this.queue.length; i++) {
       const d = this.queue[i];
-      if (i === 0 && !d.waved && f >= WAVE_AT) { d.waved = true; d.player.play('wave', { restart: true }); }
+      if (i === 0 && !d.waved && f >= WAVE_AT) { d.waved = true; d.player.play('wave', { restart: true }); game.audio.play('hello'); }
       d.player.tick();
       if (d.player.done) d.player.play('idle', { restart: true });
     }
     if (this.taken) return;
     if ((f >= CONFIRM_AT && confirmPressed(game.input) >= 0) || f >= AUTO_AT) {
       this.taken = 1;
+      game.audio.play('menu_confirm');
       game.fadeTo(() => game.replace('kitchen'));
     }
   }

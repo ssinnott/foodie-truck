@@ -8,7 +8,7 @@
 // call — see the orchard's deviations), treat this as the contract and change nothing in it for one screen's sake:
 //   ROUND_FRAMES 2400, SIGN_SLAM 6, SIGN_HOLD 60
 //   makeSeats(game, floorY) -> seats[]  | seatAnim(seat, name, restart?)
-//   drawSeatPlate(ctx, seat, stack?)    | makeClock() / tickClock(clock) / endRound(clock, text) / roundOver(clock)
+//   drawSeatPlate(ctx, seat, stack?)    | makeClock() / tickClock(clock) / endRound(clock, text, audio?) / roundOver(clock)
 //   drawClock(ctx, clock, countStr, drawIcon, title) | drawEndSign(ctx, clock, frame)
 // Anything ONE screen needs lives in that screen (the orchard keeps its own catch boxes, seat draw and poses).
 //
@@ -24,7 +24,7 @@ import type { DrawRigOpts, Rig, RigWeapon } from '../lib/art/rig.ts';
 import { LIGHT_X, LIGHT_Y } from '../lib/art/shading.ts';
 import { drawText, measureText } from '../engine/text.ts';
 import { drawTicket, drawBar, drawSign, drawNamePlate } from './ui.ts';
-import type { Game } from './game.ts';
+import type { Game, Audio } from './game.ts';
 
 /**
  * The basket state a rig carries, merged into the library's `Rig` rather than restated as a wrapper type: the
@@ -212,8 +212,14 @@ export function tickClock(clock: Clock): boolean {
   if (clock.timer > 0) clock.timer--;
   return clock.timer === 0;
 }
-/** Start the sign-drop ending with the words on the board (one string, built once). */
-export function endRound(clock: Clock, text: string): void { clock.phase = 1; clock.signT = 0; clock.signText = text; }
+/**
+ * Start the sign-drop ending with the words on the board (one string, built once). Given the audio service, the
+ * sign's knock lands on the audio clock at the frame the board does (SIGN_SLAM), and the round-over tune follows.
+ */
+export function endRound(clock: Clock, text: string, audio?: Audio): void {
+  clock.phase = 1; clock.signT = 0; clock.signText = text;
+  if (audio) { audio.play('sign_drop', { delay: SIGN_SLAM / 60 }); audio.play('round_over', { delay: (SIGN_SLAM + 8) / 60 }); }
+}
 /** True once the sign has slammed in and been held its 60 frames. */
 export function roundOver(clock: Clock): boolean { return clock.phase === 1 && clock.signT >= SIGN_SLAM + SIGN_HOLD; }
 

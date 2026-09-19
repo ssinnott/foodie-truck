@@ -176,7 +176,7 @@ export const SWARM_SHAPE = Object.freeze([
   Object.freeze({ cy: 102, halfW: 16, halfH: 28, rx: 4, ry: 3, stride: 7, centre: 0 }),
   Object.freeze({ cy: 136, halfW: 190, halfH: 8, rx: 5, ry: 3, stride: 3, centre: 1 }),
 ]);
-/** Orbit steps per frame per state: the drone rising, as motion (the game has no audio). Simulation state. */
+/** Orbit steps per frame per state: the drone rising, as motion first (the swarm has no sound of its own). Simulation state. */
 export const SWARM_SPIN = Int8Array.of(1, 3, 2);
 
 /**

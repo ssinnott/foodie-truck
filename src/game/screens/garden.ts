@@ -468,6 +468,7 @@ export class GardenScreen extends Screen {
     if (s.gripX < X_MIN) s.gripX = X_MIN; else if (s.gripX > X_MAX) s.gripX = X_MAX;
     s.moving = false;
     seatAnim(s, 'grip', true);
+    this.game.audio.play('grip');
   }
 
   /** One tug: the gauge climbs a step, the top shakes, and the step that reaches the top brings the root out. */
@@ -475,6 +476,7 @@ export class GardenScreen extends Screen {
     s.grip = 0;
     s.pull += PULL_STEP;
     seatAnim(s, 'grip', true);
+    this.game.audio.play('heave');
     if (s.pull >= GAUGE_UNITS) { const t = this.tops[s.top]; t.held = 0; s.top = -1; this.pullRoot(s, t); }
   }
 
@@ -491,6 +493,7 @@ export class GardenScreen extends Screen {
     ringAt(t.x, ROOT_Y - 4, 3, 13, UI.cream, 2, 12, true, true);
     burstSparkle(t.x, ROOT_Y - 18, 4, SIGNAL.garden, true);
     floatText(t.x + s.facing * 14, ROOT_Y - 54, PLUS_ONE, s.colour, 1, true);
+    this.game.audio.play('root');
   }
 
   /** GRIP_TIMEOUT with no press: the critter straightens up and the top is free again. Costs nothing. */
@@ -526,7 +529,7 @@ export class GardenScreen extends Screen {
   /** The round is over: drop the sign; a seat with roots in its trug cheers, one without sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.top >= 0) this.tops[s.top].held = 0;

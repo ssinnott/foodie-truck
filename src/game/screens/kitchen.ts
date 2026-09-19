@@ -69,6 +69,9 @@ const STOVE_FRAMES = 240;
 const OVEN_FRAMES = 240;
 /** After the bell: one component lands on the plate every DROP_FRAMES, the stamp slams, then results. */
 const SERVE_FRAMES = 96, DROP_FRAMES = 12, STAMP_AT = 40;
+/** The sound each hold station makes while its button is down, and the frames between replays (by station). */
+const HOLD_SOUND = { [MIX]: 'stir', [STOVE]: 'sizzle', [OVEN_S]: 'bake' };
+const HOLD_SOUND_EVERY = { [MIX]: 14, [STOVE]: 18, [OVEN_S]: 24 };
 /** The ORDER UP! stamp's resting row: the wall's clear band between the station signs (104..121) and the props
  *  that stand on the counter (156..200). At its old row 110 it printed straight across the MIX and STOVE signs. */
 const STAMP_Y = 140;
@@ -345,7 +348,7 @@ export class KitchenScreen extends Screen {
 
   /** Advance the current step by the GDD's rules for its station. */
   stepStation(inp: Input): void {
-    const station = this.currentStation(), st = this.st;
+    const station = this.currentStation(), st = this.st, audio = this.game.audio;
     if (station < 0) { this.serve(null); return; }
     const holdStation = station === MIX || station === STOVE || station === OVEN_S;
     const s = this.actor(inp, station, holdStation);
@@ -357,6 +360,7 @@ export class KitchenScreen extends Screen {
           st.count++; this.pulled = Math.min(this.pullIcons.length, this.pulled + 1); this.pullT = 0;
           s.facing = 1; s.actT = ACT_FRAMES; this.playAnim(s, 'reach', true);
           ringAt(FRIDGE.x + FRIDGE.w / 2, FRIDGE.doorY + 20, 3, 12, UI.cream, 2, 10, false, true);
+          audio.play('fridge');
           if (st.count >= this.segs(FRIDGE_S)) this.completeStep(2, s);
         }
         break;
@@ -364,6 +368,7 @@ export class KitchenScreen extends Screen {
         if (pressed) {
           st.count++; this.tak = 6; s.facing = 1; s.actT = CHOP_ANIM; this.playAnim(s, 'chop', true);
           ringAt(PROP_X[CHOP], ROWS.counterTop - 8, 3, 12, UI.cream, 2, 10, false, true);
+          audio.play('chop');
           if (st.count >= CHOP_HITS) this.completeStep(2, s);
         }
         break;
@@ -376,6 +381,8 @@ export class KitchenScreen extends Screen {
         if (held) {
           st.phase = 1; st.t++; s.facing = 1; s.actT = 2;
           if (station === OVEN_S) this.ovenGlow = 60;
+          // the station's own noise, replayed on a period of its own while the button is down
+          if (st.t % HOLD_SOUND_EVERY[station] === 1) audio.play(HOLD_SOUND[station]);
           if (st.t >= need) this.completeStep(2, s);
         } else st.phase = 0;
         break;
@@ -394,8 +401,8 @@ export class KitchenScreen extends Screen {
     const idx = this.stepIdx, station = this.steps[idx];
     this.scores[idx] = score; this.total += score;
     const px = PROP_X[station], py = ROWS.counterTop - 40;
-    if (score === 2) { floatText(px, py, PERFECT, UI.cream, 1, true); burstSparkle(px, py + 10, 5, UI.cream, true); }
-    else floatText(px, py, DONE, UI.cream, 1, true);
+    if (score === 2) { floatText(px, py, PERFECT, UI.cream, 1, true); burstSparkle(px, py + 10, 5, UI.cream, true); this.game.audio.play('perfect'); }
+    else { floatText(px, py, DONE, UI.cream, 1, true); this.game.audio.play('done'); }
     this.stepIdx++;
     this.st.phase = 0; this.st.t = 0; this.st.count = 0;
     this.setHint();
@@ -409,6 +416,7 @@ export class KitchenScreen extends Screen {
       this.playAnim(b, 'eat', true);
       burstCrumbs(b.x + b.facing * 8, ROWS.feet - 40, ROWS.feet, this.hexes[0], 6, true);
       floatText(b.x, ROWS.feet - 70, NOM, UI.cream, 1, true);
+      this.game.audio.play('nom', { delay: 0.25 });
     }
     void s;
   }
@@ -420,6 +428,8 @@ export class KitchenScreen extends Screen {
     const n = Math.max(1, this.steps.length);
     this.stars = Math.max(1, Math.min(3, R(this.total / (2 * n) * 3)));
     ringAt(BELL.x + BELL.w / 2, BELL.y + 4, 4, 22, UI.cream, 2, 16, false, true);
+    this.game.audio.play('bell');
+    this.game.audio.play('stamp', { delay: STAMP_AT / 60 });
     void s;
   }
 
