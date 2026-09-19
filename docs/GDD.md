@@ -57,6 +57,13 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   a different supply landmark (never home) and each customer ordering one of the day's recipes — the menu is dealt
   round so every recipe is ordered at least once. The plan is drawn from its own seeded stream, so every online
   peer lays the same day out from the START packet, and it never touches the gameplay rng.
+- **Order twists** (`run.ts TWISTS`). One customer in four wants their dish a little different, and the twist is on
+  the board, in the bubble at the hatch and in the kitchen: **EXTRA CRUNCHY** (the CHOP step takes 15 taps instead
+  of 10; only a dish that chops), **A BIG ONE** (one more of every ingredient, on the order and so on the shopping
+  list), or **WITH MINT / CHIVES / ROSEMARY ON TOP** (one sprig of that herb added to the order, which is what sends
+  the truck to Thyme Terrace on a day nobody ordered a herb dish). The board prints the twist after the dish
+  (`COLESLAW, CRUNCHY`, `STRAWBERRY TART +MINT`). A dev-jump day (`?order=`, `?recipes=`) never carries a twist:
+  those promise a known dish and a known list.
 - **The day board** (`stage`) pins the plan up before the truck opens: the three lines and the **shopping list**
   — every ingredient of every order in every line, summed. Confirm opens the truck.
 - **A recipe** (`ORDERS`) names a dish, a phone line, 2–3 ingredients with amounts, and the kitchen steps in order.
@@ -217,8 +224,10 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   canopies are painted per fruit (a pear tree taller and narrower, a peach tree rounder with a pink-tinged leaf,
   an avocado tree one big dark glossy canopy), the fruit hangs on its branch in that canopy in its own colour before
   it lets go, and the fall has the fruit's own feel from a per-fruit table (a pear sways less, a peach drifts
-  wider, an avocado drops heavier and straighter) — every speed still inside the basket's catch window, every
-  number still drawn from `rng`. The wormy one and the bomb play on every visit: a wormy pear is a bruised pear with
+  wider, an avocado drops heavier and straighter, a cherry is light and drifts, a plum drops like an avocado) — every
+  speed still inside the basket's catch window, every number still drawn from `rng`. Cherries fall **two on one
+  stem** (the glyph is the pair): catching one is +2 while the list still wants two or more, and +1 for the last,
+  so a catch never counts past the target. The wormy one and the bomb play on every visit: a wormy pear is a bruised pear with
   the same grub, and a pear with a fuse goes off exactly as an apple does.
 - **Pond — FISH** (*tap*). Fixed standing spots on a jetty, one float column per seat. `action` casts; the float
   bobs; after a seeded 60–150 frames the fish bites (the float drops, a mint ring) and stays on. Tapping `action`
@@ -316,7 +325,7 @@ cooked out of thin air - and the recipe card shows them with checks. Interaction
 | Station | Verb | Rule |
 |---|---|---|
 | FRIDGE | tap | one `action` press per item the order wants (four apples and two eggs is six taps), any rhythm; each tap swings the door open and the next ingredient, in the order's own order, flies along the counter into the station that uses it next (onto the board for a recipe that chops, else into the bowl). Nothing to choose: the fridge holds exactly the order |
-| CHOP | tap | ten `action` presses, any rhythm; the pips on the card light one per chop |
+| CHOP | tap | ten `action` presses, any rhythm (fifteen on an EXTRA CRUNCHY order, `order.chops`); the pips on the card light one per chop |
 | MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it |
 | STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way |
 | OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way |
@@ -337,7 +346,10 @@ for a landing, and nothing about it is simulated (`kitchen.ts` flights are cosme
 Nothing can burn or be missed: every completed step scores its full 2, so stars = round(total / max × 3) is always
 3 for a served dish (minimum 1 by the formula).
 The hungry one, when seated, gets a `bite` beat on a seeded 1-in-6 chance each time a step completes: a crumb burst
-and a laugh, no score change.
+and a laugh, no score change. The room has two beats of its own on the same odds, for the crew who are not Barley:
+when a STOVE step completes the pot lid may rattle and lift on its own for 40 frames with steam getting out under
+it, and when an OVEN step completes a cloud of flour may puff out of the door, POOF!. Neither scores; the roll is
+made either way so every peer draws the same day.
 
 ## 7. Results
 

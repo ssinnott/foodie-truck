@@ -21,10 +21,10 @@ whole game stands on**:
 
 ## A. A joke for every mini-game
 
-> **Done.** Every row below shipped (`docs/GDD.md` section 5 has the table as built). Two things changed on the
-> way: the cove's pinch is for a crab grabbed while it is still *running* - the sparkle already says pounce on a
-> stopped one, so the joke is the greedy grab - and the dairy's tail is a count of squirts across pails, not
-> inside one. The kitchen's two extra beats at the foot of this section are not built.
+> **Done.** Every row below shipped, the kitchen's two extra beats included (`docs/GDD.md` sections 5 and 6).
+> Two things changed on the way: the cove's pinch is for a crab grabbed while it is still *running* - the sparkle
+> already says pounce on a stopped one, so the joke is the greedy grab - and the dairy's tail is a count of
+> squirts across pails, not inside one.
 
 The orchard's wormy apple and its bomb (`screens/orchard.ts`, `boomT` on the seat) are the pattern: a seeded
 chance on the thing you were going to catch anyway, a short held animation on that seat, a sound, and then carry
@@ -122,8 +122,7 @@ Each customer line and a new customer assignment are needed per row; the three d
 
 > **Done.** All eight shipped with eleven recipes between them (`docs/GDD.md` section 3). Cheese rides the
 > butter's own milk-then-churn code with the hint reading PRESS; a cockle never moves and the spit of water off
-> its bump is what gives it away; cherries are one catch, one +1 (the two-on-a-stem catch was not worth a second
-> catch rule).
+> its bump is what gives it away; cherries fall two on a stem and a catch is +2 while the list wants two more.
 
 A new ingredient at an existing landmark costs a glyph in `art/food.ts`, a visit look at that landmark (a plant in
 `gardenProps.ts PLANTS`, a canopy in the orchard's backdrop, a bush on the bank, a sack band at the mill), and at
@@ -148,8 +147,7 @@ because the dairy's milk-then-churn structure already exists and cheese opens th
 
 ## E. New landmarks
 
-> **Done.** All three shipped. Every row of this roadmap is now built except the kitchen's two extra beats
-> (section A's foot) and the order twists (section D's Thyme Terrace note).
+> **Done.** All three shipped. Every row of this roadmap is now built.
 
 A landmark is the expensive unit: a `PLACES` row, a lane on the map (`art/backgrounds/map.ts LANES`) and a spot
 kept clear of the tree scatter, a screen, a backdrop and a props file, a HOW TO PLAY card, three or four SFX, a
@@ -190,8 +188,8 @@ the wheat, river and lane tables go; the map's tree scatter (`nearLandmark`) wil
 
 ### Thyme Terrace — SNIP (*move + tap*)
 
-> **Built** (`docs/GDD.md` section 5). The order twists that would use herbs as an "extra" are not built; the
-> herbs have four recipes of their own instead.
+> **Built** (`docs/GDD.md` section 5). The herbs have four recipes of their own AND are the order twists' extra:
+> a customer in four wants their dish EXTRA CRUNCHY, A BIG ONE or WITH a herb ON TOP (`docs/GDD.md` section 3).
 
 - **Where:** between home and the orchard, about (680, 440), on a spur off the orchard lane.
 - **Gathers:** mint, chives, rosemary.
