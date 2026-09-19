@@ -84,6 +84,9 @@ const FALL: Readonly<Record<string, Float64Array>> = Object.freeze({
   pear: Float64Array.of(1.5, 2.4, 2, 64),
   peach: Float64Array.of(1.3, 2.2, 5, 70),
   avocado: Float64Array.of(1.8, 2.6, 1, 62),
+  // the third pass: a cherry is light and drifts, a plum drops like an avocado
+  cherry: Float64Array.of(1.2, 2.0, 4, 66),
+  plum: Float64Array.of(1.7, 2.5, 1, 64),
 });
 const F_VY_MIN = 0, F_VY_MAX = 1, F_SWAY = 2, F_ROW = 3;
 /** The fall for an ingredient id; anything the table does not name falls like an apple. */

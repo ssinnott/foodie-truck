@@ -279,7 +279,7 @@ export class DairyScreen extends Screen {
     this.ing = gatherTarget(run, params.place, 'dairy');
     const ing = INGREDIENTS[this.ing] || INGREDIENTS.milk;
     this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
-    this.butter = this.ing === 'butter';
+    this.butter = this.ing === 'butter' || this.ing === 'cheese';   // cheese is milk and then the press, the way butter is milk and then the churn
     const icon = this.icon, hex = this.hex;
     this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
     const need = run ? run.need(this.ing) : null;
@@ -288,7 +288,7 @@ export class DairyScreen extends Screen {
     this.total = 0; this.swishes = 0;
     this.countStr = '0/' + this.target;
     const key = game.input.keyText(0, 'action');
-    this.hint = this.butter ? 'MILK: TAP ' + key + '   THEN CHURN: TAP ' + key + ' OVER AND OVER' : 'MILK: TAP ' + key + ' OVER AND OVER';
+    this.hint = this.butter ? 'MILK: TAP ' + key + (this.ing === 'cheese' ? '   THEN PRESS: TAP ' : '   THEN CHURN: TAP ') + key + ' OVER AND OVER' : 'MILK: TAP ' + key + ' OVER AND OVER';
     this.cardKey = key;
     this.clock = makeClock();
     // the sorted pass's fixed index array: five objects per stall (the cow, its pail, the stool, the churn, the milker)
@@ -554,7 +554,7 @@ export class DairyScreen extends Screen {
     if (h.t >= h.frames) return;
     const k = h.t / h.frames;
     const x = h.x0 + (h.tx - h.x0) * k, y = h.y0 + (h.ty - h.y0) * k - Math.sin(k * Math.PI) * h.lift;
-    if (h.kind === HOP_BUTTER) { drawShadow(ctx, x, h.y0, 16, 0.3, h.y0 - y); drawFood(ctx, 'butter', R(x), R(y), PAT_S, this.hex); return; }
+    if (h.kind === HOP_BUTTER) { drawShadow(ctx, x, h.y0, 16, 0.3, h.y0 - y); drawFood(ctx, this.icon, R(x), R(y), PAT_S, this.hex); return; }
     drawShadow(ctx, x, h.y0, 26, 0.32, h.y0 - y);
     drawPail(ctx, x, y, 1, h.slot, 1);
   }
@@ -567,7 +567,7 @@ export class DairyScreen extends Screen {
     let flying = 0;
     for (let i = 0; i < this.hops.length; i++) { const h = this.hops[i]; if (h.t < h.frames && h.kind !== HOP_POUR) flying++; }
     const n = Math.min(CHURN_X.length, Math.max(0, this.total - flying));
-    for (let i = 0; i < n; i++) { if (this.butter) drawFood(ctx, 'butter', CHURN_X[i], ROWS.rack - PAT_S, PAT_S, this.hex); else drawChurn(ctx, CHURN_X[i], ROWS.rack); }
+    for (let i = 0; i < n; i++) { if (this.butter) drawFood(ctx, this.icon, CHURN_X[i], ROWS.rack - PAT_S, PAT_S, this.hex); else drawChurn(ctx, CHURN_X[i], ROWS.rack); }
   }
 
   /**

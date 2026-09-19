@@ -210,6 +210,66 @@ export const FOOD = {
     ball(ctx, cx, cy - s * 0.35, s * 0.55, hex, false);
     ctx.fillStyle = INK; ctx.fillRect(R(cx - 1), R(cy - s * 0.5), 2, 2);   // the crown on the top one
   },
+  // ---- the third pass (docs/CONTENT_ROADMAP.md section D) ----
+  /** Cherries: two on one stem, the stems meeting above. */
+  cherry(ctx, cx, cy, s, hex = '#C0273A') {
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(R(cx - s * 0.45), R(cy + s * 0.2)); ctx.lineTo(R(cx), R(cy - s)); ctx.lineTo(R(cx + s * 0.5), R(cy + s * 0.25)); ctx.stroke();
+    ball(ctx, cx - s * 0.45, cy + s * 0.45, s * 0.5, hex); ball(ctx, cx + s * 0.5, cy + s * 0.5, s * 0.5, hex);
+    ctx.fillStyle = '#5FA652'; ctx.fillRect(R(cx), R(cy - s), R(s * 0.45), 2);   // the leaf at the join
+  },
+  /** A plum: a dark round with a crease down it and the bloom's shine. */
+  plum(ctx, cx, cy, s, hex = '#6B3A7A') {
+    ball(ctx, cx, cy + s * 0.05, s * 0.9, hex);
+    ctx.fillStyle = foodTones(hex).sh; ctx.fillRect(R(cx - 1), R(cy - s * 0.6), 2, R(s * 0.9));
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - 1), R(cy - s * 1.0), 2, R(s * 0.3));
+  },
+  /** A wedge of cheese, the holes inked. */
+  cheese(ctx, cx, cy, s, hex = '#F0C860') {
+    const t = foodTones(hex);
+    ctx.beginPath(); ctx.moveTo(cx - s, cy + s * 0.6); ctx.lineTo(cx + s, cy + s * 0.6); ctx.lineTo(cx + s, cy - s * 0.2); ctx.lineTo(cx - s * 0.2, cy - s * 0.8); ctx.closePath();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = t.base; ctx.fill();
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s) + 1, R(cy + s * 0.25), R(s * 2) - 2, R(s * 0.35));
+    if (s >= 4) { ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.4), R(cy - s * 0.1), 2, 2); ctx.fillRect(R(cx + s * 0.3), R(cy + s * 0.05), 2, 2); ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.1), R(cy - s * 0.55), 2, 2); }
+  },
+  /** Oats: the mill's sack with a plain jute band round it. */
+  oats(ctx, cx, cy, s, hex = '#D9C39A') {
+    FOOD.sack(ctx, cx, cy, s, hex);
+    ctx.fillStyle = foodTones(hex).sh; ctx.fillRect(R(cx - s * 0.7), R(cy + s * 0.05), R(s * 1.4), 2);
+  },
+  /** A tomato: a red round with a green calyx star on top. */
+  tomato(ctx, cx, cy, s, hex = '#D8402E') {
+    ball(ctx, cx, cy + s * 0.1, s * 0.9, hex);
+    ctx.fillStyle = '#5FA652'; ctx.fillRect(R(cx - s * 0.5), R(cy - s * 0.75), R(s), 2); ctx.fillRect(R(cx - 1), R(cy - s * 1.05), 2, R(s * 0.5));
+  },
+  /** A pea pod: a curved green pod, its peas showing as inked rounds along it. */
+  pea(ctx, cx, cy, s, hex = '#7CB342') {
+    const t = foodTones(hex);
+    ctx.beginPath(); ctx.ellipse(cx, cy, s * 1.05, s * 0.5, -0.3, 0, Math.PI * 2);
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = t.base; ctx.fill();
+    ctx.save(); ctx.clip(); ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 1.1), R(cy + s * 0.15), R(s * 2.2), R(s)); ctx.restore();
+    ctx.fillStyle = t.hi;
+    for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.arc(cx + i * s * 0.5, cy - i * s * 0.15, s * 0.22, 0, Math.PI * 2); ctx.fill(); }
+  },
+  /** A raspberry: a rounder strawberry made of drupelets, the highlight on three of them. */
+  raspberry(ctx, cx, cy, s, hex = '#C4325F') {
+    const t = foodTones(hex);
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.85, cy - s * 0.3); ctx.quadraticCurveTo(cx - s * 0.9, cy + s * 0.6, cx, cy + s * 0.95);
+    ctx.quadraticCurveTo(cx + s * 0.9, cy + s * 0.6, cx + s * 0.85, cy - s * 0.3); ctx.quadraticCurveTo(cx, cy - s * 0.7, cx - s * 0.85, cy - s * 0.3); ctx.closePath();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = t.base; ctx.fill();
+    ctx.save(); ctx.clip(); ctx.fillStyle = t.sh; ctx.fillRect(R(cx + s * 0.2), R(cy - s), R(s), R(s * 2)); ctx.restore();
+    if (s >= 4) { ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.45), R(cy - s * 0.1), 2, 2); ctx.fillRect(R(cx + s * 0.05), R(cy + s * 0.3), 2, 2); ctx.fillRect(R(cx - s * 0.1), R(cy - s * 0.4), 2, 2); }
+    ctx.fillStyle = '#5FA652'; ctx.fillRect(R(cx - s * 0.5), R(cy - s * 0.7), R(s), R(s * 0.3));
+  },
+  /** A cockle: a ribbed fan of shell, its hinge at the bottom. */
+  cockle(ctx, cx, cy, s, hex = '#E0C9A6') {
+    const t = foodTones(hex);
+    ctx.beginPath(); ctx.moveTo(cx, cy + s * 0.7); ctx.arc(cx, cy + s * 0.2, s * 0.95, Math.PI * 1.15, Math.PI * 1.85); ctx.closePath();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = t.base; ctx.fill();
+    ctx.strokeStyle = t.sh; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, cy + s * 0.6); ctx.lineTo(cx - s * 0.5, cy - s * 0.45); ctx.moveTo(cx, cy + s * 0.6); ctx.lineTo(cx, cy - s * 0.7); ctx.moveTo(cx, cy + s * 0.6); ctx.lineTo(cx + s * 0.5, cy - s * 0.45); ctx.stroke();
+    if (s >= 4) { ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.3), R(cy - s * 0.35), 2, 2); }
+  },
 };
 
 /** Draw an ingredient by icon id; unknown ids get a plain ball. */

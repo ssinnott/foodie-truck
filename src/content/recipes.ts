@@ -40,6 +40,17 @@ export const INGREDIENTS = Object.freeze({
   // Bramble Bank, the berry beds on the south lane
   strawberry: { name: 'STRAWBERRIES', place: 'bramble', hex: '#E8405A', icon: 'strawberry' },
   blueberry: { name: 'BLUEBERRIES', place: 'bramble', hex: '#4A5BA8', icon: 'blueberry' },
+  // The third pass (docs/CONTENT_ROADMAP.md section D): more things where the truck already goes. Two more orchard
+  // trees; cheese, which is milk and then the press the way butter is milk and then the churn; oats, the mill's
+  // third sack; two more rows at the farm; a third berry on the bank; and, at last, cockles at Cockle Cove.
+  cherry: { name: 'CHERRIES', place: 'orchard', hex: '#C0273A', icon: 'cherry' },
+  plum: { name: 'PLUMS', place: 'orchard', hex: '#6B3A7A', icon: 'plum' },
+  cheese: { name: 'CHEESE', place: 'dairy', hex: '#F0C860', icon: 'cheese' },
+  oats: { name: 'OATS', place: 'mill', hex: '#D9C39A', icon: 'oats' },
+  tomato: { name: 'TOMATOES', place: 'garden', hex: '#D8402E', icon: 'tomato' },
+  pea: { name: 'PEAS', place: 'garden', hex: '#7CB342', icon: 'pea' },
+  raspberry: { name: 'RASPBERRIES', place: 'bramble', hex: '#C4325F', icon: 'raspberry' },
+  cockle: { name: 'COCKLES', place: 'shore', hex: '#E0C9A6', icon: 'cockle' },
 });
 
 /** Every ingredient id a landmark supplies, in INGREDIENTS order (the first is the landmark's fallback). */
@@ -149,4 +160,27 @@ export const ORDERS = Object.freeze([
     needs: [{ id: 'beetroot', amount: 2 }, { id: 'flour', amount: 2 }, { id: 'egg', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
   { id: 'honeyToffee', dish: 'HONEY TOFFEE', customer: 'otter', line: 'HONEY TOFFEE! A BAG TO TAKE HOME!',
     needs: [{ id: 'butter', amount: 2 }, { id: 'honey', amount: 2 }, { id: 'salt', amount: 1 }], steps: ['fridge', 'mix', 'stove', 'plate'] },
+  // The fourth menu: the eight ingredients of the third pass, each with the recipe or two that sends the truck for it.
+  { id: 'cherryPie', dish: 'CHERRY PIE', customer: 'owl', line: 'A CHERRY PIE. MIND THE STONES.',
+    needs: [{ id: 'cherry', amount: 3 }, { id: 'flour', amount: 2 }, { id: 'egg', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
+  { id: 'clafoutis', dish: 'CHERRY CLAFOUTIS', customer: 'goat', line: 'A CLAFOUTIS. IT IS FRENCH. IT IS CHERRIES.',
+    needs: [{ id: 'cherry', amount: 3 }, { id: 'milk', amount: 2 }, { id: 'egg', amount: 1 }], steps: ['fridge', 'mix', 'oven', 'plate'] },
+  { id: 'plumCrumble', dish: 'PLUM CRUMBLE', customer: 'otter', line: 'PLUM CRUMBLE! THE PURPLE ONE!',
+    needs: [{ id: 'plum', amount: 3 }, { id: 'flour', amount: 2 }, { id: 'butter', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
+  { id: 'cheeseToastie', dish: 'CHEESE TOASTIE', customer: 'otter', line: 'CHEESE TOASTIE! STRINGY!',
+    needs: [{ id: 'cheese', amount: 2 }, { id: 'flour', amount: 2 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
+  { id: 'macAndCheese', dish: 'MAC AND CHEESE', customer: 'owl', line: 'MACARONI CHEESE. A CRUST ON TOP.',
+    needs: [{ id: 'cheese', amount: 2 }, { id: 'flour', amount: 2 }, { id: 'milk', amount: 1 }], steps: ['fridge', 'mix', 'stove', 'oven', 'plate'] },
+  { id: 'porridge', dish: 'PORRIDGE', customer: 'goat', line: 'PORRIDGE. NOT TOO HOT, NOT TOO COLD.',
+    needs: [{ id: 'oats', amount: 3 }, { id: 'milk', amount: 2 }, { id: 'honey', amount: 1 }], steps: ['fridge', 'mix', 'stove', 'plate'] },
+  { id: 'flapjacks', dish: 'FLAPJACKS', customer: 'otter', line: 'FLAPJACKS! THE CHEWY KIND!',
+    needs: [{ id: 'oats', amount: 3 }, { id: 'butter', amount: 1 }, { id: 'honey', amount: 1 }], steps: ['fridge', 'mix', 'oven', 'plate'] },
+  { id: 'tomatoSoup', dish: 'TOMATO SOUP', customer: 'owl', line: 'TOMATO SOUP. WITH A ROLL TO DIP.',
+    needs: [{ id: 'tomato', amount: 3 }, { id: 'onion', amount: 1 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
+  { id: 'peaSoup', dish: 'PEA SOUP', customer: 'goat', line: 'PEA SOUP. THE BRIGHT GREEN SORT.',
+    needs: [{ id: 'pea', amount: 3 }, { id: 'potato', amount: 1 }, { id: 'milk', amount: 1 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
+  { id: 'jamTarts', dish: 'RASPBERRY JAM TARTS', customer: 'owl', line: 'JAM TARTS. RASPBERRY. A PLATE OF THEM.',
+    needs: [{ id: 'raspberry', amount: 3 }, { id: 'flour', amount: 2 }, { id: 'butter', amount: 1 }], steps: ['fridge', 'mix', 'stove', 'oven', 'plate'] },
+  { id: 'cockleStew', dish: 'COCKLE STEW', customer: 'otter', line: 'COCKLE STEW! FROM THE COVE! IN A BOWL!',
+    needs: [{ id: 'cockle', amount: 3 }, { id: 'potato', amount: 1 }, { id: 'milk', amount: 1 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
 ]);

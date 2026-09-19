@@ -92,6 +92,18 @@ export function drawWeed(ctx, x, y, dir) {
 }
 
 /**
+ * A cockle in the wet sand: a low bump of darker sand with the ribbed edge of the shell showing, and every so often
+ * (an index hash on `f`) a spit of water out of the top, which is what gives it away.
+ */
+export function drawCockle(ctx, x, y, i, f) {
+  x = R(x); y = R(y);
+  ctx.fillStyle = BEACH.wet; ctx.beginPath(); ctx.ellipse(x, y, 11, 4, 0, 0, TAU); ctx.fill();
+  drawFood(ctx, 'cockle', x, y - 3, 5, INGREDIENTS.cockle.hex);
+  ctx.fillStyle = BEACH.wet; ctx.fillRect(x - 8, y - 1, 16, 3);   // half-buried: the sand over the hinge
+  if ((((f + i * 11) >> 4) & 3) === 0) { ctx.fillStyle = BEACH.wetGloss; ctx.fillRect(x - 1, y - 12, 2, 6); ctx.fillRect(x - 2, y - 14, 1, 2); ctx.fillRect(x + 1, y - 14, 1, 2); }
+}
+
+/**
  * A salt pan: a flat grey rock on the strand with a hollow in its top that the tide filled, crusting white as it
  * dries. `crust` is 0..1 and is what the screen simulates: the pan can be scraped once it is full (the sparkle
  * says so), and a pan still filling shows a wet hollow. Two rocks, by `variant`.

@@ -53,7 +53,38 @@ async function drawEveryKey(page, signature) {
   }, signature);
 }
 
+/**
+ * The third pass's ingredients (docs/CONTENT_ROADMAP.md section D), each fixed onto the menu by its recipe index so
+ * the landmark's visit is FOR it: cherries and plums under their own trees, cheese at the press, oats under the
+ * chutes, tomatoes and peas in the bed, raspberries on the bank, cockles in the sand.
+ */
+const THIRD_PASS = [
+  ['cherry', 'orchard', 'orchard', 40], ['plum', 'orchard', 'orchard', 42], ['cheese', 'dairy', 'dairy', 43], ['oats', 'mill', 'mill', 45],
+  ['tomato', 'garden', 'garden', 47], ['pea', 'garden', 'garden', 48], ['raspberry', 'bramble', 'bramble', 49], ['cockle', 'beach', 'shore', 50],
+];
+
 export const SCENARIOS = {
+  /** newIngredients - every third-pass ingredient opens its landmark's screen as a visit for it, plays 90 frames with the crew working, and draws clean. */
+  async newIngredients(server) {
+    for (const [ing, screen, place, recipe] of THIRD_PASS) {
+      // boot on the map with the recipe fixed, fill every OTHER line of the list (a visit is for the first short
+      // thing the landmark supplies, and onions come before tomatoes), then drive in through the landmark's door
+      await withPage(server, `skipTo=map&critters=0,1&recipes=${recipe}`, async (api, page) => {
+        await api.step(2);
+        await page.evaluate((id) => { for (const n of window.__game.game.run.needs) if (n.id !== id) n.have = n.amount; }, ing);
+        await api.goto(screen, { place });
+        await api.step(2);
+        const s0 = await api.summary();
+        const visit = await page.evaluate(() => window.__game.game.screen.ing);
+        assert(s0.screen === screen && visit === ing, `${ing}: the ${screen} opens as a visit for it (screen ${s0.screen}, ing ${visit})`);
+        await api.hold(0, { right: true, action: true }); await api.step(45); await api.release(0);
+        await api.hold(0, { action: true }); await api.step(45); await api.release(0);
+        await api.shot(`${screen}-${ing}`);
+        const s1 = await api.summary();
+        assert(s1.screen === screen, `${ing}: still on the ${screen} after 90 frames of play`);
+      });
+    }
+  },
   async cast(server) {
     await withPage(server, 'skipTo=gallery', async (api, page) => {
       const cast = await page.evaluate(() => window.__game.critterList().map((c) => c.id));

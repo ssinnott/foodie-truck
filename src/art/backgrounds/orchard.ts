@@ -105,6 +105,11 @@ export const TREES: Readonly<Record<string, TreeStyle>> = Object.freeze({
     spread: 24, spreadJit: 8, sx: 1.1, sy: 0.85, r: 30, rJit: 6, coreDy: 0, coreR: 44, trunk: 12, eaveR: 24, eaveJit: 6, eaveStep: 36 }),
   avocado: Object.freeze({ canopy: '#3A5A48', cap: '#6E9070', capR: 0.72, pitch: 140, pitchJit: 20, cy: 88, cyJit: 10, blobs: 6,
     spread: 26, spreadJit: 12, sx: 1.15, sy: 0.85, r: 36, rJit: 8, coreDy: 4, coreR: 46, trunk: 16, eaveR: 26, eaveJit: 6, eaveStep: 40 }),
+  // the third pass: a cherry tree is small and round with a bright cap; a plum tree carries purple-brown leaves
+  cherry: Object.freeze({ canopy: '#5A7C3E', cap: '#9CB85A', capR: 0.6, pitch: 90, pitchJit: 16, cy: 86, cyJit: 8, blobs: 5,
+    spread: 16, spreadJit: 8, sx: 1, sy: 0.9, r: 24, rJit: 6, coreDy: 4, coreR: 32, trunk: 10, eaveR: 18, eaveJit: 6, eaveStep: 28 }),
+  plum: Object.freeze({ canopy: '#5A4258', cap: '#8A6A86', capR: 0.62, pitch: 110, pitchJit: 18, cy: 86, cyJit: 10, blobs: 5,
+    spread: 22, spreadJit: 10, sx: 1.05, sy: 0.8, r: 30, rJit: 7, coreDy: 4, coreR: 40, trunk: 12, eaveR: 22, eaveJit: 6, eaveStep: 34 }),
 });
 /** The tree for an ingredient id; anything the table does not name (or no ingredient at all) stands in the apple orchard. */
 export function treeFor(ing: string): TreeStyle { return TREES[ing] || TREES.apple; }
@@ -270,7 +275,7 @@ export interface OrchardLayers { far: Layer; mid: Layer; ground: Layer; near: La
 /** The three layers every fruit shares, painted on the first visit of any kind. */
 let shared: { far: Layer; ground: Layer; near: Layer } | null = null;
 /** The pre-rendered set per fruit (TREES keys), painted on the first visit for that fruit and kept for every visit after. */
-const layers: Record<string, OrchardLayers | null> = { apple: null, pear: null, peach: null, avocado: null };
+const layers: Record<string, OrchardLayers | null> = { apple: null, pear: null, peach: null, avocado: null, cherry: null, plum: null };
 
 /**
  * The layers for a visit that gathers `ing`, painted on first use and cached per fruit. Each is blitted by the

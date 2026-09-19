@@ -35,7 +35,7 @@ import { gatherTarget } from '../run.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import type { Point } from '../../lib/art/rigParts.ts';
 import { beachLayers, ROWS, GLINTS, BEACH } from '../../art/backgrounds/beach.ts';
-import { BEACH_ANIMS, drawCrab, drawWeed, drawPan, drawBurrow, drawCatchSpark, drawFlyingCatch } from '../../art/beachProps.ts';
+import { BEACH_ANIMS, drawCrab, drawWeed, drawCockle, drawPan, drawBurrow, drawCatchSpark, drawFlyingCatch } from '../../art/beachProps.ts';
 import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
@@ -121,6 +121,8 @@ const QUARRY: Readonly<Record<string, Quarry>> = Object.freeze({
   crab: { speed: 1.2, dart: 2.8, runMin: 40, runMax: 110, stopMin: 24, stopMax: 60, life: 720, spawnMin: 50, spawnMax: 100, seed: 3, crust: 0, burrows: true },
   seaweed: { speed: 0.3, dart: 0, runMin: 80, runMax: 200, stopMin: 60, stopMax: 140, life: 1500, spawnMin: 60, spawnMax: 120, seed: 3, crust: 0, burrows: false },
   salt: { speed: 0, dart: 0, runMin: 0, runMax: 0, stopMin: 0, stopMax: 0, life: 100000, spawnMin: 70, spawnMax: 130, seed: 2, crust: 90, burrows: false },
+  /** Cockles: they hide, a bump in the wet sand that spits now and then gives one away, and they never move; one shows every 40..80 frames. */
+  cockle: { speed: 0, dart: 0, runMin: 200, runMax: 400, stopMin: 100, stopMax: 200, life: 1800, spawnMin: 40, spawnMax: 80, seed: 3, crust: 0, burrows: false },
 });
 function quarryFor(ing: string): Quarry { return QUARRY[ing] || QUARRY.crab; }
 
@@ -276,7 +278,7 @@ export class BeachScreen extends Screen {
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;
     this.countStr = '0/' + this.target;
-    const verb = this.ing === 'salt' ? 'SCRAPE' : this.ing === 'seaweed' ? 'RAKE' : 'GRAB';
+    const verb = this.ing === 'salt' ? 'SCRAPE' : this.ing === 'seaweed' ? 'RAKE' : this.ing === 'cockle' ? 'DIG' : 'GRAB';
     this.hint = 'MOVE: LEFT/RIGHT   ' + verb + ': ' + game.input.keyText(0, 'action');
     this.cardKey = game.input.keyText(0, 'action');
     this.clock = makeClock();
@@ -585,6 +587,7 @@ export class BeachScreen extends Screen {
       return;
     }
     if (this.ing === 'seaweed') { drawWeed(ctx, x, QUARRY_Y, t.dir); return; }
+    if (this.ing === 'cockle') { drawCockle(ctx, x, QUARRY_Y, i, f); if (((f + i * 7) >> 3) & 1) drawCatchSpark(ctx, x + 10, QUARRY_Y - 18); return; }
     const moving = t.state === RUN;
     drawCrab(ctx, x, QUARRY_Y, t.dir, moving ? (f >> 2) & 1 : 0, moving ? 0 : 1);
     // the mint sparkle over a crab that has stopped: the moment to pounce

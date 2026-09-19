@@ -334,6 +334,69 @@ export const DISHES: Record<string, DishDraw> = {
     }
     flecks(ctx, cx, cy, s, hexOf('salt'), [-0.1, -0.5, 0.1, -0.35]);
   },
+  // ---- the fourth menu (docs/CONTENT_ROADMAP.md section D) ----
+  cherryPie(ctx, cx, cy, s) {
+    pieDish(ctx, cx, cy, s, CRUST, lattice);
+    flecks(ctx, cx, cy, s, hexOf('cherry'), [-0.7, -0.75, 0.05, -1.0, 0.6, -0.7]);
+  },
+  clafoutis(ctx, cx, cy, s) {
+    // a baked custard in its dish, the cherries sunk in it as dark rounds
+    pieDish(ctx, cx, cy, s, BATTER, (c, x, y) => { c.fillStyle = hexOf('cherry'); for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(x - s * 0.6 + i * s * 0.6, y - s * 0.85, s * 0.2, 0, TAU); c.fill(); } });
+  },
+  plumCrumble(ctx, cx, cy, s) {
+    pieDish(ctx, cx, cy, s, BATTER, (c, x, y) => { flecks(c, x, y, s, CRUST_DARK, [-0.8, -0.6, -0.35, -1.0, 0.1, -0.7, 0.5, -1.0, 0.8, -0.55]); });
+    flecks(ctx, cx, cy, s, hexOf('plum'), [-0.15, -0.35, 0.35, -0.3]);
+  },
+  cheeseToastie(ctx, cx, cy, s) {
+    // two slices of toast with the cheese pressed out between them, cut on the diagonal
+    const t = foodTones(TOAST), ch = foodTones(hexOf('cheese'));
+    box(ctx, cx - s * 0.95, cy - s * 0.1, s * 1.9, s * 0.7, t.base);
+    ctx.fillStyle = ch.base; ctx.fillRect(R(cx - s * 0.9), R(cy - s * 0.25), R(s * 1.8), 4); ctx.fillRect(R(cx + s * 0.6), R(cy + s * 0.05), 3, R(s * 0.4));   // the cheese, and a string of it
+    box(ctx, cx - s * 0.95, cy - s * 0.85, s * 1.9, s * 0.65, t.hi);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.7), R(cy - s * 0.75), R(s * 0.4), 2); ctx.fillRect(R(cx + s * 0.2), R(cy - s * 0.6), R(s * 0.5), 2);   // the griddle marks
+  },
+  macAndCheese(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('cheese'), (c, x, y) => {
+      c.strokeStyle = CRUST_DARK; c.lineWidth = 2;
+      for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(x - s * 0.5 + i * s * 0.5, y - s * 0.4, s * 0.16, Math.PI * 0.2, Math.PI * 1.4); c.stroke(); }   // the macaroni
+    });
+  },
+  porridge(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('oats'), (c, x, y) => { c.fillStyle = hexOf('honey'); c.beginPath(); c.arc(x, y - s * 0.4, s * 0.3, 0, TAU); c.fill(); c.fillStyle = CREAM; c.fillRect(R(x - s * 0.7), R(y - s * 0.55), R(s * 0.3), 2); });
+  },
+  flapjacks(ctx, cx, cy, s) {
+    // two golden bars, one leaning on the other, the oats as pale flecks
+    const t = foodTones(CRUST);
+    box(ctx, R(cx - s * 1.2), R(cy - s * 0.4), R(s * 1.3), R(s * 1.0), t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 1.2) + 1, R(cy + s * 0.3), R(s * 1.3) - 2, R(s * 0.25));
+    box(ctx, cx - s * 0.2, cy - s * 0.8, s * 1.2, s * 1.0, t.base);
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.2) + 1, R(cy - s * 0.1), R(s * 1.2) - 2, R(s * 0.25));
+    flecks(ctx, cx, cy, s, hexOf('oats'), [-0.8, 0.1, -0.5, 0.25, 0.05, -0.3, 0.4, -0.2, 0.7, -0.35]);
+  },
+  tomatoSoup(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('tomato'), (c, x, y) => { c.fillStyle = CREAM; c.fillRect(R(x - s * 0.3), R(y - s * 0.55), R(s * 0.6), 2); c.fillRect(R(x - s * 0.1), R(y - s * 0.4), 2, 2); });
+  },
+  peaSoup(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('pea'), (c, x, y) => { flecks(c, x, y, s, CREAM, [-0.45, -0.5, 0.3, -0.45]); c.fillStyle = hexOf('leek'); c.fillRect(R(x - s * 0.1), R(y - s * 0.6), R(s * 0.35), 2); });
+  },
+  jamTarts(ctx, cx, cy, s) {
+    // three little tarts in a row, each a ring of crust round a pool of jam
+    const j = foodTones(hexOf('raspberry'));
+    for (let i = 0; i < 3; i++) {
+      const x = cx - s * 0.75 + i * s * 0.75, y = cy + s * 0.15 - (i & 1) * s * 0.3;
+      oval(ctx, x, y, s * 0.4, s * 0.28, CRUST);
+      ctx.fillStyle = j.base; ctx.beginPath(); ctx.ellipse(x, y - 1, s * 0.24, s * 0.15, 0, 0, TAU); ctx.fill();
+      shine(ctx, x - s * 0.15, y - 3);
+    }
+  },
+  cockleStew(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, CREAM, (c, x, y) => {
+      // the shells standing in the broth: three small fans in the cockle's own hex, inked at the hinge
+      c.fillStyle = hexOf('cockle');
+      for (let i = 0; i < 3; i++) { const sx = x - s * 0.55 + i * s * 0.55, sy = y - s * 0.4 + (i & 1) * s * 0.1; c.beginPath(); c.moveTo(sx, sy + 3); c.arc(sx, sy, s * 0.24, Math.PI * 1.15, Math.PI * 1.85); c.closePath(); c.fill(); }
+      flecks(c, x, y, s, hexOf('potato'), [-0.25, -0.25, 0.4, -0.2]);
+    });
+  },
 };
 
 /**
