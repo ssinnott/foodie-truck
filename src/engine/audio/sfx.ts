@@ -1,7 +1,7 @@
 // Synthesized SFX library (docs/GDD.md section 11). Each entry is `(ctx, dest, when, { v, p }) => endTime`, pure
 // with respect to the context so the same code drives the game and the OfflineAudioContext self-test.
 //
-// The model is the sibling game's engine/audio/sfx.ts; the LIBRARY is this game's. Where that one has factions,
+// The contract (SfxDef) and the primitives are the engine's (src/lib/audio); the LIBRARY is this game's. Where that one has factions,
 // this one has three registers, and every name below sits in one of them:
 //   * PAPER AND WOOD - the menus, the stamps, the signs and the truck: woodblocks, a rubber stamp's thud, a
 //     sign's rope creak. Short, dry, low. Nothing in a menu rings.
@@ -12,24 +12,10 @@
 //     only long ring in the game, because ringing it is the one thing a whole order builds toward.
 // `v` scales volume (already ducked for overlapping plays) and `p` scales pitch, including the +/-4% wobble the
 // JITTERED names get so a mashed button does not sound like a machine.
-import { osc, noise, ring, am, echo, glass } from './synth.ts';
+import { osc, noise, ring, am, echo, glass } from '../../lib/audio/synth.ts';
+import type { SfxOpts, SfxDef } from '../../lib/audio/sfx.ts';
 
-/**
- * What every SFX entry is called with. `v` scales volume and `p` scales pitch; `vol` / `pitch` are the same two
- * numbers under the facade's public names, passed on every play so an entry may read either.
- */
-export interface SfxOpts {
-  v: number;
-  p: number;
-  vol?: number;
-  pitch?: number;
-}
-
-/**
- * One entry of SFX_DEFS: schedules its voices on `ctx` at absolute time `when` and returns the time it ends. Pure
- * with respect to the context, so the same call drives the game and the OfflineAudioContext self-test.
- */
-export type SfxDef = (ctx: BaseAudioContext, dest: AudioNode, when: number, o: SfxOpts) => number;
+export type { SfxOpts, SfxDef };
 
 const N = (m: number): number => 440 * Math.pow(2, (m - 69) / 12); // midi -> Hz
 const C5 = N(72), E5 = N(76);

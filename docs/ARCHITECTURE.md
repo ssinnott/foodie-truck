@@ -60,7 +60,7 @@ src/constants.js         every shared number and UI colour (never hardcode these
 src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, actions (the eight, frozen), bindings (which key/button each one is on), input
                (8-action masks), rng, math, trig, text (5x7 pixel font), audio (the WebAudio facade) +
-               audio/ (synth primitives, the SFX library, the pattern sequencer and the tracks)
+               audio/ (this game's SFX library and its tracks; the primitives and the sequencer are lib/audio/)
 src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (the paper-doll), layers (offscreen
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
                fishing + hens + kitchenProps + dairyProps + millProps + hiveProps + gardenProps (per-scene props),
@@ -157,14 +157,15 @@ export const audio = {
   render(name, seconds, { music }), selfTest(),   // OfflineAudioContext: the same code, measured, for the playtest
 };
 ```
-`audio/synth.ts` is the primitives (`osc`, `noise`, `ring`, `am`, `echo`, `bus`, `glass`), every one pure with
-respect to the context — `(ctx, dest, when, opts)` on any BaseAudioContext — which is what lets `selfTest()` render
-the whole library into buffers and measure them with no speaker and no gesture. `audio/sfx.ts` is the library, one
-`(ctx, dest, when, { v, p }) => endTime` per name. `audio/music.ts` is a step sequencer over TRACK DATA: a key, a
-chord loop, channels with instruments and sixteenth-note patterns (`'r:4 r+7:4'`, `'chord:16'`, absolute notes,
-`K.h.S.h.` drums), compiled once and scheduled 200 ms ahead by a look-ahead timer. Every track is four bars, one
-chord a bar, and every pattern is a whole number of bars (`compileTrack` warns otherwise and the audio playtest
-fails on it).
+The facade itself is the engine's: `engine/audio.ts` is `createAudio(...)` from `lib/audio/facade.ts` over this
+game's SFX table and tracks. `lib/audio/synth.ts` is the primitives (`osc`, `noise`, `ring`, `am`, `echo`, `bus`,
+`glass`), every one pure with respect to the context — `(ctx, dest, when, opts)` on any BaseAudioContext — which is
+what lets `selfTest()` render the whole library into buffers and measure them with no speaker and no gesture.
+`engine/audio/sfx.ts` is this game's library, one `(ctx, dest, when, { v, p }) => endTime` per name.
+`lib/audio/sequencer.ts` is a step sequencer over TRACK DATA (`engine/audio/music.ts`): a key, a chord loop, channels
+with instruments and sixteenth-note patterns (`'r:4 r+7:4'`, `'chord:16'`, absolute notes, `K.h.S.h.` drums),
+compiled once and scheduled 200 ms ahead by a look-ahead timer. Every track is four bars, one chord a bar, and every
+pattern is a whole number of bars (`compileTrack` warns otherwise and the audio playtest fails on it).
 
 WIRING. `Game.push` starts the screen's track from its `SCREEN_MUSIC` table BEFORE `enter()` runs, so a screen
 can override it for one visit (the closed day board plays `closing`); a screen missing from the table leaves the

@@ -13,11 +13,11 @@ Two to four players, every browser running the same simulation at 60Hz, exchangi
 
 | Piece | Module | Notes |
 |---|---|---|
-| Wire format | `src/net/protocol.js` | 8 actions in a uint16; a slot-tagged INPUT packet with 8 frames of redundancy is 23 bytes; START carries `{ seed, scene, delay, critters[] }` |
+| Wire format | `src/net/protocol.js` (framing in `lib/net/protocol.ts`) | 8 actions in a uint16; a slot-tagged INPUT packet with 8 frames of redundancy is 23 bytes; START carries `{ seed, scene, delay, critters[] }` |
 | Frame scheduler | `src/net/lockstep.js` | One ring per seat; delay applied at record time; `resend()` and `tailOf()` while stalled; DROP frames |
-| Desync canary | `src/net/checksum.js` | `runChecksum(game)`: FNV-1a over `rng.state`, `game.frame`, every field of `game.run`, the top screen's id and `checksumFields()` |
+| Desync canary | `src/net/checksum.js` (kernel in `lib/net/checksum.ts`) | `runChecksum(game)`: FNV-1a over `rng.state`, `game.frame`, every field of `game.run`, the top screen's id and `checksumFields()` |
 | Peer link | `src/net/peer.js` | One link of the mesh: an unreliable channel for INPUT/CHECKSUM, a reliable one for everything else |
-| Signalling | `src/net/signal.js` | Room codes over MQTT/WSS, split into a channel per pairing by `createSignalMux`; BroadcastChannel for the tests |
+| Signalling | `src/net/signal.js` (strategies in `lib/net/signal.ts`, bound to `APP_ID`) | Room codes over MQTT/WSS, split into a channel per pairing by `createSignalMux`; BroadcastChannel for the tests |
 | The room | `src/net/roster.js` | Seats, picks, the mesh of links, announcements, latency measurement |
 | The session | `src/net/session.js` | The state machine, the START boundary, drops, the per-frame pump, `installNetHooks` |
 | Tests | `tools/nettest.js`, `tools/scenarios/netplay.js` | Pure-Node suites; two-page and four-page real-WebRTC matches |
