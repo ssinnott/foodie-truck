@@ -254,6 +254,10 @@ Bindable on a pad: all sixteen standard buttons, the shoulders and triggers incl
 nothing by default). NOT bindable: the left stick, which is always the four directions — a stick that could be
 mapped onto CANCEL is a player leaving a mini-game by leaning.
 
+Outside the table: **M mutes** for the session (not saved — a game that comes back silent is a game that looks
+broken). It is not an action, so it is not on the wire and not on the CONTROLS form, and it stands down when a
+player has bound M to something, while a rebind is listening, and while a host key is being typed.
+
 ## 10. Screens — what each must do
 
 - **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`.
@@ -280,3 +284,52 @@ mapped onto CANCEL is a player leaving a mini-game by leaning.
   as above. Every one exposes `summary()` and `checksumFields()` and reads input only by seat.
 - **pause**: transparent overlay (RESUME / QUIT TO TITLE); refused while `game.net.active`.
 - **gallery**: the cast contact sheet in game.
+
+## 11. Sound and music
+
+Everything is synthesized in the browser at play time (docs/ARCHITECTURE.md section 3): no audio file, ever. Sound
+comes on with the first key or tap, because browsers will not start audio before one.
+
+**Three registers of SFX**, and every sound sits in one of them:
+
+- **Paper and wood** — the menus, the stamps, the signs and the truck. Woodblock knocks for the cursor
+  (`menu_move`, `menu_confirm` up a third, `menu_back` down one), a felt `stamp` for READY / SERVED / ORDER UP and
+  the star stamp, a rope creak and a knock for every wooden sign (`sign_drop`: the map's and the mini-games'), the
+  truck's own voice (`truck_start` on OPEN THE TRUCK — the starter, the engine catching, a honk for the road —
+  `honk` on ALT, `truck_stop` on pulling up, `splash` for a nose in the river), `pause` / `unpause`, `join` for a
+  seat sitting down, `type` for a letter of a host key, `rebind_ok` / `rebind_refused`. Short, dry, low. Nothing in
+  a menu rings.
+- **The gather** — the mini-games. Each catch is a soft BODY followed by ONE PIP (a clean sine and its octave), so
+  the +1 the eye reads is the +1 the ear hears whatever the ingredient: the orchard's basket (`catch`), the coop's
+  shell on straw (`egg`), the dairy's tin `pail` on the rack, the mill's sack tied off (`tie`), the hive's glass
+  `jar`, the garden's `root` popping out, the pond's `hook`. Around the pips, each game's own texture: `wormy`
+  (a rubber boing, no pip), `fuse` and a soft `boom`, `splat` for an apple on the grass; `cast`, `bite`, the reel's
+  ratchet (`reel`), the trout in the `bucket`; `squirt` per press; `pour` while the chute runs; `dip`; `grip` and
+  `heave`. The round ends on the sign's knock and a four-note `round_over`.
+- **The kitchen** — the stations. `fridge` per item out, the knife's `chop`, and the three holds each with a noise
+  that replays while the button is down (`stir`, `sizzle`, `bake`); `done` for a step, `perfect` with a sparkle on
+  it; `nom` for the hungry one; and the `bell`, the one long ring in the game, because ringing it is the one thing a
+  whole order builds toward. At the results: `chew` per bite, `stamp`, `coin` as the tip lands, `cheer` from the
+  crew; `hello` when a diner steps up to the hatch; `day_done` over the closed board.
+
+Sounds played on the same frame duck each other (four seats catching at once is one catch's loudness), and the
+percussive names get a few percent of pitch wobble so a mashed button does not sound like a machine.
+
+**Nine tracks**, one per place the day goes, every one four bars, major-key and mid-tempo, and every one carrying
+the truck's own motif — the rising sixth 1-3-5-6 — somewhere. Which screen plays which is one table
+(`game/game.ts SCREEN_MUSIC`), started the moment the screen is pushed and crossfaded over half a second:
+
+| Track | Where | What it is |
+|---|---|---|
+| `title` | title, select, lobby, controls, gallery | The parked truck at dusk: a music box over a squeezebox, unhurried. G, 96. |
+| `board` | stage (open) | The day's plan on paper: a whistle reading it out over an organ. C, 84. |
+| `drive` | map | The lane: an oompah squeezebox under a whistle, the wheels in the shaker. D, 128. |
+| `gather` | orchard, coop, dairy, mill, hive, garden | Marimba over a plucked bass, a woodblock keeping the forty seconds. F, 120. |
+| `pond` | pond | Water waltzes: a flute over a pad, in 3. A, 88. |
+| `line` | line | The queue at dusk: the title's squeezebox with a plucked tune over it, swung. G, 92. |
+| `kitchen` | kitchen | The order on the pass: a harpsichord running over organ stabs, the clock in the drums. C, 140. |
+| `results` | results | The customer eats: bells over brass, the motif three times and a bow. D, 112. |
+| `closing` | stage (closed) | The truck shut for the night: the title tune slowed to a lullaby over a drone. G, 72. |
+
+The pause overlay leaves its scene's track playing. Adding a track is adding data to `engine/audio/music.ts` and a
+row to the table; the audio playtest renders every track it finds and fails on a silent one or a ragged bar.

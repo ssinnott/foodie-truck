@@ -25,8 +25,9 @@ the field mouse (the chef), **Chicory** the brown hare (the driver) and **Cress*
 the one human who owns the truck and runs them: **Rowan**, the head chef. All five are playable.
 
 The whole game is vanilla JavaScript ES modules and one HTML5 canvas at 640×360, scaled up with nearest-neighbour
-filtering. There are no image, audio or font files: every sprite, backdrop, glyph and particle is drawn from code
-so the repository stays reviewable in a diff.
+filtering. There are no image, audio or font files: every sprite, backdrop, glyph and particle is drawn from code,
+and every sound and every tune is synthesized in the browser (WebAudio oscillators and noise, nine looping tracks
+and forty-odd effects, all data in `src/engine/audio/`), so the repository stays reviewable in a diff.
 
 ## The three parts
 
@@ -70,6 +71,9 @@ which is the way back in if you ever bind yourself into a corner.
 The shoulders and triggers are bindable too — they do nothing by default, so `LB` / `RB` are there if you want the
 dairy's two-handed milking on two hands. The left stick is always the four directions and is not bindable.
 
+**Sound** comes on with the first key or tap (the browser's rule, not ours). `M` mutes and unmutes for the session;
+it stands down if you have bound M to an action, or while you are typing a host key.
+
 Any screen can be opened directly for a look: `index.html?debug=1&skipTo=orchard&critters=0,1,2,3&seed=7`. Add
 `&order=4` to force a recipe onto the day's menu (and into the first customer's paws), or `&recipes=0,2` to fix the
 whole menu. The title's CREW row opens the gallery, a contact sheet of every critter and animation.
@@ -100,6 +104,7 @@ npm run art-check    # data-tier art invariants (palettes, player-colour contras
 npm run nettest      # pure-node protocol, lockstep and trig tests
 npm run playtest     # headless Playwright: boots every screen, walks the flow, holds a netplay room
 npm run playtest playthrough   # one scenario: the whole day from the title screen to the first line served
+npm run playtest audio         # every sound and track rendered offline and measured, and the screens' tracks
 npm run capture -- tools/screens map "kitchen:critters=0,1,2,3"   # screenshots of any screen at 2x
 node tools/sheet-capture.js tools/screens critter=barley          # critter contact sheets
 npm run build        # single-file dist/index.html

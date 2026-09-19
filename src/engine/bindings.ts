@@ -97,6 +97,11 @@ function keyOwner(code) {
   for (let s = 0; s < keys.length; s++) for (const a of ACTIONS) if (keys[s][a].indexOf(code) >= 0) return { slot: s, action: a };
   return null;
 }
+/**
+ * Is a keyboard code bound to ANY seat's action? main.ts asks before it reads a global key (M mutes): a player who
+ * has put M on their CANCEL is pressing CANCEL, and the game must not also go quiet on them.
+ */
+export function isKeyBound(code) { return keyOwner(code) !== null; }
 /** The action a pad button is currently bound to, or null. */
 function padOwner(button) {
   for (const a of ACTIONS) if (pad[a].indexOf(button) >= 0) return a;

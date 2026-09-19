@@ -69,17 +69,18 @@ export class PauseScreen extends Screen {
       below.enter({});
     }
     this.hint = `${g.input.keyText(0, 'action')}: CHOOSE    ${g.input.keyText(0, 'cancel')}: RESUME`;
+    g.audio.play('pause');
   }
 
   override update(): void {
     super.update();
     const inp = this.game.input;
-    const dy = navY(inp);
-    if (dy) this.sel = (this.sel + dy + ROWS.length) % ROWS.length;
-    if (cancelPressed(inp) >= 0) { this.game.pop(); return; }
+    const dy = navY(inp), audio = this.game.audio;
+    if (dy) { this.sel = (this.sel + dy + ROWS.length) % ROWS.length; audio.play('menu_move'); }
+    if (cancelPressed(inp) >= 0) { audio.play('unpause'); this.game.pop(); return; }
     if (confirmPressed(inp) >= 0) {
-      if (this.sel === 0) this.game.pop();
-      else this.game.reset('title');
+      if (this.sel === 0) { audio.play('unpause'); this.game.pop(); }
+      else { audio.play('menu_confirm'); this.game.reset('title'); }
     }
   }
 

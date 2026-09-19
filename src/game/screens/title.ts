@@ -167,8 +167,8 @@ export class TitleScreen extends Screen {
     super.update();
     const inp = this.game.input;
     const dy = navY(inp);
-    if (dy) this.sel = (this.sel + dy + ROWS.length) % ROWS.length;
-    if (confirmPressed(inp) >= 0) this.choose();
+    if (dy) { this.sel = (this.sel + dy + ROWS.length) % ROWS.length; this.game.audio.play('menu_move'); }
+    if (confirmPressed(inp) >= 0) { this.game.audio.play('menu_confirm'); this.choose(); }
     for (const s of this.crew) this.tickSeat(s);
   }
 

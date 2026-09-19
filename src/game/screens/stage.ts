@@ -219,6 +219,9 @@ export class StageScreen extends Screen {
       ? `${game.input.keyText(0, 'action')}: TITLE`
       : `${game.input.keyText(0, 'action')}: OPEN THE TRUCK    ${game.input.keyText(0, 'cancel')}: BACK`;
     this.portOpts = { bg: PLUM.shadow, fill: 0.6, facing: 1 };
+    // the SERVED stamp lands as its slam finishes; at closing time the night's little bell follows it
+    if (this.justServed >= 0) game.audio.play('stamp', { delay: STAMP_FRAMES / 60 });
+    if (this.closed) { game.audio.music.play('closing'); game.audio.play('day_done', { delay: (STAMP_FRAMES + 20) / 60 }); }
   }
 
   override update(): void {
@@ -228,18 +231,19 @@ export class StageScreen extends Screen {
     if (this.stampT < STAMP_FRAMES) this.stampT++;
     // the night is over: the only thing left on the board is the way out
     if (this.closed) {
-      if (confirmPressed(inp) >= 0) this.quit();
+      if (confirmPressed(inp) >= 0) { game.audio.play('menu_confirm'); this.quit(); }
       return;
     }
     if (this.chosen) return;                            // the truck is opening, the fade is running
     if (confirmPressed(inp) >= 0) {
       this.chosen = 1;
+      game.audio.play('truck_start');
       game.fadeTo(() => game.replace('map'));
       return;
     }
     // Backing out to the title is a LOCAL way out: online it would drop one peer out of a live room and stall
     // the rest, which is why the pause overlay is refused there too (docs/ARCHITECTURE.md section 5).
-    if (cancelPressed(inp) >= 0 && !(game.net && game.net.active)) game.reset('title');
+    if (cancelPressed(inp) >= 0 && !(game.net && game.net.active)) { game.audio.play('menu_back'); game.reset('title'); }
   }
 
   /** Closing time, confirmed: leave the room if there is one, then back to the front door. */

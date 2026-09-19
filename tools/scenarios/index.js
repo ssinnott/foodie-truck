@@ -16,5 +16,6 @@ import { SCENARIOS as pads } from './pads.js';
 import { SCENARIOS as controls } from './controls.js';
 import { SCENARIOS as stage } from './stage.js';
 import { SCENARIOS as playthrough } from './playthrough.js';
+import { SCENARIOS as audio } from './audio.js';
 
-export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...kitchen, ...ui, ...pads, ...controls, ...stage, ...playthrough };
+export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...kitchen, ...ui, ...pads, ...controls, ...stage, ...playthrough, ...audio };
