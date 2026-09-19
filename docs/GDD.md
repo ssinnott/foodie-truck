@@ -60,12 +60,16 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **The day board** (`stage`) pins the plan up before the truck opens: the three lines and the **shopping list**
   — every ingredient of every order in every line, summed. Confirm opens the truck.
 - **A recipe** (`ORDERS`) names a dish, a phone line, 2–3 ingredients with amounts, and the kitchen steps in order.
-  Twenty-two ship. The first seven — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup,
+  Forty ship. The first seven — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup,
   griddle cakes — ask for the first seven ingredients (apples, trout, eggs, milk, flour, honey, carrots); the
   fifteen after them each carry one of the sixteen newer ones — pears, peaches, avocados, butter, rice, potatoes,
   onions, leeks, beetroot, pumpkins, cabbages, crabs, seaweed, sea salt, strawberries, blueberries — so every
-  ingredient is somewhere a day can send the truck. Recipes are only ever appended, because `?order=N` and the
-  scenarios name them by index.
+  ingredient is somewhere a day can send the truck; and the eighteen after those (honey cakes, trout pie, fish and
+  chips, carrot cake, strawberry milkshake, coleslaw, baked apples, pears in honey, crab chowder, pumpkin pie, leek
+  and potato soup, egg fried rice, blueberry pancakes, avocado and crab salad, seaweed crisps, onion tart, beetroot
+  brownies, honey toffee) give every ingredient a second dish, so no landmark is a rare visit. Three of them never
+  touch the stove or the oven and baked apples is two steps long: the kitchen's variety is which stations a recipe
+  skips. Recipes are only ever appended, because `?order=N` and the scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
   orchard drops pears, peaches and avocados as well as apples; the farm pulls six vegetables besides the
   carrot; the dairy's pails go on through the churn to butter; the mill's chutes fill rice sacks. A mini-game gathers whichever of
