@@ -517,4 +517,15 @@ export const GARDEN_ANIMS = Object.freeze({
     F(6, { armR: [92, 24], armL: [74, 30], weapon: 90, torso: -10, head: -4, legR: [20, 16], legL: [-20, 24], root: [-2, 2], squash: 1.05, face: 'happy' }, { ease: 'inout' }),
     F(4, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 2, head: 0, root: [0, 0], face: 'happy' }, { ease: 'out' }),
   ] },
+  /**
+   * The whopper (the farm's joke, game/screens/garden.ts): the root comes out so big the puller goes over
+   * backwards - the heave, then flat on the back with the legs in the air and the arms out, `dazed`, then a
+   * scramble back up onto the carry stance. Thirty frames, none of them lost.
+   */
+  overBackwards: { loop: false, frames: [
+    F(4, { armR: [104, 18], armL: [88, 24], weapon: 90, torso: -30, head: -14, legR: [32, 6], legL: [-32, 32], root: [-6, -3], stretch: 1.06, face: 'shout' }, { ease: 'out' }),
+    F(5, { armR: [-60, -30], armL: [-70, -30], weapon: 90, torso: -84, head: -20, legR: [-70, 40], legL: [-80, 40], root: [-14, 10], squash: 1.1, face: 'dazed' }, { ease: 'in', smear: { from: -20, to: -90, a: 0.35 } }),
+    F(14, { armR: [-64, -30], armL: [-74, -30], weapon: 90, torso: -86, head: -22, legR: [-66, 44], legL: [-84, 36], root: [-14, 12], squash: 1.1, face: 'dazed' }),
+    F(7, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 2, head: 0, root: [0, 0], face: 'happy' }, { ease: 'out' }),
+  ] },
 });

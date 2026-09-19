@@ -30,8 +30,8 @@ const PULL_SHOT = 5;
 function seat0(page) {
   return page.evaluate(() => {
     const sc = window.__game.game.screen, s = sc.seats[0];
-    return { count: s.count, state: s.state, t: s.t, anim: s.anim, top: s.top, pull: s.pull, total: sc.total, pulls: sc.pulls,
-      tops: sc.tops.map((t) => [t.x, t.active ? 1 : 0, t.held]) };
+    return { count: s.count, state: s.state, t: s.t, anim: s.anim, top: s.top, pull: s.pull, total: sc.total, pulls: sc.pulls, whoppers: sc.whoppers,
+      tops: sc.tops.map((t) => [t.x, t.active ? 1 : 0, t.held, t.whopper]) };
   });
 }
 
@@ -47,7 +47,43 @@ function nearestTop(tops, x) {
   return best;
 }
 
+/** The whopper (screens/garden.ts): the over-backwards beat. */
+const WHOPPER_FRAMES = 30;
+
 export const SCENARIOS = {
+  /**
+   * gardenWhopper - the joke: the nearest top is made the whopper, seat 0 grips it and taps it out. The twelfth tap
+   *                 is still +1, but the seat goes over backwards for 30 frames instead of the 14-frame pull
+   *                 (state 'pull', t 30, anim overBackwards, whoppers 1), and is idle again after. Writes garden-whopper.
+   */
+  async gardenWhopper(server) {
+    await withPage(server, 'skipTo=garden&critters=0,1&order=6', async (api, page) => {
+      await api.step(2);
+      await holdTarget(page);
+      const x = await page.evaluate(() => {
+        const sc = window.__game.game.screen, s = sc.seats[0];
+        for (const t of sc.tops) t.whopper = 0;
+        // the top nearest the middle of the row, so the shot shows the fall and not the edge of the frame
+        const t = sc.tops.filter((t) => t.active).sort((a, b) => Math.abs(a.x - 320) - Math.abs(b.x - 320))[0];
+        t.whopper = 1; s.x = t.x - 4; s.facing = 1;
+        return t.x;
+      });
+      await api.press(0, { action: true }, 1, 2);
+      const g = await seat0(page);
+      assert(g.state === 1 && g.top >= 0, `seat 0 has hold of the whopper's top at ${x} (state ${g.state}, top ${g.top})`);
+      for (let i = 0; i < PULL_PRESSES - 1; i++) await api.press(0, { action: true }, 1, 3);
+      const before = await seat0(page);
+      await api.press(0, { action: true }, 1, 0);
+      const w = await seat0(page);
+      assert(w.count === before.count + 1 && w.total === before.total + 1, `the twelfth tap is still +1 (count ${before.count} -> ${w.count})`);
+      assert(w.state === 2 && w.t === WHOPPER_FRAMES && w.anim === 'overBackwards' && w.whoppers === 1, `and the seat goes over backwards (state ${w.state}, t ${w.t}, anim '${w.anim}', whoppers ${w.whoppers})`);
+      await api.step(12);
+      await api.shot('garden-whopper');
+      await api.step(WHOPPER_FRAMES - 12);
+      const up = await seat0(page);
+      assert(up.state === 0 && up.t === 0, `back on its feet after ${WHOPPER_FRAMES} frames (state ${up.state})`);
+    });
+  },
   async garden(server) {
     await withPage(server, BOOT, async (api, page) => {
       await api.step(2);
