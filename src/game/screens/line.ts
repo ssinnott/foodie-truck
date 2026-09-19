@@ -24,7 +24,7 @@ import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawTicket, drawSign, drawHint } from '../ui.ts';
 import { confirmPressed } from '../menuinput.ts';
 import { drawLane, TRUCK_Y, CREW_Y } from '../../art/logo.ts';
-import { recipeOf } from '../run.ts';
+import { recipeOf, twistSay } from '../run.ts';
 
 /** The truck parks where the title parks it, turned to face LEFT so the hatch (its rear) opens on the queue. */
 const TRUCK_X = 150, TRUCK_OPTS = { scale: 2, wheel: 0, facing: -1, heads: null as unknown as LineHead[] };
@@ -124,7 +124,7 @@ export class LineScreen extends Screen {
     const front = ln.customers[run.customer];
     const def = getCustomer(front ? front.customer : run.order.customer);
     this.bubbleTitle = def.name;
-    this.bubbleText = front ? recipeOf(front.recipe).line : run.order.line;
+    this.bubbleText = front ? recipeOf(front.recipe).line + (twistSay(front) ? ' ' + twistSay(front) : '') : run.order.line;
     this.bubbleW = Math.max(measureText(this.bubbleTitle, 1), measureText(this.bubbleText, 1)) + BUBBLE_PAD * 2;
     this.bubbleX = Math.min(VIEW_W - 8 - this.bubbleW, Math.max(BUBBLE_MIN_X, Math.round(QUEUE_X0 - this.bubbleW / 2)));
     this.hint = `${game.input.keyText(0, 'action')}: TAKE THE ORDER`;

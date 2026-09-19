@@ -139,7 +139,7 @@ const SPLAT_FRAMES = 20, SPLAT_STEP = 5, MAX_SPLATS = 8;
 const SPLAT_RX = Int8Array.of(8, 6, 4, 3), SPLAT_RY = Int8Array.of(3, 3, 2, 2);
 /** Petals: a cosmetic stream (seed from the orchard block), one every few frames so about two dozen are in the air. */
 const PETAL_EVERY = 6, PETAL_SEED = 105, PETAL_PALE = '#F1E4C8';
-const PLUS_ONE = '+1', BOOM = 'BOOM!', TITLE = 'PIPPIN ORCHARD';
+const PLUS_ONE = '+1', PLUS_TWO = '+2', BOOM = 'BOOM!', TITLE = 'PIPPIN ORCHARD';
 /** The bang's particles, built once. */
 const SMOKE_OPTS = { speed: 2.2, up: 1.2, sizeJitter: 2, screen: true }, EMBER_OPTS = { speed: 3, up: 1.6, screen: true };
 const PUFF_OPTS = { speed: 0.5, up: 0.9, sizeJitter: 1, screen: true };
@@ -423,10 +423,12 @@ export class OrchardScreen extends Screen {
         caught = true;
         a.active = false;
         if (a.kind === RIPE) {
-          s.count++; s.catchT = CATCH_FRAMES;
-          this.setTotal(this.total + 1);
+          // cherries fall two on one stem (the glyph is the pair), so a catch is +2 while the list wants two more
+          const n = this.ing === 'cherry' && this.total + 1 < this.target ? 2 : 1;
+          s.count += n; s.catchT = CATCH_FRAMES;
+          this.setTotal(this.total + n);
           ringAt(bx, by, 4, 14, UI.cream, 2, 12, false, true);
-          floatText(bx, by - 12, PLUS_ONE, s.colour, 1, true);
+          floatText(bx, by - 12, n === 2 ? PLUS_TWO : PLUS_ONE, s.colour, 1, true);
           this.game.audio.play('catch');
         } else if (a.kind === WORMY) {
           // the grub: a flinch and a dazed face, and that is all it costs

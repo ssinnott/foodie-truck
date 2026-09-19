@@ -43,6 +43,41 @@ export const CROSSINGS_PER_DAY = 3;
 export const CROSSING_SHEEP = 0, CROSSING_DUCKS = 1, DUCK_ODDS = 0.35, FLOCK_MIN = 5, FLOCK_MAX = 9, DUCK_FAMILY = 7;
 /** The day's weather: three days in five are clear, one drizzles (wet lanes, a mud patch), one is foggy (the view shrinks, the lanterns glow). */
 export const WEATHER_CLEAR = 0, WEATHER_DRIZZLE = 1, WEATHER_FOG = 2;
+/**
+ * ORDER TWISTS (docs/CONTENT_ROADMAP.md section C): one customer in TWIST_ODDS wants their dish a little different,
+ * and the twist is on the board, in the bubble at the hatch and in the kitchen:
+ *   crunchy  EXTRA CRUNCHY: the CHOP step takes CHOP_TAPS_CRUNCHY taps instead of CHOP_TAPS (only a dish that chops)
+ *   big      A BIG ONE: one more of every ingredient, on the order and so on the shopping list
+ *   herb     WITH <HERB> ON TOP: one sprig of mint, chives or rosemary is added to the order, which is the reason
+ *            the truck goes to Thyme Terrace on a day nobody ordered a herb dish
+ * A dev-jump day (?order= or ?recipes=) never carries a twist: those promise a known dish and a known list.
+ */
+export const TWIST_ODDS = 4, CHOP_TAPS = 10, CHOP_TAPS_CRUNCHY = 15;
+export const HERBS = Object.freeze(['mint', 'chive', 'rosemary']);
+export const TWISTS: Readonly<Record<string, { tag: string; say: string }>> = Object.freeze({
+  crunchy: { tag: ', CRUNCHY', say: 'EXTRA CRUNCHY!' },
+  big: { tag: ', BIG', say: 'A BIG ONE!' },
+  herb: { tag: '', say: 'WITH {HERB} ON TOP.' },
+});
+/** The board's short tag for a customer's twist (', BIG'; '+MINT' for a herb), or ''. */
+export function twistTag(c: { twist: string; extra: string }): string {
+  if (!c.twist) return '';
+  if (c.twist === 'herb') return ' +' + (INGREDIENTS[c.extra] ? INGREDIENTS[c.extra].name : c.extra.toUpperCase());
+  return TWISTS[c.twist] ? TWISTS[c.twist].tag : '';
+}
+/** What the customer adds at the hatch for their twist ('EXTRA CRUNCHY!'), or ''. */
+export function twistSay(c: { twist: string; extra: string }): string {
+  if (!c.twist || !TWISTS[c.twist]) return '';
+  return TWISTS[c.twist].say.replace('{HERB}', INGREDIENTS[c.extra] ? INGREDIENTS[c.extra].name : c.extra.toUpperCase());
+}
+/** An order's needs with its twist applied: one more of everything for BIG, a sprig of the herb for HERB. */
+export function needsOf(c: { recipe: string; twist: string; extra: string }): { id: string; amount: number }[] {
+  const rec = recipeOf(c.recipe);
+  const out = rec.needs.map((n) => ({ id: n.id, amount: n.amount + (c.twist === 'big' ? 1 : 0) }));
+  if (c.twist === 'herb' && c.extra) out.push({ id: c.extra, amount: 1 });
+  return out;
+}
+
 /** The village diners who queue, by content/critters/customers.js id. */
 export const DINERS = Object.freeze(['owl', 'otter', 'goat']);
 /** Salt mixed into the run seed for the plan's own rng stream, so the same seed never draws the plan and the first apple alike. */
@@ -84,18 +119,27 @@ export function planDay(seed: number, o: { order?: number; recipes?: number[] } 
   const places = shuffle(r, supply).slice(0, Math.min(LINES_PER_DAY, supply.length));
   // the orders: the menu dealt round until every seat in every line has one, then shuffled - except that a forced
   // recipe stays at the front of the first line, which is what ?order= promises
+  const fixed = !!(o.order != null && o.order > 0) || !!(o.recipes && o.recipes.length);
   const total = places.length * LINE_LENGTH, dealt: number[] = [];
   for (let k = 0; k < total; k++) dealt.push(recipes[k % recipes.length]);
   const orders = o.order != null && o.order > 0 ? [dealt[0]].concat(shuffle(r, dealt.slice(1))) : shuffle(r, dealt);
   const lines: DayPlanLine[] = [];
   let k = 0, last = -1;
   for (const place of places) {
-    const customers: { customer: string; recipe: string }[] = [];
+    const customers: { customer: string; recipe: string; twist: string; extra: string }[] = [];
     for (let c = 0; c < LINE_LENGTH; c++) {
       let d = r.int(0, DINERS.length - 1);
       if (d === last) d = (d + 1) % DINERS.length;    // nobody queues behind their own twin
       last = d;
-      customers.push({ customer: DINERS[d], recipe: ORDERS[orders[k++]].id });
+      const rec = ORDERS[orders[k++]];
+      // the twist: one customer in TWIST_ODDS, never on a dev-jump day; crunchy only on a dish that chops
+      let twist = '', extra = '';
+      if (!fixed && r.int(1, TWIST_ODDS) === 1) {
+        const kind = r.int(0, 2);
+        twist = kind === 0 ? (rec.steps.indexOf('chop') >= 0 ? 'crunchy' : 'big') : kind === 1 ? 'big' : 'herb';
+        if (twist === 'herb') extra = HERBS[r.int(0, HERBS.length - 1)];
+      }
+      customers.push({ customer: DINERS[d], recipe: rec.id, twist, extra });
     }
     lines.push({ place, customers });
   }
@@ -124,12 +168,12 @@ export function startRun(game, o) {
   const party = o.critters.slice(0, 4).map((ci, slot) => ({ slot, critter: cast[ci % cast.length].id, score: 0 }));
   const seed = o.seed || 1;
   const plan = planDay(seed, { order: o.order, recipes: o.recipes });
-  const lines: RunLine[] = plan.lines.map((l) => ({ place: l.place, served: false, customers: l.customers.map((c) => ({ customer: c.customer, recipe: c.recipe, stars: 0 })) }));
+  const lines: RunLine[] = plan.lines.map((l) => ({ place: l.place, served: false, customers: l.customers.map((c) => ({ customer: c.customer, recipe: c.recipe, twist: c.twist, extra: c.extra, stars: 0 })) }));
   // the shopping list: every line of every order in every queue, summed per ingredient, in INGREDIENTS order
   const needs: OrderNeed[] = [];
   for (const id of Object.keys(INGREDIENTS)) {
     let amount = 0;
-    for (const l of lines) for (const c of l.customers) { const rec = recipeOf(c.recipe); for (const n of rec.needs) if (n.id === id) amount += n.amount; }
+    for (const l of lines) for (const c of l.customers) for (const n of needsOf(c)) if (n.id === id) amount += n.amount;
     if (amount > 0) needs.push({ id, amount, have: 0, used: 0 });
   }
   const run: Run = {
@@ -227,7 +271,8 @@ export function startRun(game, o) {
     summary() {
       return {
         seed: run.seed, party: run.party.map((p) => p.critter), phase: run.dayComplete() ? 'closed' : run.complete() ? 'serve' : 'gather',
-        recipes: run.recipes.slice(), lines: run.lines.map((l) => ({ place: l.place, served: l.served, customers: l.customers.map((c) => `${c.customer}:${c.recipe}:${c.stars}`) })),
+        recipes: run.recipes.slice(), lines: run.lines.map((l) => ({ place: l.place, served: l.served, customers: l.customers.map((c) => `${c.customer}:${c.recipe}:${c.stars}` + (c.twist ? `:${c.twist}${c.extra ? '/' + c.extra : ''}` : '')) })),
+        twist: run.order.twist, extra: run.order.extra, chops: run.order.chops,
         line: run.line, customer: run.customer, dish: run.order.dish, customerId: run.order.customer,
         needs: run.needs.map((n) => `${n.id}:${n.have}/${n.amount}`), stock: run.needs.map((n) => `${n.id}:${n.have - n.used}`),
         complete: run.complete(), served: run.served, score: run.score, linesServed: run.linesServed(), stars: run.stars(),
@@ -272,6 +317,10 @@ export function recipeOf(id: string) { return ORDERS.find((o) => o.id === id) ||
 
 /** The order a customer placed, as the kitchen and results read it: the pantry already holds every line of it. */
 function makeOrder(c: RunCustomer): Order {
-  const o = recipeOf(c.recipe);
-  return { id: o.id, dish: o.dish, customer: c.customer, line: o.line, steps: o.steps.slice(), needs: o.needs.map((n) => ({ id: n.id, amount: n.amount, have: n.amount, used: 0 })) };
+  const o = recipeOf(c.recipe), say = twistSay(c);
+  return {
+    id: o.id, dish: o.dish, customer: c.customer, line: say ? o.line + ' ' + say : o.line, steps: o.steps.slice(),
+    needs: needsOf(c).map((n) => ({ id: n.id, amount: n.amount, have: n.amount, used: 0 })),
+    chops: c.twist === 'crunchy' ? CHOP_TAPS_CRUNCHY : CHOP_TAPS, twist: c.twist || '', extra: c.extra || '',
+  };
 }

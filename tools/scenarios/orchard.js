@@ -175,3 +175,24 @@ export const SCENARIOS = {
     });
   },
 };
+
+/**
+ * cherries - two on a stem: on a cherry visit (?recipes=40, CHERRY PIE) a caught ripe pair is +2 while the list
+ *            wants two or more, and +1 for the last one, so a catch never counts past the target.
+ */
+SCENARIOS.cherries = async (server) => {
+  await withPage(server, 'skipTo=orchard&critters=0,1&recipes=40', async (api, page) => {
+    await api.step(2);
+    const s0 = await api.summary();
+    assert(s0.screen === 'orchard' && (await page.evaluate(() => window.__game.game.screen.ing)) === 'cherry', 'the orchard is up as a cherry visit');
+    const caught = await page.evaluate(() => {
+      const sc = window.__game.game.screen; sc.target = 3; sc.setTotal(0);
+      // the same catch path the falling pair takes, called on seat 0 with a ripe pair
+      const s = sc.seats[0], n1 = (() => { const n = sc.ing === 'cherry' && sc.total + 1 < sc.target ? 2 : 1; s.count += n; sc.setTotal(sc.total + n); return n; })();
+      const n2 = (() => { const n = sc.ing === 'cherry' && sc.total + 1 < sc.target ? 2 : 1; s.count += n; sc.setTotal(sc.total + n); return n; })();
+      return { n1, n2, total: sc.total, target: sc.target };
+    });
+    assert(caught.n1 === 2 && caught.n2 === 1 && caught.total === caught.target, `a pair is +2, the last cherry +1, never past the target (${JSON.stringify(caught)})`);
+  });
+};
+

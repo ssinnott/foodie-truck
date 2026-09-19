@@ -50,11 +50,16 @@ export interface Order {
   dish: string;
   /** The village diner who ordered it ('owl', content/critters/customers.js). */
   customer: string;
-  /** What they said at the hatch. */
+  /** What they said at the hatch (the recipe's line, with the twist's words on the end). */
   line: string;
   /** Kitchen stations in order (content/places.js STATIONS). */
   steps: string[];
   needs: OrderNeed[];
+  /** Taps the CHOP step takes: CHOP_TAPS, or CHOP_TAPS_CRUNCHY on an EXTRA CRUNCHY order. */
+  chops: number;
+  /** The twist on this order ('' | 'crunchy' | 'big' | 'herb', game/run.ts TWISTS) and the herb it asks for. */
+  twist: string;
+  extra: string;
 }
 
 /** One seat of the party, in slot order. */
@@ -72,6 +77,9 @@ export interface RunCustomer {
   customer: string;
   /** ORDERS id ('applePie'). */
   recipe: string;
+  /** The twist on their order ('' for none; game/run.ts TWISTS), and the herb a 'herb' twist asks for. */
+  twist: string;
+  extra: string;
   /** 0 until served, then 1..3. */
   stars: number;
 }
@@ -88,7 +96,7 @@ export interface RunLine {
 /** One line as `planDay` lays it out, before the run adds the served state. */
 export interface DayPlanLine {
   place: string;
-  customers: { customer: string; recipe: string }[];
+  customers: { customer: string; recipe: string; twist: string; extra: string }[];
 }
 
 /** One crossing as `planDay` lays it out: which lane spot, sheep or ducks, and how many of them. */
