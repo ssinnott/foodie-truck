@@ -163,7 +163,7 @@ function standFor(st, appleX) {
 
 /**
  * Play one round in the orchard: chase the ripe apples, step out from under the wormy ones and the bombs, and leave
- * when the round hands back to the map (the target reached, or the 40-second clock out). Input only - nothing here
+ * when the round hands back to the map (the target reached - a round has no clock). Input only - nothing here
  * touches the sim.
  */
 async function pickApples(api, page) {

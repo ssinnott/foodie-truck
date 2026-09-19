@@ -8,7 +8,7 @@
 //            - holding `action` within REACH of a full skep for DIP_HOLD frames scores and empties that skep;
 //            - letting go early scores nothing, costs nothing, and leaves the skep full for the next hold;
 //            - holding at an EMPTY skep does nothing at all.
-//          Finally the clock is forced to its last frames: the HONEY sign drops, is held, and the screen hands back
+//          Finally the finish line is brought down to the party's total: the HONEY sign drops, is held, and the screen hands back
 //          to the map with run.gather('honey') banked into the order's honey line.
 //          Screenshots: tools/screens/hive-dip.png (the dipper in a full skep, the strand of honey climbing it and
 //          the bar over the knob half full - the shot the skeps' and the dipper's readability are judged from) and
@@ -17,7 +17,7 @@ import { withPage, assert } from '../playtest.js';
 
 const SLAM = 6, HOLD = 60;
 /** The screen's own numbers, mirrored here so an assert says what it expects rather than what it found. */
-const ROUND_FRAMES = 2400, DIP_HOLD = 60;
+const DIP_HOLD = 60;
 /** The frame of the hold the picture is taken on: the dipper is up in the doorway and the bar is half full. */
 const DIP_SHOT = 30;
 /** Held-input leg: 90 frames of `right` is 162 px at the screen's 1.8 px/frame creep. */
@@ -66,7 +66,7 @@ export const SCENARIOS = {
       assert(x1 > x0 && x1 >= 24 && x1 <= 616, `seat 0 crept along the meadow and stayed in the lane (${x0} -> ${x1})`);
       assert(JSON.stringify(moved.top.seats.slice(1).map((s) => s[1])) === others0, 'the other seats, with no input, stayed put');
       // 3 boot/settle frames + CREEP_FRAMES
-      assert(moved.top.timer === ROUND_FRAMES - 3 - CREEP_FRAMES, `the clock counted every frame (timer ${moved.top.timer}, expected ${ROUND_FRAMES - 3 - CREEP_FRAMES})`);
+      assert(moved.top.elapsed === 3 + CREEP_FRAMES, `the clock counted every frame (elapsed ${moved.top.elapsed}, expected ${3 + CREEP_FRAMES})`);
 
       // ---- the rule, half one: holding at a full skep for DIP_HOLD frames is honey ----
       const skepX = moved.top.skeps[2][0];
@@ -104,12 +104,13 @@ export const SCENARIOS = {
       assert(nothing.count === dry.count && nothing.dipT === 0, `a hold at an empty skep is nothing (count ${nothing.count}, dipT ${nothing.dipT})`);
       assert(nothing.bumpT === 0, `and nothing in this meadow stings (bumpT ${nothing.bumpT})`);
 
-      // ---- the ending ----
+      // ---- the ending: there is no clock to force, a round ends only when the total reaches the target ----
       let last = await api.summary();
-      await page.evaluate(() => { window.__game.game.screen.clock.timer = 3; });
+      assert(last.top.honey >= 1, `something was dipped before the ending (honey ${last.top.honey})`);
+      await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(1, sc.total); sc.setTotal(sc.total); });
       await api.step(4 + SLAM + 20);
       const s2 = await api.summary();
-      assert(s2.screen === 'hive' && s2.top.phase === 1 && /^HONEY: \d+$/.test(s2.top.sign), `the clock ran out: the HONEY sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
+      assert(s2.screen === 'hive' && s2.top.phase === 1 && /^HONEY: \d+$/.test(s2.top.sign), `the target was reached: the HONEY sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
       await api.shot('hive-sign');
       last = s2;
       await api.step(HOLD);

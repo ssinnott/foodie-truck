@@ -315,7 +315,7 @@ export class BeachScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /** Every seat: the beat first (it locks the stick), then the stick along the sand, the grab, the anim. */
@@ -364,6 +364,7 @@ export class BeachScreen extends Screen {
     ringAt(t.x, QUARRY_Y - 4, 4, 16, SIGNAL.pond, 2, 14, true, true);
     burstDust(t.x, QUARRY_Y, 4, 1.4, true);
     floatText(t.x, QUARRY_Y - 30, PLUS_ONE, s.colour, 1, true);
+    this.game.audio.play('catch');   // the orchard's basket and its pip: the catch lands in the same basket
   }
 
   /** Every thing on the strand, then the spawner. */
@@ -404,7 +405,7 @@ export class BeachScreen extends Screen {
     if (q.dart > 0 && t.cool === 0 && t.dartT === 0) {
       for (let i = 0; i < this.seats.length; i++) {
         const sx = this.seats[i].x, d = sx > t.x ? sx - t.x : t.x - sx;
-        if (d <= DART_R) { t.dir = sx > t.x ? -1 : 1; t.dartT = DART_FRAMES; t.cool = DART_COOL; t.state = RUN; t.t = DART_FRAMES; burstDust(t.x, QUARRY_Y, 2, 1.2, true); break; }
+        if (d <= DART_R) { t.dir = sx > t.x ? -1 : 1; t.dartT = DART_FRAMES; t.cool = DART_COOL; t.state = RUN; t.t = DART_FRAMES; burstDust(t.x, QUARRY_Y, 2, 1.2, true); this.game.audio.play('grip'); break; }
       }
     }
     if (t.state === RUN) {
@@ -426,7 +427,7 @@ export class BeachScreen extends Screen {
   /** The round is over: drop the sign; a seat with a catch in its basket cheers, one without sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.pounceT = 0; s.moving = false;
@@ -457,7 +458,7 @@ export class BeachScreen extends Screen {
     particles.draw(ctx, null, 'front');
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, this.title);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -518,7 +519,7 @@ export class BeachScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText, ing: this.ing,
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, ing: this.ing,
       seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), count: s.count, pounceT: s.pounceT, anim: s.anim })),
       /** [x, dir, state, dartT] per thing on the strand. */
       things: this.things.filter((t) => t.active).map((t) => [R(t.x), t.dir, STATE_NAMES[t.state], t.dartT]),
@@ -528,7 +529,7 @@ export class BeachScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.nextSpawn);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       f.push(s.x, s.facing, s.count, s.pounceT, s.moving ? 1 : 0);

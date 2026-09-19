@@ -5,12 +5,12 @@
 //   -> hooked (the trout arcs into the bucket) -> idle after 40.
 // The bite is REELED IN by tapping `action` over and over: every press is one turn of the reel and REEL_PRESSES of
 // them land the fish. There is no window and no way to lose it - a press during the wait is ignored, and a fish that
-// has bitten waits as long as it takes. The seats, the clock, the name plates and the end sign are game/minigame.js,
+// has bitten waits as long as it takes. The seats, the tally ticket, the name plates and the end sign are game/minigame.js,
 // the same furniture every mini-game stands on, so the seven wear one HUD; only the rod, the float, the trout and the
 // bucket are the pond's own.
 // Everything in update() is deterministic: input by seat only, the wait from `rng`, positions from integer tables and
 // + - * /; the bob, the tug, the fish arc and the particles are visual and read the timers in draw(). Each seat's
-// state, timer, reel count, float position and count plus the clock feed the desync canary.
+// state, timer, reel count, float position and count plus the round's elapsed count feed the desync canary.
 import { UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
@@ -229,7 +229,7 @@ export class PondScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   stepSeat(s: PondSeat, pressed: boolean): void {
@@ -249,6 +249,7 @@ export class PondScreen extends Screen {
         if (i >= PARA_N - 1) {
           s.fx = s.tx; s.fy = s.sy;
           ringAt(s.fx, s.fy, 3, 9, UI.cream, 2, 12, true, true); burstDrops(s.fx, s.fy, 2, true);
+          this.game.audio.play('cast');
           s.state = WAIT; s.t = rng.int(WAIT_MIN, WAIT_MAX); seatAnim(s, 'rodWait', true);
         }
         break;
@@ -262,7 +263,7 @@ export class PondScreen extends Screen {
         if (pressed) this.reelOnce(s);
         break;
       case HOOKED:
-        if (RESULT_FRAMES - s.t === FISH_ARC) s.landT = LAND_FRAMES;   // the trout drops in: the rim takes the hit
+        if (RESULT_FRAMES - s.t === FISH_ARC) { s.landT = LAND_FRAMES; this.game.audio.play('bucket'); }   // the trout drops in: the rim takes the hit
         if (--s.t <= 0) this.rest(s);
         break;
       default: break;
@@ -272,6 +273,7 @@ export class PondScreen extends Screen {
   /** The trout is on: the float drops, the ring opens, and the seat is told to start tapping. */
   bite(s: PondSeat): void {
     s.state = BITE; s.t = 0; s.reel = 0;
+    this.game.audio.play('bite');
     seatAnim(s, 'rodReel', true);
     ringAt(s.fx, s.fy + 5, 4, 16, SIGNAL.pond, 2, 18, false, true);
     burstDrops(s.fx, s.fy, 3, true);
@@ -281,6 +283,7 @@ export class PondScreen extends Screen {
   /** One turn of the reel: a tug on the rod and the float, and the last one lands the fish. */
   reelOnce(s: PondSeat): void {
     s.reel++; s.t = TUG_FRAMES;
+    this.game.audio.play('reel');
     seatAnim(s, 'rodReel', true);
     burstDrops(s.fx, s.fy, 1, true);
     if (s.reel >= REEL_PRESSES) this.hook(s);
@@ -291,6 +294,7 @@ export class PondScreen extends Screen {
 
   hook(s: PondSeat): void {
     s.state = HOOKED; s.t = RESULT_FRAMES; s.reel = 0; s.count++;
+    this.game.audio.play('hook');
     this.total++; this.countStr = this.total + '/' + this.target;
     seatAnim(s, 'pull', true);
     burstDrops(s.fx, s.fy, 6, true); ringAt(s.fx, s.fy, 4, 14, UI.cream, 2, 14, true, true);
@@ -299,7 +303,7 @@ export class PondScreen extends Screen {
 
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     // everyone holds one pose under the sign: rod up for a full bucket, rod low for an empty one
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.state = IDLE; s.t = 0; s.reel = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; seatAnim(s, s.count > 0 ? 'pull' : 'rodIdle', true); }
   }
@@ -338,7 +342,7 @@ export class PondScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === HOOKED) this.drawCatch(ctx, this.seats[i]);
     // the reel gauges over the biting floats, after everything: the one thing a tapping player is watching
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === BITE) this.drawReel(ctx, this.seats[i]);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, this.title);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -396,7 +400,7 @@ export class PondScreen extends Screen {
 
   override summary() {
     return {
-      timer: this.clock.timer, total: this.total, target: this.target, ending: this.clock.phase !== 0, sign: this.clock.signText,
+      elapsed: this.clock.elapsed, total: this.total, target: this.target, ending: this.clock.phase !== 0, sign: this.clock.signText,
       seats: this.seats.map((s) => ({ slot: s.slot, state: STATE_NAMES[s.state], t: s.t, reel: s.reel, count: s.count, fx: s.fx, fy: s.fy })),
     };
   }
@@ -404,7 +408,7 @@ export class PondScreen extends Screen {
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const o = this.sum;
-    o[0] = this.clock.timer; o[1] = this.clock.phase; o[2] = this.total;
+    o[0] = this.clock.elapsed; o[1] = this.clock.phase; o[2] = this.total;
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i], k = 3 + i * 6; o[k] = s.state; o[k + 1] = s.t; o[k + 2] = s.reel; o[k + 3] = s.fx; o[k + 4] = s.fy; o[k + 5] = s.count; }
     return o;
   }

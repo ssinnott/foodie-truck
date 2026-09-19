@@ -196,13 +196,14 @@ export class ResultsScreen extends Screen {
     this.player.tick();
     for (let i = 0; i < this.crew.length; i++) {
       const c = this.crew[i];
-      if (!c.cheered && f >= c.cheerAt) { c.cheered = true; c.player.play('cheer', { restart: true }); }
+      if (!c.cheered && f >= c.cheerAt) { c.cheered = true; c.player.play('cheer', { restart: true }); if (i === 0) game.audio.play('cheer'); }
       c.player.tick();
     }
     // the chews: three eats, one after the other, each taking a component off the plate
     if (f >= EAT_AT && this.chews < CHEWS && (f - EAT_AT) % EAT_LEN === 0) {
       this.chews++;
       this.player.play('eat', { restart: true });
+      game.audio.play('chew');
       // the dish goes down over the three chews whatever it is made of, so the last bite empties the plate
       this.eaten = Math.min(this.icons.length, R(this.chews * this.icons.length / CHEWS));
       if (this.eaten >= this.icons.length) this.dropFood();
@@ -211,10 +212,12 @@ export class ResultsScreen extends Screen {
     // `cheer` raises the near arm forward: the paw must be empty before it, or the apple lands on the beak and
     // the near eye - the one thing ART_STYLE section 0.7 forbids outright, on the shot this screen is built around
     if (this.chews >= CHEWS && this.player.done && this.player.name !== 'cheer') { this.dropFood(); this.player.play('cheer'); }
-    if (f === STAMP_AT) burstSparkle(COL_X, STAMP_Y + 10, 6, UI.cream, true);
+    if (f === STAMP_AT) { burstSparkle(COL_X, STAMP_Y + 10, 6, UI.cream, true); game.audio.play('stamp'); }
+    if (f === STARS_AT) game.audio.play('coin');
     if (this.left) return;
     if ((f >= CONFIRM_AT && confirmPressed(game.input) >= 0) || f >= AUTO_AT) {
       this.left = true;
+      game.audio.play('menu_confirm');
       const run = game.run;
       run.serve(this.stars);
       // the next in line steps up; a finished line sends the truck on to the next one, and the last line closes the day

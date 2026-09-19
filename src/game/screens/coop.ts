@@ -3,8 +3,8 @@
 // boxes along the back wall and on the floor in front of the lanes, and `action` within reach of one plucks it (a
 // 12-frame reach up into a nest from the gold ring on the floor that marks its spot, a 12-frame crouch to a floor
 // egg). Five hens potter about the back of the floor and never get in the way: nothing in this coop bumps, charges
-// or costs an egg. The round ends when the party's total reaches the order's amount or the 40-second clock runs out;
-// the EGGS sign drops, is held, then run.gather() and back to the map.
+// or costs an egg. The round ends when the party's total reaches the order's amount, and not before (there is no
+// clock to run out); the EGGS sign drops, is held, then run.gather() and back to the map.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): the eggs and hens are fixed pools of plain sim objects, every random
 // number comes from the rng singleton inside update(), distances are plain differences along x, and nothing in
@@ -295,7 +295,7 @@ export class CoopScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /** Every seat: the beat first (it locks the stick), then the stick along the lane, the pluck, the anim. */
@@ -338,6 +338,7 @@ export class CoopScreen extends Screen {
     ringAt(e.x, e.y, 3, 10, UI.cream, 2, 12, false, true);
     floatText(e.x, e.y - 12, PLUS_ONE, s.colour, 1, true);
     if (e.nest >= 0) burstDust(e.x, e.y + 4, 3, 1, true);
+    this.game.audio.play('egg');
   }
 
   /**
@@ -382,7 +383,7 @@ export class CoopScreen extends Screen {
   /** The round is over: drop the sign; a seat with eggs cheers, one without sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, SIGN_PREFIX + this.total);
+    endRound(this.clock, SIGN_PREFIX + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.moving = false; s.reachT = 0; seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true); }
   }
 
@@ -410,7 +411,7 @@ export class CoopScreen extends Screen {
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
     blitAt(ctx, L.rafter.L, 0, L.rafter.y);
-    drawClock(ctx, this.clock, this.countStr, clockIcon, TITLE);
+    drawClock(ctx, this.countStr, this.total / this.target, clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -485,7 +486,7 @@ export class CoopScreen extends Screen {
 
   override summary() {
     return {
-      count: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
+      count: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
       seats: this.seats.map((s) => [s.slot, R(s.x), R(s.y), s.count]),
       eggs: this.eggs.filter((e) => e.active).map((e) => [R(e.x), R(e.fy), e.nest]),
       hens: this.hens.map((h) => [R(h.x), R(h.y), h.state]),
@@ -495,7 +496,7 @@ export class CoopScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.nextSpawn);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.count, s.reachT, s.moving ? 1 : 0); }
     for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; f.push(e.active ? 1 : 0, e.x, e.y, e.fy, e.nest); }
     for (let i = 0; i < this.hens.length; i++) { const h = this.hens[i]; f.push(h.x, h.y, h.tx, h.ty, h.state, h.t, h.facing); }

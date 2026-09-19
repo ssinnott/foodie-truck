@@ -10,7 +10,7 @@
 //                           dead reach, a dead gauge or a dead pull fails one of those.
 //              LETTING GO   a grip nobody presses on for GRIP_TIMEOUT frames is let go of: no carrot, nothing lost,
 //                           the top standing where it was.
-//              THE HAND-OFF the clock is forced to its last frames: the CARROTS sign drops, is held, and the screen
+//              THE HAND-OFF the finish line is brought down to the party's total: the CARROTS sign drops, is held, and the screen
 //                           hands back to the map with the order's carrot line updated by the party's total.
 //            Shots: tools/screens/garden-grip.png (a seat with hold of a top and an empty gauge over its head),
 //            garden-pull.png (the root out of the ground and in the air, the hole behind it) and garden-gauges.png
@@ -142,11 +142,14 @@ export const SCENARIOS = {
       assert(four.top.seats.every((s) => s.state === 'grip'), 'all four seats can have hold of a top at the same time');
       await api.shot('garden-gauges');
 
-      // --- the hand-off: force the clock to its last frames, watch the sign, then the map
-      await page.evaluate(() => { window.__game.game.screen.clock.timer = 3; });
+      // --- the hand-off: bring the finish line down to the party's total (there is no clock to force), watch the
+      // sign, then the map
+      const beforeEnd = await api.summary();
+      assert(beforeEnd.top.total >= 1, `something was pulled before the ending (total ${beforeEnd.top.total})`);
+      await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(1, sc.total); sc.setTotal(sc.total); });
       await api.step(4 + SLAM + 20);
       const s2 = await api.summary();
-      assert(s2.screen === 'garden' && s2.top.phase === 1 && /^CARROTS: \d+$/.test(s2.top.sign), `the clock ran out: the CARROTS sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
+      assert(s2.screen === 'garden' && s2.top.phase === 1 && /^CARROTS: \d+$/.test(s2.top.sign), `the target was reached: the CARROTS sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
       await api.shot('garden-sign');
       const banked2 = s2.top.total;
       await api.step(HOLD);

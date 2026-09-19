@@ -1,9 +1,9 @@
 // The world map (docs/GDD.md section 4, docs/ARCHITECTURE.md section 5): one shared truck on a 1920x1080 storybook
 // plane. Every seated player's stick is a vector; they are summed (the driver's x1.5), quantised to 16 headings on
 // dcos/dsin tables built here, and the truck turns one step per 4 frames, rolling 2.2 px/frame on a lane and 1.0 in
-// the fields; the river stops it except on the bridges. Arriving within 40 px of a landmark's door opens its
-// mini-game while the shopping list is short, or the line waiting there once the pantry is full (docs/GDD.md
-// section 3); otherwise a wooden sign says why not.
+// the fields; water stops it - the river except on its bridges, the millpond, the cove's sea. Arriving within 40 px
+// of a landmark's door opens its mini-game while the shopping list is short, or the line waiting there once the
+// pantry is full (docs/GDD.md section 3); otherwise a wooden sign says why not.
 //
 // Everything in update() is deterministic: input by seat only, distances from + - * / and Math.sqrt, no clock, no
 // Math.random; run.truck { x, y, heading, at } is the state that survives between visits and feeds the desync canary.
@@ -26,7 +26,7 @@ import { WORLD_W, WORLD_H, PLACES } from '../../content/places.ts';
 import { drawTruck } from '../../art/truck.ts';
 import {
   CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, RIVER_BLOCK, SPOTS, SIGN_AT, PARK_AT,
-  ROADSIDE_TREES, GLINTS, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, riverBlocked,
+  ROADSIDE_TREES, GLINTS, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, waterBlocked,
   wallBlocked, drawSails, drawHen, drawBee, drawPhoneRing, MAP,
 } from '../../art/backgrounds/map.ts';
 import { drawShoppingHud, drawLinesHud, drawLineTag, drawSeatPlates, drawWheel, drawDestArrow, drawHonk, drawSignPlate, drawMapHint } from '../maphud.ts';
@@ -56,8 +56,9 @@ const TAG_ABOVE = 46;
 /**
  * A line that is waiting where the truck already stands (the pantry filled at that very landmark) opens on its
  * own after this many frames: arrival fires on `truck.at` CHANGING, and nobody should have to drive off and back
- * to be let in. A mini-game is never reopened this way - a round that ran out of time hands back to the map with
- * the truck still at its landmark, and the player must be free to drive on.
+ * to be let in. A mini-game is never reopened this way - a round hands back to the map with the truck still at
+ * its landmark, and if that landmark supplies something else the list is short of, the player must be free to
+ * drive on rather than be pulled straight into the next round.
  */
 const REOPEN_FRAMES = 45;
 
@@ -388,13 +389,14 @@ export class MapScreen extends Screen {
       let nx = truck.x + COS[truck.heading] * this.speed, ny = truck.y + SIN[truck.heading] * this.speed;
       nx = nx < DRIVE_MIN_X ? DRIVE_MIN_X : nx > DRIVE_MAX_X ? DRIVE_MAX_X : nx;
       ny = ny < DRIVE_MIN_Y ? DRIVE_MIN_Y : ny > DRIVE_MAX_Y ? DRIVE_MAX_Y : ny;
-      if (riverBlocked(nx, ny)) {
-        // the splash belongs in the water in front of the nose, not under the truck: RIVER_BLOCK keeps the token a
+      if (waterBlocked(nx, ny)) {
+        // the splash belongs in the water in front of the nose, not under the truck: every block keeps the token a
         // half-length short of the bank, so a ring at the centre lands on grass and the cream word on the cream hatch
         this.speed = 0; this.blocked = true;
         if (this.splashCd === 0) {
           ringAt(nx + COS[truck.heading] * RIVER_BLOCK, ny + SIN[truck.heading] * RIVER_BLOCK, 4, 18, MAP.skyTop, 2, 16, true);
           floatText(nx, ny - 40, 'SPLASH', MAP.skyTop); this.splashCd = 30;
+          game.audio.play('splash');
         }
       } else if (wallBlocked(nx, ny)) { this.speed = 0; this.blocked = true; } else { truck.x = nx; truck.y = ny; }
       this.wheelAcc += this.speed; this.wheelStep = Math.floor(this.wheelAcc / 5) & 3;
@@ -408,7 +410,7 @@ export class MapScreen extends Screen {
     if (this.reopen > 0 && --this.reopen === 0) truck.at = '';
     if (near < 0) truck.at = '';
     else if (truck.at !== PLACES[near].id) { truck.at = PLACES[near].id; this.arrive(near); }
-    if (inp.anyPressed('alt') >= 0) { this.honk = HONK_FRAMES; this.squashT = SQUASH_FRAMES; }
+    if (inp.anyPressed('alt') >= 0) { this.honk = HONK_FRAMES; this.squashT = SQUASH_FRAMES; game.audio.play('honk'); }
     if (this.honk > 0) this.honk--;
     if (this.squashT > 0) this.squashT--;
     if (this.signTimer > 0) this.signTimer--;
@@ -421,6 +423,7 @@ export class MapScreen extends Screen {
     if (screen) {
       // pulling up at a queue: the run stands on that line before its screen opens, so the first customer is at the hatch
       if (screen === 'line') run.startLine(run.lineAt(id));
+      this.game.audio.play('truck_stop');
       this.game.fadeTo(() => this.game.replace(screen, { place: id }));
       return;
     }
@@ -432,6 +435,7 @@ export class MapScreen extends Screen {
     this.signText = text;
     this.signW = measureText(text, 1) + 24;
     this.signTimer = SIGN_FRAMES;
+    this.game.audio.play('sign_drop');
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {

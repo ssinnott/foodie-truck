@@ -10,7 +10,7 @@
 //                           lost one bit), the seat's count and the party's total up by one, the reach beat playing.
 //              NOTHING      `action` under a bush with nothing ripe on it does nothing at all.
 //              RIPENING     a berry ripens on its own inside RIPEN_MIN..RIPEN_MAX frames of the last.
-//              THE HAND-OFF the clock is forced to its last frames: the STRAWBERRIES sign drops, is held, and the
+//              THE HAND-OFF the finish line is brought down to the party's total: the STRAWBERRIES sign drops, is held, and the
 //                           screen hands back to the map with the order's strawberry line updated.
 //            Shots: tools/screens/bramble-pick.png (mid-reach, the berry in the air) and bramble-sign.png.
 import { withPage, assert } from '../playtest.js';
@@ -97,12 +97,14 @@ export const SCENARIOS = {
       const nextRipen = await page.evaluate(() => window.__game.game.screen.nextRipen);
       assert(nextRipen > 0 && nextRipen <= RIPEN_MAX, `and the next is seeded inside the range (${nextRipen})`);
 
-      // --- the hand-off: force the clock to its last frames, watch the sign, then the map
+      // --- the hand-off: bring the finish line down to the party's total (there is no clock to force), watch the
+      // sign, then the map
       const lastTotal = (await api.summary()).top.total;
-      await page.evaluate(() => { window.__game.game.screen.clock.timer = 3; });
+      assert(lastTotal >= 1, `something was picked before the ending (total ${lastTotal})`);
+      await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(1, sc.total); sc.setTotal(sc.total); });
       await api.step(4 + SLAM + 20);
       const s2 = await api.summary();
-      assert(s2.screen === 'bramble' && s2.top.phase === 1 && /^STRAWBERRIES: \d+$/.test(s2.top.sign), `the clock ran out: the STRAWBERRIES sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
+      assert(s2.screen === 'bramble' && s2.top.phase === 1 && /^STRAWBERRIES: \d+$/.test(s2.top.sign), `the target was reached: the STRAWBERRIES sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
       await api.shot('bramble-sign');
       await api.step(HOLD);
       const s3 = await api.summary();

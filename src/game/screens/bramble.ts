@@ -5,8 +5,8 @@
 // `action` within REACH of a bush with a ripe berry on it picks one - a 12-frame reach up into the bush, the berry
 // hops into the basket, +1. There is no beat to hit and nothing to pick by mistake: a bush with nothing ripe on it
 // simply does nothing, and the only thing the bank asks of anyone is to walk to the sparkle and tap. The round ends
-// when the party's total reaches the order's amount or the 40-second clock runs out; the STRAWBERRIES sign drops,
-// is held, then run.gather('strawberry') and back to the map.
+// when the party's total reaches the order's amount, and not before (there is no clock to run out); the
+// STRAWBERRIES sign drops, is held, then run.gather('strawberry') and back to the map.
 //
 // This is the coop's shape - walk a lane, tap at the thing, a reach beat - with bushes for nesting boxes: the bank
 // borrowed the farm's bed for a while, and a strawberry pulled out of the ground by its top was the one thing on
@@ -245,7 +245,7 @@ export class BrambleScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /** Every seat: the beat first (it locks the stick), then the stick along the path, the pick, the anim. */
@@ -292,6 +292,7 @@ export class BrambleScreen extends Screen {
     ringAt(sx, sy, 3, 10, UI.cream, 2, 12, false, true);
     burstSparkle(sx, sy - 4, 3, UI.cream, true);
     floatText(sx, sy - 14, PLUS_ONE, s.colour, 1, true);
+    this.game.audio.play('catch');   // the orchard's basket and its pip: a berry lands in the same basket
   }
 
   /** Ripen one more berry, on a seeded bush that has a green spot, on a seeded spot of it. */
@@ -314,7 +315,7 @@ export class BrambleScreen extends Screen {
   /** The round is over: drop the sign; a seat with berries in its basket cheers, one without sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.reachT = 0; s.moving = false;
@@ -338,7 +339,7 @@ export class BrambleScreen extends Screen {
     particles.draw(ctx, null, 'front');
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, this.title);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -369,7 +370,7 @@ export class BrambleScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
       seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), count: s.count, reachT: s.reachT, anim: s.anim })),
       /** The ripe mask per bush, in BUSH_X order. */
       bushes: this.bushes.map((b) => b.ripe),
@@ -379,7 +380,7 @@ export class BrambleScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.nextRipen);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextRipen);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       f.push(s.x, s.facing, s.count, s.reachT, s.moving ? 1 : 0);

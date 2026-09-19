@@ -1,5 +1,5 @@
 // The world map's backdrop (docs/ART_STYLE.md section 1 "Map", section 7; docs/GDD.md section 4): the palette, the
-// lane / river / bridge data the sim drives on, and the ground painted as 3x3 chunks of 640x360 with seeds 140..148.
+// lane / river / bridge / pond / sea data the sim drives on, and the ground painted as 3x3 chunks of 640x360 with seeds 140..148.
 //
 // A chunk is a PURE function of its index: every chunk paints the whole world's authored content (lanes, river,
 // landmarks, hand-placed fields, module-seeded trees) translated by its origin and clipped by its own canvas, so the
@@ -8,6 +8,8 @@
 // for. Nothing here animates: the sails, hens, bees, glints, smoke and the truck are the map screen's per-frame marks.
 import { makeLayer, discShaded, boxShaded, boxOutlined, polyOutlined, vGradient, radialGlow, makeGlowSprite, INK } from '../layers.ts';
 import { makeRng } from '../../lib/engine/rng.ts';
+import { clamp } from '../../lib/engine/math.ts';
+import { dsin } from '../../lib/engine/trig.ts';
 import { WORLD_W, WORLD_H, PLACES } from '../../content/places.ts';
 import { VIEW_W, VIEW_H, PLUM, SIGNAL } from '../../constants.ts';
 import { drawText, measureText } from '../../engine/text.ts';
@@ -92,14 +94,16 @@ function polyDist2(px, py, poly) {
 export function laneDist(px, py) { let best = 1e12; for (let i = 0; i < LANES.length; i++) { const d = polyDist2(px, py, LANES[i]); if (d < best) best = d; } return Math.sqrt(best); }
 /** Distance from a point to the river centreline. */
 export function riverDist(px, py) { return Math.sqrt(polyDist2(px, py, RIVER)); }
-/** The truck's centre keeps this far from the river's centreline: the bank plus half a token, so its nose stays dry. */
-export const RIVER_BLOCK = RIVER_HALF + 12;
+/** The truck's centre keeps this far from the edge of any water: half a token, so its nose stays dry. */
+export const WATER_MARGIN = 12;
+/** The truck's centre keeps this far from the river's centreline: the bank plus half a token. */
+export const RIVER_BLOCK = RIVER_HALF + WATER_MARGIN;
 /** True on a bridge deck (or its lane approach, which reaches as far as the block radius so the deck can be entered). */
 export function onBridge(px, py) {
   for (let i = 0; i < BRIDGES.length; i++) { const b = BRIDGES[i]; if (px >= b.x - BRIDGE_HALF_W - 14 && px <= b.x + BRIDGE_HALF_W + 14 && py >= b.y - BRIDGE_HALF_H && py <= b.y + BRIDGE_HALF_H) return true; }
   return false;
 }
-/** True where the truck may not go: in the water and not on a bridge. */
+/** True in the river and not on a bridge. */
 export function riverBlocked(px, py) { return riverDist(px, py) < RIVER_BLOCK && !onBridge(px, py); }
 
 // ---------------------------------------------------------------- authored world content
@@ -118,11 +122,52 @@ export const SPOTS = Object.freeze({
   pond: { x: POND.x, y: POND.y - 56, rx: 50, ry: 28 },
   /**
    * The cove's coast: the sea comes in over the east hedge from `top` to `bottom`, its shoreline weaving about
-   * x = `x`, with sand from `x - 36` back to the meadow. Paint, not a block (DRIVE_MAX_X is 1896): the truck can
-   * paddle, like it can at the pond.
+   * x = `x` (shoreX), with sand from `x - 36` back to the meadow. The water is a block like the river and the pond
+   * (seaBlocked): the truck stops on the sand a half-token short of the waterline.
    */
   cove: { x: SHORE.x + 50, top: SHORE.y - 170, bottom: SHORE.y + 170, deep: 26 },
 });
+/** The sea's caps: its top and bottom edges run `SEA_CAP` beyond SPOTS.cove's top/bottom, curving in to the shoreline over `SEA_CAP_IN` rows. */
+const SEA_CAP = 22, SEA_CAP_IN = 24;
+/**
+ * The cove's shoreline: the sea's west edge at row `y` along its straight stretch (SPOTS.cove top + SEA_CAP_IN to
+ * bottom - SEA_CAP_IN). dsin rather than Math.sin because the sim reads it (seaBlocked) as well as the paint.
+ */
+export function shoreX(y) { const c = SPOTS.cove; return c.x + 7 * dsin((y - c.top) / 19) + 4 * dsin((y - c.top) / 47); }
+/**
+ * The sea's west edge at any row of it, for the sim: the shoreline along the straight stretch and, along each cap,
+ * the same quadratic the paint draws from the cap's flat end (x + SEA_CAP) in to the shoreline (x - 2). That curve's
+ * y is a square in its parameter, so t comes from Math.sqrt and the x from + - * alone: bit-exact under lockstep.
+ * `y` must lie within the sea (SPOTS.cove top - SEA_CAP .. bottom + SEA_CAP).
+ */
+export function seaEdgeX(y) {
+  const c = SPOTS.cove;
+  if (y >= c.top + SEA_CAP_IN && y <= c.bottom - SEA_CAP_IN) return shoreX(y);
+  const inFromEnd = y < c.top + SEA_CAP_IN ? y - (c.top - SEA_CAP) : (c.bottom + SEA_CAP) - y;
+  const t = Math.sqrt(inFromEnd / (SEA_CAP + SEA_CAP_IN)), u = 1 - t;
+  return c.x + SEA_CAP * u * u - 2 * (SEA_CAP * 0.6) * u * t - 2 * t * t;
+}
+/**
+ * True in the cove's sea, with WATER_MARGIN of sand kept between the truck's centre and the waterline. The token is
+ * as tall as it is wide, so the edge is read a half-token above and below the centre as well, and the westmost wins:
+ * that is what keeps the nose out of the caps' corners, where the waterline runs nearly flat.
+ */
+export function seaBlocked(px, py) {
+  const c = SPOTS.cove, y0 = c.top - SEA_CAP, y1 = c.bottom + SEA_CAP;
+  if (py <= y0 - WATER_MARGIN || py >= y1 + WATER_MARGIN) return false;
+  let edge = seaEdgeX(clamp(py, y0, y1));
+  const above = seaEdgeX(clamp(py - WATER_MARGIN, y0, y1)), below = seaEdgeX(clamp(py + WATER_MARGIN, y0, y1));
+  if (above < edge) edge = above;
+  if (below < edge) edge = below;
+  return px > edge - WATER_MARGIN;
+}
+/** True in the millpond (SPOTS.pond grown by WATER_MARGIN): the ellipse test cross-multiplied, so it is * and + alone. */
+export function pondBlocked(px, py) {
+  const p = SPOTS.pond, rx = p.rx + WATER_MARGIN, ry = p.ry + WATER_MARGIN, dx = px - p.x, dy = py - p.y;
+  return dx * dx * ry * ry + dy * dy * rx * rx < rx * rx * ry * ry;
+}
+/** True where the truck may not go: in any water - the river off its bridges, the millpond, the cove's sea. */
+export function waterBlocked(px, py) { return riverBlocked(px, py) || pondBlocked(px, py) || seaBlocked(px, py); }
 /**
  * Signpost base points (world): beside each door, off the lane, and a few rows above the door line so a truck parked
  * right on the door y-sorts in front of its sign instead of under it. Home and the pond sit further out than the rest
@@ -328,16 +373,17 @@ function paintLandmarks(g) {
   // weaving shoreline, a sand strip curving back into the meadow at each end, foam breaking along the waterline,
   // a deeper band further out, rocks at the tide line, two crab pots on the sand and a rowing boat pulled up by
   // the door. Everything east of the shoreline is water to the edge of the world.
-  const C = SPOTS.cove, shoreX = (y) => C.x + 7 * Math.sin((y - C.top) / 19) + 4 * Math.sin((y - C.top) / 47);
+  // the water's own outline (dx 0, capW SEA_CAP) is the sim's seaEdgeX, row for row
+  const C = SPOTS.cove;
   const coast = (dx, capW) => {
     g.beginPath(); g.moveTo(WORLD_W + 40, C.top - capW); g.lineTo(C.x + dx + capW, C.top - capW);
-    g.quadraticCurveTo(C.x + dx - capW * 0.6, C.top - capW, C.x + dx - 2, C.top + 24);
-    for (let y = C.top + 24; y <= C.bottom - 24; y += 4) g.lineTo(shoreX(y) + dx, y);
+    g.quadraticCurveTo(C.x + dx - capW * 0.6, C.top - capW, C.x + dx - 2, C.top + SEA_CAP_IN);
+    for (let y = C.top + SEA_CAP_IN; y <= C.bottom - SEA_CAP_IN; y += 4) g.lineTo(shoreX(y) + dx, y);
     g.quadraticCurveTo(C.x + dx - capW * 0.6, C.bottom + capW, C.x + dx + capW, C.bottom + capW);
     g.lineTo(WORLD_W + 40, C.bottom + capW); g.closePath();
   };
   coast(-36, 40); g.fillStyle = MAP.sand; g.fill();
-  coast(0, 22); g.strokeStyle = INK; g.lineWidth = 4; g.lineJoin = 'round'; g.stroke(); g.fillStyle = MAP.river; g.fill();
+  coast(0, SEA_CAP); g.strokeStyle = INK; g.lineWidth = 4; g.lineJoin = 'round'; g.stroke(); g.fillStyle = MAP.river; g.fill();
   coast(C.deep, 8); g.fillStyle = MAP.deep; g.fill();
   g.fillStyle = MAP.wall;
   for (let y = C.top + 30; y < C.bottom - 26; y += 9) g.fillRect(R(shoreX(y)) + 3 + ((y / 9) & 1) * 3, y, 5, 2);

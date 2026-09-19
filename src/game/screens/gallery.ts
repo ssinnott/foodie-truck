@@ -82,12 +82,12 @@ export class GalleryScreen extends Screen {
   override update(): void {
     super.update();
     const inp = this.game.input;
-    const dx = navX(inp), dy = navY(inp);
-    if (dx) { this.anim = (this.anim + dx + ANIMS.length) % ANIMS.length; this.apply(); }
-    if (dy) this.zoom = Math.max(1, Math.min(4, this.zoom - dy));
-    if (inp.anyPressed('alt') >= 0) this.facing = -this.facing;
+    const dx = navX(inp), dy = navY(inp), audio = this.game.audio;
+    if (dx) { this.anim = (this.anim + dx + ANIMS.length) % ANIMS.length; this.apply(); audio.play('menu_move'); }
+    if (dy) { this.zoom = Math.max(1, Math.min(4, this.zoom - dy)); audio.play('menu_move'); }
+    if (inp.anyPressed('alt') >= 0) { this.facing = -this.facing; audio.play('menu_move'); }
     for (const s of this.slots) { s.player.tick(); if (s.player.done) s.player.play(ANIMS[this.anim], { restart: true }); }
-    if (cancelPressed(inp) >= 0) this.game.reset('title');
+    if (cancelPressed(inp) >= 0) { audio.play('menu_back'); this.game.reset('title'); }
   }
   override draw(ctx: CanvasRenderingContext2D): void {
     // A pinboard in the truck: paper wall, plum dado, wooden shelf floor (docs/ART_STYLE.md section 1).

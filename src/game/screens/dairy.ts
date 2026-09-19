@@ -42,16 +42,15 @@ const R = Math.round;
 
 /**
  * PUMP_PER_PAIL 12: twelve taps is about 2.4 s at a comfortable 5 presses/s and 6 s at a careful 2 presses/s, so a
- * solo player banks the shipped fallback target of 3 in under a third of the 2400-frame round even at the slow
- * rate - long enough that a pail feels earned, short enough that the clock stays a backstop and never the
- * opponent: this scene has no opponent.
+ * solo player banks the shipped fallback target of 3 in well under twenty seconds even at the slow rate - long
+ * enough that a pail feels earned, short enough that a round never drags: this scene has no clock and no opponent.
  */
 const PUMP_PER_PAIL = 12;
 /**
  * CHURN_PRESSES 12: the same dozen as the pail, so a pat of butter is exactly twice the tapping of a pail of milk.
  * The butter orders ask for one or two (content/recipes.js), which is 24..48 taps at a child's pace inside a
- * 2400-frame round with half the clock to spare; asking more per pat would make butter the one thing in the game a
- * slow tapper cannot finish, and the whole point of the dozen is that nobody can.
+ * round that has no clock, so nobody is ever hurried; asking more per pat would make butter the one thing in the
+ * game that drags, and the whole point of the dozen is that nothing does.
  */
 const CHURN_PRESSES = 12;
 /** The crank turns this far per press (draw-only), so twelve presses are one full turn: the round is the number. */
@@ -301,7 +300,7 @@ export class DairyScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /**
@@ -331,6 +330,7 @@ export class DairyScreen extends Screen {
     s.squirtT = SQUIRT_FRAMES;
     seatAnim(s, down === 0 ? 'pumpR' : 'pumpL', true);
     ringAt(s.pailX, s.pailY - PAIL_H, 3, 10, UI.cream, 2, 10, true, true);
+    this.game.audio.play('squirt');
     if (s.fill >= PUMP_PER_PAIL) { if (this.butter) this.pour(s); else this.bank(s); }
   }
 
@@ -351,6 +351,7 @@ export class DairyScreen extends Screen {
     this.hop(HOP_PAIL, s.pailX, s.pailY, CHURN_X[slot], ROWS.rack, s.slot, HOP_FRAMES, HOP_LIFT);
     ringAt(s.pailX, s.pailY - PAIL_H, 4, 18, SIGNAL.dairy, 2, 16, false, true);
     floatText(s.pailX, s.pailY - PAIL_H - 16, PLUS_ONE, s.colour, 1, true);
+    this.game.audio.play('pail');
   }
 
   /**
@@ -364,6 +365,7 @@ export class DairyScreen extends Screen {
     this.hop(HOP_POUR, s.pailX, s.pailY, s.churnX, s.hubY - CHURN_ABOVE_HUB - 4, s.slot, POUR_FRAMES, POUR_LIFT);
     ringAt(s.pailX, s.pailY - PAIL_H, 4, 18, SIGNAL.dairy, 2, 16, false, true);
     seatAnim(s, 'milkIdle', true);
+    this.game.audio.play('pour', { delay: POUR_FRAMES / 120 });
   }
 
   /** One turn of the crank: the paws swap over as they do on the udder, and the twelfth turn brings the butter. */
@@ -373,6 +375,7 @@ export class DairyScreen extends Screen {
     s.squirtT = SQUIRT_FRAMES;   // the crank's swing between one press and the next reads this, as the jet does
     seatAnim(s, down === 0 ? 'pumpR' : 'pumpL', true);
     ringAt(s.hubX, s.hubY, 3, 10, UI.cream, 2, 10, true, true);
+    this.game.audio.play('reel');   // the crank's ratchet: the pond's reel, which is the same handle going round
     if (s.churn >= CHURN_PRESSES) this.pat(s);
   }
 
@@ -385,6 +388,7 @@ export class DairyScreen extends Screen {
     ringAt(s.churnX, s.hubY - CHURN_ABOVE_HUB, 4, 18, SIGNAL.dairy, 2, 16, false, true);
     floatText(s.churnX, s.hubY - CHURN_ABOVE_HUB - 18, PLUS_ONE, s.colour, 1, true);
     seatAnim(s, 'milkIdle', true);
+    this.game.audio.play('pail');   // the dairy's +1 pip, the same for a pat as for a pail
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
@@ -392,7 +396,7 @@ export class DairyScreen extends Screen {
   /** The round is over: drop the sign; a seat that banked anything cheers, one that did not sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.bumpT = 0; s.squirtT = 0;
@@ -430,7 +434,7 @@ export class DairyScreen extends Screen {
     }
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, TITLE);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -548,7 +552,7 @@ export class DairyScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
       seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), fill: s.fill, count: s.count, bumpT: s.bumpT, phase: s.phase, churn: s.churn })),
       cows: this.seats.map((s) => s.cow.kind),
     };
@@ -557,7 +561,7 @@ export class DairyScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       f.push(s.fill, s.count, s.bumpT, s.squirtT, s.pailT, s.phase, s.churn, s.facing);

@@ -6,8 +6,8 @@
 // the moment it reaches the brim it ties itself off: +1 flour, the sack hops onto the barrow, a ring and a '+1', and
 // a fresh empty sack is in the paw. Letting go early keeps the part sack to be topped up at the next chute (this is
 // the co-op bit). Nothing bursts and nothing is ever lost: the only skill is being under the gold when it pours.
-// The round ends when the party's total reaches the order's amount or the 40-second clock runs out; the FLOUR sign
-// drops, is held, then run.gather('flour') and back to the map.
+// The round ends when the party's total reaches the order's amount, and not before (there is no clock to run out);
+// the FLOUR sign drops, is held, then run.gather('flour') and back to the map.
 //
 // The same chutes fill sacks of RICE when the list asks for it (game/run.js gatherTarget, docs/GDD.md section 5),
 // and the mechanic does not change by a frame - but the LOOK does, because a visit that pours flour dust into flour
@@ -84,8 +84,8 @@ const LANE_Y0 = ROWS.feet, LANE_GAP = 8;
 /**
  * The chutes. At most POUR_MAX are awake at once so a solo player is never asked to be in two places, and a wake
  * lands every 70..130 frames (mean 100). A wake costs a chute TELEGRAPH + POUR_FRAMES = 354 frames of its life, so
- * over a 2400-frame round the two slots offer 4800 chute-frames against the ~24 wakes the timer asks for: the cap
- * is what shapes the round, not the timer, and with two spouts nearly always running the room is never bare.
+ * over a forty-second stretch the two slots offer 4800 chute-frames against the ~24 wakes the timer asks for: the
+ * cap is what shapes the round, not the timer, and with two spouts nearly always running the room is never bare.
  *
  * POUR_FRAMES was 110 and a sack needs 90 of them: a spout was only ever worth reaching if you were already under
  * it when it lit, and a player anywhere else on the floor watched it close as they arrived (the playtest's own
@@ -96,9 +96,9 @@ const POUR_MAX = 2, TELEGRAPH = 24, POUR_FRAMES = 330, WAKE_MIN = 70, WAKE_MAX =
 /**
  * The tuning: a sack is 90 frames of one 330-frame pour, so a player who reaches a spout from anywhere on the
  * floor ties a sack off that pour, and a player who arrives late tops the part sack up at the next one. Wakes
- * land every 70..130 frames, so a solo party banks the fallback target of 3 in a wake or two, well inside the
- * 2400-frame round even camping under one spout. A four-seat party shares the same 2400 frames and the same two
- * live spouts, which is what keeps a full room co-operative rather than four people racing each other.
+ * land every 70..130 frames, so a solo party banks the fallback target of 3 in a wake or two, even camping under
+ * one spout (a round has no clock, so it is never hurried). A four-seat party shares the same two live spouts,
+ * which is what keeps a full room co-operative rather than four people racing each other.
  */
 /** A seat is under a chute within this of its centre: 72 px of standing room, so any part of the critter under the spout counts. */
 const CATCH_HALF = 36;
@@ -109,6 +109,8 @@ const CATCH_HALF = 36;
  * there" before the tie beat lands.
  */
 const FILL_RATE = 1 / 90, FULL = 1, BRIM_BAND = 0.35;
+/** Frames between replays of the pour's hush while a sack is under a running chute. */
+const POUR_EVERY = 12;
 const BRIM_AT = FULL - BRIM_BAND;
 /** The tie beat (18 frames of the `tie` anim) and the frame of it the sack leaves the paw on. */
 const TIE_FRAMES = 18, TIE_TOSS = 9;
@@ -509,7 +511,7 @@ export class MillScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /** A mote of flour somewhere in the shaft's quad: cosmetic, its own seeded stream, never in the checksum. */
@@ -572,6 +574,7 @@ export class MillScreen extends Screen {
           s.chute = c;
           if (this.chutes[c].seat < 0) this.chutes[c].seat = i;
           s.fill += FILL_RATE;
+          if ((this.frame % POUR_EVERY) === 0) this.game.audio.play('pour');
           // the brim ties the sack off by itself: there is no release to time and nothing to overfill
           if (s.fill >= FULL) this.tie(s);
         }
@@ -599,6 +602,7 @@ export class MillScreen extends Screen {
     h.t = -(TIE_FRAMES - TIE_TOSS); h.x0 = mx; h.y0 = my; h.slot = s.slot;
     ringAt(mx, my, 4, 16, UI.cream, 2, 14, false, true);
     floatText(mx, my - 26, PLUS_ONE, s.colour, 1, true);
+    this.game.audio.play('tie');
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
@@ -606,7 +610,7 @@ export class MillScreen extends Screen {
   /** The round is over: drop the sign; a seat that tied a sack cheers, one that never did sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.moving = false; s.bumpT = 0; s.tieT = 0; s.chute = -1;
@@ -633,7 +637,7 @@ export class MillScreen extends Screen {
     particles.draw(ctx, null, 'front');
     blitAt(ctx, L.beam.L, 0, L.beam.y);                 // the ceiling boards: the gear's teeth run up into them
     this.drawPlates(ctx);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, TITLE);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -709,7 +713,7 @@ export class MillScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
       tied: this.tied, wake: this.wake,
       // fill is rounded to three places so a test can read it without chasing float tails
       seats: this.seats.map((s) => [s.slot, R(s.x), s.count, Math.round(s.fill * 1000) / 1000, s.chute]),
@@ -723,7 +727,7 @@ export class MillScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.wake, this.tied);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.wake, this.tied);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       f.push(s.x, s.facing, s.count, s.fill, s.bumpT, s.tieT, s.chute, s.moving ? 1 : 0);

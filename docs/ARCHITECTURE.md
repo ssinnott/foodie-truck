@@ -35,8 +35,9 @@ author). Where a module says "ported", its behaviour is that game's, and `docs/A
 - **The shared half lives in `src/lib/`**, vendored from the `game-engine` repository with `git subtree`. Do not
   edit it here: fix it there and `git subtree pull`. `art/palettes.ts` and `engine/text.ts` are deliberate local
   shims — each re-exports the library and adds this game's own art direction (the palette tables, the ink).
-- **Zero binary assets.** All art is drawn with canvas primitives at runtime. No image, font or audio file is ever
-  fetched or committed. Icons and screenshots produced by the tools live outside the game (`tools/screens/`, ignored).
+- **Zero binary assets.** All art is drawn with canvas primitives at runtime; all audio is synthesized with WebAudio
+  (`engine/audio.ts`, section 3). No image, font or audio file is ever fetched or committed. Icons and screenshots
+  produced by the tools live outside the game (`tools/screens/`, ignored).
 - **Internal resolution:** `640 x 360` (`VIEW_W`, `VIEW_H`). That is the ONE canvas's bitmap size; CSS scales it to
   the largest whole number of CSS pixels per game pixel that fills most of the window (`lib/engine/canvas.ts`,
   `image-rendering: pixelated`). Snap sprite positions to integers when drawing.
@@ -57,7 +58,8 @@ index.html               the page: one canvas, the error box, the module entry
 src/constants.js         every shared number and UI colour (never hardcode these elsewhere)
 src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, actions (the eight, frozen), bindings (which key/button each one is on), input
-               (8-action masks), rng, math, trig, text (5x7 pixel font)
+               (8-action masks), rng, math, trig, text (5x7 pixel font), audio (the WebAudio facade) +
+               audio/ (synth primitives, the SFX library, the pattern sequencer and the tracks)
 src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (the paper-doll), layers (offscreen
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
                fishing + hens + kitchenProps + dairyProps + millProps + hiveProps + gardenProps (per-scene props),
@@ -140,6 +142,38 @@ wired to the four directions and is not.
 `createCanvas(el)`; `rng.seed/next/range/int/pick/chance/state` + `makeRng(seed)` for cosmetic streams;
 `clamp/lerp/approach/rad/deg/...`; `dsin/dcos/dhypot`; `drawText(ctx, text, x, y, { size, color, align, shadow })`,
 `drawTextOutlined(...)`, `measureText`, `lineHeight`. Text is upper-cased 5x7 pixels; never use system fonts.
+
+### `engine/audio.js`, `engine/audio/*.js`
+The model is the sibling game's audio stack, ported whole where it is generic and rewritten where it is that game's.
+```js
+export const audio = {
+  init(),                    // installs the one-time gesture listeners that create/resume the AudioContext
+  unlock(),                  // create/resume it now (from a user gesture)
+  play(name, { volume=1, pitch=1, delay=0 } = {}),   // named synthesized SFX (the list is GDD section 11)
+  music: { play(track), stop(), setVolume(v), current },   // looping tracks, equal-power crossfade between them
+  setMuted(m), toggleMute(), muted, setVolume(v), setSfxVolume(v), unlocked, musicPlaying,
+  testMode,                  // set true before init(): no AudioContext is ever made and every call is a no-op
+  render(name, seconds, { music }), selfTest(),   // OfflineAudioContext: the same code, measured, for the playtest
+};
+```
+`audio/synth.ts` is the primitives (`osc`, `noise`, `ring`, `am`, `echo`, `bus`, `glass`), every one pure with
+respect to the context — `(ctx, dest, when, opts)` on any BaseAudioContext — which is what lets `selfTest()` render
+the whole library into buffers and measure them with no speaker and no gesture. `audio/sfx.ts` is the library, one
+`(ctx, dest, when, { v, p }) => endTime` per name. `audio/music.ts` is a step sequencer over TRACK DATA: a key, a
+chord loop, channels with instruments and sixteenth-note patterns (`'r:4 r+7:4'`, `'chord:16'`, absolute notes,
+`K.h.S.h.` drums), compiled once and scheduled 200 ms ahead by a look-ahead timer. Every track is four bars, one
+chord a bar, and every pattern is a whole number of bars (`compileTrack` warns otherwise and the audio playtest
+fails on it).
+
+WIRING. `Game.push` starts the screen's track from its `SCREEN_MUSIC` table BEFORE `enter()` runs, so a screen
+can override it for one visit (the closed day board plays `closing`); a screen missing from the table leaves the
+music alone (the pause overlay). Screens call `this.game.audio.play(name)` from their `update()` — that is allowed
+on the simulation path because nothing here is state: no rng is read (the pitch wobble is `Math.random`, and a peer
+that hears a different wobble is on the same frame), nothing is hashed, and in `?autotest=1` no context exists.
+Sounds that must land on a later frame (a stamp's slam, the end sign's knock) take `delay` in seconds and are
+scheduled on the audio clock, never on a timer. M mutes (`main.ts`, off `typedCodes()`), and stands down while a
+rebind is capturing, while the lobby is typing a host key (`screen.typing`), or when M is bound to an action
+(`bindings.isKeyBound`). Mute is session-only; a persisted mute is a silent-game trap.
 
 ## 4. Art modules
 
@@ -244,18 +278,20 @@ All nine mini-games stand on this module, so it is **frozen**: a screen that wan
 its own file (the orchard keeps its catch boxes there, the coop its pluck anims). It owns, and is the only place
 that may define:
 
-- `ROUND_FRAMES` 2400 (GDD section 5's 40 seconds), `SIGN_SLAM` 6, `SIGN_HOLD` 60.
+- `SIGN_SLAM` 6, `SIGN_HOLD` 60. There is no round length: a round has no time limit (GDD section 5).
 - `makeSeats(game, floorY)` → one seat per party member (rig in the seat's apron colour, `AnimPlayer`, the ribbon
   basket, `count`, `bumpT`, the reused draw-options object); `seatAnim(seat, name, restart?)`.
 - `makeClock()` / `tickClock(clock)` / `endRound(clock, text)` / `roundOver(clock)` — the round's whole lifecycle.
-- `drawClock(ctx, clock, countStr, drawIcon, title)`, `drawEndSign(ctx, clock, frame)`, `drawSeatPlate(ctx, seat,
+  The clock only counts (`elapsed` frames, for the checksum and the tests); nothing in it ends a round.
+- `drawClock(ctx, countStr, progress, drawIcon, title)`, `drawEndSign(ctx, clock, frame)`, `drawSeatPlate(ctx, seat,
   stack?)` with `PLATES` / `resetPlates()` for the stacking pass.
 
 A mini-game screen is therefore: `enter()` builds its cached layers, its seats, its fixed sim pools and its target
 (**the remainder** of the order line, `max(1, amount - have)`, never the whole line — the map may have banked some
 already); `update()` simulates only while `clock.phase === 0`, calls `finish()` when the party's total reaches the
-target, and once `roundOver()` calls `run.gather(<ingredient>, total)` and `game.replace('map')`; `draw()` blits,
-sorts, plates, then draws the clock, the hint and the end sign. Changing a number in this module changes seven
+target — the only way a round ends — and once `roundOver()` calls `run.gather(<ingredient>, total)` and
+`game.replace('map')`; `draw()` blits, sorts, plates, then draws the tally ticket (its bar is `total / target`),
+the hint and the end sign. Changing a number in this module changes seven
 screens at once and needs all seven re-measured.
 
 ### Overlays
@@ -273,7 +309,7 @@ those ORDERS indices), `?room=CODE` / `?host=1` (online), `?transport=broadcast`
 
 ```js
 window.__game = {
-  ready, game, input, rng, options, loop, scenes,
+  ready, game, input, audio, rng, options, loop, scenes,
   step(n), screen(), screenIds(), summary(), goto(id, params),
   setInput(slot, actions|mask), clearInput(slot), critterList(), errors: [],
   // bindings: get() / set(data) / reset() / saved() — what the CONTROLS scenario drives
@@ -312,7 +348,9 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
   `playthrough` scenario is the one that never jumps: title → select → day board → drive → mini-games until the list
   is full → the queue → kitchen → results → the next in line → kitchen → results → map, on input alone (the menu
   fixed with `?recipes=` to the two landmarks it can play), so it fails when two screens that each pass on their
-  own cannot hand over.
+  own cannot hand over. The `audio` scenario renders every SFX and every track through an OfflineAudioContext and
+  fails on a silent or a throwing one, then walks the screens and reads which track each asked for, presses M for
+  real and reads the mute, and opens the closed board for its own track.
 - `npm run capture -- <dir> [screen[:params]...]` — screenshots of any screen at 2x (`tools/capture.js`).
 - `node tools/sheet-capture.js <dir> critter=<id> [anims,walk,closeup,cast,bench]` — critter contact sheets.
 - `.github/workflows/pages.yml` — lint, art-check, nettest, playtest, build on every push/PR; deploys `main`

@@ -66,7 +66,7 @@ export const ORDERS = Object.freeze([
   // asked for milk, flour, honey or carrots, `run.missing()` never named those landmarks, `screenForPlace` never
   // returned their screens and four finished mini-games would have sat unreachable behind a signpost. Each one
   // pairs a new ingredient with a second so the truck still makes two stops, and the amounts are the 3..4 a party
-  // gathers inside a 40-second round (measured against the orchard's four apples).
+  // gathers in well under a minute (measured against the orchard's four apples; a round has no clock).
   { id: 'honeyLoaf', dish: 'HONEY LOAF', customer: 'owl', line: 'A HONEY LOAF. WARM, AND CUT THICK.',
     needs: [{ id: 'flour', amount: 3 }, { id: 'honey', amount: 2 }], steps: ['fridge', 'mix', 'oven', 'plate'] },
   { id: 'custardTart', dish: 'CUSTARD TART', customer: 'goat', line: 'CUSTARD TART. NOT TOO WOBBLY.',

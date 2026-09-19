@@ -1,18 +1,23 @@
 // Mini-game furniture shared by the mini-game screens (docs/GDD.md section 5 common rules): the seats (one rig +
 // AnimPlayer per party member, built in enter(), never in draw()), the name plates above the tallest head part, the
-// paper clock, the wooden sign that drops in on ropes to end the round, and the basket wrapper that adds the seat's
-// ribbon and the catch squash to content/critters/items.js ITEMS.basket without touching it.
+// paper tally ticket, the wooden sign that drops in on ropes to end the round, and the basket wrapper that adds the
+// seat's ribbon and the catch squash to content/critters/items.js ITEMS.basket without touching it.
+//
+// A ROUND HAS NO TIME LIMIT. It ends when the party's total reaches the target (the shopping list's remainder) and
+// not before: nobody is sent back to the map short, so a landmark is one visit per ingredient and the pantry fills
+// in the order the truck drives. The round keeps an elapsed-frame count for the desync canary and the tests, and
+// the ticket's bar fills with the tally instead of draining with a timer.
 //
 // SHARED, SO FROZEN. This started as the orchard's private helper and the coop now imports it too, which makes every
 // number in here another owner's timing as well. Until docs/ARCHITECTURE.md section 5 records it (the integrator's
 // call — see the orchard's deviations), treat this as the contract and change nothing in it for one screen's sake:
-//   ROUND_FRAMES 2400, SIGN_SLAM 6, SIGN_HOLD 60
+//   SIGN_SLAM 6, SIGN_HOLD 60
 //   makeSeats(game, floorY) -> seats[]  | seatAnim(seat, name, restart?)
-//   drawSeatPlate(ctx, seat, stack?)    | makeClock() / tickClock(clock) / endRound(clock, text) / roundOver(clock)
-//   drawClock(ctx, clock, countStr, drawIcon, title) | drawEndSign(ctx, clock, frame)
+//   drawSeatPlate(ctx, seat, stack?)    | makeClock() / tickClock(clock) / endRound(clock, text, audio?) / roundOver(clock)
+//   drawClock(ctx, countStr, progress, drawIcon, title) | drawEndSign(ctx, clock, frame)
 // Anything ONE screen needs lives in that screen (the orchard keeps its own catch boxes, seat draw and poses).
 //
-// Everything simulated here (the clock, the sign's frame counter) is plain integers driven by update(); every
+// Everything simulated here (the elapsed count, the sign's frame counter) is plain integers driven by update(); every
 // Math.sin/atan2 lives in a draw helper, so headless peers step without drawing.
 import { PLAYER_COLORS, UI, SIGNAL, VIEW_W } from '../constants.ts';
 import { critterRig } from '../content/critters/common.ts';
@@ -24,7 +29,7 @@ import type { DrawRigOpts, Rig, RigWeapon } from '../lib/art/rig.ts';
 import { LIGHT_X, LIGHT_Y } from '../lib/art/shading.ts';
 import { drawText, measureText } from '../engine/text.ts';
 import { drawTicket, drawBar, drawSign, drawNamePlate } from './ui.ts';
-import type { Game } from './game.ts';
+import type { Game, Audio } from './game.ts';
 
 /**
  * The basket state a rig carries, merged into the library's `Rig` rather than restated as a wrapper type: the
@@ -47,8 +52,6 @@ declare module '../lib/art/rig.ts' {
 }
 
 const R = Math.round;
-/** GDD section 5: a mini-game lasts 40 seconds. */
-export const ROUND_FRAMES = 2400;
 /** The end sign slams in over 6 frames and is held 60 (GDD section 5). */
 export const SIGN_SLAM = 6, SIGN_HOLD = 60;
 /**
@@ -193,10 +196,13 @@ export function drawSeatPlate(ctx: CanvasRenderingContext2D, seat: Seat, stack?:
   drawNamePlate(ctx, seat.slot, seat.name, cx, y);
 }
 
-/** The round's clock and ending, plain data: frames left, the phase (0 play, 1 sign), and the sign's frame counter. */
+/**
+ * The round's clock and ending, plain data: frames played, the phase (0 play, 1 sign), and the sign's frame counter.
+ * The clock only counts; nothing in it ends a round. A round ends when the screen's total reaches its target.
+ */
 export interface Clock {
-  /** Frames left of the round. */
-  timer: number;
+  /** Frames the round has been played (phase 0 only). Sim state: it feeds the checksum and the tests' frame counts. */
+  elapsed: number;
   /** 0 = playing, 1 = the sign is dropping. */
   phase: number;
   /** Frames since the sign started dropping. */
@@ -204,16 +210,21 @@ export interface Clock {
   /** The words on the board, built once by the screen that ends the round. */
   signText: string;
 }
-export function makeClock(): Clock { return { timer: ROUND_FRAMES, phase: 0, signT: 0, signText: '' }; }
+export function makeClock(): Clock { return { elapsed: 0, phase: 0, signT: 0, signText: '' }; }
 
-/** Tick the clock; returns true on the frame the timer runs out (the caller ends the round). */
-export function tickClock(clock: Clock): boolean {
-  if (clock.phase !== 0) { clock.signT++; return false; }
-  if (clock.timer > 0) clock.timer--;
-  return clock.timer === 0;
+/** Tick the clock: the elapsed count while the round is played, the sign's frame counter once it is ending. */
+export function tickClock(clock: Clock): void {
+  if (clock.phase !== 0) clock.signT++;
+  else clock.elapsed++;
 }
-/** Start the sign-drop ending with the words on the board (one string, built once). */
-export function endRound(clock: Clock, text: string): void { clock.phase = 1; clock.signT = 0; clock.signText = text; }
+/**
+ * Start the sign-drop ending with the words on the board (one string, built once). Given the audio service, the
+ * sign's knock lands on the audio clock at the frame the board does (SIGN_SLAM), and the round-over tune follows.
+ */
+export function endRound(clock: Clock, text: string, audio?: Audio): void {
+  clock.phase = 1; clock.signT = 0; clock.signText = text;
+  if (audio) { audio.play('sign_drop', { delay: SIGN_SLAM / 60 }); audio.play('round_over', { delay: (SIGN_SLAM + 8) / 60 }); }
+}
 /** True once the sign has slammed in and been held its 60 frames. */
 export function roundOver(clock: Clock): boolean { return clock.phase === 1 && clock.signT >= SIGN_SLAM + SIGN_HOLD; }
 
@@ -221,16 +232,17 @@ export function roundOver(clock: Clock): boolean { return clock.phase === 1 && c
 export type ClockIcon = (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
 
 /**
- * The paper clock: a small perforated ticket at the top centre with the ingredient icon, the party's `countStr`
- * ("3/4", built by the screen when it changes) and a bar draining as the 40 seconds go.
+ * The paper tally ticket: a small perforated ticket at the top centre with the ingredient icon, the party's
+ * `countStr` ("3/4", built by the screen when it changes) and a bar that fills with `progress` (total / target,
+ * 0..1) as the round is gathered. It fills rather than drains: there is no time to run out of.
  */
-export function drawClock(ctx: CanvasRenderingContext2D, clock: Clock, countStr: string, drawIcon: ClockIcon | null, title: string): void {
+export function drawClock(ctx: CanvasRenderingContext2D, countStr: string, progress: number, drawIcon: ClockIcon | null, title: string): void {
   const w = 132, h = 40, x = R(VIEW_W / 2 - w / 2), y = 6;
   CLOCK_OPTS.title = title;
   const top = drawTicket(ctx, x, y, w, h, CLOCK_OPTS);
   if (drawIcon) drawIcon(ctx, x + 14, top + 9);
   drawText(ctx, countStr, x + 26, top + 5, COUNT_TEXT);
-  drawBar(ctx, x + 62, top + 7, 62, 6, clock.timer / ROUND_FRAMES, BAR_OPTS);
+  drawBar(ctx, x + 62, top + 7, 62, 6, progress < 1 ? progress : 1, BAR_OPTS);
 }
 
 /**

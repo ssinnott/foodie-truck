@@ -4,7 +4,7 @@
 //   coop - four seats in the coop: seat 0 is driven along its lane to the nearest egg (polling summary() for its
 //          reach x and holding the stick toward it), presses action and has one egg in its basket; up and down
 //          move nobody (the lanes are the whole depth a seat gets); the five hens potter at the back and touch
-//          nothing; then the clock is forced to its last frames: the EGGS sign drops, is held, and the screen
+//          nothing; then the finish line is brought down to the party's total: the EGGS sign drops, is held, and the screen
 //          returns to the map with the order's egg line updated by the party's total. Also writes
 //          tools/screens/coop-pluck.png and coop-sign.png.
 import { withPage, assert } from '../playtest.js';
@@ -65,13 +65,15 @@ export const SCENARIOS = {
       assert(JSON.stringify(p.top.seats.slice(1).map((s) => [s[1], s[2]])) === others0, 'the other seats stayed put: no hen shoves anyone');
       assert(p.top.hens.every((h) => h[1] <= 290), `the hens keep to the back of the floor (${p.top.hens.map((h) => h[1]).join()})`);
 
-      // force the clock to its end (or watch the early ending) and expect the sign, then the map
+      // bring the finish line down to the party's total (or watch the early ending) and expect the sign, then the map:
+      // there is no clock to force, a round ends only when the total reaches the target
       let s2 = await api.summary();
       if (s2.screen === 'coop' && s2.top.phase === 0) {
-        await page.evaluate(() => { window.__game.game.screen.clock.timer = 3; });
+        assert(s2.top.count >= 1, `something was collected before the ending (count ${s2.top.count})`);
+        await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(1, sc.total); sc.setTotal(sc.total); });
         await api.step(4 + SLAM + 20);
         s2 = await api.summary();
-        assert(s2.screen === 'coop' && s2.top.phase === 1 && /^EGGS: \d+$/.test(s2.top.sign), `the clock ran out: the EGGS sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
+        assert(s2.screen === 'coop' && s2.top.phase === 1 && /^EGGS: \d+$/.test(s2.top.sign), `the target was reached: the EGGS sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
         await api.shot('coop-sign');
         await api.step(HOLD);
       } else if (s2.screen === 'coop') await api.step(SLAM + HOLD);

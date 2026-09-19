@@ -3,9 +3,10 @@
 //
 //   map - four seats on the map: holding right on seat 0 drives the truck east off home, a honk stamps, the river
 //         stops it short of a bridge, the mill's wall stops it outside the tower, a landmark the order does NOT
-//         need drops a NOTHING NEEDED HERE sign, and driving to the orchard with apples on the order opens the
-//         orchard screen. Every signpost is checked off the driving lane so none of them can drift back onto it.
-//         Also writes tools/screens/map-driving.png.
+//         need drops a NOTHING NEEDED HERE sign, the millpond and the cove's sea stop it on their banks, and
+//         driving to the orchard with apples on the order opens the orchard screen. Every signpost is checked off
+//         the driving lane so none of them can drift back onto it, and every door and signpost is checked out of
+//         the water. Also writes tools/screens/map-driving.png.
 //
 //   routing - the data invariant behind the seven mini-games: every ingredient in content/recipes.js names a
 //             landmark that exists, that landmark carries a screen, that screen is registered in main.js, and
@@ -20,7 +21,7 @@
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.ts';
 import { INGREDIENTS, ORDERS } from '../../src/content/recipes.ts';
-import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, riverDist, laneDist, wallBlocked } from '../../src/art/backgrounds/map.ts';
+import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, SPOTS, riverDist, laneDist, wallBlocked, waterBlocked, pondBlocked, seaBlocked, shoreX } from '../../src/art/backgrounds/map.ts';
 
 const placeOf = (id) => PLACES.find((p) => p.id === id);
 const teleport = (page, x, y, heading) => page.evaluate(([px, py, h]) => { const t = window.__game.game.run.truck; t.x = px; t.y = py; t.at = ''; if (h != null) t.heading = h; }, [x, y, heading == null ? null : heading]);
@@ -84,6 +85,24 @@ export const SCENARIOS = {
       const sw = await api.summary();
       assert(sw.top.truck.y > mill.y - 82 && sw.top.truck.y < mill.y, `the mill's wall stops the truck outside the tower (y ${sw.top.truck.y}, tower ${mill.y - 82}..${mill.y - 6})`);
 
+      // the millpond is not drivable either: drive north at it from its door (the list needs nothing there, so the
+      // door only drops a sign) and stop on the bank, the token's centre a half-token short of the water
+      const pond = placeOf('pond'), P = SPOTS.pond;
+      await teleport(page, pond.x, pond.y + 60, 12);
+      await api.hold(0, { up: true }); await api.step(150);
+      const sp = await api.summary(); await api.release(0);
+      assert(sp.screen === 'map' && sp.top.blocked === true, `driving into the millpond holds the truck (on ${sp.screen}, blocked ${sp.top.blocked})`);
+      assert(sp.top.truck.x === pond.x && sp.top.truck.y > P.y + P.ry && sp.top.truck.y < pond.y - 5, `...on the bank below the water (y ${sp.top.truck.y}, water to ${P.y + P.ry}, door ${pond.y})`);
+      assert(!pondBlocked(sp.top.truck.x, sp.top.truck.y + 1) && pondBlocked(sp.top.truck.x, sp.top.truck.y - 2), `...right against the pond's block (y ${sp.top.truck.y})`);
+      // ...nor the cove's sea: drive east off the cove's door, over the sand, and stop short of the waterline
+      const shore = placeOf('shore');
+      await teleport(page, shore.x, shore.y, 0);
+      await api.hold(0, { right: true }); await api.step(150);
+      const ss = await api.summary(); await api.release(0);
+      assert(ss.screen === 'map' && ss.top.blocked === true, `driving into the sea holds the truck (on ${ss.screen}, blocked ${ss.top.blocked})`);
+      assert(ss.top.truck.y === shore.y && ss.top.truck.x > SPOTS.cove.x - 36 && ss.top.truck.x < shoreX(ss.top.truck.y) - 8, `...on the sand short of the waterline (x ${ss.top.truck.x}, sand from ${SPOTS.cove.x - 36}, waterline ${shoreX(ss.top.truck.y).toFixed(1)})`);
+      assert(!seaBlocked(ss.top.truck.x - 1, ss.top.truck.y) && seaBlocked(ss.top.truck.x + 2, ss.top.truck.y), `...right against the sea's block (x ${ss.top.truck.x})`);
+
       // the orchard supplies the missing apples: arriving there opens its screen
       const o = placeOf('orchard');
       await teleport(page, o.x + 70, o.y + 70, 10);
@@ -91,11 +110,14 @@ export const SCENARIOS = {
       const s5 = await api.summary();
       assert(s5.screen === 'orchard', `arriving at the orchard opens the orchard screen (now on ${s5.screen}, truck at '${s5.run.truckAt}')`);
 
-      // every signpost stands off the lane and out of a wall: the truck drives through anything that does not
+      // every signpost stands off the lane and out of a wall: the truck drives through anything that does not.
+      // Every door and signpost is on dry land too, or the water block would put a landmark out of reach
       for (const p of PLACES) {
         const g = SIGN_AT[p.id], d = laneDist(g.x, g.y);
         assert(d > SIGN_CLEAR, `the ${p.id} signpost clears the driving lane (${d.toFixed(1)} px > ${SIGN_CLEAR})`);
         assert(!wallBlocked(g.x, g.y), `the ${p.id} signpost is not planted inside a building`);
+        assert(!waterBlocked(g.x, g.y), `the ${p.id} signpost is not planted in the water`);
+        assert(!waterBlocked(p.x, p.y), `the ${p.id} door is on dry land`);
       }
     });
   },

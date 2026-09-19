@@ -8,8 +8,8 @@
 //          the fuse burn down (HOLD_FRAMES), it goes off in a cloud of smoke and embers, and the critter stands there
 //          blackened and dazed with smoke coming off its ears (SINGED_FRAMES) before shaking it off and carrying on.
 //          Nothing is lost but the time.
-// The round ends when the party's total reaches the order's amount or the 40-second clock runs out; a wooden sign
-// drops in on ropes, is held a second, then run.gather() and back to the map.
+// The round ends when the party's total reaches the order's amount, and not before (there is no clock to run out);
+// a wooden sign drops in on ropes, is held a second, then run.gather() and back to the map.
 //
 // The orchard drops pears, peaches and avocados as well as apples, and a visit gathers whichever the day is short of
 // (game/run.js gatherTarget). The mechanic never changes - a pear is caught like an apple - but the visit LOOKS like
@@ -365,7 +365,7 @@ export class OrchardScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /** Every seat: the beats first (they lock the stick), then the stick, the anim, the catch beat. */
@@ -424,14 +424,17 @@ export class OrchardScreen extends Screen {
           this.setTotal(this.total + 1);
           ringAt(bx, by, 4, 14, UI.cream, 2, 12, false, true);
           floatText(bx, by - 12, PLUS_ONE, s.colour, 1, true);
+          this.game.audio.play('catch');
         } else if (a.kind === WORMY) {
           // the grub: a flinch and a dazed face, and that is all it costs
           s.bumpT = BUMP_FRAMES; s.moving = false;
           seatAnim(s, 'bump', true);
+          this.game.audio.play('wormy');
         } else this.lightFuse(s);
       }
       if (!caught && bottom >= APPLE_FLOOR) {
         a.active = false;
+        this.game.audio.play('splat');
         const sp = this.splats[this.splatCursor]; this.splatCursor = (this.splatCursor + 1) % this.splats.length;
         sp.t = 0; sp.x = R(a.x); sp.y = APPLE_FLOOR;
       }
@@ -443,6 +446,7 @@ export class OrchardScreen extends Screen {
     s.boomT = BOOM_TOTAL; s.moving = false; s.catchT = 0;
     s.rig.weapon = null;
     seatAnim(s, 'holdBomb', true);
+    this.game.audio.play('fuse');
   }
 
   /** One frame of the bomb sequence: the hold, the bang on the one frame it lands, the singed stand, the recovery. */
@@ -463,6 +467,7 @@ export class OrchardScreen extends Screen {
     ringAt(px, py, 4, 20, UI.cream, 2, 10, false, true);
     floatText(px, py - 20, BOOM, UI.cream, 1, true);
     seatAnim(s, 'singed', true);
+    this.game.audio.play('boom');
   }
 
   /** Shaken off: the soot goes, the basket is back in the paw, and the seat is a player again. */
@@ -476,7 +481,7 @@ export class OrchardScreen extends Screen {
   /** The round is over: drop the sign, and every seat with something in its basket cheers. */
   finish(): void {
     if (this.clock.phase !== 0) return;
-    endRound(this.clock, this.signPrefix + this.total);
+    endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       s.moving = false; s.bumpT = 0;
@@ -505,7 +510,7 @@ export class OrchardScreen extends Screen {
     // plates front lane first, each one stacked clear of the ones already down: ragged row, no buried name
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, TITLE);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawEndSign(ctx, this.clock, this.frame);
     if (this.game.options.debug) this.drawBoxes(ctx);
@@ -604,7 +609,7 @@ export class OrchardScreen extends Screen {
 
   override summary() {
     return {
-      caught: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText, booms: this.booms,
+      caught: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, booms: this.booms,
       seats: this.seats.map((s) => [s.slot, R(s.x), s.count, s.bumpT, s.boomT]), apples: this.apples.filter((a) => a.active).length,
     };
   }
@@ -612,7 +617,7 @@ export class OrchardScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.booms);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.booms);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.count, s.bumpT, s.boomT, s.moving ? 1 : 0); }
     for (let i = 0; i < this.apples.length; i++) { const a = this.apples[i]; f.push(a.active ? 1 : 0, a.x, a.y, a.vy, a.kind, a.t); }
     return f;
