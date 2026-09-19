@@ -112,7 +112,14 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   scatter) with a `#B99A6A` edge, river `#6F9FB0` over `#4E7A8C`, hedges `#4F6B3A`, cottage walls `#F1E4C8`, roofs
   `#A65A48`, plum tree-line `#4A3038`, a dusk-peach horizon strip `#F4C9A0`; signal: lantern gold on the next sign.
 - **Orchard**: daytime warm sky `#FBE3C4`→`#F4C9A0`, canopy `#4F6B3A` with `#6E8A48` caps, grass `#5E7A3E` (L .42),
-  four depth lanes 8 px apart; signal: ripe apple red `#D9463B`; HOT on a bomb apple's fuse spark.
+  four depth lanes 8 px apart; signal: ripe apple red `#D9463B`; HOT on a bomb apple's fuse spark. The trees are
+  the fruit's own (`backgrounds/orchard.js TREES`, the mid and eaves layers repainted per fruit on the same seeds
+  and cached per fruit, the way the cove borrows the pond): a **pear** tree taller and narrower in a paler leaf
+  `#587A3C` / `#82A04E`; a **peach** tree one round head in a warmer olive `#5F7040` with dusty-rose `#C49488` caps,
+  its blossom and its fruit at once; an **avocado** tree a big dark glossy canopy `#3A5A48` / `#6E9070` on a thick
+  trunk (a hue step off the hive's hedge, so the two dark greens never twin). No fruit hex is ever painted into a
+  canopy — a fruit in the leaves that never falls is a false target — so the only fruit on any tree is the screen's
+  own hanging one, one beat before it drops.
 - **Pond**: golden-hour sky, a plum tree-line `#4A3038` behind the torsos, bank turf `#6E7A5A`, water `#4E7A8C` with a
   `#6F9FB0` surface band, jetty `#9A6234`; signal: bite ring mint `#5FD3C0`; floats white with a slot-colour cap and an
   8×5 slot tag above.

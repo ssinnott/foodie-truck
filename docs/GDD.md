@@ -150,7 +150,13 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   burning fuse — and catching it is the scene's joke: the critter holds it up and watches the fuse burn for 40
   frames, it goes off in smoke and embers, and the critter stands blackened and dazed for 90 frames before shaking
   it off. Nothing is lost but the time. Four seats use four depth lanes 8 px apart so bodies stack instead of
-  fusing.
+  fusing. A visit for pears, peaches or avocados is the same catch under **that fruit's own trees**: the backdrop's
+  canopies are painted per fruit (a pear tree taller and narrower, a peach tree rounder with a pink-tinged leaf,
+  an avocado tree one big dark glossy canopy), the fruit hangs on its branch in that canopy in its own colour before
+  it lets go, and the fall has the fruit's own feel from a per-fruit table (a pear sways less, a peach drifts
+  wider, an avocado drops heavier and straighter) — every speed still inside the basket's catch window, every
+  number still drawn from `rng`. The wormy one and the bomb play on every visit: a wormy pear is a bruised pear with
+  the same grub, and a pear with a fuse goes off exactly as an apple does.
 - **Pond — FISH** (*tap*). Fixed standing spots on a jetty, one float column per seat. `action` casts; the float
   bobs; after a seeded 60–150 frames the fish bites (the float drops, a mint ring) and stays on. Tapping `action`
   twelve times reels it in: every press is one turn of the reel, drawn as a bar over the float. A press during the wait
