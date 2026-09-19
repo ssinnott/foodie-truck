@@ -291,3 +291,37 @@ export const SCENARIOS = {
     });
   },
 };
+
+/**
+ * netweek - the WEEK on the wire. The host is mid-week, with a record on disk and three days already banked; the
+ *        guest has never played. One byte of START carries which DAY the party opens on, and the week's RECORD
+ *        deliberately does not travel: `weekStars` is hashed by the canary, so a host who walked in through
+ *        CONTINUE carrying days no guest can know about would desync the room on frame one. `startRun` beginning
+ *        it empty on every peer is what stops that, and this is the test that would catch it coming back.
+ */
+SCENARIOS.netweek = async (server) => {
+  const { DAYS_PER_WEEK, SCENES } = await import('../../src/game/run.ts');
+  const day = DAYS_PER_WEEK - 2, stage = SCENES.indexOf('stage');
+  await withPeers(server, ['transport=broadcast&skipTo=title', 'transport=broadcast&skipTo=title'], async (pages) => {
+    // the host is mid-week: a saved record, and days already banked that no guest can know about
+    await pages[0].evaluate((d) => localStorage.setItem('foodie-truck.week', JSON.stringify({
+      v: 1, seed: 481920, day: d, critters: [0, 1], stars: [12, 18, 14], takings: [1200, 1800, 1400],
+    })), day);
+    await fillRoom(pages);
+    await pages[0].evaluate((d) => { window.__game.net().lobby.day = d; }, day);
+    await readyAll(pages, 2, stage, 'stage', 0);   // the day board draws no seat dots: nobody stands on it
+    await runMatch(pages, 60);
+    const runs = await Promise.all(pages.map((p) => p.evaluate(() => {
+      const r = window.__game.game.run;
+      return { day: r.day, stars: r.weekStars.slice(), takings: r.weekTakings.slice(), score: r.score, recipes: r.recipes.slice(), lines: r.lines.length };
+    })));
+    assert(runs[0].day === day && runs[1].day === day, `the host's day crosses in START (${runs.map((r) => r.day).join()}, wanted ${day})`);
+    assert(runs.every((r) => r.stars.length === 0 && r.takings.length === 0), `and the week's RECORD does not: every peer starts it empty (${JSON.stringify(runs.map((r) => r.stars))})`);
+    assert(JSON.stringify(runs[0]) === JSON.stringify(runs[1]), `both machines lay the same day out (${JSON.stringify(runs)})`);
+    await checkLockstep(pages, `on the host's day ${day + 1} with a week saved on the host alone`);
+    // (that a GUEST writes no week of its own is `weekOnlineGuard` in tools/scenarios/week.js, not here: both
+    // peers of a broadcast room are pages of one browser on one origin, so they share a localStorage and this
+    // file cannot tell whose record it is looking at.)
+  });
+};
+

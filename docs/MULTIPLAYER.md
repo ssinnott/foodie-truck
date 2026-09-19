@@ -13,7 +13,7 @@ Two to four players, every browser running the same simulation at 60Hz, exchangi
 
 | Piece | Module | Notes |
 |---|---|---|
-| Wire format | `src/net/protocol.js` (framing in `lib/net/protocol.ts`) | 8 actions in a uint16; a slot-tagged INPUT packet with 8 frames of redundancy is 23 bytes; START carries `{ seed, scene, delay, critters[] }` |
+| Wire format | `src/net/protocol.js` (framing in `lib/net/protocol.ts`) | 8 actions in a uint16; a slot-tagged INPUT packet with 8 frames of redundancy is 23 bytes; START carries `{ seed, scene, delay, day, critters[] }` |
 | Frame scheduler | `src/net/lockstep.js` | One ring per seat; delay applied at record time; `resend()` and `tailOf()` while stalled; DROP frames |
 | Desync canary | `src/net/checksum.js` (kernel in `lib/net/checksum.ts`) | `runChecksum(game)`: FNV-1a over `rng.state`, `game.frame`, every field of `game.run`, the top screen's id and `checksumFields()` |
 | Peer link | `src/net/peer.js` | One link of the mesh: an unreliable channel for INPUT/CHECKSUM, a reliable one for everything else |
@@ -46,8 +46,11 @@ idle -> signalling -> connecting -> lobby (guest) -> playing -> ended
 5. Latency: each peer pings every other (through the relay where that is the path), keeps the worst round trip,
    and guests report theirs to the host. `delayForRtt` turns the worst in the room into an input delay of 2-10
    frames that exceeds the one-way latency. The match never auto-starts before the measurement is in.
-6. When every seated player is ready and reachable, the host sends `START { seed, scene, delay, critters }` and
-   applies it itself. `beginMatch(scene)` is the same thing called by hand (a lobby's START ANYWAY, the tests).
+6. When every seated player is ready and reachable, the host sends `START { seed, scene, delay, day, critters }`
+   and applies it itself. `beginMatch(scene, day)` is the same thing called by hand (a lobby's START ANYWAY, the
+   tests). `day` is which day of the HOST'S WEEK the party opens on (`game/run.js DAY_SHAPES`): the week itself is
+   a pure function of the seed, so that one byte is the entire cost of the week on the wire, and a host who is
+   resuming a week takes the party into the day they are actually standing in.
    `scene` defaults to `game/run.js START_SCENE`, the DAY BOARD: an online party reads the day's plan together on
    the first shared screen of the match, and the truck is opened by whoever presses.
 
@@ -68,7 +71,7 @@ if they leave, the session ends for everyone. Host migration is not implemented.
 it desyncs peers that are otherwise identical:
 
 - `rng.seed(seed)` — the boot seed is `Date.now()`-derived.
-- `startRun(game, { seed, critters })` — the run is the only cross-screen state and is rebuilt from the packet.
+- `startRun(game, { seed, critters, day })` — the run is the only cross-screen state and is rebuilt from the packet.
 - `game.frame = 0` — it is hashed, and it counted every update since boot.
 - a fade-out in flight is turned into a fade-in — `Game.update()` skips the top screen while fading out, and one
   peer may be mid-fade when START lands.
@@ -109,6 +112,15 @@ their own keyboard (`beforeStep` keeps feeding it from `pollRaw(0)`); `leave()` 
 - Inside `update()`: no clock, no `Math.random`, no `Math.sin/cos/pow/hypot/atan2` on anything that reaches state
   (`engine/trig.js`), no `localStorage`, no window size. The gameplay `rng` is consumed in `update()` only, never
   in `draw()` (render runs per rAF, update at 60Hz, so a draw-time draw diverges by refresh rate).
+- **The two saved files obey that rule from opposite ends.** The WEEK in progress (`game/week.js`) is read in a
+  screen's `enter()` and written at the closed day board, and an online peer does not write it at all: a guest
+  plays the host's week, which arrived in START, and one player owns a week the way one player owns the host key.
+  The RECIPE BOOK (`game/book.js`) is stronger still - it is **written by the game and read only by the book
+  screen**, and nothing it holds ever reaches `planWeek`, `planDay`, `gatherTarget` or any `update()`. That is
+  what makes a saved file safe here at all: two peers with different books play byte-identical days because no
+  code path exists from the book into the simulation. An unlock would desync them the instant their saves
+  differed. `tools/check.js` fails the build if any module but `game/screens/book.js` imports the book's
+  `readBook`, and the `bookInvariant` playtest scenario proves the same thing from outside the code.
 - Scene changes are driven by simulation state (`game.replace(...)` from inside `update()`), so they happen on the
   same frame everywhere. `fadeTo` from inside `update()` is fine for the same reason.
 - Expose `checksumFields()` returning every number or string that can diverge, and `summary()` for the tests.

@@ -20,16 +20,27 @@ import { CRITTERS } from '../../content/critters/index.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawSlate, drawMenuRows, drawHint } from '../ui.ts';
 import { confirmPressed, navY } from '../menuinput.ts';
+import { readWeek } from '../week.ts';
+import type { WeekRecord } from '../week.ts';
+import { startRun, shapeOf, DAYS_PER_WEEK } from '../run.ts';
 import { drawLane, drawLogoSign, drawCrate, drawBlock, TRUCK_Y, CREW_Y } from '../../art/logo.ts';
 
-/** The menu, and the screen each row opens. SOURCE is a link, not a screen. */
-const ROWS = ['PLAY', 'ONLINE', 'CONTROLS', 'CREW', 'SOURCE'];
 /**
- * The A-frame slate on the verge, right of the crew. Sized to its five rows: an empty board is dead green. It
- * stood at x 426, 176 wide, while the crew were four; the fifth member takes the lane up to ~478, so the board
- * is 36 px narrower and starts where the lineup stops (its widest row, CONTROLS, is 48 px of the 140).
+ * The menu, and the screen each row opens. SOURCE is a link, not a screen.
+ *
+ * The first row is PLAY or CONTINUE - the same row in two states, never both - depending on whether there is a
+ * week in progress (game/week.ts). PLAY starts a fresh week at the character select; CONTINUE reseats the party
+ * the saved week was being played by and opens its board straight away.
  */
-const SLATE = { x: 482, y: 180, w: 140, h: 104 };
+const ROWS = ['PLAY', 'ONLINE', 'BOOK', 'CONTROLS', 'CREW', 'SOURCE'];
+const PLAY_ROW = 0, PLAY_TEXT = 'PLAY', CONTINUE_TEXT = 'CONTINUE';
+/**
+ * The A-frame slate on the verge, right of the crew. It stood at x 426, 176 wide, while the crew were four; the
+ * fifth member takes the lane up to ~478, so the board is 36 px narrower and starts where the lineup stops (its
+ * widest row, CONTINUE, is 56 px of the 140). It grew 18 px taller when BOOK joined the list: five rows at a 14
+ * pitch cleared the old 104, six do not, and a row clipped by the frame is worse than a slightly taller A-frame.
+ */
+const SLATE = { x: 482, y: 166, w: 140, h: 122 };
 /**
  * Where the truck parks, the crate it was loaded from, and where the crew lines up.
  *
@@ -138,8 +149,15 @@ export class TitleScreen extends Screen {
   declare crew: TitleSeat[];
   /** Which ROWS row the slate stands on; the one number this screen can diverge on. */
   declare sel: number;
+  /**
+   * The week in progress, read ONCE here in enter() and never in update() (docs/MULTIPLAYER.md: no localStorage
+   * on the simulation path). null when there is none, which is what makes the first row say PLAY.
+   */
+  declare week: WeekRecord | null;
+  /** The menu as this screen draws it: ROWS with the first row worded for the week. */
+  declare rows: string[];
 
-  constructor(game: Game) { super(game, 'title'); this.crew = []; this.sel = 0; }
+  constructor(game: Game) { super(game, 'title'); this.crew = []; this.sel = 0; this.week = null; this.rows = ROWS.slice(); }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -148,6 +166,10 @@ export class TitleScreen extends Screen {
     this.game.input.setPadClaims(true);
     this.game.input.resetClaims();
     this.sel = 0;
+    // a week part-played turns the first row from PLAY into CONTINUE; there is never both
+    this.week = readWeek();
+    this.rows = ROWS.slice();
+    this.rows[PLAY_ROW] = this.week ? CONTINUE_TEXT : PLAY_TEXT;
     this.crew = CRITTERS.map((def, i) => {
       // nobody is seated on the title, so the crew wears the off-duty apron: the four player colours mean "this
       // seat is taken" everywhere else (constants.js OFF_DUTY_APRON, docs/ART_STYLE.md section 4)
@@ -167,7 +189,7 @@ export class TitleScreen extends Screen {
     super.update();
     const inp = this.game.input;
     const dy = navY(inp);
-    if (dy) { this.sel = (this.sel + dy + ROWS.length) % ROWS.length; this.game.audio.play('menu_move'); }
+    if (dy) { this.sel = (this.sel + dy + this.rows.length) % this.rows.length; this.game.audio.play('menu_move'); }
     if (confirmPressed(inp) >= 0) { this.game.audio.play('menu_confirm'); this.choose(); }
     for (const s of this.crew) this.tickSeat(s);
   }
@@ -183,12 +205,33 @@ export class TitleScreen extends Screen {
 
   /** Open the selected row. SOURCE leaves the game, so it is the one row guarded against a blocked popup. */
   choose(): void {
-    const row = ROWS[this.sel];
-    if (row === 'PLAY') this.game.replace('select');
+    const row = this.rows[this.sel];
+    if (row === CONTINUE_TEXT) this.resume();
+    else if (row === PLAY_TEXT) this.game.replace('select');
     else if (row === 'ONLINE') this.game.replace('lobby');
+    else if (row === 'BOOK') this.game.replace('book');
     else if (row === 'CONTROLS') this.game.replace('controls');
     else if (row === 'CREW') this.game.replace('gallery');
     else if (row === 'SOURCE') { try { window.open(REPO_URL, '_blank'); } catch { /* popups blocked: stay put */ } }
+  }
+
+  /**
+   * CONTINUE: pick the week up where it was left. The record (read in enter(), never here) holds the seed, the
+   * day and who was sitting down, and `planWeek` rebuilds the rest - so this reseats the party and opens that
+   * day's board directly, with no character select in between: the crew was chosen on Monday.
+   */
+  resume(): void {
+    const w = this.week;
+    if (!w) { this.game.replace('select'); return; }
+    startRun(this.game, { seed: w.seed, critters: w.critters, day: w.day });
+    const run = this.game.run;
+    // the days already closed come back with the run, so the board's week strip is whole on a resumed Thursday
+    run.weekStars = w.stars.slice();
+    run.weekTakings = w.takings.slice();
+    let takings = 0;
+    for (const t of run.weekTakings) takings += t | 0;
+    run.score = takings;
+    this.game.replace('stage');
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
@@ -215,7 +258,7 @@ export class TitleScreen extends Screen {
     ctx.fillStyle = UI.wood; ctx.fillRect(SLATE.x + 26, SLATE.y + SLATE.h, 8, 24); ctx.fillRect(SLATE.x + SLATE.w - 34, SLATE.y + SLATE.h, 8, 24);
     ctx.fillStyle = UI.woodDark; ctx.fillRect(SLATE.x + 32, SLATE.y + SLATE.h, 2, 24); ctx.fillRect(SLATE.x + SLATE.w - 28, SLATE.y + SLATE.h, 2, 24);
     drawSlate(ctx, SLATE.x, SLATE.y, SLATE.w, SLATE.h, { title: 'TODAY' });
-    drawMenuRows(ctx, ROWS, SLATE.x, SLATE.y + 38, SLATE.w, this.sel, this.frame);
+    drawMenuRows(ctx, this.rows, SLATE.x, SLATE.y + 38, SLATE.w, this.sel, this.frame);
     // the sign hangs over everything, swinging about its top centre
     drawLogoSign(ctx, VIEW_W / 2, 0, SWING * Math.sin(this.frame * SWING_RATE));
     if (this.frame % BLINK_PERIOD < BLINK_ON) {
@@ -224,7 +267,15 @@ export class TitleScreen extends Screen {
     drawHint(ctx, REPO_LABEL);
   }
 
-  override summary() { return { row: ROWS[this.sel], sel: this.sel, rows: ROWS.length, crew: this.crew.length }; }
+  override summary() {
+    const w = this.week;
+    return {
+      row: this.rows[this.sel], sel: this.sel, rows: this.rows.length, crew: this.crew.length,
+      menu: this.rows.slice(),
+      // the week in progress, as the row reads it: what CONTINUE would pick up
+      week: w ? { seed: w.seed, day: w.day, days: DAYS_PER_WEEK, dayName: shapeOf(w.day).name, critters: w.critters.slice() } : null,
+    };
+  }
   /** The only thing on this screen that could differ between two machines. */
   override checksumFields(): number[] { return [this.sel]; }
 }

@@ -20,7 +20,7 @@
 //              there opens the kitchen. The one test that proves the loop's two halves hand over.
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.ts';
-import { planDay, WEATHER_DRIZZLE, WEATHER_FOG } from '../../src/game/run.ts';
+import { planWeek, WEATHER_DRIZZLE, WEATHER_FOG } from '../../src/game/run.ts';
 import { INGREDIENTS, ORDERS } from '../../src/content/recipes.ts';
 import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, SPOTS, CROSSING_SPOTS, riverDist, laneDist, wallBlocked, waterBlocked, pondBlocked, seaBlocked, shoreX } from '../../src/art/backgrounds/map.ts';
 
@@ -117,15 +117,23 @@ export const SCENARIOS = {
    *           round the truck and nothing slows. Writes map-drizzle and map-fog.
    */
   async weather(server) {
-    // the seeds come from the plan itself: the menu's length moves the plan's rng, so a pinned seed would go stale
-    const seedFor = (w) => { for (let seed = 1; seed < 500; seed++) if (planDay(seed).weather === w) return seed; return -1; };
+    // The seeds come from the plan itself: the menu's length moves the plan's rng, so a pinned seed would go
+    // stale. The search walks the WEEK rather than one day, because a day's shape decides what weather it may
+    // have at all - the opening day is always clear - and the page is then opened on the day it found with ?day=.
+    const seedFor = (w) => {
+      for (let seed = 1; seed < 500; seed++) {
+        const week = planWeek(seed);
+        for (let d = 0; d < week.length; d++) if (week[d].weather === w) return { seed, day: d };
+      }
+      return null;
+    };
     const drizzle = seedFor(WEATHER_DRIZZLE), fog = seedFor(WEATHER_FOG);
-    assert(drizzle > 0 && fog > 0, `the plan rolls a drizzle day and a fog day inside five hundred seeds (${drizzle}, ${fog})`);
-    await withPage(server, `skipTo=map&critters=0,1,2,3&seed=${drizzle}`, async (api, page) => {
+    assert(drizzle && fog, `the plan rolls a drizzle day and a fog day inside five hundred seeds (${JSON.stringify(drizzle)}, ${JSON.stringify(fog)})`);
+    await withPage(server, `skipTo=map&critters=0,1,2,3&seed=${drizzle.seed}&day=${drizzle.day + 1}`, async (api, page) => {
       await api.step(5);
       await noCrossings(page);
       const s0 = await api.summary();
-      assert(s0.top.weather === 1 && s0.top.mud && s0.top.muddy === 0, `seed ${drizzle} is a drizzle day with a mud patch (weather ${s0.top.weather}, mud ${JSON.stringify(s0.top.mud)})`);
+      assert(s0.top.weather === 1 && s0.top.mud && s0.top.muddy === 0, `seed ${drizzle.seed} day ${drizzle.day + 1} is a drizzle day with a mud patch (weather ${s0.top.weather}, mud ${JSON.stringify(s0.top.mud)})`);
       const spot = CROSSING_SPOTS.find((p) => p.x === s0.top.mud.x && p.y === s0.top.mud.y);
       assert(!!spot, 'the mud patch stands on a lane spot');
       const heading = Math.round(((Math.atan2(spot.dy, spot.dx) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 8)) % 16;
@@ -139,10 +147,10 @@ export const SCENARIOS = {
       const out = await api.summary();
       assert(out.top.inMud === false && out.top.muddy === 1, `and wears the mud out the other side (inMud ${out.top.inMud}, muddy ${out.top.muddy})`);
     });
-    await withPage(server, `skipTo=map&critters=0,1,2,3&seed=${fog}`, async (api, page) => {
+    await withPage(server, `skipTo=map&critters=0,1,2,3&seed=${fog.seed}&day=${fog.day + 1}`, async (api, page) => {
       await api.step(5);
       const s0 = await api.summary();
-      assert(s0.top.weather === 2 && !s0.top.mud, `seed ${fog} is a fog day (weather ${s0.top.weather})`);
+      assert(s0.top.weather === 2 && !s0.top.mud, `seed ${fog.seed} day ${fog.day + 1} is a fog day (weather ${s0.top.weather})`);
       await api.hold(0, { right: true }); await api.step(120); await api.release(0);
       await api.shot('map-fog');
       const s1 = await api.summary();

@@ -1,8 +1,10 @@
 # Foodie Truck — Content Roadmap
 
 > **Precedence:** this is a plan, not a rule book. `docs/GDD.md` owns the design of anything that ships; when a
-> thing on this list is built, its numbers move into the GDD and its row here is struck through. Nothing below is
-> in the game yet.
+> thing on this list is built, its numbers move into the GDD and its row here is struck through.
+>
+> **All of it is now built.** The plan that follows it is `docs/EXPANSION_ROADMAP.md`, which makes the game
+> longer rather than the day wider.
 
 The game's content is wide at the landmarks (nine mini-games, twenty-three ingredients) and thin everywhere else:
 every day is the same shape, the road between landmarks is quiet, and only the orchard has a joke. The four

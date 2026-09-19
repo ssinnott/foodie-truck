@@ -49,14 +49,40 @@ live in `src/content/critters/`. Customers are NPC critters built with the same 
 ```
 title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> map -> line -> kitchen -> results -> line -> kitchen -> results -> map -> line ...
                                                                                                                                                               |
-   the day: three recipes, three lines of two customers, one shopping list; when the third line is served -> stage (CLOSED) -> title
+   the day: a menu, a line per queue, one shopping list; when the last line is served -> stage (CLOSED) --NEXT DAY--> stage (OPEN, tomorrow) -> map -> ...
+                                                                                                          |
+                                                                                    ... and on the LAST day of the week -> title. That is the end of the game.
 ```
 
-- **A day** is planned from the run's seed (`game/run.js planDay`): `RECIPES_PER_DAY` (3) recipes drawn from
-  `content/recipes.js ORDERS`, and `LINES_PER_DAY` (3) **lines** of `LINE_LENGTH` (2) customers, each line waiting at
-  a different supply landmark (never home) and each customer ordering one of the day's recipes — the menu is dealt
-  round so every recipe is ordered at least once. The plan is drawn from its own seeded stream, so every online
-  peer lays the same day out from the START packet, and it never touches the gameplay rng.
+- **A week** is `DAYS_PER_WEEK` (5) days, and a run is a week. The whole week is planned ONCE from the run's seed
+  (`game/run.js planWeek`) before day 1 opens, purely, on one stream in day order. All five up front for two
+  reasons: THE FETE draws its menu from what days 1–4 actually serve, which is only possible if those days are
+  already on the table; and resuming is then `planWeek(seed)[day]`, so two integers rebuild any day of any week
+  and the save record holds no plan at all.
+- **A day** is one entry of that week, laid out by its **shape** (`game/run.js DAY_SHAPES`) and not only by its
+  seed. A shape names how many queues form and how long each is, how many recipes the menu draws, whether twists
+  are dealt at all, and what the weather is allowed to do:
+
+  | Day | Name | Queues | Menu | Twists | Weather | Dishes |
+  |---|---|---|---|---|---|---|
+  | 1 | **OPENING DAY** | 2 × 2 | 2 recipes | none | clear | 4 |
+  | 2 | — | 3 × 2 | 3 recipes | dealt | rolled | 6 |
+  | 3 | **MARKET DAY** | 3 × 2 | **2 recipes** | dealt | rolled | 6 |
+  | 4 | — | 3 × 2 | 3 recipes | dealt | **drizzle or fog** | 6 |
+  | 5 | **THE FETE** | 2, 2, 2, **3** | **the week's own** | dealt | clear | 9 |
+
+  **Thirty-one dishes a week** against six today, and ten different recipes against three. Day 1 is short and
+  plain so a first day teaches the loop without being labelled a tutorial; MARKET DAY keeps its queues but cuts
+  the menu, so the village wants the same things and the day is two long gathers instead of eight short ones; day
+  4 guarantees once a week the fog and the mud that otherwise fire one day in five each; and THE FETE is four
+  queues, one of them three deep, on a menu drawn from what this week has already served — the last customer of
+  the week orders Monday's dish. Shapes are **appended, never filed in between**: the day index crosses the wire
+  and is written into the save record.
+- Each day's queues wait at a different supply landmark (never home) and each customer orders one of that day's
+  recipes — the menu is dealt round so every recipe is ordered at least once. The plan is drawn from its own
+  seeded stream, so every online peer lays the same week out from the START packet, and it never touches the
+  gameplay rng. `RECIPES_PER_DAY` (3), `LINES_PER_DAY` (3) and `LINE_LENGTH` (2) remain the ORDINARY day's
+  numbers, which is day 2's shape and what a bare `planDay()` still lays out.
 - **Order twists** (`run.ts TWISTS`). One customer in four wants their dish a little different, and the twist is on
   the board, in the bubble at the hatch and in the kitchen: **EXTRA CRUNCHY** (the CHOP step takes 15 taps instead
   of 10; only a dish that chops), **A BIG ONE** (one more of every ingredient, on the order and so on the shopping
@@ -108,7 +134,21 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   customer and takes the dish's ingredients back out of the pantry. While the line still has someone in it, back to
   the line screen and the next one steps up; when it is empty, back to the map for the next line (the map says
   `LINE SERVED! 2 TO GO`); when that was the last line, to the day board, which opens **closed** — the day's stars
-  and takings totted up — and the only way on is the title screen. **That is the end of the game.**
+  and takings totted up, and the **week strip** under them.
+- **The closed board is the hinge, not the exit.** On any day but the last, the one press left says `NEXT DAY`:
+  `run.nextDay()` banks the day into the week's record and rebuilds every per-day field from the week's own plan —
+  a new menu, a new shopping list, an empty pantry, the road laid out again and the truck back in the yard — and
+  the board comes straight back up open on tomorrow. What carries between days is the week's record, the takings
+  and the party, and **nothing else**: the pantry deliberately does not, or the board would stop being the whole
+  truth about the day. On the **last** day of the week the board closes the week, prints its totals, and the one
+  press goes back to the title. **That is the end of the game.**
+- **A week is resumable at day boundaries** (`game/week.ts`), because at one a run holds nothing that is not
+  derivable: the record is the seed, the day, the party and what the closed days were worth — about sixty bytes.
+  The title's first row is `CONTINUE` instead of `PLAY` while one is in progress, and it reseats the saved party
+  and opens that day's board with no character select in between: the crew was chosen on Monday. `PLAY` forgets
+  the week in progress, so a fresh start can never be offered last week's Thursday. Written and read from screen
+  `enter()` / `exit()` only, and **online peers do not save**: a guest plays the host's week, which arrives in the
+  START packet, and one player owns a week the way one player owns the host key.
 
 ## 4. The world map
 
@@ -398,18 +438,25 @@ player has bound M to something, while a rebind is listening, and while a host k
 
 ## 10. Screens — what each must do
 
-- **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`.
+- **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Six rows, so the A-frame is 18 px taller than it was at five.
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
 - **select**: five 116×200 cards (the kit's 140 fitted four across), one cursor per joined seat, READY stamps;
   `next` = stage (starts the run).
 - **stage** (the day board): the day's three lines pinned up as 140×124 paper tickets across the top — each one
   headed `LINE 01`, the landmark it waits at, and one block per customer (portrait, name, the dish they will order)
   — with the SHOPPING LIST on one wide ticket under them (every ingredient with the day's total, in columns) and a
-  pad carrying the menu and `FILL THE PANTRY, THEN SERVE THE LINES`. No cursor: any joined seat's CONFIRM opens the
+  pad carrying the menu and `FILL THE PANTRY, THEN SERVE THE LINES`. The sign over it reads `DAY 2 OF 5`, with the
+  day's name after it where it has one. No cursor: any joined seat's CONFIRM opens the
   truck and fades to the map. **When every line has been served the board opens closed**: each line washed back
   under a SERVED stamp (slammed on arrival for the one just finished) with its customers' stars in place of their
-  dishes, and a CLOSING TIME slate over it with the lines and dishes served, the day's stars out of 18 and the
-  takings; the one press left goes back to the title. BACK (open board only) leaves for the title, and is refused
+  dishes, and a CLOSING TIME slate over it with the lines and dishes served, the day's stars and its takings, and
+  under them the **week strip** - one chip per day of the week, a closed day chalked up with its stars (tonight's
+  landing on the same stamp beat the SERVED cards use), a day still to come pencilled in, so the week reads as a
+  week from the first night. The one press left says `NEXT DAY` and rolls the run over into tomorrow's open board;
+  on the LAST day of the week it says `TITLE` and ends the game. The closed board is also **the one write of the
+  night**: `run.closeDay()`, `recordDay()` into the book and `saveWeek()` all happen in its `enter()`, at a screen
+  boundary and never in an `update()`, and all three are keyed on the day so a board that opens closed twice counts
+  once. BACK (open board only) leaves for the title, and is refused
   online (a peer walking out of a live room stalls the rest, as with the pause overlay).
 - **line**: the truck pulled up at a queue on the dusk lane, turned so its hatch faces the diners still waiting (one
   rig each, front first, the crew's heads in the windows); the front diner waves, a paper bubble over their head
@@ -423,6 +470,7 @@ player has bound M to something, while a rebind is listening, and while a host k
   as above. Every one exposes `summary()` and `checksumFields()` and reads input only by seat.
 - **pause**: transparent overlay (RESUME / QUIT TO TITLE); refused while `game.net.active`.
 - **gallery**: the cast contact sheet in game.
+- **book**: the recipe book (section 12), the gallery's sibling: left/right through the pages, CANCEL out.
 
 ## 11. Sound and music
 
@@ -472,3 +520,43 @@ the truck's own motif — the rising sixth 1-3-5-6 — somewhere. Which screen p
 
 The pause overlay leaves its scene's track playing. Adding a track is adding data to `engine/audio/music.ts` and a
 row to the table; the audio playtest renders every track it finds and fails on a silent one or a ragged bar.
+
+## 12. The recipe book
+
+What this truck has cooked, who it has fed, what it has gathered and where it has been. Sixty-three recipes,
+forty ingredients, twelve landmarks and three diners are in the game, and a player who finishes a whole week has
+met ten of the sixty-three recipes; the book is where the rest are, and it is the reason to open the game
+tomorrow.
+
+**The invariant, which is the whole design:**
+
+> The book is **written** by the game and **read** only by the book screen. Nothing the book holds ever reaches
+> `planWeek`, `planDay`, `gatherTarget`, or any screen's `update()`.
+
+That is what makes a saved file safe in a lockstep game. Two peers with different books must play byte-identical
+days, and they do, because no code path exists from the book into the simulation. An unlock - a recipe you have
+to earn, a landmark that opens once you have visited it - would desync two players the instant their saves
+differed, and is the one thing this must never grow into. `recordDay` is importable anywhere, because writing
+cannot branch the simulation; `readBook` may be imported by `game/screens/book.ts` and by nothing else, and
+`tools/check.js` fails the build if that stops being true - the executable half of this section, the way
+`tools/art-check.js` is the executable half of the art style. A playtest scenario (`bookInvariant`) proves it from
+the outside as well: a page carrying a book with every recipe in it and a page carrying none lay out a
+byte-identical day off the same seed.
+
+**What it holds** (`game/book.ts`, one record under `foodie-truck.book`, banked in a single `recordDay(run)` at
+the closed day board):
+
+| Page | Records | Drawn as |
+|---|---|---|
+| **The dishes** | Per `ORDERS` id: times cooked, best stars, which day of trading it was first served on | Four cards across, three down, six pages. A dish cooked is its own `art/dishes.ts` picture **inked in**, named, with its tally and best rating under it. One never cooked is the same card **in pencil**: the picture faded back to a shape, the name blanked to `- - -`. No new art - every dish drawing already exists. |
+| **The diners** | Per `DINERS` id: times fed, and the dish they have ordered most | Three deep rows on the slate, each headed by the same head portrait the day board draws over its queues (`art/portraits.ts`), in the same plum window and idling on its own beat, with the tally and what they like beside it. A diner this truck has never served is that portrait **in pencil** - the village is all there from the first day, and who has eaten is not. |
+| **The larder** | Per `INGREDIENTS` id: how many gathered | The forty glyphs from `art/food.ts` in a grid, greyed until gathered once. |
+| **The road** | Per `PLACES` id: how many days the truck has been there | Twelve rows, the map's own names. |
+| **The strap** | Dishes cooked out of the whole menu | `23 OF 63 COOKED` - the number the closed board has never been able to print. |
+
+Counters saturate rather than overflow. An unknown id in a stored record is **dropped** on load rather than
+thrown on: a book written by a build with sixty-three recipes has to load on a build with seventy, and back
+again. The book is reachable from the title and from nowhere else, so it can never be open while a run is live;
+and unlike the week, **every peer in an online match does write it**, because what it records is what that player
+themselves cooked.
+

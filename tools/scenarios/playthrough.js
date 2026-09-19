@@ -18,6 +18,10 @@ import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.ts';
 import { LANES } from '../../src/art/backgrounds/map.ts';
 import { walkTo, chopOnce, pullAll } from './kitchen.js';
+import { DAY_SHAPES } from '../../src/game/run.ts';
+
+/** A real PLAY always starts a fresh week, so an uninterrupted playthrough is always DAY 1: the opening day. */
+const DAY1 = DAY_SHAPES[0];
 
 // ---------------------------------------------------------------- driving
 
@@ -281,7 +285,7 @@ export const SCENARIOS = {
       await api.step(90);
       let s = await api.summary();
       assert(s.screen === 'stage', `the stamped card opens the day board (on ${s.screen})`);
-      assert(s.top.lines === 3 && s.top.closed === false, `three lines are pinned up and the truck is not yet open (${s.top.lines})`);
+      assert(s.top.lines === DAY1.lines.length && s.top.closed === false, `the opening day's ${DAY1.lines.length} lines are pinned up and the truck is not yet open (${s.top.lines})`);
       assert(s.run.recipes.join() === 'applePie,omelette', `the menu is the pie and the omelette (${s.run.recipes.join()})`);
 
       // ---- the day board: the truck opened ----
@@ -335,7 +339,7 @@ export const SCENARIOS = {
       // ---- the line served: back to the map with two to go ----
       assert(s.screen === 'map' && s.run.linesServed === 1 && s.run.dayComplete === false, `the last customer served sends the truck back to the map, one line down (on ${s.screen}, ${s.run.linesServed} served)`);
       assert(s.run.score === servedStars * 100 && s.run.stars === servedStars, `the run scores what the customers gave it (${s.run.score} for ${servedStars} stars)`);
-      assert(s.top.sign === 'LINE SERVED!  2 TO GO', `the map says so (sign '${s.top.sign}')`);
+      assert(s.top.sign === `LINE SERVED!  ${DAY1.lines.length - 1} TO GO`, `the map says so (sign '${s.top.sign}')`);
       assert(s.top.dest !== place && s.run.lines[s.top.destLine].served === false, `...and the compass has moved on to a line still waiting (dest ${s.top.dest})`);
       await api.step(30);
       await api.shot('playthrough-line-served');
