@@ -3,8 +3,12 @@
 // boxes along the back wall and on the floor in front of the lanes, and `action` within reach of one plucks it (a
 // 12-frame reach up into a nest from the gold ring on the floor that marks its spot, a 12-frame crouch to a floor
 // egg). Five hens potter about the back of the floor and never get in the way: nothing in this coop bumps, charges
-// or costs an egg. The round ends when the party's total reaches the order's amount, and not before (there is no
-// clock to run out); the EGGS sign drops, is held, then run.gather() and back to the map.
+// or costs an egg. THE JOKE: one nest egg in BROODY_ODDS is laid with a hen already sat on it (`broody` on the egg,
+// a countdown): reaching for it gets a peck instead of the egg - the paw is yanked back, a hop on one foot for
+// PECK_FRAMES, OW! - and the hen clucks and hops off when her countdown ends, leaving the egg where it was. Nothing
+// is lost but the moment, and the egg is there for the next reach. The round ends when the party's total reaches
+// the order's amount, and not before (there is no clock to run out); the EGGS sign drops, is held, then run.gather()
+// and back to the map.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): the eggs and hens are fixed pools of plain sim objects, every random
 // number comes from the rng singleton inside update(), distances are plain differences along x, and nothing in
@@ -44,6 +48,9 @@ const LANE_Y0 = 316, LANE_GAP = 8;
 const MAX_EGGS = 8, SPAWN_MIN = 90, SPAWN_MAX = 150, EGG_S = 5, PLUCK_R = 34, REACH_FRAMES = 12;
 /** At most three nests hold an egg at once: nest eggs share the pool, and six unreachable ones would starve the floor spawns. */
 const NEST_CAP = 3;
+/** The broody hen: one nest egg in BROODY_ODDS is sat on for BROODY_FRAMES; a reach at it is the peck beat, PECK_FRAMES long. */
+const BROODY_ODDS = 8, BROODY_FRAMES = 90, PECK_FRAMES = 24;
+const OW = 'OW!';
 /** Floor eggs land in the band's front rows, where the lanes are, never under the lip. */
 const EGG_X_MIN = 30, EGG_X_MAX = 610, EGG_Y_MIN = 296, EGG_Y_MAX = 334;
 /** Hens: five, 0.6 px/frame between seeded waypoints with 30..90 frame pauses, kept to the back of the floor behind the lanes. */
@@ -90,6 +97,16 @@ const COOP_ANIMS = Object.freeze({
   reachNest: { loop: false, frames: [
     F(5, { armL: [-150, -10], armR: [56, 44], weapon: 90, torso: -4, head: -8, root: [0, -1], stretch: 1.02, face: 'happy' }, { ease: 'in' }),
     F(7, { armL: [-158, -14], armR: [50, 40], weapon: 90, torso: -6, head: -10, root: [0, -2], stretch: 1.04, face: 'happy' }, { ease: 'out' }),
+  ] },
+  /**
+   * The peck: the reaching far arm is yanked back down and shaken, and the critter hops on one foot twice (the
+   * root lifts, the near leg tucks up), `hurt` throughout; the basket stays upright on the near arm as in reachNest.
+   */
+  pecked: { loop: false, frames: [
+    F(4, { armL: [-40, -60], armR: [56, 44], weapon: 90, legR: [40, -60], torso: 6, head: 4, root: [0, -6], squash: 0.96, face: 'hurt' }, { ease: 'out' }),
+    F(6, { armL: [-30, -50], armR: [56, 44], weapon: 90, legR: [40, -60], torso: 8, head: 6, root: [0, 0], squash: 1.04, face: 'hurt' }),
+    F(4, { armL: [-44, -62], armR: [56, 44], weapon: 90, legR: [40, -60], torso: 6, head: 4, root: [0, -5], squash: 0.96, face: 'hurt' }, { ease: 'out' }),
+    F(10, { armL: [-30, -50], armR: [56, 44], weapon: 90, legR: [40, -60], torso: 8, head: 6, root: [0, 0], squash: 1.02, face: 'hurt' }),
   ] },
 });
 
@@ -144,7 +161,7 @@ export interface CoopLayers {
  * the screen's own fields as typed as the shared ones.
  */
 export interface CoopSeat extends Seat {
-  /** Frames left of the pluck / reachNest beat; the stick is locked while it runs. */
+  /** Frames left of the pluck / reachNest / pecked beat; the stick is locked while it runs. */
   reachT: number;
   /** Where the basket is on screen, refilled from the `handN` joint by every drawSeat. */
   basketPt: Point;
@@ -161,6 +178,8 @@ export interface Egg {
   fy: number;
   /** Index into NEST_X, or -1 for a floor egg. */
   nest: number;
+  /** Frames a broody hen is still sat on this nest egg (0: nobody is; the egg can be plucked). */
+  broody: number;
 }
 
 /** One of the five hens wandering between seeded waypoints. */
@@ -218,6 +237,8 @@ export class CoopScreen extends Screen {
   declare target: number;
   /** Eggs in the party's baskets right now. */
   declare total: number;
+  /** Pecks taken this round (the joke's count, for the tests and the desync canary). */
+  declare pecks: number;
   /** "3/4" for the clock ticket, rebuilt by setTotal() as the count changes. */
   declare countStr: string;
   /** The hint line along the bottom. */
@@ -252,7 +273,7 @@ export class CoopScreen extends Screen {
       seatAnim(s, 'carry');
     }
     this.eggs = [];
-    for (let i = 0; i < MAX_EGGS; i++) this.eggs.push({ active: false, x: 0, y: 0, fy: 0, nest: -1 });
+    for (let i = 0; i < MAX_EGGS; i++) this.eggs.push({ active: false, x: 0, y: 0, fy: 0, nest: -1, broody: 0 });
     this.nestFull = new Int8Array(NEST_X.length);
     this.nextSpawn = SPAWN_MIN;
     this.hens = [];
@@ -264,7 +285,7 @@ export class CoopScreen extends Screen {
     this.hopCursor = 0;
     const need = run ? run.need('egg') : null;
     this.target = need ? Math.max(1, need.amount - need.have) : 3;
-    this.total = 0;
+    this.total = 0; this.pecks = 0;
     this.countStr = '0/' + this.target;
     this.hint = 'MOVE: LEFT/RIGHT   PLUCK: ' + game.input.keyText(0, 'action');
     this.cardKey = game.input.keyText(0, 'action');
@@ -285,6 +306,7 @@ export class CoopScreen extends Screen {
     if (clock.phase === 0) {
       this.updateSeats(input);
       this.updateEggs();
+      this.updateBroody();
       this.updateHens();
       if (this.total >= this.target) this.finish();
     } else {
@@ -327,6 +349,7 @@ export class CoopScreen extends Screen {
     }
     if (best < 0) return;
     const e = this.eggs[best];
+    if (e.broody > 0) { this.peck(s, e); return; }
     e.active = false;
     if (e.nest >= 0) this.nestFull[e.nest] = 0;
     s.count++; this.setTotal(this.total + 1);
@@ -339,6 +362,27 @@ export class CoopScreen extends Screen {
     floatText(e.x, e.y - 12, PLUS_ONE, s.colour, 1, true);
     if (e.nest >= 0) burstDust(e.x, e.y + 4, 3, 1, true);
     this.game.audio.play('egg');
+  }
+
+  /** The joke: the hen on that nest pecks the reaching paw. The egg stays, the hen stays until her countdown ends, and the seat hops for a beat. */
+  peck(s: CoopSeat, e: Egg): void {
+    this.pecks++;
+    s.reachT = PECK_FRAMES; s.moving = false;
+    s.facing = e.x >= s.x ? 1 : -1;
+    seatAnim(s, 'pecked', true);
+    ringAt(e.x, e.y, 3, 10, SIGNAL.hot, 2, 10, false, true);
+    floatText(s.x, s.y - 66, OW, UI.cream, 1, true);
+    burstDust(e.x, e.y + 6, 3, 1, true);
+    this.game.audio.play('peck');
+  }
+
+  /** The hens on the nests: each broody countdown runs, and at 0 the hen clucks and hops off, leaving the egg. */
+  updateBroody(): void {
+    for (let i = 0; i < this.eggs.length; i++) {
+      const e = this.eggs[i];
+      if (!e.active || e.broody <= 0) continue;
+      if (--e.broody === 0) { burstDust(e.x, e.y + 6, 4, 1, true); this.game.audio.play('cluck'); }
+    }
   }
 
   /**
@@ -359,8 +403,12 @@ export class CoopScreen extends Screen {
       const start = rng.int(0, NEST_X.length - 1);
       for (let k = 0; k < NEST_X.length; k++) { const j = (start + k) % NEST_X.length; if (!this.nestFull[j]) { nest = j; break; } }
     }
-    e.active = true; e.nest = nest;
-    if (nest >= 0) { this.nestFull[nest] = 1; e.x = NEST_X[nest]; e.y = NEST_EGG_Y; e.fy = NEST_REACH_Y; }
+    e.active = true; e.nest = nest; e.broody = 0;
+    if (nest >= 0) {
+      this.nestFull[nest] = 1; e.x = NEST_X[nest]; e.y = NEST_EGG_Y; e.fy = NEST_REACH_Y;
+      // the deal: one nest egg in BROODY_ODDS is laid with a hen already sat on it
+      if (rng.int(1, BROODY_ODDS) === 1) e.broody = BROODY_FRAMES;
+    }
     else { e.x = rng.int(EGG_X_MIN, EGG_X_MAX); e.fy = rng.int(EGG_Y_MIN, EGG_Y_MAX); e.y = e.fy - EGG_S; }
   }
 
@@ -390,10 +438,11 @@ export class CoopScreen extends Screen {
   override draw(ctx: CanvasRenderingContext2D): void {
     const L = this.layers, f = this.frame;
     blitAt(ctx, L.wall.L, 0, L.wall.y);
-    for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; if (e.active && e.nest >= 0) this.drawEgg(ctx, e, i, f); }
+    for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; if (e.active && e.nest >= 0) { if (e.broody > 0) this.drawBroody(ctx, e, f); else this.drawEgg(ctx, e, i, f); } }
     blitAt(ctx, L.floor.L, 0, L.floor.y);
     particles.draw(ctx, null, 'back');
-    for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; if (e.active && e.nest >= 0) this.drawNestCue(ctx, e, i, f); }
+    // no cue under a sat-on nest: the hen is the whole hint that there is nothing to reach for yet
+    for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; if (e.active && e.nest >= 0 && e.broody === 0) this.drawNestCue(ctx, e, i, f); }
     // ground contact first: the slot ring under each seat's shadow, then every hen and floor egg
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
@@ -469,6 +518,15 @@ export class CoopScreen extends Screen {
     if (((f + i * 7) >> 3) & 1) { ctx.fillStyle = UI.cream; ctx.fillRect(x - 2, y - 10, 2, 2); }
   }
 
+  /**
+   * The broody hen: sat down in the straw over the egg (the egg is under her, out of sight), settling with a slow
+   * bob, and in the last 20 frames of her countdown she is up on her feet and about to go.
+   */
+  drawBroody(ctx: CanvasRenderingContext2D, e: Egg, f: number): void {
+    const up = e.broody <= 20 ? 3 : 0, bob = up ? 0 : (f >> 4) & 1;
+    drawHen(ctx, R(e.x), R(e.y) + 5 - up + bob, e.nest & 1, e.nest & 1 ? -1 : 1, 0, up ? 0 : ((f >> 5) & 1));
+  }
+
   /** An egg at rest, with the fresh-egg sparkle blinking above it on an index hash. */
   drawEgg(ctx: CanvasRenderingContext2D, e: Egg, i: number, f: number): void {
     const x = R(e.x), y = R(e.y);
@@ -486,9 +544,9 @@ export class CoopScreen extends Screen {
 
   override summary() {
     return {
-      count: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
-      seats: this.seats.map((s) => [s.slot, R(s.x), R(s.y), s.count]),
-      eggs: this.eggs.filter((e) => e.active).map((e) => [R(e.x), R(e.fy), e.nest]),
+      count: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, pecks: this.pecks,
+      seats: this.seats.map((s) => [s.slot, R(s.x), R(s.y), s.count, s.reachT]),
+      eggs: this.eggs.filter((e) => e.active).map((e) => [R(e.x), R(e.fy), e.nest, e.broody]),
       hens: this.hens.map((h) => [R(h.x), R(h.y), h.state]),
     };
   }
@@ -496,9 +554,9 @@ export class CoopScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pecks);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.count, s.reachT, s.moving ? 1 : 0); }
-    for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; f.push(e.active ? 1 : 0, e.x, e.y, e.fy, e.nest); }
+    for (let i = 0; i < this.eggs.length; i++) { const e = this.eggs[i]; f.push(e.active ? 1 : 0, e.x, e.y, e.fy, e.nest, e.broody); }
     for (let i = 0; i < this.hens.length; i++) { const h = this.hens[i]; f.push(h.x, h.y, h.tx, h.ty, h.state, h.t, h.facing); }
     return f;
   }

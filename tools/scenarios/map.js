@@ -54,6 +54,12 @@ export const SCENARIOS = {
       await api.step(90);
       await api.shot('map-horizon');
 
+      // From here the shopping list is cut to apples alone: the bridge below is a door's width from Furrow Farm, and
+      // a day that needs a vegetable would open the garden the moment the truck crossed (forty recipes now, so the
+      // seeded menu reaches the farm more days than not); the mill test further down wants a landmark the list does
+      // not need, and the orchard test at the end wants the one it does.
+      await page.evaluate(() => { const run = window.__game.game.run; run.needs.length = 0; run.needs.push({ id: 'apple', amount: 4, have: 0, used: 0 }); });
+
       // the river is not drivable: drive at it beside a bridge and stay on the west bank
       const b = BRIDGES[1];
       await teleport(page, b.x - 60, b.y + 40, 0);
@@ -67,10 +73,9 @@ export const SCENARIOS = {
       const s3 = await api.summary();
       assert(s3.top.truck.x > b.x + 30, `the bridge carries it across (x ${s3.top.truck.x} vs ${b.x})`);
 
-      // a landmark the list does not need: the shopping list is cut to apples alone, so the mill has nothing the
-      // truck wants and arriving there stays on the map behind a sign. (Every landmark opens a screen now, so the
-      // old COMING SOON chalk note has no landmark left to stand on - screens/map.js dropped it.)
-      await page.evaluate(() => { const run = window.__game.game.run; run.needs.length = 0; run.needs.push({ id: 'apple', amount: 4, have: 0, used: 0 }); });
+      // a landmark the list does not need: the list is apples alone (above), so the mill has nothing the truck wants
+      // and arriving there stays on the map behind a sign. (Every landmark opens a screen now, so the old COMING
+      // SOON chalk note has no landmark left to stand on - screens/map.js dropped it.)
       const mill = placeOf('mill');
       await teleport(page, mill.x, mill.y + 70, 12);
       await api.hold(0, { up: true }); await api.step(60); await api.release(0);

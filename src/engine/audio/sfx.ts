@@ -206,6 +206,10 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   reel: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.02, vol: 0.14 }); return noise(c, d, t, { dur: 0.03, vol: 0.12 * o.v, type: 'bandpass', f0: 3200 * o.p, q: 3, attack: 0.0005 }); },
   /** Landed: the splash on the way out and the pip on the way into the bucket. */
   hook: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 1.2, f: 600, vol: 0.2, splash: 0.24 }); whoosh(c, d, t + 0.05, { v: o.v, p: o.p, f0: 800, f1: 3000, dur: 0.2, vol: 0.14 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.3 }); },
+  /** The broody hen's peck: one hard high knock, dry, and a short squawk after it. */
+  peck: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.035, vol: 0.26 }); return osc(c, d, t + 0.05, { type: 'square', f0: 900 * o.p, f1: 1300 * o.p, glide: 0.05, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2400 }); },
+  /** The hen hops off the nest: two clucks, a wobble of pitch on each, and a flap of noise. */
+  cluck: (c, d, t, o) => { osc(c, d, t, { type: 'square', f0: 700 * o.p, f1: 520 * o.p, glide: 0.06, dur: 0.08, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); osc(c, d, t + 0.11, { type: 'square', f0: 760 * o.p, f1: 560 * o.p, glide: 0.06, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); return noise(c, d, t + 0.02, { dur: 0.16, vol: 0.06 * o.v, type: 'bandpass', f0: 1800 * o.p, f1: 900 * o.p, q: 0.7, attack: 0.01 }); },
   /** The old boot comes up on the line: a hollow rubber thunk with a slosh of water out of it, and no pip at all. */
   boot: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 90, lp: 500, dur: 0.12, vol: 0.26 }); return noise(c, d, t + 0.1, { dur: 0.28, vol: 0.1 * o.v, type: 'bandpass', f0: 1400 * o.p, f1: 500 * o.p, q: 0.8, attack: 0.03 }); },
   /** The trout drops into the bucket: a tin thump. */

@@ -18,8 +18,38 @@ function nearest(list, x) {
 }
 
 export const SCENARIOS = {
+  /**
+   * coopBroody - the joke: a nest egg with a hen sat on it. Seat 0 stands under it and reaches: no egg, a peck
+   *              (reachT PECK_FRAMES, pecks 1, count 0); the hen hops off when her countdown ends and the same
+   *              reach then plucks the egg. Writes coop-broody.
+   */
+  async coopBroody(server) {
+    await withPage(server, 'skipTo=coop&critters=0,1', async (api, page) => {
+      await api.step(2);
+      // lay the egg by hand: nest 2 (x 268), sat on for 40 frames, and stand seat 0 on its floor spot
+      await page.evaluate(() => {
+        const sc = window.__game.game.screen, e = sc.eggs[0];
+        e.active = true; e.nest = 2; e.x = 268; e.y = 158; e.fy = 316; e.broody = 40; sc.nestFull[2] = 1;
+        sc.seats[0].x = 268;
+      });
+      await api.step(1);
+      await api.press(0, { action: true }, 1, 0);
+      const p = await api.summary();
+      assert(p.top.pecks === 1 && p.top.seats[0][3] === 0 && p.top.count === 0, `the reach gets a peck and no egg (pecks ${p.top.pecks}, count ${p.top.seats[0][3]})`);
+      assert(p.top.seats[0][4] === 24, `the seat hops for 24 frames (${p.top.seats[0][4]})`);
+      assert(p.top.eggs.some((e) => e[2] === 2 && e[3] > 0), `the egg is still in the nest under the hen (${JSON.stringify(p.top.eggs)})`);
+      await api.step(6);
+      await api.shot('coop-broody');
+      await api.step(40);
+      const off = await api.summary();
+      assert(off.top.eggs.some((e) => e[2] === 2 && e[3] === 0), `the hen has hopped off (${JSON.stringify(off.top.eggs)})`);
+      await api.press(0, { action: true }, 1, 0);
+      const got = await api.summary();
+      assert(got.top.seats[0][3] === 1 && got.top.count === 1, `and the same reach now plucks the egg (count ${got.top.seats[0][3]})`);
+    });
+  },
   async coop(server) {
-    await withPage(server, 'skipTo=coop&critters=0,1,2,3', async (api, page) => {
+    await withPage(server, 'skipTo=coop&critters=0,1,2,3&order=1', async (api, page) => {
       await api.step(2);
       const s0 = await api.summary();
       assert(s0.screen === 'coop', `the coop is up with a run started (on ${s0.screen})`);
