@@ -33,8 +33,9 @@ author). Where a module says "ported", its behaviour is that game's, and `docs/A
   would silently clobber a base constructor's assignment. `npm run class-fields` fails on any instance field that
   is neither `declare` nor initialised.
 - **The shared half lives in `src/lib/`**, vendored from the `game-engine` repository with `git subtree`. Do not
-  edit it here: fix it there and `git subtree pull`. `art/palettes.ts` and `engine/text.ts` are deliberate local
-  shims — each re-exports the library and adds this game's own art direction (the palette tables, the ink).
+  edit it here: fix it there and `git subtree pull`. `npm run lib-check` (part of `npm run check`) fails on any
+  difference between `src/lib/` and the engine commit it was pulled from, committed or not, so an edit made here
+  cannot reach main. `art/palettes.ts` and `engine/text.ts` are deliberate local shims — each re-exports the library and adds this game's own art direction (the palette tables, the ink).
 - **Zero binary assets.** All art is drawn with canvas primitives at runtime; all audio is synthesized with WebAudio
   (`engine/audio.ts`, section 3). No image, font or audio file is ever fetched or committed. Icons and screenshots
   produced by the tools live outside the game (`tools/screens/`, ignored).

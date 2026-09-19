@@ -27,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # lib-check reads the subtree squash commit, which a depth-1 clone cannot reach
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
