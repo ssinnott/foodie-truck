@@ -43,7 +43,7 @@ async function stage(api, page, ci, pouring) {
     // step then gives it the screen's own POUR_FRAMES, so the test never invents a state the sim cannot reach
     if (on) { sc.chutes[i].state = 1; sc.chutes[i].t = 1; }
     s.x = sc.summary().chutes[i][3]; s.facing = 1; s.moving = false;
-    s.fill = 0; s.bumpT = 0; s.tieT = 0; s.chute = -1;
+    s.fill = 0; s.bumpT = 0; s.tieT = 0; s.chute = -1; s.sneezeT = 0; s.sneezeDue = 0;
     sc.target = Math.max(sc.target, sc.total + 4); sc.setTotal(sc.total);
     return { count: s.count, total: sc.total, target: sc.target };
   }, [ci, pouring]);
@@ -55,11 +55,43 @@ async function stage(api, page, ci, pouring) {
 function seat0(page) {
   return page.evaluate(() => {
     const sc = window.__game.game.screen, s = sc.seats[0];
-    return { x: s.x, fill: s.fill, count: s.count, bumpT: s.bumpT, tieT: s.tieT, anim: s.anim, chute: s.chute, total: sc.total, tied: sc.tied };
+    return { x: s.x, fill: s.fill, count: s.count, bumpT: s.bumpT, tieT: s.tieT, anim: s.anim, chute: s.chute, total: sc.total, tied: sc.tied, sneezeT: s.sneezeT, sneezes: sc.sneezes };
   });
 }
 
+/** The sneeze (screens/mill.ts): the wind-up, and the whole beat. */
+const SNEEZE_UP = 24, SNEEZE_FRAMES = 36;
+
 export const SCENARIOS = {
+  /**
+   * millSneeze - the joke: a tie with the sneeze due. The tie beat plays out, then the wind-up (sneezeT 36, the
+   *              stick locked), the ACHOO at 24 frames in (sneezes 1), and the seat is live again after 36 with
+   *              the fresh sack untouched (fill 0, count kept). Writes mill-sneeze.
+   */
+  async millSneeze(server) {
+    await withPage(server, 'skipTo=mill&critters=0,1&order=4', async (api, page) => {
+      await api.step(2);
+      const before = await stage(api, page, 1, true);
+      await page.evaluate(() => { window.__game.game.screen.seats[0].fill = 0.99; });
+      await api.hold(0, { action: true });
+      await api.step(1);
+      await api.release(0);
+      const tied = await seat0(page);
+      assert(tied.count === before.count + 1 && tied.tieT > 0, `the sack tied (count ${tied.count}, tieT ${tied.tieT})`);
+      await page.evaluate(() => { window.__game.game.screen.seats[0].sneezeDue = 1; });
+      await api.step(tied.tieT);
+      const up = await seat0(page);
+      assert(up.sneezeT === SNEEZE_FRAMES && up.sneezes === 1 && up.anim === 'sneezeUp', `the wind-up starts as the tie beat ends (sneezeT ${up.sneezeT}, anim '${up.anim}')`);
+      // the stick is locked through it
+      await api.hold(0, { right: true }); await api.step(SNEEZE_UP + 2); await api.release(0);
+      const ach = await seat0(page);
+      assert(ach.x === up.x && ach.anim === 'achoo', `ACHOO, and the seat has not moved (x ${up.x} -> ${ach.x}, anim '${ach.anim}')`);
+      await api.shot('mill-sneeze');
+      await api.step(SNEEZE_FRAMES - SNEEZE_UP);
+      const after = await seat0(page);
+      assert(after.sneezeT === 0 && after.fill === 0 && after.count === tied.count, `over, with the fresh sack untouched (sneezeT ${after.sneezeT}, fill ${after.fill}, count ${after.count})`);
+    });
+  },
   async mill(server) {
     // order=4 is HONEY LOAF (content/recipes.js ORDERS index 3): FLOUR 3 + HONEY 2. Without it the boot order is
     // APPLE PIE, the screen falls back to a target of 3 and run.gather('flour') has nothing to bank into.
@@ -127,6 +159,7 @@ export const SCENARIOS = {
       assert(tied.count === before.count + 1, `reaching the brim ties the sack off without a release (seat 0 ${before.count} -> ${tied.count})`);
       assert(tied.total === before.total + 1, `and the party's total went up with it (${before.total} -> ${tied.total})`);
       assert(tied.fill === 0 && tied.tieT > 0 && tied.anim === 'tie', `a fresh empty sack and the tie beat (fill ${tied.fill}, tieT ${tied.tieT}, anim '${tied.anim}')`);
+      await page.evaluate(() => { window.__game.game.screen.seats[0].sneezeDue = 0; });   // the sneeze has a scenario of its own
       await api.release(0);
       await api.step(TIE_FRAMES + 2);
 
