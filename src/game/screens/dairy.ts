@@ -23,13 +23,12 @@ import { blitAt } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt } from '../../art/fx.ts';
 import { drawFood } from '../../art/food.ts';
 import { drawRig } from '../../lib/art/rig.ts';
-import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { gatherTarget } from '../run.ts';
 import { ROWS, SEAT_X, SEAT_PITCH, CHURN_X, dairyLayers } from '../../art/backgrounds/dairy.ts';
 import {
   drawCow, drawStool, drawPail, drawJet, drawChevrons, drawChurn, drawSwallow, drawBarrelChurn, drawCrankArm,
-  TEAT_DX, TEAT_DY, PAIL_H, CHURN_W, CHURN_ABOVE_HUB,
+  TEAT_DX, TEAT_DY, PAIL_H, CHURN_W, CHURN_ABOVE_HUB, SIT_ROOT_Y, STOOL_MIN, DAIRY_ANIMS,
 } from '../../art/dairyProps.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
@@ -95,80 +94,8 @@ const COW_BACK_MIN = 8, COW_BACK_MAX = 16;
 const PAIL_DX = -13, PAIL_DY = -2;
 /** The pump chevron's tag: on the floor at the pail's foot, overlapping its base (see drawChevrons for why here). */
 const CHEV_DY = 2;
-/**
- * The seated pose's root drop. Every DAIRY_ANIMS key carries it, and each seat's stool is cut to it: a chibi's hip
- * is only 11..16 px off the ground standing, so however the legs fold the stool can only ever be about a dozen px
- * tall - which is what a milking stool is. 4 is the drop that lands every one of the four casts' feet within a
- * pixel of the floor line with the knees folded under the hips (see SIT).
- */
-const SIT_ROOT_Y = 4;
-/** The chibi's hip is only 11..16 px off the ground, so a milking stool is a low one; each seat's is cut to its rig. */
-const STOOL_MIN = 6;
 const FALLBACK_TARGET = 3;
 const PLUS_ONE = '+1', TITLE = 'BUTTERCUP DAIRY';
-
-
-/**
- * The scene's own beats, an AnimPlayer overlay on top of the shared table (the pond's POND_ANIMS pattern). Every
- * key sets BOTH legs and the root, because a missing key resolves to DEFAULT_POSE and a seated critter would stand
- * up mid-beat.
- *
- * SIT is the milking stance: the thigh just past horizontal (88) with the shin folded back under it (a 26 degree
- * total) puts the knees up and the feet on the floor about 9 px in front of the stool, which is what sitting on a
- * 12 px stool looks like when the whole leg is 17 px long. The far leg is a touch less forward so two legs do not
- * print as one. Round 1 folded harder (96 / -74) and dropped the hip to 10 px, which left no stool to see.
- *
- * pumpR / pumpL are the tapping made visible ON the critter: the milking paw pulls down while the braced paw rides
- * up, and the two alternate press by press so a run of taps reads as a rhythm rather than one pose stuttering.
- * Both are non-looping and fall back to milkIdle when they finish, so a crew that has stopped pumping breathes
- * instead of freezing mid-pull.
- *
- * WHERE THE OFF PAW IS, and why it is not on a teat. Round 1 put both arms up at the udder (armR 126 / armL 122),
- * and both paws were then within 4 degrees of each other: the far arm is rooted 16..20 px BEHIND the near one
- * (shoulderF is at -shoulderX - 2 and shoulderX is 7..9 across the cast), so at that angle its paw landed inside
- * the critter's own skull - 4..9 px from the head joint against a head radius of 11..15 - and the far arm draws
- * before the head (ART_STYLE 0.3), so not one pixel of it survived in any frame. Every capture showed a one-pawed
- * milker, against 0's "a viewer must instantly pick out both paws".
- *
- * It cannot be fixed by opening the far arm toward the udder, and the geometry says so flatly: a chibi arm is
- * 15..18 px long, the far shoulder is 16..20 px behind the near one, so the far paw's reach in x STOPS about 15 px
- * short of where the near paw already is - 8 px past the udder's outer edge - and everything between the two is
- * the critter's own torso and skull, which draw over it. Measured across the four casts and the whole arm circle,
- * the far paw survives in exactly one place: BEHIND the body, where the stool is. So the milker strips the teat
- * one-pawed and braces the off paw back on the stool's seat, which is a posture a byre milker actually takes: 40
- * to 90 px of paw survive on every cast in every key (measured by rendering the seat with its far palette forced
- * to magenta and counting), the silhouette is open, and the pump beat still rocks the braced paw against the
- * milking one, so which paw is down goes on saying which button just landed.
- */
-const SIT = { legR: [88, -62], legL: [76, -52] };
-const DAIRY_ANIMS = Object.freeze({
-  milkIdle: { loop: true, frames: [
-    F(26, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [0, SIT_ROOT_Y], torso: 4, head: 8, face: 'happy' }),
-    F(26, { ...SIT, armR: [128, 2], armL: [-27, -10], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 10, face: 'happy' }),
-  ] },
-  pumpR: { loop: false, frames: [
-    F(4, { ...SIT, armR: [112, 8], armL: [-48, -18], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 9, face: 'happy' }, { ease: 'out' }),
-    F(9, { ...SIT, armR: [114, 6], armL: [-44, -16], root: [0, SIT_ROOT_Y], torso: 5, head: 8, face: 'happy' }),
-  ] },
-  pumpL: { loop: false, frames: [
-    F(4, { ...SIT, armR: [138, -6], armL: [-16, -2], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 9, face: 'happy' }, { ease: 'out' }),
-    F(9, { ...SIT, armR: [136, -4], armL: [-19, -4], root: [0, SIT_ROOT_Y], torso: 5, head: 8, face: 'happy' }),
-  ] },
-  /**
-   * Seated cheer and seated sulk for the end sign: a paw up off the udder and the other thrown up BEHIND the
-   * shoulder, or both down. The off arm goes back over the shoulder rather than forward for the same reason the
-   * milking keys brace it back - forward of the body it is inside the skull and nothing of it draws.
-   */
-  cheer: { loop: true, frames: [
-    F(10, { ...SIT, armR: [116, 20], armL: [-128, 14], root: [0, SIT_ROOT_Y - 1], torso: -4, head: -6, squash: 1.05, face: 'happy' }),
-    F(14, { ...SIT, armR: [126, 14], armL: [-138, 6], root: [0, SIT_ROOT_Y - 3], torso: -6, head: -10, stretch: 1.04, face: 'happy' }),
-    F(8, { ...SIT, armR: [118, 18], armL: [-130, 12], root: [0, SIT_ROOT_Y - 1], torso: -4, head: -6, squash: 1.06, face: 'happy' }),
-  ] },
-  sad: { loop: true, frames: [
-    F(30, { ...SIT, armR: [56, 44], armL: [-30, -6], root: [0, SIT_ROOT_Y + 1], torso: 14, head: 22, face: 'hurt' }),
-    F(30, { ...SIT, armR: [58, 46], armL: [-28, -8], root: [0, SIT_ROOT_Y + 2], torso: 16, head: 24, face: 'hurt' }),
-  ] },
-});
 
 /** One pre-rendered backdrop layer and the screen y it is blitted at (art/backgrounds/dairy.ts dairyLayers). */
 export interface DairyLayer {
