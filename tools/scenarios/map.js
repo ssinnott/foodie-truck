@@ -79,6 +79,36 @@ export const SCENARIOS = {
       assert((await api.errors()).length === 0, 'no errors on the road');
     });
   },
+  /**
+   * cart - the tipped cart: on its lane spot with the first short ingredient spilled. The truck is driven over the
+   *        spill: that ingredient's line goes up by one, the cart is taken (righted), the pip plays, and driving over
+   *        it again gives nothing. If that filled the line, the compass points at the next short one.
+   */
+  async cart(server) {
+    await withPage(server, 'skipTo=map&critters=0,1,2,3', async (api, page) => {
+      await api.step(5);
+      await noCrossings(page);
+      const s0 = await api.summary();
+      assert(s0.top.cart && s0.top.cart.taken === 0, `the day has a tipped cart on the road (${JSON.stringify(s0.top.cart)})`);
+      const first = s0.run.needs.find((n) => !n.endsWith('/' + n.split(':')[1].split('/')[0]));
+      const id = first.split(':')[0], have = parseInt(first.split(':')[1], 10);
+      const c = s0.top.cart;
+      await teleport(page, c.x - 60, c.y, 0);
+      await api.step(10);
+      await api.shot('map-cart');
+      await api.hold(0, { right: true }); await api.step(50); await api.release(0);
+      const s1 = await api.summary();
+      assert(s1.top.cart.taken === 1, `driving over the spill takes the cart (taken ${s1.top.cart.taken})`);
+      const line = s1.run.needs.find((n) => n.startsWith(id + ':'));
+      assert(parseInt(line.split(':')[1], 10) === have + 1, `and the first short line went up by one (${first} -> ${line})`);
+      const miss = s1.run.needs.find((n) => !n.endsWith('/' + n.split(':')[1].split('/')[0]));
+      assert(!miss || s1.top.dest === INGREDIENTS[miss.split(':')[0]].place, `the compass points at what is still short (${miss} -> dest ${s1.top.dest})`);
+      await teleport(page, c.x - 60, c.y, 0);
+      await api.hold(0, { right: true }); await api.step(50); await api.release(0);
+      const s2 = await api.summary();
+      assert(JSON.stringify(s2.run.needs) === JSON.stringify(s1.run.needs), 'a second pass over it gives nothing');
+    });
+  },
   async map(server) {
     await withPage(server, 'skipTo=map&critters=0,1,2,3', async (api, page) => {
       await api.step(5);

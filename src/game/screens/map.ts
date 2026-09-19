@@ -12,6 +12,10 @@
 // clear on their own AUTO_SHEEP frames after the truck first ran up against them and ducks finish crossing in
 // AUTO_DUCKS, so nobody is ever stuck; once a crossing is done the next one comes out. The herd's walkers are laid
 // out from fixed offset tables about the crossing's spot, so a peer needs only the crossing's state and its timer.
+// THE TIPPED CART (`run.cart`): a hand cart on the verge with its load spilled across the lane at one more of those
+// spots. While the pantry is short, driving over the spill is +1 of the first ingredient the list is short of (the
+// float, the ring and the catch's pip), and the cart is righted; the compass is re-pointed in case that filled a
+// line. Once the pantry is full the cart is only a cart.
 //
 // Everything in update() is deterministic: input by seat only, distances from + - * / and Math.sqrt, no clock, no
 // Math.random; run.truck { x, y, heading, at } is the state that survives between visits and feeds the desync canary.
@@ -31,6 +35,9 @@ import { AnimPlayer } from '../../lib/art/animation.ts';
 import type { Pose } from '../../lib/art/poses.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import { WORLD_W, WORLD_H, PLACES } from '../../content/places.ts';
+import { INGREDIENTS } from '../../content/recipes.ts';
+import { drawFood } from '../../art/food.ts';
+import { INK } from '../../art/layers.ts';
 import { drawTruck } from '../../art/truck.ts';
 import {
   CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, RIVER_BLOCK, SPOTS, SIGN_AT, PARK_AT,
@@ -49,7 +56,9 @@ const BEE_X = new Int8Array(32), BEE_Y = new Int8Array(32);
 for (let i = 0; i < 32; i++) { BEE_X[i] = Math.round(Math.cos(i * Math.PI / 16) * 10); BEE_Y[i] = Math.round(Math.sin(i * Math.PI / 16) * 6); }
 const LANE_SPEED = 2.2, FIELD_SPEED = 1.0, TURN_EVERY = 4, ARRIVE_R = 40, DRIVER = 'chicory', DRIVER_WEIGHT = 1.5;
 const HONK_FRAMES = 30, SQUASH_FRAMES = 4, SIGN_FRAMES = 90, RING_FRAMES = 60, TOKEN_SCALE = 0.5;
-const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3, KIND_HERD = 4;
+const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3, KIND_HERD = 4, KIND_CART = 5;
+/** The tipped cart: the truck takes its spill within CART_R of the spot. */
+const CART_R = 36, THANKS = 'THANKS!';
 /**
  * The crossings. A crossing ON its lane blocks the truck within BLOCK_R of its spot; a honk within HONK_R scatters
  * it over CLEAR_FRAMES; left alone, sheep clear AUTO_SHEEP frames after the first block and ducks in AUTO_DUCKS.
@@ -268,6 +277,8 @@ export class MapScreen extends Screen {
   declare herd: MapSprite[];
   /** Frames before the herd will bleat or quack at the truck again. */
   declare baaCd: number;
+  /** The tipped cart's sprite in the y-sort (parked off-world on a day without one). */
+  declare cartSprite: MapSprite;
   /** The lantern glow over the destination's sign. */
   declare glow: MapLayer;
   /** The drifting cloud shadow, blitted three times. */
@@ -320,38 +331,9 @@ export class MapScreen extends Screen {
       rest.splice(1, 0, rest.splice(mid, 1)[0]);
     }
     for (const s of rest) this.heads.push({ rig: s.rig, pose: s.player.pose });
-    // where the day wants us: the landmark of the first missing ingredient while the pantry is short; once it is
-    // full, the nearest line still waiting (squared distances, no sqrt: the compass is drawn, never hashed); home
-    // when the day is done
-    this.serving = run.complete();
-    this.destLine = -1;
-    if (!this.serving) {
-      const miss = run.missing();
-      this.destId = miss.length ? run.placeFor(miss[0].id) : 'home';
-    } else {
-      let bd = Infinity;
-      for (let i = 0; i < run.lines.length; i++) {
-        if (run.lines[i].served) continue;
-        const p = PLACES.find((x) => x.id === run.lines[i].place);
-        if (!p) continue;
-        const dx = p.x - truck.x, dy = p.y - truck.y, d = dx * dx + dy * dy;
-        if (d < bd) { bd = d; this.destLine = i; }
-      }
-      this.destId = this.destLine >= 0 ? run.lines[this.destLine].place : 'home';
-    }
-    this.destSign = SIGN_AT[this.destId] || SIGN_AT.home;
+    this.pickDest();
     // the phone rings as the truck opens for the day, and never again
     if (rungRun !== run) { rungRun = run; this.ring = RING_FRAMES; }
-    // the queues: the HUD's rows and the tag over each signpost, worded once; a served line keeps its row (washed
-    // back) and loses its tag
-    this.lineRows.length = 0; this.lineTags.length = 0;
-    for (let i = 0; i < run.lines.length; i++) {
-      const ln = run.lines[i], p = PLACES.find((x) => x.id === ln.place), sg = SIGN_AT[ln.place];
-      const left = ln.customers.length - (i === run.line ? run.customer : 0);
-      this.lineRows.push(`${p ? p.sign : ln.place.toUpperCase()}  ${ln.served ? 'SERVED' : left + ' IN LINE'}`);
-      const text = `${left} IN LINE`;
-      if (sg) this.lineTags.push({ line: i, x: sg.x, y: sg.y, text, w: measureText(text, 1) + 12 });
-    }
     // the first visit after a line was finished says so, and how many are left
     const servedNow = run.linesServed();
     if (signedRun === run && servedNow > signedLines) this.raiseSign(`LINE SERVED!  ${run.lines.length - servedNow} TO GO`);
@@ -372,7 +354,9 @@ export class MapScreen extends Screen {
       this.herd.push(sp); this.sprites.push(sp);
     }
     this.placeHerds();
-    this.sum.length = 6 + run.crossings.length * 2;
+    this.cartSprite = { kind: KIND_CART, x: run.cart ? run.cart.x : -1000, y: run.cart ? run.cart.y : -1000, L: null, w: 40, h: 24, shadow: 26 };
+    this.sprites.push(this.cartSprite);
+    this.sum.length = 7 + run.crossings.length * 2;
     this.order.length = 0; for (let i = 0; i < this.sprites.length; i++) this.order.push(i);
     this.glow = destGlowSprite(); this.cloud = cloudShadowSprite();
     // dev-only nudge so a capture can show the truck rolling: seat 0 is pushed east for the first two seconds
@@ -459,6 +443,7 @@ export class MapScreen extends Screen {
     if (inp.anyPressed('alt') >= 0) { this.honk = HONK_FRAMES; this.squashT = SQUASH_FRAMES; game.audio.play('honk'); this.honkHerd(); }
     if (this.baaCd > 0) this.baaCd--;
     this.stepCrossings();
+    this.takeCart();
     if (this.honk > 0) this.honk--;
     if (this.squashT > 0) this.squashT--;
     if (this.signTimer > 0) this.signTimer--;
@@ -466,6 +451,59 @@ export class MapScreen extends Screen {
     this.truckSprite.x = truck.x; this.truckSprite.y = truck.y;
     this.snapCamera(false);
   }
+  /**
+   * Where the day wants us: the landmark of the first missing ingredient while the pantry is short; once it is
+   * full, the nearest line still waiting (squared distances, no sqrt: the compass is drawn, never hashed); home
+   * when the day is done. And the queues' HUD rows and signpost tags, worded once; a served line keeps its row
+   * (washed back) and loses its tag. Called on entry, and again the moment the tipped cart fills a line.
+   */
+  pickDest(): void {
+    const run = this.game.run, truck = this.truck;
+    this.serving = run.complete();
+    this.destLine = -1;
+    if (!this.serving) {
+      const miss = run.missing();
+      this.destId = miss.length ? run.placeFor(miss[0].id) : 'home';
+    } else {
+      let bd = Infinity;
+      for (let i = 0; i < run.lines.length; i++) {
+        if (run.lines[i].served) continue;
+        const p = PLACES.find((x) => x.id === run.lines[i].place);
+        if (!p) continue;
+        const dx = p.x - truck.x, dy = p.y - truck.y, d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; this.destLine = i; }
+      }
+      this.destId = this.destLine >= 0 ? run.lines[this.destLine].place : 'home';
+    }
+    this.destSign = SIGN_AT[this.destId] || SIGN_AT.home;
+    this.lineRows.length = 0; this.lineTags.length = 0;
+    for (let i = 0; i < run.lines.length; i++) {
+      const ln = run.lines[i], p = PLACES.find((x) => x.id === ln.place), sg = SIGN_AT[ln.place];
+      const left = ln.customers.length - (i === run.line ? run.customer : 0);
+      this.lineRows.push(`${p ? p.sign : ln.place.toUpperCase()}  ${ln.served ? 'SERVED' : left + ' IN LINE'}`);
+      const text = `${left} IN LINE`;
+      if (sg) this.lineTags.push({ line: i, x: sg.x, y: sg.y, text, w: measureText(text, 1) + 12 });
+    }
+  }
+
+  /** The tipped cart: over its spill while the list is short of something, and that something is +1. */
+  takeCart(): void {
+    const run = this.game.run, cart = run.cart, truck = this.truck;
+    if (!cart || cart.taken || this.serving) return;
+    const dx = cart.x - truck.x, dy = cart.y - truck.y;
+    if (dx * dx + dy * dy >= CART_R * CART_R) return;
+    const miss = run.missing();
+    if (!miss.length) return;
+    const need = miss[0], ing = INGREDIENTS[need.id];
+    cart.taken = 1;
+    run.gather(need.id, 1);
+    ringAt(cart.x, cart.y - 6, 4, 22, SIGNAL.map, 2, 16, true);
+    floatText(cart.x, cart.y - 34, '+1 ' + ing.name, ing.hex);
+    floatText(cart.x + 26, cart.y - 20, THANKS, MAP.skyTop);
+    this.game.audio.play('catch');
+    this.pickDest();
+  }
+
   /** The crossing ON its lane whose spot is within BLOCK_R of (x, y), or -1. */
   crossingAt(x: number, y: number): number {
     const cs = this.game.run.crossings;
@@ -570,6 +608,7 @@ export class MapScreen extends Screen {
       if (s.kind === KIND_TRUCK) this.drawTruck(ctx, sx, sy);
       else if (s.kind === KIND_SAILS) drawSails(ctx, SPOTS.millHub.x - cam.x, SPOTS.millHub.y - cam.y, f * 0.3);
       else if (s.kind === KIND_HERD) this.drawWalker(ctx, s, sx, sy, f);
+      else if (s.kind === KIND_CART) this.drawCart(ctx, sx, sy);
       else ctx.drawImage(s.L.canvas, sx - (s.L.w >> 1), sy - s.L.h);
     }
     // the lantern glow over the destination's sign (the map's one signal colour), then the drifting cloud shadows
@@ -617,6 +656,29 @@ export class MapScreen extends Screen {
     else drawDuck(ctx, sx, sy, facing, s.k === 0 ? 1 : 0, walk);
   }
 
+  /**
+   * The tipped cart: a plank bed on one big wheel with two handles, tipped onto its side with its load spilled
+   * across the lane (the first short ingredient's glyph, three of them, so what it gives is what it shows); righted
+   * and empty once the truck has been over it.
+   */
+  drawCart(ctx: CanvasRenderingContext2D, sx: number, sy: number): void {
+    const run = this.game.run, taken = !run.cart || run.cart.taken || this.serving;
+    ctx.save(); ctx.translate(sx, sy);
+    if (!taken) ctx.rotate(-0.5);
+    // the wheel, the bed, the handles
+    ctx.beginPath(); ctx.arc(-8, -6, 6, 0, Math.PI * 2); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = MAP.trunk; ctx.fill();
+    ctx.fillStyle = MAP.skyTop; ctx.fillRect(-9, -7, 2, 2);
+    ctx.beginPath(); ctx.rect(-14, -18, 26, 10); ctx.stroke(); ctx.fillStyle = MAP.wall; ctx.fill();
+    ctx.fillStyle = MAP.trunk; ctx.fillRect(-13, -12, 24, 3);
+    ctx.fillStyle = INK; ctx.fillRect(12, -16, 10, 2); ctx.fillRect(12, -11, 10, 2);
+    ctx.restore();
+    if (taken) return;
+    const miss = run.missing();
+    if (!miss.length) return;
+    const ing = INGREDIENTS[miss[0].id];
+    drawFood(ctx, ing.icon, sx + 14, sy - 3, 5, ing.hex); drawFood(ctx, ing.icon, sx + 26, sy + 1, 5, ing.hex); drawFood(ctx, ing.icon, sx + 20, sy - 10, 5, ing.hex);
+  }
+
   /** Reuse one options object for drawTruck (zero allocation in draw). */
   truckOpts(bob: number): TruckDrawOpts {
     const o = this._to || (this._to = { scale: TOKEN_SCALE, facing: 1, bob: 0, wheel: 0, squash: 1, heads: this.heads });
@@ -629,6 +691,7 @@ export class MapScreen extends Screen {
     return {
       truck: { x: Math.round(t.x), y: Math.round(t.y), heading: t.heading, at: t.at }, speed: Math.round(this.speed * 100) / 100, dest: this.destId, destLine: this.destLine, serving: this.serving, sign: this.signTimer > 0 ? this.signText : '', honk: this.honk > 0, blocked: this.blocked, seats: this.seats.length,
       crossings: this.game.run.crossings.map((c) => ({ x: c.x, y: c.y, kind: c.kind, herd: c.herd, state: c.state, t: c.t })),
+      cart: this.game.run.cart ? { x: this.game.run.cart.x, y: this.game.run.cart.y, taken: this.game.run.cart.taken } : null,
     };
   }
   /** Every field that could diverge between peers (net/checksum.js). */
@@ -637,6 +700,7 @@ export class MapScreen extends Screen {
     s[0] = t.x; s[1] = t.y; s[2] = t.heading; s[3] = this.speed; s[4] = placeIndex(t.at); s[5] = this.reopen;
     const cs = this.game.run.crossings;
     for (let i = 0; i < cs.length; i++) { s[6 + i * 2] = cs[i].state; s[7 + i * 2] = cs[i].t; }
+    s[6 + cs.length * 2] = this.game.run.cart ? this.game.run.cart.taken : 0;
     return s;
   }
 }

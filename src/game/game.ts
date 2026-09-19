@@ -107,6 +107,16 @@ export interface DayPlan {
   recipes: string[];
   lines: DayPlanLine[];
   crossings: DayPlanCrossing[];
+  /** The tipped cart's lane spot (an index into CROSSING_SPOTS, never one a crossing uses), or -1 for no cart today. */
+  cart: number;
+}
+
+/** The tipped cart on the road: a hand cart on the verge with its load across the lane; driving over it is +1 of something the list is short of. */
+export interface Cart {
+  x: number;
+  y: number;
+  /** 1 once the truck has been over it. */
+  taken: number;
 }
 
 /**
@@ -163,6 +173,8 @@ export interface Run {
   truck: TruckState;
   /** The day's crossings on the road, in the order they come out. */
   crossings: Crossing[];
+  /** The tipped cart, or null on a day without one. */
+  cart: Cart | null;
   /** Frames spent in the run. */
   frame: number;
   /** The shopping-list line for an ingredient, or null when the day never asks for it. */

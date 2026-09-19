@@ -24,7 +24,7 @@ import { PLACES } from '../content/places.ts';
 import { CROSSING_SPOTS } from '../art/backgrounds/map.ts';
 import { makeRng } from '../lib/engine/rng.ts';
 import type { RngInstance } from '../lib/engine/rng.ts';
-import type { Order, OrderNeed, Run, RunLine, RunCustomer, DayPlan, DayPlanLine, DayPlanCrossing, Crossing } from './game.ts';
+import type { Order, OrderNeed, Run, RunLine, RunCustomer, DayPlan, DayPlanLine, DayPlanCrossing, Crossing, Cart } from './game.ts';
 
 /**
  * Scene indices for the START packet (net/protocol.js): the screen a match opens on. Scenes finished after the
@@ -103,7 +103,10 @@ export function planDay(seed: number, o: { order?: number; recipes?: number[] } 
     const kind = r.chance(DUCK_ODDS) ? CROSSING_DUCKS : CROSSING_SHEEP;
     return { spot, kind, herd: kind === CROSSING_DUCKS ? DUCK_FAMILY : r.int(FLOCK_MIN, FLOCK_MAX) };
   });
-  return { recipes: recipes.map((i) => ORDERS[i].id), lines, crossings };
+  // the tipped cart: one more lane spot, never one a crossing stands on (the spots were shuffled above, so it is the next one along)
+  const rest = shuffle(r, CROSSING_SPOTS.map((_, i) => i)).filter((i) => spots.indexOf(i) < 0);
+  const cart = rest.length ? rest[0] : -1;
+  return { recipes: recipes.map((i) => ORDERS[i].id), lines, crossings, cart };
 }
 
 /**
@@ -149,6 +152,8 @@ export function startRun(game, o) {
     truck: { x: 0, y: 0, heading: 0, at: 'home' },
     /** The day's crossings: the first is out on its lane from the start, the rest come out one at a time as each clears. */
     crossings: plan.crossings.map((c, i): Crossing => { const sp = CROSSING_SPOTS[c.spot]; return { ...c, x: sp.x, y: sp.y, dx: sp.dx, dy: sp.dy, state: i === 0 ? 1 : 0, t: 0 }; }),
+    /** The tipped cart on the road, untouched until the truck drives over its spill. */
+    cart: plan.cart >= 0 ? ({ x: CROSSING_SPOTS[plan.cart].x, y: CROSSING_SPOTS[plan.cart].y, taken: 0 } as Cart) : null,
     /** Frames spent in the run (a clock the kitchen and results can read). */
     frame: 0,
     /** Mutators */
@@ -219,6 +224,7 @@ export function startRun(game, o) {
         complete: run.complete(), served: run.served, score: run.score, linesServed: run.linesServed(), stars: run.stars(),
         dayComplete: run.dayComplete(), truckAt: run.truck.at,
         crossings: run.crossings.map((c) => ({ x: c.x, y: c.y, kind: c.kind, herd: c.herd, state: c.state, t: c.t })),
+        cart: run.cart ? { x: run.cart.x, y: run.cart.y, taken: run.cart.taken } : null,
       };
     },
   };

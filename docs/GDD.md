@@ -121,6 +121,11 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   nobody is ever stuck; the moment a crossing is done the next comes out. The scattered herd stands in the field
   beside the lane for the rest of the day. Nothing is lost by a crossing but the moment, and the whole thing is
   two integers per crossing (state, timer) on the wire.
+- **The tipped cart** (`run.cart`). One more lane spot a day, never one a crossing stands on: a hand cart on its
+  side with its load spilled across the lane, the load drawn as the first ingredient the list is still short of.
+  While the pantry is short, driving within 36 px of it is +1 of that ingredient (the float in the ingredient's
+  colour, the ring, the catch's pip, a THANKS!), the cart is righted and empty, and the compass is re-pointed in
+  case that filled a line. Once the pantry is full the cart is only a cart. One integer (taken) on the wire.
 - **HUD**: the shopping list (one row per ingredient, `have/amount`, a tick when full, the gold arrow on the first
   short one) while gathering, then the lines (`sign  N IN LINE`, washed back once served, the arrow on the one the
   compass points at); the steering-wheel widget with one tick per seat that lights while that seat pushes; the
