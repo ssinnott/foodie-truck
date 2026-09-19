@@ -189,11 +189,42 @@ export function drawStars(ctx: CanvasRenderingContext2D, cx: number, y: number, 
   }
 }
 
-/** One-line hint on a paper strip along the bottom of the screen. */
-export function drawHint(ctx: CanvasRenderingContext2D, text: string, y: number = 346): void {
-  const w = measureText(text, 1) + 16, x = R(VIEW_W / 2 - w / 2);
-  ctx.fillStyle = UI.paper; ctx.fillRect(x, y, w, 12); ctx.fillStyle = UI.ink; ctx.fillRect(x, y + 12, w, 1);
-  drawText(ctx, text, VIEW_W / 2, y + 2, { size: 1, color: UI.ink, align: 'center', shadow: false });
+/** The paper strip a hint sits on, in internal px. */
+export interface HintRect { x: number; y: number; w: number; h: number; }
+
+/**
+ * Where `drawHint` would put that strip, without drawing it.
+ *
+ * A hint that is an ADDRESS claims this rect as its clickable one (engine/links.ts), and claims it in `enter()`,
+ * before anything has been drawn. Measuring it here rather than in the screen keeps the paper the player sees and
+ * the rect the mouse hits the same rectangle by construction.
+ */
+export function hintRect(text: string, y: number = 346): HintRect {
+  const w = measureText(text, 1) + 16;
+  return { x: R(VIEW_W / 2 - w / 2), y, w, h: 13 };
+}
+
+/**
+ * One-line hint on a paper strip along the bottom of the screen.
+ *
+ * `color` is ink for every hint that is a hint. The two that are addresses pass a warmer one while the mouse is
+ * on them or the row that follows them is selected - ink gone warm rather than any of the reserved signal
+ * colours (constants.ts SIGNAL), which mean things elsewhere and must go on meaning only those things.
+ */
+export function drawHint(ctx: CanvasRenderingContext2D, text: string, y: number = 346, color: string = UI.ink): HintRect {
+  const r = hintRect(text, y);
+  ctx.fillStyle = UI.paper; ctx.fillRect(r.x, y, r.w, 12); ctx.fillStyle = UI.ink; ctx.fillRect(r.x, y + 12, r.w, 1);
+  drawText(ctx, text, VIEW_W / 2, y + 2, { size: 1, color, align: 'center', shadow: false });
+  return r;
+}
+
+/**
+ * Underline a hint that is an address, so it reads as something to follow rather than a caption. Drawn inside the
+ * strip, under the text, in the text's own colour.
+ */
+export function drawHintRule(ctx: CanvasRenderingContext2D, text: string, r: HintRect, color: string = UI.ink): void {
+  const w = measureText(text, 1);
+  ctx.fillStyle = color; ctx.fillRect(R(VIEW_W / 2 - w / 2), r.y + 10, w, 1);
 }
 
 /** Dim the screen under an overlay. */

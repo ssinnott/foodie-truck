@@ -18,7 +18,8 @@ import { drawFood } from '../../art/food.ts';
 import { LIGHT_X, LIGHT_Y } from '../../lib/art/shading.ts';
 import { CRITTERS } from '../../content/critters/index.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
-import { drawSlate, drawMenuRows, drawHint } from '../ui.ts';
+import { drawSlate, drawMenuRows, drawHint, drawHintRule, hintRect } from '../ui.ts';
+import { links } from '../../engine/links.ts';
 import { confirmPressed, navY } from '../menuinput.ts';
 import { readWeek } from '../week.ts';
 import type { WeekRecord } from '../week.ts';
@@ -34,6 +35,19 @@ import { drawLane, drawLogoSign, drawCrate, drawBlock, TRUCK_Y, CREW_Y } from '.
  */
 const ROWS = ['PLAY', 'ONLINE', 'BOOK', 'CONTROLS', 'CREW', 'SOURCE'];
 const PLAY_ROW = 0, PLAY_TEXT = 'PLAY', CONTINUE_TEXT = 'CONTINUE';
+const SOURCE_ROW = ROWS.length - 1;
+/**
+ * The repository address along the bottom is the SOURCE row's other half: the row opens it, and the address is
+ * both the thing a click lands on (engine/links.ts) and the thing to type where no tab ever opens.
+ */
+const LINK_ZONE = hintRect(REPO_LABEL);
+/** How long the SOURCE row's answer stays up, in frames (60 = a second). */
+const NOTICE_FRAMES = 150;
+const LINK_OPENED = 'OPENED IN A NEW TAB';
+/** Nothing is lost when the tab is refused: the address is on the strip below either way. */
+const LINK_BLOCKED = 'NEW TAB BLOCKED - THE ADDRESS IS BELOW';
+/** The address lit: ink gone warm, never one of the reserved signal colours (constants.ts SIGNAL). */
+const LINK_LIT = UI.wood;
 /**
  * The A-frame slate on the verge, right of the crew. It stood at x 426, 176 wide, while the crew were four; the
  * fifth member takes the lane up to ~478, so the board is 36 px narrower and starts where the lineup stops (its
@@ -156,8 +170,11 @@ export class TitleScreen extends Screen {
   declare week: WeekRecord | null;
   /** The menu as this screen draws it: ROWS with the first row worded for the week. */
   declare rows: string[];
+  /** What following the repository link did, and how many frames that answer has left. */
+  declare notice: string;
+  declare noticeTimer: number;
 
-  constructor(game: Game) { super(game, 'title'); this.crew = []; this.sel = 0; this.week = null; this.rows = ROWS.slice(); }
+  constructor(game: Game) { super(game, 'title'); this.crew = []; this.sel = 0; this.week = null; this.rows = ROWS.slice(); this.notice = ''; this.noticeTimer = 0; }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -166,6 +183,10 @@ export class TitleScreen extends Screen {
     this.game.input.setPadClaims(true);
     this.game.input.resetClaims();
     this.sel = 0;
+    this.notice = ''; this.noticeTimer = 0;
+    // The drawn address is clickable for as long as this screen is on the stack. A click is a real user gesture,
+    // so it opens the tab even where the row's fixed-step call would be refused (engine/links.ts).
+    links.setZone({ ...LINK_ZONE, url: REPO_URL, onOpen: (opened) => this.linkNotice(opened) });
     // a week part-played turns the first row from PLAY into CONTINUE; there is never both
     this.week = readWeek();
     this.rows = ROWS.slice();
@@ -185,8 +206,23 @@ export class TitleScreen extends Screen {
     });
   }
 
+  override exit(): void { links.clearZone(); }
+
+  /**
+   * Report what following the repository link actually did - the row and a click come through here alike.
+   *
+   * Only a refusal makes a sound: the row's own `menu_confirm` has already played by the time this runs, and a
+   * click that opens a tab has the tab to show for itself.
+   */
+  linkNotice(opened: boolean): void {
+    this.notice = opened ? LINK_OPENED : LINK_BLOCKED;
+    this.noticeTimer = NOTICE_FRAMES;
+    if (!opened) this.game.audio.play('menu_back');
+  }
+
   override update(): void {
     super.update();
+    if (this.noticeTimer > 0) this.noticeTimer--;
     const inp = this.game.input;
     const dy = navY(inp);
     if (dy) { this.sel = (this.sel + dy + this.rows.length) % this.rows.length; this.game.audio.play('menu_move'); }
@@ -212,7 +248,10 @@ export class TitleScreen extends Screen {
     else if (row === 'BOOK') this.game.replace('book');
     else if (row === 'CONTROLS') this.game.replace('controls');
     else if (row === 'CREW') this.game.replace('gallery');
-    else if (row === 'SOURCE') { try { window.open(REPO_URL, '_blank'); } catch { /* popups blocked: stay put */ } }
+    // SOURCE leaves the game, and is the one row that can be refused: from the fixed step this is a rAF callback
+    // rather than an event handler, so a browser that wants a real gesture blocks the tab. Say so and leave the
+    // address on screen instead of looking broken.
+    else if (row === 'SOURCE') this.linkNotice(links.open(REPO_URL));
   }
 
   /**
@@ -264,7 +303,13 @@ export class TitleScreen extends Screen {
     if (this.frame % BLINK_PERIOD < BLINK_ON) {
       drawTextOutlined(ctx, START_TEXT, VIEW_W / 2, START_Y, { size: 2, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
     }
-    drawHint(ctx, REPO_LABEL);
+    // The address, lit while the mouse is on it or the row that opens it is selected, and underlined always so it
+    // reads as something to follow. What the last press of it did sits above it until it times out.
+    const lit = links.hot || this.sel === SOURCE_ROW;
+    const linkColor = lit ? LINK_LIT : UI.ink;
+    const rect = drawHint(ctx, REPO_LABEL, LINK_ZONE.y, linkColor);
+    drawHintRule(ctx, REPO_LABEL, rect, linkColor);
+    if (this.noticeTimer > 0) drawHint(ctx, this.notice, LINK_ZONE.y - 16);
   }
 
   override summary() {
@@ -272,6 +317,8 @@ export class TitleScreen extends Screen {
     return {
       row: this.rows[this.sel], sel: this.sel, rows: this.rows.length, crew: this.crew.length,
       menu: this.rows.slice(),
+      // the outward link, as a test sees it: the address, the rect a click must land in, and the last answer
+      link: REPO_URL, linkLabel: REPO_LABEL, linkZone: LINK_ZONE, notice: this.noticeTimer > 0 ? this.notice : '',
       // the week in progress, as the row reads it: what CONTINUE would pick up
       week: w ? { seed: w.seed, day: w.day, days: DAYS_PER_WEEK, dayName: shapeOf(w.day).name, critters: w.critters.slice() } : null,
     };

@@ -59,8 +59,9 @@ index.html               the page: one canvas, the error box, the module entry
 src/constants.js         every shared number and UI colour (never hardcode these elsewhere)
 src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, actions (the eight, frozen), bindings (which key/button each one is on), input
-               (8-action masks), rng, math, trig, text (5x7 pixel font), audio (the WebAudio facade) +
-               audio/ (this game's SFX library and its tracks; the primitives and the sequencer are lib/audio/)
+               (8-action masks), links (the only module that navigates anywhere), rng, math, trig, text (5x7
+               pixel font), audio (the WebAudio facade) + audio/ (this game's SFX library and its tracks; the
+               primitives and the sequencer are lib/audio/)
 src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (the paper-doll), layers (offscreen
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
                fishing + hens + kitchenProps + dairyProps + millProps + hiveProps + gardenProps (per-scene props),
@@ -206,6 +207,19 @@ holds the NPC diners.
 Offscreen pre-render: `makeLayer(w, h, paint(g, w, h, rnd), seed)`, `blitTiled`, `blitAt`, `blitWorld(ctx, L, camX,
 camY)`, `vGradient`, `radialGlow`, `makeGlowSprite`, `boxOutlined`, `boxShaded`, `discShaded`, `polyOutlined`,
 `makePool`, `pulse`, `PARALLAX`, `INK`. Backdrops paint ONCE with a seeded rng and blit per frame at integer offsets.
+
+### `engine/links.js` (ported)
+The only module in the build that leaves the page, for the two addresses drawn on the canvas: the repository on
+the title (the SOURCE row and the address under it) and the Ko-fi address on the crew screen. Each has two ways
+to follow it, because neither alone reaches every player. `links.open(url)` is called from the fixed step by a
+row or a key and returns whether the tab ACTUALLY opened - a rAF callback is not a user gesture, so a browser may
+refuse it, and the screen reports that rather than looking broken. `links.setZone({ x, y, w, h, url, onOpen })`
+claims the drawn address's rect (internal 640x360 px, from `ui.ts hintRect`) so a click on it opens the tab
+through a real gesture; the screen that draws the address claims the rect in `enter()` and releases it with
+`clearZone()` in `exit()`, one zone at a time. `links.hot` is true while the mouse rests on it, which is what
+lights the address up. Either way the address stays drawn, so a player whose browser refuses the tab can read it
+off the screen. Nothing here is simulation: no screen's `checksumFields` sees a link, and a peer never hears
+about one (docs/MULTIPLAYER.md).
 
 ### `engine/particles.js`, `art/fx.js` (ported)
 One 600-slot pool, visual only (its own rng stream): `particles.spawn(kind, x, y, opts)`, `burst(kind, x, y, n, opts)`,

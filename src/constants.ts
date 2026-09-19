@@ -71,3 +71,11 @@ export const PLAYER_LABELS = Object.freeze(['P1', 'P2', 'P3', 'P4']);
 /** Where this build came from (the title screen's SOURCE row). */
 export const REPO_URL = 'https://github.com/ssinnott/foodie-truck';
 export const REPO_LABEL = 'GITHUB.COM/SSINNOTT/FOODIE-TRUCK';
+
+/**
+ * Where to tip the cook, drawn on the crew screen and nowhere else: a game a small child plays does not ask for
+ * money on its way in. The label is the same address in the game's own type, for the player who reads it off the
+ * screen rather than following it (engine/links.ts).
+ */
+export const KOFI_URL = 'https://ko-fi.com/seansinnott';
+export const KOFI_LABEL = 'KO-FI.COM/SEANSINNOTT';

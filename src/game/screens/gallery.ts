@@ -1,6 +1,6 @@
 // Gallery: every critter in the cast, side by side, cycling through the shared animation table - the in-game
 // contact sheet (docs/ART_PRINCIPLES.md 42). Left/right picks the animation, up/down the zoom, cancel leaves.
-import { VIEW_W, VIEW_H, UI, PLUM } from '../../constants.ts';
+import { VIEW_W, VIEW_H, UI, PLUM, KOFI_URL, KOFI_LABEL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { CritterDef, Game, ScreenParams } from '../game.ts';
 import { drawText, drawTextOutlined } from '../../engine/text.ts';
@@ -9,8 +9,9 @@ import type { Rig } from '../../lib/art/rig.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { ITEMS } from '../../content/critters/items.ts';
-import { cancelPressed, navX, navY } from '../menuinput.ts';
-import { drawSign, drawHint, drawNamePlate } from '../ui.ts';
+import { cancelPressed, confirmKey, navX, navY } from '../menuinput.ts';
+import { drawSign, drawHint, drawHintRule, drawNamePlate, hintRect } from '../ui.ts';
+import { links } from '../../engine/links.ts';
 
 const ANIMS = ['idle', 'walk', 'run', 'carry', 'carryWalk', 'reach', 'catch', 'cheer', 'sad', 'eat', 'chop', 'stir',
   'bump', 'hop', 'wave', 'sit', 'sneak', 'honk', 'cast', 'taste'];
@@ -19,6 +20,19 @@ const SIGNATURE = 4;
 /** Which held item a pose is authored around, so the gallery shows the pair. */
 const ITEM_FOR = { carry: 'basket', carryWalk: 'basket', catch: 'basket', eat: 'food', chop: 'knife', stir: 'spoon', honk: 'horn', cast: 'rod', taste: 'spoon' };
 const FLOOR_Y = 250;
+/**
+ * The cook's tip jar, and the only place in the game that asks for anything: the crew screen is where a player
+ * who came looking for who made this ends up, and a game a small child plays does not put a money row on its
+ * front door. Two ways to follow it, like the repository address on the title (engine/links.ts) - a click on the
+ * strip, or the action key, which is otherwise idle here - and the address stays readable either way.
+ */
+const KOFI_ZONE = hintRect(KOFI_LABEL, 330);
+/** How long the answer to a press or a click stays up, in frames. */
+const NOTICE_FRAMES = 150;
+const LINK_OPENED = 'OPENED IN A NEW TAB';
+const LINK_BLOCKED = 'NEW TAB BLOCKED - THE ADDRESS IS BELOW';
+/** The address lit: ink gone warm, never one of the reserved signal colours (constants.ts SIGNAL). */
+const LINK_LIT = UI.wood;
 /** Each critter hangs on its own card, so no fur ever sits on a plane of its own value. */
 const CARD_TOP_PAD = 10;
 /** Paper mount inside a dark critter's frame, in px. */
@@ -61,15 +75,34 @@ export class GalleryScreen extends Screen {
   declare facing: number;
   /** One card per cast member, in cast order. */
   declare slots: GallerySlot[];
+  /** What following the Ko-fi link did, and how many frames that answer has left. */
+  declare notice: string;
+  declare noticeTimer: number;
 
   constructor(game: Game) { super(game, 'gallery'); }
   override enter(params: ScreenParams): void {
     super.enter(params);
     this.anim = 0; this.zoom = 2; this.facing = 1;
+    this.notice = ''; this.noticeTimer = 0;
+    // The drawn address is clickable while this screen is up: a click is a real user gesture, so it opens the tab
+    // even where the action key's fixed-step call would be refused (engine/links.ts).
+    links.setZone({ ...KOFI_ZONE, url: KOFI_URL, onOpen: (opened) => this.linkNotice(opened) });
     this.slots = (this.game.critters || []).map((c, i) => ({ def: c, rig: critterRig(c, i), player: new AnimPlayer(c.anims) }));
     for (const s of this.slots) s.player.play(ANIMS[this.anim]);
     this.apply();
   }
+  override exit(): void { links.clearZone(); }
+
+  /**
+   * Report what following the Ko-fi link actually did - the key and a click come through here alike. Only a
+   * refusal makes a sound: an opened tab is its own answer, and the notice says so either way.
+   */
+  linkNotice(opened: boolean): void {
+    this.notice = opened ? LINK_OPENED : LINK_BLOCKED;
+    this.noticeTimer = NOTICE_FRAMES;
+    if (!opened) this.game.audio.play('menu_back');
+  }
+
   apply(): void {
     const name = ANIMS[this.anim], item = ITEM_FOR[name] || null;
     for (const s of this.slots) {
@@ -86,6 +119,12 @@ export class GalleryScreen extends Screen {
     if (dx) { this.anim = (this.anim + dx + ANIMS.length) % ANIMS.length; this.apply(); audio.play('menu_move'); }
     if (dy) { this.zoom = Math.max(1, Math.min(4, this.zoom - dy)); audio.play('menu_move'); }
     if (inp.anyPressed('alt') >= 0) { this.facing = -this.facing; audio.play('menu_move'); }
+    if (this.noticeTimer > 0) this.noticeTimer--;
+    // The action key does nothing else on a contact sheet, so it is what follows the address for a player with no
+    // mouse: keyboard, gamepad and all. The action key ALONE, not `confirmPressed`, which would put START on it
+    // too: the hint names one key, and a key that opens a tab had better be the key the screen said it would be.
+    // Called from the fixed step it can be refused, which linkNotice then says out loud.
+    if (inp.anyPressed('action') >= 0) { audio.play('menu_confirm'); this.linkNotice(links.open(KOFI_URL)); }
     for (const s of this.slots) { s.player.tick(); if (s.player.done) s.player.play(ANIMS[this.anim], { restart: true }); }
     if (cancelPressed(inp) >= 0) { audio.play('menu_back'); this.game.reset('title'); }
   }
@@ -125,7 +164,19 @@ export class GalleryScreen extends Screen {
     drawSign(ctx, VIEW_W / 2, 6, 120, 24, 'THE CREW', { size: 2 });
     const sig = this.anim >= ANIMS.length - SIGNATURE ? '  (ONE CRITTER ONLY)' : '';
     drawText(ctx, `< ${ANIMS[this.anim].toUpperCase()} >${sig}   ZOOM ${this.zoom}X   X: FLIP`, VIEW_W / 2, 46, { size: 1, color: UI.ink, align: 'center', shadow: false });
-    drawHint(ctx, 'C: BACK');
+    // The tip jar: the address, lit under the mouse and underlined always so it reads as something to follow,
+    // with what the last press or click did above it and the way out under it.
+    const linkColor = links.hot ? LINK_LIT : UI.ink;
+    const rect = drawHint(ctx, KOFI_LABEL, KOFI_ZONE.y, linkColor);
+    drawHintRule(ctx, KOFI_LABEL, rect, linkColor);
+    if (this.noticeTimer > 0) drawHint(ctx, this.notice, KOFI_ZONE.y - 16);
+    drawHint(ctx, `C: BACK   ${confirmKey(this.game.input) || 'Z'}: KO-FI`);
   }
-  override summary() { return { anim: ANIMS[this.anim], critters: this.slots.length }; }
+  override summary() {
+    return {
+      anim: ANIMS[this.anim], critters: this.slots.length,
+      // the outward link, as a test sees it: the address, the rect a click must land in, and the last answer
+      link: KOFI_URL, linkLabel: KOFI_LABEL, linkZone: KOFI_ZONE, notice: this.noticeTimer > 0 ? this.notice : '',
+    };
+  }
 }

@@ -2,6 +2,7 @@
 import { VIEW_W, VIEW_H } from './constants.ts';
 import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.ts';
+import { links } from './engine/links.ts';
 import { audio } from './engine/audio.ts';
 import { rng } from './lib/engine/rng.ts';
 import { createCanvas } from './lib/engine/canvas.ts';
@@ -93,6 +94,9 @@ function boot() {
   // stock bindings without touching what is stored - a way back in for a player who has bound themselves out.
   if (!options.defaults) bindings.load();
   input.init(view.canvas);
+  // The outward links' own listeners: a click on a drawn address is a real user gesture, which the fixed step's
+  // call is not (engine/links.ts). Nothing else on the canvas listens for a click.
+  links.init(view);
   // Sound comes on with the first key or tap (the browser's autoplay rule); in autotest no context is ever made.
   audio.testMode = options.autotest;
   audio.init();
