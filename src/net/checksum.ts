@@ -1,58 +1,15 @@
-// Desync canary for lockstep netcode (docs/MULTIPLAYER.md). Ported from the sibling game's checksum.js;
-// the hashing helpers are verbatim, the body is this game's simulation.
+// Desync canary for lockstep netcode (docs/MULTIPLAYER.md). The hashing kernel (FNV-1a, the -0 and NaN rules,
+// the type tags) is the library's, src/lib/net/checksum.ts; the walk over the run below is this game's.
 //
 // Peers exchange this hash every N frames (net/lockstep.js checksumEvery). It must have ZERO false
 // positives: two correctly synchronised peers must never disagree, or the session ends for no reason.
-//
-// Two traps, both handled below:
-//   -0 and 0 are numerically equal but have different bit patterns, and -0 arises easily from
-//     multiplying a speed by zero (a truck coasting to a halt). Hashing raw bits would report a
-//     desync that is not one.
-//   NaN has many bit patterns. Any NaN is normalised to one sentinel.
 //
 // What is hashed is exactly the simulation: the rng stream, the frame counter, every field of game.run
 // (the only cross-screen state, game/run.js) and whatever the top screen says can diverge through its
 // checksumFields(). Nothing visual is ever hashed: a backdrop layer, a particle or a camera may differ
 // between peers and must not trip the canary.
 
-const f64 = new Float64Array(1);
-const u32 = new Uint32Array(f64.buffer);
-
-/** FNV-1a over a uint32. */
-export function mix(h, v) {
-  h ^= v & 0xff; h = Math.imul(h, 16777619);
-  h ^= (v >>> 8) & 0xff; h = Math.imul(h, 16777619);
-  h ^= (v >>> 16) & 0xff; h = Math.imul(h, 16777619);
-  h ^= (v >>> 24) & 0xff; h = Math.imul(h, 16777619);
-  return h >>> 0;
-}
-
-/** Hash a number by its exact bits, with -0 and NaN normalised so equal values always hash equally. */
-export function mixNum(h, n) {
-  if (Number.isNaN(n)) return mix(h, 0x7ff80000);
-  f64[0] = n === 0 ? 0 : n;                  // n === 0 is true for both 0 and -0
-  return mix(mix(h, u32[0]), u32[1]);
-}
-
-/** Hash a string, length-prefixed so 'AB','C' cannot collide with 'A','BC'. */
-export function mixStr(h, s) {
-  h = mix(h, s.length);
-  for (let i = 0; i < s.length; i++) h = mix(h, s.charCodeAt(i));
-  return h;
-}
-
-/**
- * Hash any simulation field. Several of this game's fields are STRINGS (run.truck.at is a place id,
- * party critters are cast ids), so a number-only path would silently hash a constant and make them
- * invisible to the canary. Each type is tagged so 0, '', false and null cannot collide.
- */
-export function mixAny(h, v) {
-  if (v === undefined || v === null) return mix(h, 0);
-  if (typeof v === 'number') return mixNum(h, v);
-  if (typeof v === 'string') return mixStr(mix(h, 1), v);
-  if (typeof v === 'boolean') return mix(h, v ? 2 : 3);
-  return mix(h, 4);
-}
+import { FNV_OFFSET, mix, mixNum, mixAny } from '../lib/net/checksum.ts';
 
 /**
  * Hash the simulation state of the game: rng stream, frame counter, the run, and the top screen.
@@ -60,7 +17,7 @@ export function mixAny(h, v) {
  * @returns {number} uint32
  */
 export function runChecksum(game) {
-  let h = 2166136261 >>> 0;
+  let h = FNV_OFFSET;
   // rng.state is the highest-signal field. mulberry32 advances by a fixed constant per draw
   // (engine/rng.js), so it is effectively a call counter: if two peers ever take a different branch
   // that consumes randomness, this diverges immediately, one frame before positions do.

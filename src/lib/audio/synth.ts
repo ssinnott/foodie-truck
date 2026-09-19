@@ -1,7 +1,7 @@
-// WebAudio synthesis primitives, ported whole from the sibling game (aether-and-brass engine/audio/synth.ts).
-// Every function is pure with respect to the context: `(ctx, dest, when, opts)` schedules nodes on ANY
-// BaseAudioContext (realtime or Offline) at absolute time `when` (seconds, in `ctx.currentTime` units) and returns
-// the end time. Nothing here touches global state, so the same code renders in `audio.selfTest()` and in-game.
+// WebAudio synthesis primitives. Every function is pure with respect to the context: `(ctx, dest, when, opts)`
+// schedules nodes on ANY BaseAudioContext (realtime or Offline) at absolute time `when` (seconds, in
+// `ctx.currentTime` units) and returns the end time. Nothing here touches global state, so the same code renders
+// in a game and inside the facade's offline self-test (./facade.ts).
 
 /** A pitch ramp's shape: exponential (the default -- how pitch is heard) or linear. */
 export type RampCurve = 'exp' | 'lin';
@@ -313,7 +313,7 @@ export function bus(ctx: BaseAudioContext, dest: AudioNode, { gain = 1, lp = 0, 
   return g;
 }
 
-/** Glassy chord (the results bell, the honey jar): detuned sine pairs with slow tremolo and a long release. */
+/** Glassy chord: detuned sine pairs with slow tremolo and a long release. */
 export function glass(ctx: BaseAudioContext, dest: AudioNode, when: number, { freqs = [1320, 1980], detune = 6, dur = 0.5, vol = 0.12, trem = 5, attack = 0.01 }: GlassOpts = {}): number {
   const vca = ctx.createGain(); vca.gain.value = 0.8;
   const lfo = ctx.createOscillator(); lfo.frequency.value = trem;
