@@ -1,0 +1,10 @@
+# Puts a "Sponsor" button on the repository page and in the sidebar.
+#
+# `github` needs GitHub Sponsors enabled on the account before the button appears:
+# github.com/sponsors -> set up a profile and a Stripe payout. Until that is done this
+# file is harmless but does nothing visible.
+#
+# Both are listed, so the Sponsor button offers a choice.
+# Ko-fi one-off tips are 0% platform fee, so only payment processing comes off.
+github: [ssinnott]
+ko_fi: seansinnott
