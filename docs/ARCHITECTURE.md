@@ -278,18 +278,20 @@ All seven mini-games stand on this module, so it is **frozen**: a screen that wa
 its own file (the orchard keeps its catch boxes there, the coop its pluck anims). It owns, and is the only place
 that may define:
 
-- `ROUND_FRAMES` 2400 (GDD section 5's 40 seconds), `SIGN_SLAM` 6, `SIGN_HOLD` 60.
+- `SIGN_SLAM` 6, `SIGN_HOLD` 60. There is no round length: a round has no time limit (GDD section 5).
 - `makeSeats(game, floorY)` → one seat per party member (rig in the seat's apron colour, `AnimPlayer`, the ribbon
   basket, `count`, `bumpT`, the reused draw-options object); `seatAnim(seat, name, restart?)`.
 - `makeClock()` / `tickClock(clock)` / `endRound(clock, text)` / `roundOver(clock)` — the round's whole lifecycle.
-- `drawClock(ctx, clock, countStr, drawIcon, title)`, `drawEndSign(ctx, clock, frame)`, `drawSeatPlate(ctx, seat,
+  The clock only counts (`elapsed` frames, for the checksum and the tests); nothing in it ends a round.
+- `drawClock(ctx, countStr, progress, drawIcon, title)`, `drawEndSign(ctx, clock, frame)`, `drawSeatPlate(ctx, seat,
   stack?)` with `PLATES` / `resetPlates()` for the stacking pass.
 
 A mini-game screen is therefore: `enter()` builds its cached layers, its seats, its fixed sim pools and its target
 (**the remainder** of the order line, `max(1, amount - have)`, never the whole line — the map may have banked some
 already); `update()` simulates only while `clock.phase === 0`, calls `finish()` when the party's total reaches the
-target, and once `roundOver()` calls `run.gather(<ingredient>, total)` and `game.replace('map')`; `draw()` blits,
-sorts, plates, then draws the clock, the hint and the end sign. Changing a number in this module changes seven
+target — the only way a round ends — and once `roundOver()` calls `run.gather(<ingredient>, total)` and
+`game.replace('map')`; `draw()` blits, sorts, plates, then draws the tally ticket (its bar is `total / target`),
+the hint and the end sign. Changing a number in this module changes seven
 screens at once and needs all seven re-measured.
 
 ### Overlays
@@ -298,7 +300,8 @@ implemented (a paused peer would stall the room) — the pause overlay is refuse
 
 ## 6. Debug & test hooks (`src/main.js`)
 
-URL params: `?autotest=1` (test mode: no rAF loop, seeded rng, `window.__game` populated), `?debug=1`, `?seed=N`,
+URL params: `?autotest=1` (test mode: no rAF loop, seeded rng, `window.__game` populated), `?debug=1`, `?seed=N`
+(pins the seed for every run on the page; without it each run the select screen starts draws its own, `rng.freshSeed`),
 `?skipTo=<screen>` (straight into a screen with a run started), `?critters=0,1,2,3` (party for skipTo), `?place=coop`,
 `?order=N` (force recipe N onto the day's menu and into the first customer's paws), `?recipes=0,2` (fix the menu to
 those ORDERS indices), `?room=CODE` / `?host=1` (online), `?transport=broadcast` (same-machine netplay for tests),

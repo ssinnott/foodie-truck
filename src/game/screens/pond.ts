@@ -5,12 +5,12 @@
 //   -> hooked (the trout arcs into the bucket) -> idle after 40.
 // The bite is REELED IN by tapping `action` over and over: every press is one turn of the reel and REEL_PRESSES of
 // them land the fish. There is no window and no way to lose it - a press during the wait is ignored, and a fish that
-// has bitten waits as long as it takes. The seats, the clock, the name plates and the end sign are game/minigame.js,
+// has bitten waits as long as it takes. The seats, the tally ticket, the name plates and the end sign are game/minigame.js,
 // the same furniture every mini-game stands on, so the seven wear one HUD; only the rod, the float, the trout and the
 // bucket are the pond's own.
 // Everything in update() is deterministic: input by seat only, the wait from `rng`, positions from integer tables and
 // + - * /; the bob, the tug, the fish arc and the particles are visual and read the timers in draw(). Each seat's
-// state, timer, reel count, float position and count plus the clock feed the desync canary.
+// state, timer, reel count, float position and count plus the round's elapsed count feed the desync canary.
 import { UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
@@ -228,7 +228,7 @@ export class PondScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   stepSeat(s: PondSeat, pressed: boolean): void {
@@ -341,7 +341,7 @@ export class PondScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === HOOKED) this.drawCatch(ctx, this.seats[i]);
     // the reel gauges over the biting floats, after everything: the one thing a tapping player is watching
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === BITE) this.drawReel(ctx, this.seats[i]);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, this.title);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -399,7 +399,7 @@ export class PondScreen extends Screen {
 
   override summary() {
     return {
-      timer: this.clock.timer, total: this.total, target: this.target, ending: this.clock.phase !== 0, sign: this.clock.signText,
+      elapsed: this.clock.elapsed, total: this.total, target: this.target, ending: this.clock.phase !== 0, sign: this.clock.signText,
       seats: this.seats.map((s) => ({ slot: s.slot, state: STATE_NAMES[s.state], t: s.t, reel: s.reel, count: s.count, fx: s.fx, fy: s.fy })),
     };
   }
@@ -407,7 +407,7 @@ export class PondScreen extends Screen {
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const o = this.sum;
-    o[0] = this.clock.timer; o[1] = this.clock.phase; o[2] = this.total;
+    o[0] = this.clock.elapsed; o[1] = this.clock.phase; o[2] = this.total;
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i], k = 3 + i * 6; o[k] = s.state; o[k + 1] = s.t; o[k + 2] = s.reel; o[k + 3] = s.fx; o[k + 4] = s.fy; o[k + 5] = s.count; }
     return o;
   }

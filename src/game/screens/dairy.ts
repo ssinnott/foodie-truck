@@ -34,9 +34,8 @@ const R = Math.round;
 
 /**
  * PUMP_PER_PAIL 12: twelve taps is about 2.4 s at a comfortable 5 presses/s and 6 s at a careful 2 presses/s, so a
- * solo player banks the shipped fallback target of 3 in under a third of the 2400-frame round even at the slow
- * rate - long enough that a pail feels earned, short enough that the clock stays a backstop and never the
- * opponent: this scene has no opponent.
+ * solo player banks the shipped fallback target of 3 in well under twenty seconds even at the slow rate - long
+ * enough that a pail feels earned, short enough that a round never drags: this scene has no clock and no opponent.
  */
 const PUMP_PER_PAIL = 12;
 /**
@@ -323,7 +322,7 @@ export class DairyScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /**
@@ -412,7 +411,7 @@ export class DairyScreen extends Screen {
     }
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, TITLE);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -512,7 +511,7 @@ export class DairyScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
       seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), fill: s.fill, count: s.count, bumpT: s.bumpT })),
       cows: this.seats.map((s) => s.cow.kind),
     };
@@ -521,7 +520,7 @@ export class DairyScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       f.push(s.fill, s.count, s.bumpT, s.squirtT, s.pailT);

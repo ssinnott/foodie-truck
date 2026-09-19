@@ -39,6 +39,8 @@ export function parseOptions(search = window.location.search) {
   return {
     autotest, debug,
     seed: q.has('seed') ? Number(q.get('seed')) || 1 : (autotest ? 1 : (Date.now() & 0x7fffffff)),
+    // a pinned seed (?seed=N, or test mode) holds for every run on the page; otherwise each local run draws its own
+    seedFixed: q.has('seed') || autotest,
     // ?skipTo=<screen id> jumps straight to a screen with a run already started (dev / capture / test only)
     skipTo: devOnly ? (q.get('skipTo') || '') : '',
     // ?critters=0,1,2,3 seats that many local players on those cast indices for a skipTo run

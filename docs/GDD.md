@@ -71,10 +71,11 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   carrot; the dairy's pails go on to butter; the mill's chutes fill rice sacks. A mini-game gathers whichever of
   its landmark's ingredients the list is still short of (`run.js gatherTarget`: the first short one in
   `INGREDIENTS` order, else the first the list asks for, else the landmark's first — so a bare dev jump still
-  catches apples), and draws that ingredient's glyph and colour on the clock, in the basket and on the end sign.
+  catches apples), and draws that ingredient's glyph and colour on the tally ticket, in the basket and on the end sign.
 - **Gathering.** The map is where the shopping list is read and the truck is driven. Arriving at a landmark that
   supplies an ingredient the list is still *short of* opens its mini-game; the round's target is that line's
-  remainder, and a round that runs out of time banks what it got and the landmark can be visited again. Arriving
+  remainder, and the round runs until the party has gathered all of it — there is no clock, so nobody is sent back
+  to the map short. Arriving
   anywhere else does nothing but show a sign. `run.gather(id, n)` banks a round; `run.complete()` is the pantry
   full.
 - **Serving.** The moment the pantry is full the lines open: the HUD swaps the list for the lines, a tag over each
@@ -104,7 +105,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **The truck** is one shared vehicle. Every seated player's stick is a vector; they are summed (the driver's ×1.5),
   quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it,
   turning at most 1 heading step per 4 frames. Roads are the fast path; fields are drivable but slow and dusty;
-  the river is not drivable (bridges are). Arrival = within 40 px of a landmark's door point.
+  water is not drivable — the river (its bridges are), the millpond and the cove's sea: the truck stops a
+  half-token short of the edge with a splash. Arrival = within 40 px of a landmark's door point.
 - **HUD**: the shopping list (one row per ingredient, `have/amount`, a tick when full, the gold arrow on the first
   short one) while gathering, then the lines (`sign  N IN LINE`, washed back once served, the arrow on the one the
   compass points at); the steering-wheel widget with one tick per seat that lights while that seat pushes; the
@@ -115,15 +117,16 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 ## 5. The mini-games
 
 Common rules: side view, feet on a scene-specific floor line, one critter per seat, name plates above heads,
-`+1` float text and a ring on every success, the `bump` beat (4/10/6 frames) on every failure, a 40-second clock
-drawn as a paper timer, the target count from the shopping list (that ingredient's remainder, so a list that asks
-for twelve eggs may take two visits); the scene ends with a sign dropping in (`APPLES: 12`)
-and a 60-frame hold, then `run.gather` and back to the map. All randomness through `rng` inside `update()`.
+`+1` float text and a ring on every success, the `bump` beat (4/10/6 frames) on every failure, a paper tally ticket
+whose bar fills as the party gathers, the target count from the shopping list (that ingredient's remainder). **A
+round has no time limit**: it ends only when the party's total reaches the target, so one visit always fills that
+line of the list; the scene ends with a sign dropping in (`APPLES: 12`) and a 60-frame hold, then `run.gather` and
+back to the map. All randomness through `rng` inside `update()`.
 
 A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the market garden) and a
 screen two landmarks share (the pond's jetty is the cove's, the market's bed is the bank's) asks `run.js
-gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the clock and in the basket,
-its name on the end sign, and the landmark's own name on the clock ticket. The mechanic never changes — a pear is
+gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the tally ticket and in the
+basket, its name on the end sign, and the landmark's own name on the ticket. The mechanic never changes — a pear is
 caught like an apple, a crab reeled in like a trout. The cove repaints the pond's layers in a seaside palette
 (`art/backgrounds/pond.js COVE`: open sea to the horizon, dunes for the tree-line, sand and marram for the turf,
 foam under the deck, no lily pads); the bank keeps the market's backdrop.
@@ -132,14 +135,14 @@ foam under the deck, no lily pads); the bank keeps the market's backdrop.
 kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
 part of the critter overlaps the thing, the seat can use it. Nobody has to find an exact spot.
 
-**Every round opens on a HOW TO PLAY card** (`game/controlcard.ts`): a paper ticket under the clock for 210
+**Every round opens on a HOW TO PLAY card** (`game/controlcard.ts`): a paper ticket under the tally ticket for 210
 frames, then it slides away, showing the round's controls as animated keycaps rather than words — two arrow keys
 pressed by turns (MOVE), the action key pressed once (TAP), pressed over and over with motion marks (TAP TAP TAP)
 or held down with a bar filling under it (HOLD). The key is labelled with the seat's own binding.
 
 The whole game is built on **three inputs and nothing else**: move left and right, tap ACTION over and over, and
 hold ACTION down. There are no timing windows, no beats to hit and no wrong buttons — a young player can never lose
-what they have gathered, and the 40-second clock is a backstop rather than an opponent. The only hazards left are
+what they have gathered, and there is no clock to race: a round lasts as long as it takes. The only hazards left are
 jokes (the orchard's wormy apple and its bomb), and they cost nothing but a moment.
 
 - **Orchard — CATCH** (*move*). Move left/right with a basket held in front. Apples (14 px, so they read from

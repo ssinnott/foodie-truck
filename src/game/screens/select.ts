@@ -18,6 +18,7 @@ import { AnimPlayer } from '../../lib/art/animation.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import type { PartialPose } from '../../lib/art/poses.ts';
 import { startRun } from '../run.ts';
+import { freshSeed } from '../../lib/engine/rng.ts';
 import { CARD_H, BUST_H, drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.ts';
 import { drawLane, drawPorthole, PORT_R } from '../../art/logo.ts';
 import { TRUCK } from '../../art/truck.ts';
@@ -221,8 +222,14 @@ export class SelectScreen extends Screen {
       this.started = true;
       const picks = [];
       for (const s of this.seats) if (s.on) picks.push(s.card);
+      // A new day, a new seed - unless ?seed= (or test mode) pinned one for the page, in which case every run replays
+      // it. Either way the gameplay rng is reseeded from the run's seed here, as net/session.ts does at START, so
+      // a run is reproducible from its seed alone and not from how many menus were walked to reach it.
+      const opts = this.game.options;
+      if (!opts.seedFixed) opts.seed = freshSeed();
+      this.game.rng.seed(opts.seed);
       // the two dev jumps ride along so a capture or a scenario that walks in through the front door still gets its day
-      startRun(this.game, { seed: this.game.options.seed, critters: picks, order: this.game.options.order, recipes: this.game.options.recipes });
+      startRun(this.game, { seed: opts.seed, critters: picks, order: opts.order, recipes: opts.recipes });
       audio.play('menu_confirm');
       this.game.fadeTo(() => this.game.replace('stage'));
     }

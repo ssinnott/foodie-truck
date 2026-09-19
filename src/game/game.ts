@@ -227,6 +227,11 @@ export interface GameOptions {
   autotest: boolean;
   /** The run's seed: every peer draws from the same one. */
   seed: number;
+  /**
+   * True when `?seed=N` (or test mode) pinned the seed for the page: every local run then replays the same day.
+   * Otherwise the select screen draws a fresh seed for each run it starts (game/run.ts freshSeed).
+   */
+  seedFixed?: boolean;
   /** ?skipTo=<screen id>: open on that screen with a run already started. */
   skipTo: string;
   /** ?room=CODE: the online room to join. */

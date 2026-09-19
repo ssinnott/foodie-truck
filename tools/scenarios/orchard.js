@@ -5,7 +5,7 @@
 //             caught count, seat 0 actually moved and stayed inside the lane, the other seats did not), then the
 //             mini-game's rules driven by hand - a ripe apple aimed at seat 0's rim scores, one that misses the rim
 //             splats and costs nothing, a wormy one is a flinch and nothing lost, and a bomb is the joke: held, gone
-//             off, the critter singed and then fine again, nothing lost but the time - then the clock is forced to
+//             off, the critter singed and then fine again, nothing lost but the time - then the finish line is brought down to
 //             its last frames: the APPLES
 //             sign drops, is held, and the screen returns to the map with the order's apple line updated by the
 //             party's total. Also writes tools/screens/orchard-catch.png (the catch beat, with two apples left in
@@ -97,7 +97,7 @@ export const SCENARIOS = {
         assert(x1 !== x0 && x1 >= 24 && x1 <= 616, `seat 0 moved and stayed inside the lane (${x0} -> ${x1})`);
         assert(JSON.stringify(last.top.seats.slice(1).map((s) => s[1])) === others0, 'the other seats, with no input, stayed put');
         // 603 frames: main.js boots test mode with one step, then 2 + 600 here
-        assert(last.top.timer === 2400 - 603, `the clock counted every frame (timer ${last.top.timer})`);
+        assert(last.top.elapsed === 603, `the clock counted every frame (elapsed ${last.top.elapsed})`);
       }
 
       // the rule itself: an apple into seat 0's rim is +1, one past the rim splats and costs nothing. Without this a
@@ -153,12 +153,14 @@ export const SCENARIOS = {
         if (last.screen !== 'orchard') ended = true;
       }
 
-      // force the clock to its end (or watch the early ending) and expect the sign, then the map
+      // bring the finish line down to the party's total (or watch the early ending) and expect the sign, then the map:
+      // there is no clock to force, a round ends only when the total reaches the target
       if (!ended) {
-        await page.evaluate(() => { window.__game.game.screen.clock.timer = 3; });
+        assert(last.top.caught >= 1, `something was caught before the ending (caught ${last.top.caught})`);
+        await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(1, sc.total); sc.setTotal(sc.total); });
         await api.step(4 + SLAM + 20);
         const s2 = await api.summary();
-        assert(s2.screen === 'orchard' && s2.top.phase === 1 && /^APPLES: \d+$/.test(s2.top.sign), `the clock ran out: the APPLES sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
+        assert(s2.screen === 'orchard' && s2.top.phase === 1 && /^APPLES: \d+$/.test(s2.top.sign), `the target was reached: the APPLES sign is up (phase ${s2.top.phase}, '${s2.top.sign}')`);
         await api.shot('orchard-sign');
         last = s2;
         await api.step(HOLD);
