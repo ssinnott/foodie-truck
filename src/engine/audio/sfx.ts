@@ -206,6 +206,8 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   reel: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.02, vol: 0.14 }); return noise(c, d, t, { dur: 0.03, vol: 0.12 * o.v, type: 'bandpass', f0: 3200 * o.p, q: 3, attack: 0.0005 }); },
   /** Landed: the splash on the way out and the pip on the way into the bucket. */
   hook: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 1.2, f: 600, vol: 0.2, splash: 0.24 }); whoosh(c, d, t + 0.05, { v: o.v, p: o.p, f0: 800, f1: 3000, dur: 0.2, vol: 0.14 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.3 }); },
+  /** The old boot comes up on the line: a hollow rubber thunk with a slosh of water out of it, and no pip at all. */
+  boot: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 90, lp: 500, dur: 0.12, vol: 0.26 }); return noise(c, d, t + 0.1, { dur: 0.28, vol: 0.1 * o.v, type: 'bandpass', f0: 1400 * o.p, f1: 500 * o.p, q: 0.8, attack: 0.03 }); },
   /** The trout drops into the bucket: a tin thump. */
   bucket: (c, d, t, o) => { ring(c, d, t, { type: 'triangle', f0: 320 * o.p, modF: 900 * o.p, dur: 0.1, vol: 0.14 * o.v, attack: 0.001 }); return thump(c, d, t, { v: o.v, p: o.p, f: 150, lp: 1600, dur: 0.07, vol: 0.24 }); },
   /** An egg into the basket: a soft click of shell on straw and the pip. */

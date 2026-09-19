@@ -46,6 +46,8 @@ export const SCENARIOS = {
       // the bite comes on its own and stays: nothing to time
       const b = await untilState(api, 'bite', 200);
       assert(seat0(b).state === 'bite' && seat0(b).reel === 0, `the fish bites on its own (state ${seat0(b).state}, reel ${seat0(b).reel})`);
+      // this bite is the trout whatever the seed rolled: the boot has a scenario of its own below
+      await page.evaluate(() => { window.__game.game.screen.seats[0].boot = 0; });
       await api.step(6);
       await api.shot('pond-bite');
       await api.step(60);
@@ -100,5 +102,40 @@ export const SCENARIOS = {
     });
   },
 };
+/** The boot's sequence (screens/pond.ts): the arc up, the hold, the lob. */
+const BOOT_ARC = 20, BOOT_HOLD = 30, BOOT_TOSS = 16, BOOT_FRAMES = BOOT_ARC + BOOT_HOLD + BOOT_TOSS;
+
+/**
+ * pondBoot - the joke: a bite that is the old boot reels in with the same twelve taps, comes up to the paw, is held
+ *            and tipped, and is lobbed back; the count and the total stay at 0, the seat is idle again after
+ *            BOOT_FRAMES, and the bite after a boot is a fish whatever the rng says. Writes pond-boot.
+ */
+SCENARIOS.pondBoot = async (server) => {
+  await withPage(server, 'skipTo=pond&critters=0,1', async (api, page) => {
+    await api.step(5);
+    await api.press(0, { action: true }, 1, 0);
+    const b = await untilState(api, 'bite', 260);
+    assert(seat0(b).state === 'bite', `the bite came (${seat0(b).state})`);
+    await page.evaluate(() => { window.__game.game.screen.seats[0].boot = 1; });
+    for (let i = 0; i < REEL_PRESSES; i++) await api.press(0, { action: true }, 1, 3);
+    const up = await api.summary();
+    assert(seat0(up).state === 'boot' && seat0(up).count === 0 && up.top.total === 0 && up.top.boots === 1, `the twelfth tap brings up the boot and nothing is counted (state ${seat0(up).state}, count ${seat0(up).count}, total ${up.top.total}, boots ${up.top.boots})`);
+    await api.step(BOOT_ARC + 16);
+    await api.shot('pond-boot');
+    const held = await api.summary();
+    assert(seat0(held).state === 'boot', `the boot is still held and tipped (${seat0(held).state})`);
+    await api.step(BOOT_FRAMES - BOOT_ARC - 16 - 4 + 2);
+    const back = await untilState(api, 'idle', 8);
+    assert(seat0(back).state === 'idle' && seat0(back).count === 0, `the seat is back to idle with nothing in the bucket after the lob (${seat0(back).state}, count ${seat0(back).count})`);
+    // never two boots in a row: the next bite is a fish however the rng rolls
+    await api.press(0, { action: true }, 1, 0);
+    const b2 = await untilState(api, 'bite', 260);
+    assert(seat0(b2).state === 'bite' && seat0(b2).boot === 0, `the bite after a boot is always a fish (boot ${seat0(b2).boot})`);
+    for (let i = 0; i < REEL_PRESSES; i++) await api.press(0, { action: true }, 1, 3);
+    const h = await api.summary();
+    assert(seat0(h).state === 'hooked' && seat0(h).count === 1, `and it lands (${seat0(h).state}, count ${seat0(h).count})`);
+  });
+};
+
 /** game/minigame.js: the end sign slams in over 6 frames and hangs for the GDD's 60. */
 const SIGN_SLAM = 6, SIGN_HOLD = 60;

@@ -5,7 +5,10 @@
 //   -> hooked (the trout arcs into the bucket) -> idle after 40.
 // The bite is REELED IN by tapping `action` over and over: every press is one turn of the reel and REEL_PRESSES of
 // them land the fish. There is no window and no way to lose it - a press during the wait is ignored, and a fish that
-// has bitten waits as long as it takes. The seats, the tally ticket, the name plates and the end sign are game/minigame.js,
+// has bitten waits as long as it takes. THE JOKE: one bite in BOOT_ODDS is an old boot (`boot` on the seat), reeled in
+// with the same taps; it comes up on the line to the far paw, is held out at arm's length and tipped (the water runs
+// off the toe), then lobbed back with a splash - no +1, nothing lost but the moment, and the bite after a boot is
+// always a fish. The seats, the tally ticket, the name plates and the end sign are game/minigame.js,
 // the same furniture every mini-game stands on, so the seven wear one HUD; only the rod, the float, the trout and the
 // bucket are the pond's own.
 // Everything in update() is deterministic: input by seat only, the wait from `rng`, positions from integer tables and
@@ -29,7 +32,7 @@ import { gatherTarget } from '../run.ts';
 import { drawHint, drawBar } from '../ui.ts';
 import { drawFood } from '../../art/food.ts';
 import { POND, ROWS, SEAT_X, SEAT_PITCH, FLOAT_DX, FLOAT_Y, GLINTS, SUN_GLINTS, pondLayers } from '../../art/backgrounds/pond.ts';
-import { PARA_N, PARA_T, PARA_H, BOB, POND_ANIMS_CAST, CAST_LAUNCH, drawLine, drawFloat, drawTrout, drawBucket } from '../../art/fishing.ts';
+import { PARA_N, PARA_T, PARA_H, BOB, POND_ANIMS_CAST, CAST_LAUNCH, drawLine, drawFloat, drawTrout, drawBucket, drawBoot } from '../../art/fishing.ts';
 import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
@@ -40,13 +43,24 @@ import type { CardScheme } from '../controlcard.ts';
 /** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
 const SCHEMES: readonly CardScheme[] = Object.freeze(['tap', 'mash']);
 const R = Math.round;
-const IDLE = 0, CAST = 1, WAIT = 2, BITE = 3, HOOKED = 4;
-const STATE_NAMES = Object.freeze(['idle', 'cast', 'wait', 'bite', 'hooked']);
+const IDLE = 0, CAST = 1, WAIT = 2, BITE = 3, HOOKED = 4, BOOT = 5;
+const STATE_NAMES = Object.freeze(['idle', 'cast', 'wait', 'bite', 'hooked', 'boot']);
 /** The wait before the bite, and the reel: REEL_PRESSES taps of `action` land a fish that has bitten. */
 const WAIT_MIN = 60, WAIT_MAX = 150, REEL_PRESSES = 12, RESULT_FRAMES = 40;
 /** Frames the float and the rod tug for after each reel press (draw only, but kept in the sim as a plain counter). */
 const TUG_FRAMES = 6;
 const FISH_ARC = 20, FALLBACK_TARGET = 3;
+/**
+ * The old boot: one bite in BOOT_ODDS (never two in a row). Its sequence is one countdown on the seat (`t`, from
+ * BOOT_FRAMES): BOOT_ARC frames on the line up to the far paw, BOOT_HOLD frames held out and tipped with the water
+ * running off it, BOOT_TOSS frames lobbed back to where the float was. 66 frames is a joke, not a penalty.
+ */
+const BOOT_ODDS = 8, BOOT_ARC = 20, BOOT_HOLD = 30, BOOT_TOSS = 16, BOOT_FRAMES = BOOT_ARC + BOOT_HOLD + BOOT_TOSS;
+/** A drip off the tipped boot's toe every DRIP_EVERY frames (particles: visual, spawned at the paw the last draw read). */
+const DRIP_EVERY = 6;
+/** The lob's lift, as a fraction of the cast's arc. */
+const TOSS_LIFT = 0.6;
+const BOOT_TXT = 'A BOOT?!';
 /** Where the float leaves the rod tip (sim-side constants; the drawn tip is a hair off, the line hides it). */
 const LAUNCH_DX = 40, LAUNCH_Y = ROWS.feet - 40;
 /** The bucket's left edge sits this far in front of the feet; the fish arcs to its rim. */
@@ -83,6 +97,21 @@ const REEL_ANIMS = Object.freeze({
     F(3, { ...IDLE_ARMS, armR: [42, 24], weapon: -26, torso: 7, head: 5, root: [0, 1], face: 'grit' }, { ease: 'out' }),
     F(9, { ...IDLE_ARMS, armR: [46, 28], weapon: -34, torso: 5, head: 3, root: [0, 1], face: 'grit' }),
   ] },
+  /**
+   * The boot held out at arm's length in the NEAR paw (the rod is set down for the moment: `rig.weapon` is null
+   * through the hold, as the orchard drops its basket for the bomb), leaning back from it, then tipped to pour;
+   * `hurt` throughout.
+   */
+  bootHold: { loop: false, frames: [
+    F(6, { armR: [100, -10], ...IDLE_ARMS, torso: -6, head: -8, root: [0, 0], face: 'hurt' }, { ease: 'out' }),
+    F(12, { armR: [104, -12], ...IDLE_ARMS, torso: -8, head: -10, root: [0, 0], face: 'hurt' }),
+    F(12, { armR: [118, -22], ...IDLE_ARMS, torso: -10, head: -12, root: [0, -1], face: 'hurt' }, { ease: 'inout' }),
+  ] },
+  /** The lob: the near arm swings back and throws, the face goes to `shout`; the rod is picked back up at rest. */
+  bootToss: { loop: false, frames: [
+    F(5, { armR: [40, -30], ...IDLE_ARMS, torso: 4, head: -4, root: [0, 0], face: 'shout' }, { ease: 'in' }),
+    F(11, { armR: [150, 0], ...IDLE_ARMS, torso: -6, head: -6, root: [0, 0], face: 'shout' }, { ease: 'overshoot' }),
+  ] },
 });
 
 
@@ -111,6 +140,10 @@ export interface PondSeat extends Seat {
   restY: number;
   /** The rod tip in screen space, read off the rig by each draw; one point per seat, written in place. */
   tip: Point;
+  /** 1 while the thing on the line is the old boot (rolled at the bite, kept until the next bite so a boot is never followed by a boot). */
+  boot: number;
+  /** The near paw in screen space, read off the rig by each draw (the held boot is drawn there). */
+  paw: Point;
 }
 
 /** Where the caught trout is on frame `k` of its arc; one shared point so the two draw passes allocate nothing. */
@@ -136,6 +169,8 @@ export class PondScreen extends Screen {
   declare sum: number[];
   /** Trout in the party's buckets right now. */
   declare total: number;
+  /** Old boots reeled in this round (the joke's count, for the tests and the desync canary). */
+  declare boots: number;
   /** The round's clock and its ending (game/minigame.ts). */
   declare clock: Clock;
   /** Trout the round is played to: what the order still needs, or FALLBACK_TARGET with no run. */
@@ -170,7 +205,7 @@ export class PondScreen extends Screen {
     const place = PLACES.find((p) => p.id === params.place && p.screen === 'pond');
     this.variant = place && place.id === 'shore' ? 'cove' : 'pond';
     pondLayers(this.variant);
-    this.total = 0;
+    this.total = 0; this.boots = 0;
     this.clock = makeClock();
     this.ing = gatherTarget(run, place ? place.id : undefined, 'pond');
     const ing = INGREDIENTS[this.ing] || INGREDIENTS.fish;
@@ -202,13 +237,13 @@ export class PondScreen extends Screen {
       s.state = IDLE; s.t = 0; s.reel = 0; s.count = 0; s.landT = 0;
       s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y;
       s.restY = REST_Y + (i & 1) * REST_STEP;
-      s.tip = { x: 0, y: 0 };
+      s.tip = { x: 0, y: 0 }; s.paw = { x: 0, y: 0 }; s.boot = 0;
       seatAnim(s, 'rodIdle', true);
       // the crew is four people waiting, not one pose printed four times: each seat starts its breath a beat later
       // (deterministic, pose only — nothing in summary() or the checksum reads the anim clock)
       for (let k = i * 13; k > 0; k--) s.player.tick();
     }
-    this.sum.length = 3 + this.seats.length * 6;
+    this.sum.length = 4 + this.seats.length * 7;
   }
 
   override update(): void {
@@ -266,12 +301,27 @@ export class PondScreen extends Screen {
         if (RESULT_FRAMES - s.t === FISH_ARC) { s.landT = LAND_FRAMES; this.game.audio.play('bucket'); }   // the trout drops in: the rim takes the hit
         if (--s.t <= 0) this.rest(s);
         break;
+      case BOOT: {
+        s.t--;
+        const k = BOOT_FRAMES - s.t;
+        if (k === BOOT_ARC) { s.rig.weapon = null; seatAnim(s, 'bootHold', true); this.game.audio.play('boot'); floatText(s.x, s.y - 66, BOOT_TXT, UI.cream, 1, true); }
+        else if (k > BOOT_ARC && k < BOOT_ARC + BOOT_HOLD && k % DRIP_EVERY === 0) burstDrops(s.paw.x + 8, s.paw.y + 8, 1, true);
+        else if (k === BOOT_ARC + BOOT_HOLD) seatAnim(s, 'bootToss', true);
+        if (s.t <= 0) {
+          ringAt(s.tx, s.sy, 3, 12, UI.cream, 2, 12, true, true); burstDrops(s.tx, s.sy, 4, true);
+          this.game.audio.play('splash');
+          this.rest(s);
+        }
+        break;
+      }
       default: break;
     }
   }
 
   /** The trout is on: the float drops, the ring opens, and the seat is told to start tapping. */
   bite(s: PondSeat): void {
+    // the deal: one bite in BOOT_ODDS is the boot, and never the one after a boot (the roll is skipped, not hidden)
+    s.boot = s.boot === 0 && rng.int(1, BOOT_ODDS) === 1 ? 1 : 0;
     s.state = BITE; s.t = 0; s.reel = 0;
     this.game.audio.play('bite');
     seatAnim(s, 'rodReel', true);
@@ -290,9 +340,10 @@ export class PondScreen extends Screen {
   }
 
   /** Back to the rod-low stance with the float dangling under the tip. */
-  rest(s: PondSeat): void { s.state = IDLE; s.t = 0; s.reel = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; seatAnim(s, 'rodIdle', true); }
+  rest(s: PondSeat): void { s.state = IDLE; s.t = 0; s.reel = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; s.rig.weapon = ITEMS.rod as RigWeapon; seatAnim(s, 'rodIdle', true); }
 
   hook(s: PondSeat): void {
+    if (s.boot) { this.bootUp(s); return; }
     s.state = HOOKED; s.t = RESULT_FRAMES; s.reel = 0; s.count++;
     this.game.audio.play('hook');
     this.total++; this.countStr = this.total + '/' + this.target;
@@ -301,11 +352,18 @@ export class PondScreen extends Screen {
     floatText(s.fx, s.fy - 24, PLUS_ONE, UI.cream, 1, true);
   }
 
+  /** The joke: the last turn of the reel brings up the boot instead. No count, no pip; the seat plays it out and casts again. */
+  bootUp(s: PondSeat): void {
+    s.state = BOOT; s.t = BOOT_FRAMES; s.reel = 0; this.boots++;
+    seatAnim(s, 'pull', true);
+    burstDrops(s.fx, s.fy, 6, true); ringAt(s.fx, s.fy, 4, 14, UI.cream, 2, 14, true, true);
+  }
+
   finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     // everyone holds one pose under the sign: rod up for a full bucket, rod low for an empty one
-    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.state = IDLE; s.t = 0; s.reel = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; seatAnim(s, s.count > 0 ? 'pull' : 'rodIdle', true); }
+    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.state = IDLE; s.t = 0; s.reel = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; s.rig.weapon = ITEMS.rod as RigWeapon; seatAnim(s, s.count > 0 ? 'pull' : 'rodIdle', true); }
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
@@ -331,7 +389,7 @@ export class PondScreen extends Screen {
       drawBucket(ctx, s.x + BUCKET_DX, ROWS.feet, s.slot, flying ? s.count - 1 : s.count, s.landT > 0 ? 1 + s.landT * LAND_K : 1, this.ing === 'fish' ? undefined : this.hex);
       o.x = s.x; o.y = ROWS.feet; o.facing = 1;
       drawRig(ctx, s.rig, s.player.pose, o);
-      jointScreen(s.rig, 'weaponTip', s.tip);
+      jointScreen(s.rig, 'weaponTip', s.tip); jointScreen(s.rig, 'handN', s.paw);
       this.drawTackle(ctx, s, f);
     }
     blitAt(ctx, L.near.L, 0, L.near.y);
@@ -340,6 +398,7 @@ export class PondScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
     // the caught trout flies over the crew AFTER the plates: the payoff is never hidden by a name card
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === HOOKED) this.drawCatch(ctx, this.seats[i]);
+    for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === BOOT) this.drawBootFlight(ctx, this.seats[i]);
     // the reel gauges over the biting floats, after everything: the one thing a tapping player is watching
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === BITE) this.drawReel(ctx, this.seats[i]);
     drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, this.title);
@@ -360,6 +419,11 @@ export class PondScreen extends Screen {
       if (k >= FISH_ARC) { drawLine(ctx, tx, ty, tx, ty + 8); return; }
       const p = catchPoint(s, k);
       drawLine(ctx, tx, ty, p.x - 9, p.y);   // the line ends at the mouth, which leads the travel
+      return;
+    }
+    if (st === BOOT) {
+      // on the line up to the paw; from there the rod is set down and the boot is in the paw, so there is no line
+      if (BOOT_FRAMES - s.t < BOOT_ARC) { const b = this.bootPoint(s); if (b) drawLine(ctx, tx, ty, b.x - 4, b.y - 8); }
       return;
     }
     if (s.player.name === 'pull') { drawLine(ctx, tx, ty, tx, ty + 8); return; }
@@ -398,18 +462,44 @@ export class PondScreen extends Screen {
     if (this.ing === 'fish') drawTrout(ctx, p.x, p.y, 1); else drawFood(ctx, this.icon, p.x, p.y, CATCH_S, this.hex);
   }
 
+  /** Where the boot is on this frame of its sequence, or null once it is lobbed (it is then drawn on the toss arc, off the line). */
+  bootPoint(s: PondSeat): Point | null {
+    const k = BOOT_FRAMES - s.t;
+    if (k < BOOT_ARC) {
+      const i = R(k * (PARA_N - 1) / (BOOT_ARC - 1));
+      CATCH_P.x = R(s.fx + (s.paw.x - s.fx) * PARA_T[i]);
+      CATCH_P.y = R(s.fy + (s.paw.y - s.fy) * PARA_T[i]) - R(PARA_H[i] * CATCH_LIFT);
+      return CATCH_P;
+    }
+    if (k < BOOT_ARC + BOOT_HOLD) { CATCH_P.x = R(s.paw.x); CATCH_P.y = R(s.paw.y); return CATCH_P; }
+    return null;
+  }
+
+  /** The boot: up the line to the paw, held and tipped there (drips while it pours), then lobbed back on a lower arc to the water. */
+  drawBootFlight(ctx: CanvasRenderingContext2D, s: PondSeat): void {
+    const k = BOOT_FRAMES - s.t, p = this.bootPoint(s);
+    if (p) {
+      const held = k >= BOOT_ARC, tip = held ? Math.min(1, (k - BOOT_ARC) / 14) : 0;
+      drawBoot(ctx, p.x, p.y, tip * 0.9, held && tip >= 1);
+      return;
+    }
+    const j = k - BOOT_ARC - BOOT_HOLD, i = R(j * (PARA_N - 1) / (BOOT_TOSS - 1));
+    const x = R(s.paw.x + (s.tx - s.paw.x) * PARA_T[i]), y = R(s.paw.y + (s.sy - s.paw.y) * PARA_T[i]) - R(PARA_H[i] * TOSS_LIFT);
+    drawBoot(ctx, x, y, j * 0.35);   // tumbling as it goes
+  }
+
   override summary() {
     return {
-      elapsed: this.clock.elapsed, total: this.total, target: this.target, ending: this.clock.phase !== 0, sign: this.clock.signText,
-      seats: this.seats.map((s) => ({ slot: s.slot, state: STATE_NAMES[s.state], t: s.t, reel: s.reel, count: s.count, fx: s.fx, fy: s.fy })),
+      elapsed: this.clock.elapsed, total: this.total, target: this.target, ending: this.clock.phase !== 0, sign: this.clock.signText, boots: this.boots,
+      seats: this.seats.map((s) => ({ slot: s.slot, state: STATE_NAMES[s.state], t: s.t, reel: s.reel, count: s.count, fx: s.fx, fy: s.fy, boot: s.boot })),
     };
   }
 
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const o = this.sum;
-    o[0] = this.clock.elapsed; o[1] = this.clock.phase; o[2] = this.total;
-    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i], k = 3 + i * 6; o[k] = s.state; o[k + 1] = s.t; o[k + 2] = s.reel; o[k + 3] = s.fx; o[k + 4] = s.fy; o[k + 5] = s.count; }
+    o[0] = this.clock.elapsed; o[1] = this.clock.phase; o[2] = this.total; o[3] = this.boots;
+    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i], k = 4 + i * 7; o[k] = s.state; o[k + 1] = s.t; o[k + 2] = s.reel; o[k + 3] = s.fx; o[k + 4] = s.fy; o[k + 5] = s.count; o[k + 6] = s.boot; }
     return o;
   }
 }
