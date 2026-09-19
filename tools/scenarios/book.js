@@ -37,6 +37,10 @@ export const SCENARIOS = {
         const t = await api.summary();
         titles.add(t.top.title);
         assert(t.top.page === i, `page ${i + 1} turns (${t.top.page + 1})`);
+        if (t.top.title === 'THE DINERS') {
+          assert(t.top.busts === t.top.rows && t.top.busts > 0, `every diner has a portrait built for them (${t.top.busts} for ${t.top.rows} rows)`);
+          await api.shot('book-diners');
+        }
       }
       for (const want of ['THE DISHES', 'THE DINERS', 'THE LARDER', 'THE ROAD']) {
         assert(titles.has(want), `the book has a ${want} page (${[...titles].join()})`);
@@ -89,6 +93,13 @@ export const SCENARIOS = {
       assert(b.top.page === want, `paged to where ${distinct[0]} lives (page ${b.top.page + 1})`);
       assert(b.top.known >= 1, `and it is inked in rather than pencilled (${b.top.known} known on the page)`);
       await api.shot('book-cooked');
+      // the diners page, with somebody actually fed on it
+      const dinersPage = b.top.pages - 3;
+      for (let i = b.top.page; i < dinersPage; i++) await api.press(0, { right: true }, 2, 4);
+      const d = await api.summary();
+      assert(d.top.title === 'THE DINERS', `paged to the diners (${d.top.title})`);
+      assert(d.top.known >= 1, `at least one of them has been fed (${d.top.known} of ${d.top.rows})`);
+      await api.shot('book-diners-fed');
       assert(b.top.strap.startsWith(`${distinct.length} OF `) || Number(b.top.strap.split(' ')[0]) >= 1, `and knows how much of the menu is cooked (${b.top.strap})`);
     });
   },

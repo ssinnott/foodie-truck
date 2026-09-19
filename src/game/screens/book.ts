@@ -9,7 +9,7 @@
 // Nothing here simulates anything. The book is read ONCE in enter() and never in update() (docs/MULTIPLAYER.md:
 // no localStorage on the simulation path), the only state is which page is open, and the screen is reachable from
 // the title and from nowhere else - so it can never be open while a run is live.
-import { VIEW_W, UI } from '../../constants.ts';
+import { VIEW_W, UI, PLUM } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
 import { drawText, measureText } from '../../engine/text.ts';
@@ -18,6 +18,10 @@ import { drawFood } from '../../art/food.ts';
 import { ORDERS, INGREDIENTS } from '../../content/recipes.ts';
 import { PLACES } from '../../content/places.ts';
 import { getCustomer } from '../../content/critters/customers.ts';
+import { critterRig } from '../../content/critters/common.ts';
+import { drawHeadPortrait } from '../../art/portraits.ts';
+import { AnimPlayer } from '../../lib/art/animation.ts';
+import type { Rig } from '../../lib/art/rig.ts';
 import { DINERS, recipeOf } from '../run.ts';
 import { readBook, dishesKnown } from '../book.ts';
 import type { BookRecord } from '../book.ts';
@@ -50,6 +54,21 @@ const UNKNOWN_NAME = '- - -';
 const PANEL = { x: 44, y: 46, w: 552, h: 248 };
 const LIST_Y = PANEL.y + 46, LIST_ROW = 20, LIST_COLS = 2, LIST_COL_W = 264, LIST_X = PANEL.x + 20;
 const LIST_TALLY_DX = 150;
+/**
+ * THE DINERS get a page of their own shape: there are only three of them, so each is a row deep enough to carry
+ * the same head portrait the day board draws over its queues (`art/portraits.ts drawHeadPortrait`), in the same
+ * plum window. A diner never served is the portrait faded to the pencil the dish cards use.
+ */
+const DINER_Y = PANEL.y + 50, DINER_ROW = 56, DINER_X = PANEL.x + 56, DINER_PORT = 40;
+const DINER_TEXT_DX = DINER_PORT + 16, DINER_NAME_DY = 6, DINER_TALLY_DY = 20, DINER_NOTE_DY = 32;
+/**
+ * The pencil for a diner never served. Higher than the dish cards' PENCIL_ALPHA because this one sits on a dark
+ * SLATE rather than on paper: at 0.18 the three village faces went murky instead of faint, and the point is that
+ * the village is all there from the first day and only who has eaten is not.
+ */
+const DINER_PENCIL = 0.38;
+/** Each bust idles on its own beat so the page does not breathe in lockstep - the day board's trick. */
+const DINER_PHASE = 17;
 /** The larder's forty glyphs sit four across and closer together than a diner's row does. */
 const LARDER_COLS = 4, LARDER_COL_W = 132, LARDER_ROW = 17, LARDER_X = PANEL.x + 14, LARDER_TALLY_DX = 96;
 
@@ -81,6 +100,8 @@ export interface BookRow {
   id: string;
   label: string;
   tally: string;
+  /** A diner's second line ('LIKES APPLE PIE'), or ''. */
+  note: string;
   known: boolean;
   /** Ingredient rows only: the glyph and its colour. */
   icon: string;
@@ -100,6 +121,13 @@ function wrapName(name: string, w: number): string[] {
   return [words.slice(0, best).join(' '), words.slice(best).join(' ')];
 }
 
+/** One diner's portrait, built once in enter() and idling on its own beat. */
+export interface BookBust {
+  id: string;
+  rig: Rig;
+  player: AnimPlayer;
+}
+
 export class BookScreen extends Screen {
   // `declare` for the reason game.ts gives over its own block: a plain field declaration would emit a class field
   // per name and this screen has to keep the runtime it shipped with.
@@ -114,11 +142,15 @@ export class BookScreen extends Screen {
   declare cells: BookCell[];
   /** The open page's list rows (a back page) - rebuilt by `openPage`. */
   declare list: BookRow[];
+  /** One portrait per diner, built once in enter() and drawn on the diners page. */
+  declare busts: BookBust[];
+  /** The drawHeadPortrait options, reused by every diner (this file allocates nothing in draw()). */
+  declare portOpts: { bg: string; fill: number; facing: number };
   /** The strap under the sign. */
   declare strap: string;
   declare hint: string;
 
-  constructor(game: Game) { super(game, 'book'); this.book = readBook(); this.pages = []; this.page = 0; this.cells = []; this.list = []; this.strap = ''; this.hint = ''; }
+  constructor(game: Game) { super(game, 'book'); this.book = readBook(); this.pages = []; this.page = 0; this.cells = []; this.list = []; this.busts = []; this.portOpts = { bg: PLUM.shadow, fill: 0.6, facing: 1 }; this.strap = ''; this.hint = ''; }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -131,6 +163,14 @@ export class BookScreen extends Screen {
     this.pages.push({ kind: PAGE_DINERS, title: 'THE DINERS', from: 0 });
     this.pages.push({ kind: PAGE_LARDER, title: 'THE LARDER', from: 0 });
     this.pages.push({ kind: PAGE_ROAD, title: 'THE ROAD', from: 0 });
+    // one portrait per diner, built ONCE here and never in draw(), each idling from its own offset
+    this.busts.length = 0;
+    for (const id of DINERS) {
+      const def = getCustomer(id), player = new AnimPlayer(def.anims);
+      player.play('idle');
+      for (let k = 0; k < this.busts.length * DINER_PHASE; k++) player.tick();
+      this.busts.push({ id, rig: critterRig(def, -1), player });
+    }
     this.page = Math.max(0, Math.min(this.pages.length - 1, (params && (params.page as number)) | 0));
     this.hint = `${this.game.input.keyText(0, 'left')}${this.game.input.keyText(0, 'right')}: PAGE    ${this.game.input.keyText(0, 'cancel')}: BACK`;
     this.openPage();
@@ -156,21 +196,22 @@ export class BookScreen extends Screen {
         const row = book.diners[id], def = getCustomer(id);
         this.list.push({
           id, label: def ? def.name : id.toUpperCase(), known: !!row, icon: '', hex: UI.wood,
-          tally: row ? `FED ${row.n}` + (row.fav ? `, LIKES ${recipeOf(row.fav).dish}` : '') : 'NOT YET SERVED',
+          tally: row ? `FED ${row.n}` : 'NOT YET SERVED',
+          note: row && row.fav ? `LIKES ${recipeOf(row.fav).dish}` : '',
         });
       }
       this.strap = `${this.list.filter((r) => r.known).length} OF ${DINERS.length} MET`;
     } else if (p.kind === PAGE_LARDER) {
       for (const id of Object.keys(INGREDIENTS)) {
         const ing = INGREDIENTS[id], n = book.larder[id] || 0;
-        this.list.push({ id, label: ing.name, known: n > 0, icon: ing.icon, hex: ing.hex, tally: n > 0 ? String(n) : '-' });
+        this.list.push({ id, label: ing.name, known: n > 0, icon: ing.icon, hex: ing.hex, tally: n > 0 ? String(n) : '-', note: '' });
       }
       this.strap = `${this.list.filter((r) => r.known).length} OF ${this.list.length} GATHERED`;
     } else {
       for (const place of PLACES) {
         if (place.id === 'home') continue;
         const n = book.road[place.id] || 0;
-        this.list.push({ id: place.id, label: place.name, known: n > 0, icon: '', hex: place.accent, tally: n > 0 ? `${n} DAYS` : 'NOT YET' });
+        this.list.push({ id: place.id, label: place.name, known: n > 0, icon: '', hex: place.accent, tally: n > 0 ? `${n} DAYS` : 'NOT YET', note: '' });
       }
       this.strap = `${this.list.filter((r) => r.known).length} OF ${this.list.length} VISITED`;
     }
@@ -178,6 +219,7 @@ export class BookScreen extends Screen {
 
   override update(): void {
     super.update();
+    for (const b of this.busts) { b.player.tick(); if (b.player.done) b.player.play('idle', { restart: true }); }
     const inp = this.game.input;
     const dx = navX(inp);
     if (dx) {
@@ -209,7 +251,33 @@ export class BookScreen extends Screen {
     }
   }
 
-  /** A back page: the diners, the larder or the road, in columns of rows. */
+/**
+   * THE DINERS: three deep rows, each headed by the same portrait the day board draws over its queues, in the
+   * same plum window and on the same idle beat. A diner this truck has never served is the portrait faded back
+   * to the pencil the dish cards use - the village is all there from the first day, and who has eaten is not.
+   */
+  diners(ctx: CanvasRenderingContext2D): void {
+    drawSlate(ctx, PANEL.x, PANEL.y, PANEL.w, PANEL.h, { title: this.pages[this.page].title });
+    for (let i = 0; i < this.list.length; i++) {
+      const r = this.list[i], b = this.busts[i];
+      const x = DINER_X, y = DINER_Y + i * DINER_ROW;
+      if (b) {
+        // the window first, then the head in it: an ink edge so a muted village fur never sits on bare slate
+        ctx.fillStyle = UI.ink;
+        ctx.fillRect(x - 1, y - 1, DINER_PORT + 2, DINER_PORT + 2);
+        if (!r.known) ctx.globalAlpha = DINER_PENCIL;
+        drawHeadPortrait(ctx, b.rig, b.player.pose, x, y, DINER_PORT, this.portOpts);
+        ctx.globalAlpha = 1;
+      }
+      const ink = r.known ? UI.chalk : UI.boardDark;
+      const tx = x + DINER_TEXT_DX;
+      drawText(ctx, r.label, tx, y + DINER_NAME_DY, { size: 1, color: ink, shadow: false });
+      drawText(ctx, r.tally, tx, y + DINER_TALLY_DY, { size: 1, color: r.known ? UI.yellow : UI.boardDark, shadow: false });
+      if (r.note) drawText(ctx, r.note, tx, y + DINER_NOTE_DY, { size: 1, color: UI.paperDark, shadow: false });
+    }
+  }
+
+  /** A back page: the larder or the road, in columns of rows. */
   rows(ctx: CanvasRenderingContext2D): void {
     const p = this.pages[this.page];
     const larder = p.kind === PAGE_LARDER;
@@ -244,6 +312,7 @@ export class BookScreen extends Screen {
     drawText(ctx, strap, VIEW_W / 2, STRAP_Y, { size: 1, color: UI.cream, align: 'center', shadow: false });
     drawText(ctx, `${this.page + 1}/${this.pages.length}`, VIEW_W - 20, STRAP_Y, { size: 1, color: UI.cream, align: 'right', shadow: false });
     if (p.kind === PAGE_DISHES) for (let i = 0; i < this.cells.length; i++) this.cell(ctx, i);
+    else if (p.kind === PAGE_DINERS) this.diners(ctx);
     else this.rows(ctx);
     drawHint(ctx, this.hint);
   }
@@ -251,7 +320,7 @@ export class BookScreen extends Screen {
   override summary() {
     return {
       page: this.page, pages: this.pages.length, title: this.pages[this.page].title, strap: this.strap,
-      cells: this.cells.length, rows: this.list.length,
+      cells: this.cells.length, rows: this.list.length, busts: this.busts.length,
       known: this.cells.filter((c) => c.known).length + this.list.filter((r) => r.known).length,
       days: this.book.days, weeks: this.book.weeks,
     };

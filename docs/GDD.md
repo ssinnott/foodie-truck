@@ -549,7 +549,7 @@ the closed day board):
 | Page | Records | Drawn as |
 |---|---|---|
 | **The dishes** | Per `ORDERS` id: times cooked, best stars, which day of trading it was first served on | Four cards across, three down, six pages. A dish cooked is its own `art/dishes.ts` picture **inked in**, named, with its tally and best rating under it. One never cooked is the same card **in pencil**: the picture faded back to a shape, the name blanked to `- - -`. No new art - every dish drawing already exists. |
-| **The diners** | Per `DINERS` id: times fed, and the dish they have ordered most | A row each, with what they like. |
+| **The diners** | Per `DINERS` id: times fed, and the dish they have ordered most | Three deep rows on the slate, each headed by the same head portrait the day board draws over its queues (`art/portraits.ts`), in the same plum window and idling on its own beat, with the tally and what they like beside it. A diner this truck has never served is that portrait **in pencil** - the village is all there from the first day, and who has eaten is not. |
 | **The larder** | Per `INGREDIENTS` id: how many gathered | The forty glyphs from `art/food.ts` in a grid, greyed until gathered once. |
 | **The road** | Per `PLACES` id: how many days the truck has been there | Twelve rows, the map's own names. |
 | **The strap** | Dishes cooked out of the whole menu | `23 OF 63 COOKED` - the number the closed board has never been able to print. |

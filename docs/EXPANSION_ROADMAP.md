@@ -12,9 +12,9 @@
 > were wrong about the game as it stood: it counted a day's six orders as six recipes, promised that the existing
 > scenarios would be unmoved, and got the weather odds, the save record's own example, the session length and the
 > cost of the wire wrong besides. Each is corrected in place and marked **[corrected]**, so what the plan got wrong
-> is on the record rather than quietly rewritten. Where the thing BUILT differs from the thing planned - a page
-> drawn more plainly, a menu row in another place, a test that turned out not to be needed - the cell says
-> **[built as]** and describes what shipped. 8 of the first and 7 of the second.
+> is on the record rather than quietly rewritten. Where the thing BUILT differs from the thing planned - a menu
+> row in another place, a card that carries a tally where the plan said ingredients, a golden baseline that turned
+> out not to be needed - the cell says **[built as]** and describes what shipped. There are five of those.
 
 The game is wide and flat. A run is one day (`run.ts`: "when the third line has been served the day is done — that
 is the game's end"), about half an hour, and then the title screen. Three things follow from that:
@@ -109,8 +109,8 @@ plays `day_done`. Three changes:
 
 ### Resuming, and the save record
 
-A week is about two and a half hours of play across five sittings (this document's own half-hour day, five
-times), so it has to be resumable — and the elegant part is that at a day boundary the run holds nothing that is
+A week is about two and a half hours of play across five sittings. **[corrected]** the first draft said two
+hours, which contradicted this document's own half-hour day five times over. So it has to be resumable — and the elegant part is that at a day boundary the run holds nothing that is
 not derivable. The whole record is:
 
 ```json
@@ -177,8 +177,9 @@ The week costs **one byte on the wire and a version bump**, and nothing else:
 
 ## B. The Recipe Book
 
-> **Done**, but not in every particular: the table below was the plan, and three of its cells describe a page
-> richer than the one that shipped. They are corrected in place and marked **[built as]**. `docs/GDD.md` section
+> **Done**, but not in every particular: the table below was the plan, and two of its cells describe a page richer
+> than the one that shipped. They are corrected in place and marked **[built as]**. (A third did, until the
+> portraits this row promised were built rather than written off.) `docs/GDD.md` section
 > 12 describes what actually exists and wins on any disagreement. The store is `game/book.ts`, the screen is
 > `game/screens/book.ts`, and the invariant is enforced by `tools/check.js` and proved from outside by the
 > `bookInvariant` playtest scenario. The "no new art" claim held: `art/dishes.ts` has a distinct drawing for all
@@ -210,7 +211,7 @@ write, at the same screen boundary, as the week's.
 | Page | Records | Drawn as |
 |---|---|---|
 | **The dishes** | Per recipe: times cooked, best stars, the day it was first served | A card per recipe in `ORDERS` order, four across and three down. A dish you have cooked is its own `art/dishes.ts` picture **inked in**, named, **[built as]** with its tally and best rating under it and the day it was first served — not its ingredients, which no card draws. One you have not is the same card **in pencil**: the picture faded back to a shape, its name blanked to `- - -`. No new art — every dish drawing already exists. |
-| **The diners** | Per `DINERS` id: times fed, the dish they have ordered most | **[built as]** their NAME from `content/critters/customers.ts` with their tally, as text rows on a slate. The plan said a portrait; the built page draws none, and three busts at this size would have been smaller than the name beside them. |
+| **The diners** | Per `DINERS` id: times fed, the dish they have ordered most | Their portrait from `content/critters/customers.ts`, in the plum window and on the idle beat the day board gives its queues, with the tally and what they like beside it. A diner never served is that portrait in pencil, lifted off the dish cards' alpha because a slate is darker than paper. |
 | **The larder** | Per ingredient: times gathered | The forty glyphs from `art/food.ts` in a grid, greyed until gathered once. |
 | **The road** | Per landmark: visits | Twelve rows, the map's own names. |
 | **The strap** | **[built as]** recipes cooked out of the whole menu | `23 OF 63 COOKED` is the number the closed board has never been able to print. It counts DISTINCT recipes ever cooked, not servings; the record also keeps days of trading and weeks finished, but the screen does not print them. |
