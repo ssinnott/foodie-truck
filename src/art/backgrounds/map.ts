@@ -63,7 +63,8 @@ export const LANES = Object.freeze([
   [1150, 700, 1150, 850, 1180, 880],
   // the third pass: the holt's lane climbs north-west out of the orchard; the wood's runs east out of the coop
   [420, 300, 180, 150],
-  [1500, 280, 1760, 180],
+  // ...and the wood's runs east out of the coop's yard and climbs, keeping clear of the coop's own signpost
+  [1500, 280, 1560, 310, 1760, 180],
 ]);
 /** The river's centreline, top to bottom, splitting the coop and pond off on the east bank. */
 export const RIVER = Object.freeze([1340, HORIZON_H - 10, 1340, 120, 1370, 220, 1340, 340, 1330, 470, 1370, 600, 1350, 720, 1360, 860, 1330, WORLD_H + 10]);
