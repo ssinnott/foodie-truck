@@ -9,6 +9,10 @@
 //             runs the FISH CAKES order (chop, mix, stove, plate) for the stove's hold and
 //             writes tools/screens/kitchen-stove.png with the pot lit mid-hold. The tags are shot as they come up
 //             (kitchen-chop / -mix / -oven / -plate / -stove): each carries its owner's colour across its head.
+//             The food is followed down the line too: the pulls have landed at the board by the time seat 0 gets
+//             there, the tenth chop clears the board and puts the whole batch in the air for the bowl
+//             (kitchen-fly.png, mid-arc), it has dropped in by the time seat 0 arrives, and the dish is stacked
+//             on the plate before the bell.
 //   kitchenPause - `start` from a seat pushes the pause overlay, `cancel` pops it and the kitchen underneath is
 //             exactly as it was left (step, scores, owners, seat positions); online the push is refused.
 //   kitchenGag - Barley's eat gag hands him an apple and TAKES IT BACK: the rig's held item is cleared with the
@@ -88,18 +92,26 @@ export const SCENARIOS = {
       for (let i = 0; i < 5; i++) s = await chopOnce(api);
       assert(s.top.step === 1 && s.top.scores[0] === 2 && s.top.pulled === 6, `six taps empty the fridge and complete the step as PERFECT (step ${s.top.step}, score ${s.top.scores[0]}, pulled ${s.top.pulled})`);
 
-      // CHOP: walk to the board; the first tap claims the step, ten taps in any rhythm finish it
+      // CHOP: walk to the board; the pulls have all landed there by the time seat 0 arrives. The first tap claims
+      // the step, ten taps in any rhythm finish it
       s = await walkTo(api, CHOP);
       assert(s.top.seats[0][2] === CHOP, `seat 0 is at the chop station (station ${s.top.seats[0][2]}, x ${s.top.seats[0][1]})`);
+      assert(s.top.batchAt === CHOP && s.top.landed === 6 && s.top.flying === 0, `the six pulls are on and beside the board (at ${s.top.batchAt}, landed ${s.top.landed}, flying ${s.top.flying})`);
       s = await chopOnce(api);
       assert(s.top.count === 1 && s.top.owners[1] === 0, `the first tap is a chop and claims the step for P1 (count ${s.top.count}, owner ${s.top.owners[1]})`);
       await api.step(40);                        // a long think between chops costs nothing
       for (let i = 0; i < 9; i++) { s = await chopOnce(api); if (i === 3) { await api.step(7); await api.shot('kitchen-chop'); } }
       assert(s.top.step === 2 && s.top.scores[1] === 2, `ten taps complete the step as PERFECT (step ${s.top.step}, score ${s.top.scores[1]})`);
+      // the tenth chop clears the board: the whole batch is in the air for the bowl, nothing has landed yet
+      assert(s.top.batchAt === MIX && s.top.flying === 6 && s.top.landed === 0, `the tenth chop sends everything on the board flying to the bowl (at ${s.top.batchAt}, flying ${s.top.flying}, landed ${s.top.landed})`);
+      await api.step(12);
+      await api.shot('kitchen-fly');
 
-      // MIX: hold at the bowl for 240 frames; a release halfway pauses it and costs nothing
+      // MIX: hold at the bowl for 240 frames; a release halfway pauses it and costs nothing. Everything has
+      // dropped into the bowl by the time seat 0 gets there
       s = await walkTo(api, MIX);
       assert(s.top.seats[0][2] === MIX, `seat 0 is at the mixing bowl (station ${s.top.seats[0][2]})`);
+      assert(s.top.batchAt === MIX && s.top.landed === 6 && s.top.flying === 0, `the batch has landed in the bowl (at ${s.top.batchAt}, landed ${s.top.landed}, flying ${s.top.flying})`);
       await api.hold(0, { action: true });
       await api.step(120);
       s = await api.summary();
@@ -129,9 +141,12 @@ export const SCENARIOS = {
       s = await api.summary();
       assert(s.top.step === 4 && s.top.scores[3] === 2, `holding to the end of the bake is PERFECT (step ${s.top.step}, score ${s.top.scores[3]})`);
 
-      // PLATE: ring the bell at the hatch
+      // PLATE: the bake sent the dish to the plate; it is stacked there before the bell is rung
       s = await walkTo(api, PLATE);
       assert(s.top.seats[0][2] === PLATE, `seat 0 is at the hatch (station ${s.top.seats[0][2]})`);
+      await api.step(10);
+      s = await api.summary();
+      assert(s.top.batchAt === PLATE && s.top.landed === 6 && s.top.flying === 0, `the dish is on the plate before the bell (at ${s.top.batchAt}, landed ${s.top.landed}, flying ${s.top.flying})`);
       await api.shot('kitchen-plate');
       await api.press(0, { action: true }, 1, 0);
       s = await api.summary();
