@@ -280,6 +280,15 @@ export const DAIRY_ANIMS = Object.freeze({
     F(26, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [0, SIT_ROOT_Y], torso: 4, head: 8, face: 'happy' }),
     F(26, { ...SIT, armR: [128, 2], armL: [-27, -10], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 10, face: 'happy' }),
   ] },
+  /**
+   * The tail across the face (the byre's joke, game/screens/dairy.ts): the milker is rocked back on the stool with
+   * the head knocked over and `dazed`, then sits there blinking it off. Both paws stay where they were.
+   */
+  swished: { loop: false, frames: [
+    F(4, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [3, SIT_ROOT_Y], torso: 12, head: 22, squash: 0.96, face: 'dazed' }, { ease: 'out' }),
+    F(8, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [2, SIT_ROOT_Y], torso: 10, head: 18, face: 'dazed' }),
+    F(8, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [0, SIT_ROOT_Y], torso: 6, head: 10, face: 'dazed' }, { ease: 'inout' }),
+  ] },
   pumpR: { loop: false, frames: [
     F(4, { ...SIT, armR: [112, 8], armL: [-48, -18], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 9, face: 'happy' }, { ease: 'out' }),
     F(9, { ...SIT, armR: [114, 6], armL: [-44, -16], root: [0, SIT_ROOT_Y], torso: 5, head: 8, face: 'happy' }),
