@@ -32,6 +32,9 @@ export const PLACES = Object.freeze([
   // Tangle Wood is the dark wood in the north-east corner, on the coop's side of the river: things hide under the
   // leaves and are FORAGED. Its accent is the avocado's deep green.
   { id: 'wood', name: 'TANGLE WOOD', sign: 'WOOD', x: 1760, y: 180, screen: 'wood', accent: '#5C7A3B' },
+  // Thyme Terrace is the walled herb bed between home and the orchard, up a spur off the orchard lane: herbs are
+  // SNIPPED and grow back. Its accent is the leek's green.
+  { id: 'terrace', name: 'THYME TERRACE', sign: 'HERBS', x: 680, y: 440, screen: 'terrace', accent: '#7DB35A' },
 ]);
 
 /** Kitchen stations, left to right along the truck's counter. `verb` is the interaction the station asks for. */

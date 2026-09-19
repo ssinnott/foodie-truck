@@ -59,6 +59,10 @@ export const INGREDIENTS = Object.freeze({
   mushroom: { name: 'MUSHROOMS', place: 'wood', hex: '#C9A57C', icon: 'mushroom' },
   wildGarlic: { name: 'WILD GARLIC', place: 'wood', hex: '#E8EFD6', icon: 'garlic' },
   blackberry: { name: 'BLACKBERRIES', place: 'wood', hex: '#3B2A4A', icon: 'blackberry' },
+  // Thyme Terrace: the herbs, snipped off their clumps
+  mint: { name: 'MINT', place: 'terrace', hex: '#5FA652', icon: 'mint' },
+  chive: { name: 'CHIVES', place: 'terrace', hex: '#7DB35A', icon: 'chive' },
+  rosemary: { name: 'ROSEMARY', place: 'terrace', hex: '#4E6B4A', icon: 'rosemary' },
 });
 
 /** Every ingredient id a landmark supplies, in INGREDIENTS order (the first is the landmark's fallback). */
@@ -209,4 +213,13 @@ export const ORDERS = Object.freeze([
     needs: [{ id: 'wildGarlic', amount: 2 }, { id: 'butter', amount: 2 }], steps: ['fridge', 'chop', 'mix', 'plate'] },
   { id: 'blackberryApplePie', dish: 'BLACKBERRY AND APPLE PIE', customer: 'owl', line: 'BLACKBERRY AND APPLE. THE PIE OF PIES.',
     needs: [{ id: 'blackberry', amount: 2 }, { id: 'apple', amount: 2 }, { id: 'flour', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
+  // Thyme Terrace's menu
+  { id: 'mintSauce', dish: 'MINT SAUCE', customer: 'goat', line: 'MINT SAUCE. SHARP AND GREEN.',
+    needs: [{ id: 'mint', amount: 3 }, { id: 'honey', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'plate'] },
+  { id: 'chiveOmelette', dish: 'CHIVE OMELETTE', customer: 'owl', line: 'A CHIVE OMELETTE. FOLDED, NOT FLIPPED.',
+    needs: [{ id: 'egg', amount: 3 }, { id: 'chive', amount: 2 }], steps: ['fridge', 'chop', 'mix', 'stove', 'plate'] },
+  { id: 'rosemaryPotatoes', dish: 'ROSEMARY POTATOES', customer: 'otter', line: 'ROSEMARY POTATOES! CRISPY EDGES!',
+    needs: [{ id: 'potato', amount: 3 }, { id: 'rosemary', amount: 1 }, { id: 'butter', amount: 1 }], steps: ['fridge', 'chop', 'oven', 'plate'] },
+  { id: 'peaMintSoup', dish: 'PEA AND MINT SOUP', customer: 'goat', line: 'PEA AND MINT SOUP. THE SUMMER ONE.',
+    needs: [{ id: 'pea', amount: 2 }, { id: 'mint', amount: 1 }, { id: 'milk', amount: 1 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
 ]);

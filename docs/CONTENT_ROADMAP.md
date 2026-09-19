@@ -148,6 +148,9 @@ because the dairy's milk-then-churn structure already exists and cheese opens th
 
 ## E. New landmarks
 
+> **Done.** All three shipped. Every row of this roadmap is now built except the kitchen's two extra beats
+> (section A's foot) and the order twists (section D's Thyme Terrace note).
+
 A landmark is the expensive unit: a `PLACES` row, a lane on the map (`art/backgrounds/map.ts LANES`) and a spot
 kept clear of the tree scatter, a screen, a backdrop and a props file, a HOW TO PLAY card, three or four SFX, a
 playtest scenario, a golden frame, and a section in the GDD. Each below brings a **verb the game does not have**
@@ -186,6 +189,9 @@ the wheat, river and lane tables go; the map's tree scatter (`nearLandmark`) wil
 - **Recipes:** MUSHROOM SOUP, MUSHROOMS ON TOAST, GARLIC BUTTER (wild garlic + butter), BLACKBERRY AND APPLE PIE.
 
 ### Thyme Terrace — SNIP (*move + tap*)
+
+> **Built** (`docs/GDD.md` section 5). The order twists that would use herbs as an "extra" are not built; the
+> herbs have four recipes of their own instead.
 
 - **Where:** between home and the orchard, about (680, 440), on a spur off the orchard lane.
 - **Gathers:** mint, chives, rosemary.

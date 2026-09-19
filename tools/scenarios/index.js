@@ -14,6 +14,7 @@ import { SCENARIOS as bramble } from './bramble.js';
 import { SCENARIOS as beach } from './beach.js';
 import { SCENARIOS as holt } from './holt.js';
 import { SCENARIOS as wood } from './wood.js';
+import { SCENARIOS as terrace } from './terrace.js';
 import { SCENARIOS as kitchen } from './kitchen.js';
 import { SCENARIOS as ui } from './ui.js';
 import { SCENARIOS as pads } from './pads.js';
@@ -22,4 +23,4 @@ import { SCENARIOS as stage } from './stage.js';
 import { SCENARIOS as playthrough } from './playthrough.js';
 import { SCENARIOS as audio } from './audio.js';
 
-export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...beach, ...holt, ...wood, ...kitchen, ...ui, ...pads, ...controls, ...stage, ...playthrough, ...audio };
+export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...beach, ...holt, ...wood, ...terrace, ...kitchen, ...ui, ...pads, ...controls, ...stage, ...playthrough, ...audio };

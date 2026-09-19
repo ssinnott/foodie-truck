@@ -70,14 +70,19 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   brownies, honey toffee) give every ingredient a second dish, so no landmark is a rare visit; and the eleven after
   those (cherry pie, cherry clafoutis, plum crumble, cheese toastie, mac and cheese, porridge, flapjacks, tomato
   soup, pea soup, raspberry jam tarts, cockle stew) are what the third pass's eight ingredients - cherries, plums,
-  cheese, oats, tomatoes, peas, raspberries, cockles - are for. Fifty-one in all. Three of them never
+  cheese, oats, tomatoes, peas, raspberries, cockles - are for; and the twelve after those are what the three new
+  landmarks send the truck for (hazelnut brownies, walnut loaf, roast chestnuts, nut roast; mushroom soup,
+  mushrooms on toast, wild garlic butter, blackberry and apple pie; mint sauce, chive omelette, rosemary potatoes,
+  pea and mint soup). Sixty-three in all. Three of them never
   touch the stove or the oven and baked apples is two steps long: the kitchen's variety is which stations a recipe
   skips. Recipes are only ever appended, because `?order=N` and the scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
   orchard drops pears, peaches, avocados, cherries and plums as well as apples; the farm pulls six vegetables
   besides the carrot and grows tomatoes and peas up stakes; the dairy's pails go on through the churn to butter
   and through the press to cheese; the mill's chutes fill rice and oat sacks; the bank has raspberries beside its
-  strawberries and blueberries; the cove has cockles in its wet sand. Thirty-one ingredients ship. A mini-game gathers whichever of
+  strawberries and blueberries; the cove has cockles in its wet sand; Hazel Holt shakes down hazelnuts, walnuts
+  and chestnuts; Tangle Wood hides mushrooms, wild garlic and blackberries; Thyme Terrace grows mint, chives and
+  rosemary. Forty ingredients ship. A mini-game gathers whichever of
   its landmark's ingredients the list is still short of (`run.js gatherTarget`: the first short one in
   `INGREDIENTS` order, else the first the list asks for, else the landmark's first — so a bare dev jump still
   catches apples), and draws that ingredient's glyph and colour on the tally ticket, in the basket and on the end sign.
@@ -107,7 +112,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
   south lane (strawberries, blueberries) and Hazel Holt in the north-west corner (hazelnuts, walnuts, chestnuts,
   shaken down) and Tangle Wood in the north-east (mushrooms, wild garlic, blackberries, foraged out of the leaf
-  litter). **All eleven supply landmarks open a mini-game** while the list is short
+  litter) and Thyme Terrace between home and the orchard (mint, chives, rosemary, snipped off their clumps).
+  **All twelve supply landmarks open a mini-game** while the list is short
   of what they supply — the cove its beach (crabs chased along the sand), the bank its bushes — and **any
   of them can hold a line** once it is full; arriving where there is nothing to do shows a sign instead
   (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
@@ -279,6 +285,17 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   toadstool, red with white spots; brushing it is a step back with the nose wrinkled, POOH!, 20 frames, and it
   sinks back. Nothing is lost.
 
+- **Thyme Terrace — SNIP** (*move + tap*). A walled herb bed between home and the orchard: six clumps of the visit's
+  herb stand along the bed at fixed x (100 px apart), the crew works the gravel walk in front, and `action` with a
+  clump anywhere under the critter (34 px either side) that still has a snip on it is one snip of the shears (a
+  10-frame crouch): the sprig hops into the basket, +1, and the clump is a stage shorter. A clump gives three snips
+  and then stands as stubble, and grows a stage back every 50 frames, each stage drawn (stubble, shoots, half, full),
+  so the party is pushed along the bed and back. A visit is for mint (a round bushy mass), chives (tubes with purple
+  heads) or rosemary (woody sprigs). **The joke:** the hedgehog is asleep under one clump in eight when the truck
+  pulls up, curled at its foot where a sharp eye can spot it; the snip there wakes it - the critter jumps back,
+  EEK!, 20 frames, no sprig - and it trundles off over 40 frames to sleep under another clump. The clump keeps its
+  snips for the next reach.
+
 - **Cockle Cove — CHASE** (*move + tap*). The crew runs along the dry sand with the sea behind it and the strand
   line in front. Crabs come up out of burrows (three at the start, another every 50–100 frames, five at most) and
   scuttle along the strand at 1.2 px/frame, stopping now and then with their claws up; a crab that sees a critter
@@ -389,7 +406,8 @@ player has bound M to something, while a rebind is listening, and while a host k
 - **lobby**: HOST / JOIN, the host key large, invite link, four seats with busts, ready stamps, `STARTING!`; drives
   `net/session.js`; hands off to `select`-style picking on the same screen, then the host starts the match on the
   day board, so an online party reads the day's plan together and opens the truck.
-- **map**, **orchard**, **pond**, **coop**, **dairy**, **mill**, **hive**, **garden**, **kitchen**, **results**:
+- **map**, **orchard**, **pond**, **coop**, **dairy**, **mill**, **hive**, **garden**, **bramble**, **beach**, **holt**,
+  **wood**, **terrace**, **kitchen**, **results**:
   as above. Every one exposes `summary()` and `checksumFields()` and reads input only by seat.
 - **pause**: transparent overlay (RESUME / QUIT TO TITLE); refused while `game.net.active`.
 - **gallery**: the cast contact sheet in game.
@@ -433,7 +451,7 @@ the truck's own motif — the rising sixth 1-3-5-6 — somewhere. Which screen p
 | `title` | title, select, lobby, controls, gallery | The parked truck at dusk: a music box over a squeezebox, unhurried. G, 96. |
 | `board` | stage (open) | The day's plan on paper: a whistle reading it out over an organ. C, 84. |
 | `drive` | map | The lane: an oompah squeezebox under a whistle, the wheels in the shaker. D, 128. |
-| `gather` | orchard, coop, dairy, mill, hive, garden, bramble | Marimba over a plucked bass, a woodblock keeping time. F, 120. |
+| `gather` | orchard, coop, dairy, mill, hive, garden, bramble, holt, wood, terrace | Marimba over a plucked bass, a woodblock keeping time. F, 120. |
 | `pond` | pond, beach | Water waltzes: a flute over a pad, in 3. A, 88. |
 | `line` | line | The queue at dusk: the title's squeezebox with a plucked tune over it, swung. G, 92. |
 | `kitchen` | kitchen | The order on the pass: a harpsichord running over organ stabs, the clock in the drums. C, 140. |

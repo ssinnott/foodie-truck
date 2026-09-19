@@ -31,7 +31,7 @@ import type { Order, OrderNeed, Run, RunLine, RunCustomer, DayPlan, DayPlanLine,
  * first pass are APPENDED rather than filed next to their neighbours: the index is what crosses the wire, so
  * inserting 'dairy' after 'coop' would silently move 'kitchen' under every peer already holding the old table.
  */
-export const SCENES = Object.freeze(['map', 'orchard', 'pond', 'coop', 'kitchen', 'dairy', 'mill', 'hive', 'garden', 'stage', 'line', 'bramble', 'beach', 'holt', 'wood']);
+export const SCENES = Object.freeze(['map', 'orchard', 'pond', 'coop', 'kitchen', 'dairy', 'mill', 'hive', 'garden', 'stage', 'line', 'bramble', 'beach', 'holt', 'wood', 'terrace']);
 /** The scene an online match opens on: the day board, so the party reads the day's plan together and opens the truck. */
 export const START_SCENE = SCENES.indexOf('stage');
 

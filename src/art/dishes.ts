@@ -455,6 +455,31 @@ export const DISHES: Record<string, DishDraw> = {
     flecks(ctx, cx, cy, s, hexOf('blackberry'), [-0.7, -0.75, 0.6, -0.7]);
     flecks(ctx, cx, cy, s, hexOf('apple'), [0.05, -1.0]);
   },
+  // ---- Thyme Terrace's menu ----
+  mintSauce(ctx, cx, cy, s) {
+    // a small jug of it, green to the lip, a sprig standing in it
+    const g = foodTones(hexOf('mint'));
+    ctx.beginPath(); ctx.moveTo(cx - s * 1.1, cy - s * 0.6); ctx.lineTo(cx + s * 0.5, cy - s * 0.6); ctx.lineTo(cx + s * 0.4, cy + s * 0.6); ctx.lineTo(cx - s * 1.0, cy + s * 0.6); ctx.closePath(); inkFill(ctx, CREAM);
+    ctx.fillStyle = g.base; ctx.fillRect(R(cx - s * 1.0), R(cy - s * 0.45), R(s * 1.45), R(s * 0.3));
+    ctx.fillStyle = INK; ctx.fillRect(R(cx + s * 0.6), R(cy - s * 0.45), 3, R(s * 0.4)); ctx.fillRect(R(cx + s * 0.6), R(cy - s * 0.1), 4, 2);   // the handle
+    ctx.fillStyle = g.hi; ctx.fillRect(R(cx - s * 0.15), R(cy - s * 0.95), 2, R(s * 0.5)); ctx.fillRect(R(cx - s * 0.35), R(cy - s * 0.95), 6, 2);
+  },
+  chiveOmelette(ctx, cx, cy, s) {
+    const t = foodTones(hexOf('egg'));
+    ctx.beginPath(); ctx.moveTo(cx - s * 1.1, cy + s * 0.4); ctx.quadraticCurveTo(cx, cy - s * 1.2, cx + s * 1.1, cy + s * 0.4); ctx.closePath(); inkFill(ctx, CHEESE);
+    ctx.save(); ctx.clip(); ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 1.1), R(cy + s * 0.1), R(s * 2.2), R(s * 0.4)); ctx.restore();
+    flecks(ctx, cx, cy, s, hexOf('chive'), [-0.5, 0.0, 0.05, -0.3, 0.5, 0.05, -0.15, -0.55]);
+    shine(ctx, cx - s * 0.45, cy - s * 0.45);
+  },
+  rosemaryPotatoes(ctx, cx, cy, s) {
+    // a heap of golden wedges with the rosemary needles through it
+    const p = foodTones(CRUST);
+    for (let i = 0; i < 4; i++) { const x = cx - s * 0.85 + i * s * 0.5, y = cy + s * 0.1 - (i & 1) * s * 0.4; ctx.beginPath(); ctx.ellipse(x, y, s * 0.45, s * 0.28, (i & 1) ? 0.5 : -0.4, 0, TAU); inkFill(ctx, p.base); ctx.fillStyle = p.sh; ctx.fillRect(R(x - s * 0.2), R(y + 1), R(s * 0.4), 2); }
+    flecks(ctx, cx, cy, s, hexOf('rosemary'), [-0.6, -0.2, -0.1, 0.25, 0.4, -0.35, 0.7, 0.1]);
+  },
+  peaMintSoup(ctx, cx, cy, s) {
+    soupBowl(ctx, cx, cy, s, hexOf('pea'), (c, x, y) => { c.fillStyle = CREAM; c.fillRect(R(x - s * 0.3), R(y - s * 0.55), R(s * 0.6), 2); flecks(c, x, y, s, hexOf('mint'), [-0.5, -0.4, 0.4, -0.45]); });
+  },
 };
 
 /**

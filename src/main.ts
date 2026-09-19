@@ -24,6 +24,7 @@ import { GardenScreen } from './game/screens/garden.ts';
 import { BrambleScreen } from './game/screens/bramble.ts';
 import { HoltScreen } from './game/screens/holt.ts';
 import { WoodScreen } from './game/screens/wood.ts';
+import { TerraceScreen } from './game/screens/terrace.ts';
 import { BeachScreen } from './game/screens/beach.ts';
 import { KitchenScreen } from './game/screens/kitchen.ts';
 import { ResultsScreen } from './game/screens/results.ts';
@@ -110,6 +111,7 @@ function boot() {
   game.registerScreen('bramble', (g) => new BrambleScreen(g));
   game.registerScreen('holt', (g) => new HoltScreen(g));
   game.registerScreen('wood', (g) => new WoodScreen(g));
+  game.registerScreen('terrace', (g) => new TerraceScreen(g));
   game.registerScreen('beach', (g) => new BeachScreen(g));
   game.registerScreen('kitchen', (g) => new KitchenScreen(g));
   game.registerScreen('results', (g) => new ResultsScreen(g));

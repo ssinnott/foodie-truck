@@ -319,6 +319,28 @@ export const FOOD = {
     if (s >= 4) { ctx.fillStyle = t.hi; ctx.fillRect(R(cx - s * 0.4), R(cy - s * 0.2), 2, 2); ctx.fillRect(R(cx + s * 0.1), R(cy + s * 0.2), 2, 2); ctx.fillRect(R(cx - s * 0.1), R(cy - s * 0.5), 2, 2); ctx.fillRect(R(cx + s * 0.35), R(cy - s * 0.25), 2, 2); }
     ctx.fillStyle = '#5FA652'; ctx.fillRect(R(cx - s * 0.5), R(cy - s * 0.85), R(s), R(s * 0.3));
   },
+  // ---- Thyme Terrace ----
+  /** A sprig of mint: a stem with three pairs of round leaves. */
+  mint(ctx, cx, cy, s, hex = '#5FA652') {
+    const t = foodTones(hex);
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - 1), R(cy - s), 2, R(s * 2));
+    for (let i = 0; i < 3; i++) { const y = cy - s * 0.7 + i * s * 0.6; ctx.beginPath(); ctx.ellipse(cx - s * 0.5, y, s * 0.45, s * 0.28, -0.3, 0, Math.PI * 2); ctx.ellipse(cx + s * 0.5, y, s * 0.45, s * 0.28, 0.3, 0, Math.PI * 2); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = i ? t.base : t.hi; ctx.fill(); }
+  },
+  /** A bunch of chives: three tubes with a purple head on the tallest. */
+  chive(ctx, cx, cy, s, hex = '#7DB35A') {
+    const t = foodTones(hex);
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - s * 0.6), R(cy - s * 0.7), 4, R(s * 1.7)); ctx.fillRect(R(cx - 2), R(cy - s * 1.0), 4, R(s * 2)); ctx.fillRect(R(cx + s * 0.35), R(cy - s * 0.6), 4, R(s * 1.6));
+    ctx.fillStyle = t.base; ctx.fillRect(R(cx - s * 0.6) + 1, R(cy - s * 0.7) + 1, 2, R(s * 1.7) - 2); ctx.fillRect(R(cx - 2) + 1, R(cy - s * 1.0) + 1, 2, R(s * 2) - 2); ctx.fillRect(R(cx + s * 0.35) + 1, R(cy - s * 0.6) + 1, 2, R(s * 1.6) - 2);
+    ball(ctx, cx, cy - s * 1.05, s * 0.32, '#B08CFF', false);
+  },
+  /** A sprig of rosemary: a woody stem with short needles either side. */
+  rosemary(ctx, cx, cy, s, hex = '#4E6B4A') {
+    const t = foodTones(hex);
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - 1), R(cy - s), 3, R(s * 2)); ctx.fillStyle = '#8C6A48'; ctx.fillRect(R(cx), R(cy - s) + 1, 1, R(s * 2) - 2);
+    ctx.fillStyle = t.base;
+    for (let i = 0; i < 4; i++) { const y = R(cy - s * 0.8 + i * s * 0.45); ctx.fillRect(R(cx - s * 0.7), y, R(s * 0.6), 2); ctx.fillRect(R(cx + s * 0.2), y + 1, R(s * 0.6), 2); }
+    ctx.fillStyle = INK; for (let i = 0; i < 4; i++) { const y = R(cy - s * 0.8 + i * s * 0.45); ctx.fillRect(R(cx - s * 0.7) - 1, y, 1, 2); ctx.fillRect(R(cx + s * 0.8), y + 1, 1, 2); }
+  },
 };
 
 /** Draw an ingredient by icon id; unknown ids get a plain ball. */
