@@ -52,6 +52,15 @@ export const rng: Rng = {
   get state() { return state; },
 };
 
+/**
+ * A fresh seed for a new run or match: the one place gameplay may touch Math.random, since the seed it picks is
+ * what everything after it is reproduced from (a local run replays it; an online host puts it in the START packet).
+ * Never zero, so `seed()` above never falls back to its default state.
+ */
+export function freshSeed(): number {
+  return (Math.floor(Math.random() * 0x7fffffff) | 0) >>> 0 || 1;
+}
+
 /** Create an independent RNG instance (e.g. for non-gameplay sparkle). */
 export function makeRng(seed: number = 1): RngInstance {
   let s = (seed | 0) >>> 0 || 1;
