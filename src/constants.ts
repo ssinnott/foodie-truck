@@ -73,9 +73,9 @@ export const REPO_URL = 'https://github.com/ssinnott/foodie-truck';
 export const REPO_LABEL = 'GITHUB.COM/SSINNOTT/FOODIE-TRUCK';
 
 /**
- * Where to tip the cook, drawn on the crew screen and nowhere else: a game a small child plays does not ask for
- * money on its way in. The label is the same address in the game's own type, for the player who reads it off the
- * screen rather than following it (engine/links.ts).
+ * Where to tip the cook: drawn beside the repository address along the bottom of the title, and followed by a
+ * click on it alone - no menu row, no key. The label is the same address in the game's own type, for the player
+ * who reads it off the screen rather than following it (engine/links.ts).
  */
 export const KOFI_URL = 'https://ko-fi.com/seansinnott';
 export const KOFI_LABEL = 'KO-FI.COM/SEANSINNOTT';

@@ -4,7 +4,7 @@
 // Nothing here simulates anything: the only state is which menu row is selected, so `checksumFields` is one
 // number and the screen is trivially net-safe. The lane and the sign are pre-rendered layers (art/logo.js); the
 // five cast members are the only per-frame drawing, each on its own beat of the shared animation table.
-import { VIEW_W, UI, REPO_URL, REPO_LABEL } from '../../constants.ts';
+import { VIEW_W, UI, REPO_URL, REPO_LABEL, KOFI_URL, KOFI_LABEL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
 import { drawTextOutlined } from '../../engine/text.ts';
@@ -18,7 +18,7 @@ import { drawFood } from '../../art/food.ts';
 import { LIGHT_X, LIGHT_Y } from '../../lib/art/shading.ts';
 import { CRITTERS } from '../../content/critters/index.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
-import { drawSlate, drawMenuRows, drawHint, drawHintRule, hintRect } from '../ui.ts';
+import { drawSlate, drawMenuRows, drawHint, drawHintSpans, hintSpans } from '../ui.ts';
 import { links } from '../../engine/links.ts';
 import { confirmPressed, navY } from '../menuinput.ts';
 import { readWeek } from '../week.ts';
@@ -37,16 +37,23 @@ const ROWS = ['PLAY', 'ONLINE', 'BOOK', 'CONTROLS', 'CREW', 'SOURCE'];
 const PLAY_ROW = 0, PLAY_TEXT = 'PLAY', CONTINUE_TEXT = 'CONTINUE';
 const SOURCE_ROW = ROWS.length - 1;
 /**
- * The repository address along the bottom is the SOURCE row's other half: the row opens it, and the address is
- * both the thing a click lands on (engine/links.ts) and the thing to type where no tab ever opens.
+ * The two addresses on one paper strip along the bottom: where this build came from, and where to tip the cook.
+ *
+ * The repository one is the SOURCE row's other half - the row opens it, and the address is both what a click
+ * lands on and what to type where no tab ever opens. The Ko-fi one is a click only. It gets no row and no key:
+ * it is a thing to find rather than a thing the game asks for on the way in, and the eight actions are the
+ * game's (engine/actions.ts), not a donation's.
  */
-const LINK_ZONE = hintRect(REPO_LABEL);
-/** How long the SOURCE row's answer stays up, in frames (60 = a second). */
+const LINK_Y = 346;
+const [REPO_ZONE, KOFI_ZONE] = hintSpans([REPO_LABEL, KOFI_LABEL], LINK_Y);
+/** The answer to a follow, on its own strip above the addresses - which is what makes "BELOW" below. */
+const NOTICE_Y = LINK_Y - 16;
+/** How long that answer stays up, in frames (60 = a second). */
 const NOTICE_FRAMES = 150;
 const LINK_OPENED = 'OPENED IN A NEW TAB';
 /** Nothing is lost when the tab is refused: the address is on the strip below either way. */
 const LINK_BLOCKED = 'NEW TAB BLOCKED - THE ADDRESS IS BELOW';
-/** The address lit: ink gone warm, never one of the reserved signal colours (constants.ts SIGNAL). */
+/** An address lit: ink gone warm, never one of the reserved signal colours (constants.ts SIGNAL). */
 const LINK_LIT = UI.wood;
 /**
  * The A-frame slate on the verge, right of the crew. It stood at x 426, 176 wide, while the crew were four; the
@@ -184,9 +191,10 @@ export class TitleScreen extends Screen {
     this.game.input.resetClaims();
     this.sel = 0;
     this.notice = ''; this.noticeTimer = 0;
-    // The drawn address is clickable for as long as this screen is on the stack. A click is a real user gesture,
-    // so it opens the tab even where the row's fixed-step call would be refused (engine/links.ts).
-    links.setZone({ ...LINK_ZONE, url: REPO_URL, onOpen: (opened) => this.linkNotice(opened) });
+    // Both addresses are clickable for as long as this screen is on the stack. A click is a real user gesture, so
+    // it opens the tab even where the SOURCE row's fixed-step call would be refused (engine/links.ts).
+    const tell = (opened: boolean) => this.linkNotice(opened);
+    links.setZones([{ ...REPO_ZONE, url: REPO_URL, onOpen: tell }, { ...KOFI_ZONE, url: KOFI_URL, onOpen: tell }]);
     // a week part-played turns the first row from PLAY into CONTINUE; there is never both
     this.week = readWeek();
     this.rows = ROWS.slice();
@@ -206,10 +214,10 @@ export class TitleScreen extends Screen {
     });
   }
 
-  override exit(): void { links.clearZone(); }
+  override exit(): void { links.clearZones(); }
 
   /**
-   * Report what following the repository link actually did - the row and a click come through here alike.
+   * Report what following an address actually did - the row and a click on either come through here alike.
    *
    * Only a refusal makes a sound: the row's own `menu_confirm` has already played by the time this runs, and a
    * click that opens a tab has the tab to show for itself.
@@ -303,13 +311,15 @@ export class TitleScreen extends Screen {
     if (this.frame % BLINK_PERIOD < BLINK_ON) {
       drawTextOutlined(ctx, START_TEXT, VIEW_W / 2, START_Y, { size: 2, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
     }
-    // The address, lit while the mouse is on it or the row that opens it is selected, and underlined always so it
-    // reads as something to follow. What the last press of it did sits above it until it times out.
-    const lit = links.hot || this.sel === SOURCE_ROW;
-    const linkColor = lit ? LINK_LIT : UI.ink;
-    const rect = drawHint(ctx, REPO_LABEL, LINK_ZONE.y, linkColor);
-    drawHintRule(ctx, REPO_LABEL, rect, linkColor);
-    if (this.noticeTimer > 0) drawHint(ctx, this.notice, LINK_ZONE.y - 16);
+    // The two addresses, each underlined so it reads as something to follow, and each lit on its own: the one
+    // under the mouse, or the repository while the row that opens it is selected. What the last follow did sits
+    // above them until it times out.
+    const hot = links.hotUrl;
+    drawHintSpans(ctx, [
+      { text: REPO_LABEL, color: hot === REPO_URL || this.sel === SOURCE_ROW ? LINK_LIT : UI.ink, rule: true },
+      { text: KOFI_LABEL, color: hot === KOFI_URL ? LINK_LIT : UI.ink, rule: true },
+    ], LINK_Y);
+    if (this.noticeTimer > 0) drawHint(ctx, this.notice, NOTICE_Y);
   }
 
   override summary() {
@@ -317,8 +327,12 @@ export class TitleScreen extends Screen {
     return {
       row: this.rows[this.sel], sel: this.sel, rows: this.rows.length, crew: this.crew.length,
       menu: this.rows.slice(),
-      // the outward link, as a test sees it: the address, the rect a click must land in, and the last answer
-      link: REPO_URL, linkLabel: REPO_LABEL, linkZone: LINK_ZONE, notice: this.noticeTimer > 0 ? this.notice : '',
+      // the outward links, as a test sees them: each address, the rect a click must land in, and the last answer
+      links: [
+        { url: REPO_URL, label: REPO_LABEL, zone: REPO_ZONE },
+        { url: KOFI_URL, label: KOFI_LABEL, zone: KOFI_ZONE },
+      ],
+      notice: this.noticeTimer > 0 ? this.notice : '',
       // the week in progress, as the row reads it: what CONTINUE would pick up
       week: w ? { seed: w.seed, day: w.day, days: DAYS_PER_WEEK, dayName: shapeOf(w.day).name, critters: w.critters.slice() } : null,
     };

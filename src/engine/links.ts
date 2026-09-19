@@ -1,19 +1,21 @@
 // Outward links: the one module in the build that navigates anywhere. Everything else this game does happens on
-// the canvas, so this exists for the two addresses that are drawn on it - the repository on the title (the SOURCE
-// row and the address under it) and the Ko-fi address on the crew screen.
+// the canvas, so this exists for the two addresses drawn along the bottom of the title - the repository this
+// build came from, and the Ko-fi address beside it.
 //
 // Ported from the sibling game *Aether & Brass* (src/engine/links.ts), minus its SHARE zone: that one hands the
 // host's invite link to a phone's share sheet, and this game's lobby draws its invite link for reading rather
 // than sending it anywhere (screens/lobby.ts), so there is nothing here to share.
 //
-// An address needs two ways to follow it, because neither alone reaches every player:
+// Two ways in, for the two kinds of address:
 //
-//  - A menu row or a hint key calls `open()` from the fixed step, which serves keyboard, gamepad and pad alike.
-//    That is a rAF callback rather than an event handler, so a browser that insists on a real user gesture may
-//    refuse the tab. `open()` reports that honestly, and the caller says so on screen rather than looking broken.
-//  - A click on the drawn address goes through the listener below, which IS a gesture, so it always opens. The
-//    screen that draws an address claims its rect in `enter()` and releases it in `exit()`; the zone is in
-//    internal 640x360 px like everything else on screen.
+//  - A menu row calls `open()` from the fixed step, which serves keyboard, gamepad and pad alike. That is a rAF
+//    callback rather than an event handler, so a browser that insists on a real user gesture may refuse the tab.
+//    `open()` reports that honestly, and the caller says so on screen rather than looking broken. The SOURCE row
+//    is the one row that does this.
+//  - A click on a drawn address goes through the listener below, which IS a gesture, so it always opens. That is
+//    the only way to the Ko-fi address: it is a thing to find, not a row on the way into the game, and it costs
+//    the game no key. The screen that draws the addresses claims their rects in `enter()` and releases them in
+//    `exit()`; the zones are in internal 640x360 px like everything else on screen.
 //
 // One `click` listener covers both a mouse and a finger: unlike Aether & Brass, nothing in this game
 // preventDefaults `touchstart` (there is no on-screen touch pad to defend), so a tap still synthesizes the click
@@ -45,25 +47,34 @@ export interface LinkZone {
 }
 
 let view: LinkView | null = null;
-let zone: LinkZone | null = null;
-let hot = false;
+/** The rects the screen on top of the stack has claimed; empty everywhere else in the game. */
+let zones: LinkZone[] = [];
+/** The one the mouse is resting on, so the screen can light THAT address and leave the other alone. */
+let hotZone: LinkZone | null = null;
 /** Last mouse position in internal px, so a zone claimed under a resting cursor still lights up. */
 let mx = -1, my = -1;
 
-function inZone(p: { x: number; y: number }): boolean {
-  return !!zone && p.x >= zone.x && p.x < zone.x + zone.w && p.y >= zone.y && p.y < zone.y + zone.h;
+/** The claimed rect a point is inside, or null. The rects never overlap: they are pieces of one line of text. */
+function zoneAt(p: { x: number; y: number }): LinkZone | null {
+  for (const z of zones) if (p.x >= z.x && p.x < z.x + z.w && p.y >= z.y && p.y < z.y + z.h) return z;
+  return null;
 }
 
-function setHot(next: boolean): void {
-  if (next === hot) return;
-  hot = next;
+function setHot(next: LinkZone | null): void {
+  if (next === hotZone) return;
+  const was = !!hotZone;
+  hotZone = next;
+  if (was === !!next) return;
   const el = view && view.displayCanvas;
   if (el && el.style) el.style.cursor = next ? 'pointer' : '';
 }
 
 export const links = {
-  /** True while a mouse is resting on the claimed zone, so the screen can light the address up. */
-  get hot(): boolean { return hot; },
+  /** True while a mouse is resting on any claimed zone. */
+  get hot(): boolean { return !!hotZone; },
+
+  /** The address the mouse is resting on, or '' - what the screen lights up, one address at a time. */
+  get hotUrl(): string { return hotZone ? hotZone.url : ''; },
 
   /**
    * Attach the listeners to the display canvas. Called once at boot (src/main.ts), beside `input.init`, which
@@ -76,31 +87,31 @@ export const links = {
     el.addEventListener('mousemove', (e: MouseEvent) => {
       const p = v.toInternal(e.clientX, e.clientY);
       mx = p.x; my = p.y;
-      setHot(inZone(p));
+      setHot(zoneAt(p));
     });
-    el.addEventListener('mouseleave', () => { mx = -1; my = -1; setHot(false); });
+    el.addEventListener('mouseleave', () => { mx = -1; my = -1; setHot(null); });
     el.addEventListener('click', (e: MouseEvent) => {
-      const z = zone;
-      if (!z || e.button !== 0) return;
-      if (!inZone(v.toInternal(e.clientX, e.clientY))) return;
+      if (e.button !== 0) return;
+      const z = zoneAt(v.toInternal(e.clientX, e.clientY));
+      if (!z) return;
       const opened = links.open(z.url);
       if (z.onOpen) z.onOpen(opened);
     });
   },
 
   /**
-   * Claim the clickable rect. One zone at a time: only the screen on top of the stack draws an address, and it
-   * releases the rect on the way out.
+   * Claim the clickable rects. One screen's worth at a time: only the screen on top of the stack draws addresses,
+   * and it releases them on the way out.
    */
-  setZone(z: LinkZone | null): void {
-    zone = z && z.url ? z : null;
-    // A zone claimed under a cursor already sitting there must light up without waiting for the mouse to move,
+  setZones(list: LinkZone[]): void {
+    zones = (list || []).filter((z) => z && z.url);
+    // A rect claimed under a cursor already sitting there must light up without waiting for the mouse to move,
     // and one that goes away must never leave the pointer cursor behind.
-    setHot(inZone({ x: mx, y: my }));
+    setHot(zoneAt({ x: mx, y: my }));
   },
 
-  /** Release the claimed rect (screens call this from `exit()`). */
-  clearZone(): void { links.setZone(null); },
+  /** Release them (screens call this from `exit()`). */
+  clearZones(): void { links.setZones([]); },
 
   /**
    * Open `url` in a new tab.

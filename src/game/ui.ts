@@ -192,6 +192,18 @@ export function drawStars(ctx: CanvasRenderingContext2D, cx: number, y: number, 
 /** The paper strip a hint sits on, in internal px. */
 export interface HintRect { x: number; y: number; w: number; h: number; }
 
+/** One piece of a hint line: the text, the colour to draw it in, and whether it is underlined as an address. */
+export interface HintSpan {
+  text: string;
+  /** Ink unless the caller lights it. */
+  color?: string;
+  /** Underline it, so it reads as something to follow rather than a caption. */
+  rule?: boolean;
+}
+
+/** Gap between the pieces of a hint line, in spaces: wide enough that two addresses never read as one. */
+const SPAN_GAP = '   ';
+
 /**
  * Where `drawHint` would put that strip, without drawing it.
  *
@@ -205,26 +217,59 @@ export function hintRect(text: string, y: number = 346): HintRect {
 }
 
 /**
+ * Where each piece of a multi-part hint line lands, without drawing any of it: one rect per text, in order.
+ *
+ * The 5x7 font advances a fixed (GLYPH_W + spacing) per glyph and `measureText` drops the last gap, so a piece's
+ * left edge is the whole line's left edge plus the measured width of everything before it, plus that one dropped
+ * pixel. This is the measurer the title claims its two addresses' rects from.
+ */
+export function hintSpans(texts: string[], y: number = 346): HintRect[] {
+  const line = texts.join(SPAN_GAP), x0 = R(VIEW_W / 2 - measureText(line, 1) / 2);
+  const out = [];
+  let prefix = '';
+  for (const t of texts) {
+    const x = x0 + (prefix ? measureText(prefix, 1) + 1 : 0);
+    out.push({ x, y, w: measureText(t, 1), h: 13 });
+    prefix += t + SPAN_GAP;
+  }
+  return out;
+}
+
+/** The paper strip itself: the bottom rule is ink, so a hint reads as a strip of paper laid on the picture. */
+function drawStrip(ctx: CanvasRenderingContext2D, x: number, y: number, w: number): void {
+  ctx.fillStyle = UI.paper; ctx.fillRect(x, y, w, 12);
+  ctx.fillStyle = UI.ink; ctx.fillRect(x, y + 12, w, 1);
+}
+
+/**
  * One-line hint on a paper strip along the bottom of the screen.
  *
- * `color` is ink for every hint that is a hint. The two that are addresses pass a warmer one while the mouse is
- * on them or the row that follows them is selected - ink gone warm rather than any of the reserved signal
- * colours (constants.ts SIGNAL), which mean things elsewhere and must go on meaning only those things.
+ * `color` is ink for every hint that is a hint; an address passes a warmer one while the mouse is on it - ink
+ * gone warm rather than any of the reserved signal colours (constants.ts SIGNAL), which mean things elsewhere and
+ * must go on meaning only those things.
  */
 export function drawHint(ctx: CanvasRenderingContext2D, text: string, y: number = 346, color: string = UI.ink): HintRect {
   const r = hintRect(text, y);
-  ctx.fillStyle = UI.paper; ctx.fillRect(r.x, y, r.w, 12); ctx.fillStyle = UI.ink; ctx.fillRect(r.x, y + 12, r.w, 1);
+  drawStrip(ctx, r.x, y, r.w);
   drawText(ctx, text, VIEW_W / 2, y + 2, { size: 1, color, align: 'center', shadow: false });
   return r;
 }
 
 /**
- * Underline a hint that is an address, so it reads as something to follow rather than a caption. Drawn inside the
- * strip, under the text, in the text's own colour.
+ * A hint line made of several pieces, each with its own colour and its own underline: what the title's two
+ * addresses sit on. Returns the same rects `hintSpans` measured, in the same order.
  */
-export function drawHintRule(ctx: CanvasRenderingContext2D, text: string, r: HintRect, color: string = UI.ink): void {
-  const w = measureText(text, 1);
-  ctx.fillStyle = color; ctx.fillRect(R(VIEW_W / 2 - w / 2), r.y + 10, w, 1);
+export function drawHintSpans(ctx: CanvasRenderingContext2D, spans: HintSpan[], y: number = 346): HintRect[] {
+  const texts = spans.map((s) => s.text);
+  const rects = hintSpans(texts, y), line = texts.join(SPAN_GAP), w = measureText(line, 1) + 16;
+  drawStrip(ctx, R(VIEW_W / 2 - w / 2), y, w);
+  for (let i = 0; i < spans.length; i++) {
+    const sp = spans[i], r = rects[i], color = sp.color || UI.ink;
+    drawText(ctx, sp.text, r.x, y + 2, { size: 1, color, shadow: false });
+    // the underline sits in the gap between the glyphs and the strip's own bottom rule
+    if (sp.rule) { ctx.fillStyle = color; ctx.fillRect(r.x, y + 10, r.w, 1); }
+  }
+  return rects;
 }
 
 /** Dim the screen under an overlay. */

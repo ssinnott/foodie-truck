@@ -438,7 +438,7 @@ player has bound M to something, while a rebind is listening, and while a host k
 
 ## 10. Screens — what each must do
 
-- **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Six rows, so the A-frame is 18 px taller than it was at five. The repository address along the bottom is the SOURCE row's other half: underlined, clickable, lit while that row is selected, and what the screen tells you to type where a browser refuses the tab (`engine/links.ts`).
+- **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Six rows, so the A-frame is 18 px taller than it was at five. Along the bottom, on one paper strip, the two addresses this game has: the repository - the SOURCE row's other half, lit while that row is selected - and the Ko-fi address beside it, which is a click and nothing else, no row and no key. Both are underlined, and both stay readable to type where a browser refuses the tab (`engine/links.ts`).
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
 - **select**: five 116×200 cards (the kit's 140 fitted four across), one cursor per joined seat, READY stamps;
   `next` = stage (starts the run).
@@ -469,9 +469,7 @@ player has bound M to something, while a rebind is listening, and while a host k
   **wood**, **terrace**, **kitchen**, **results**:
   as above. Every one exposes `summary()` and `checksumFields()` and reads input only by seat.
 - **pause**: transparent overlay (RESUME / QUIT TO TITLE); refused while `game.net.active`.
-- **gallery**: the cast contact sheet in game. It also carries the cook's tip jar - the Ko-fi address on a paper
-  strip, followed by a click on it or by the action key, which does nothing else here. It is the ONLY place the
-  game asks for anything: a front door that asks a child for money is not what this is (`engine/links.ts`).
+- **gallery**: the cast contact sheet in game.
 - **book**: the recipe book (section 12), the gallery's sibling: left/right through the pages, CANCEL out.
 
 ## 11. Sound and music
