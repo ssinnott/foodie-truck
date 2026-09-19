@@ -32,7 +32,7 @@ function parkAtSkep(page, x) {
   return page.evaluate((sx) => {
     const sc = window.__game.game.screen, s = sc.seats[0];
     for (const k of sc.skeps) { k.refill = 0; k.held = 0; }
-    s.x = sx; s.facing = 1; s.moving = false; s.bumpT = 0; s.dipT = 0; s.dipSkep = -1;
+    s.x = sx; s.facing = 1; s.moving = false; s.bumpT = 0; s.dipT = 0; s.dipSkep = -1; s.beeT = 0;
     sc.target = Math.max(sc.target, sc.total + 4); sc.setTotal(sc.total);
     return { count: s.count, total: sc.total };
   }, x);
@@ -42,11 +42,40 @@ function parkAtSkep(page, x) {
 function seat0(page) {
   return page.evaluate(() => {
     const sc = window.__game.game.screen, s = sc.seats[0];
-    return { count: s.count, dipT: s.dipT, dipSkep: s.dipSkep, bumpT: s.bumpT, anim: s.anim, total: sc.total };
+    return { count: s.count, dipT: s.dipT, dipSkep: s.dipSkep, bumpT: s.bumpT, anim: s.anim, total: sc.total, beeT: s.beeT, bees: sc.bees };
   });
 }
+/** The bee (screens/hive.ts): whether the hold that just started gets one. The main scenario's holds must not; hiveBee's must. */
+function setBee(page, due) { return page.evaluate((d) => { window.__game.game.screen.seats[0].beeDue = d; }, due); }
+const BEE_AT = 20, BEE_FRAMES = 40;
 
 export const SCENARIOS = {
+  /**
+   * hiveBee - the joke: a hold at a full skep with a bee due. BEE_AT frames in the bee lands (beeT 40, bees 1) and
+   *           the hold PAUSES: 40 more held frames leave dipT where it was; then the bee goes and the hold runs on to
+   *           the honey. Writes hive-bee.
+   */
+  async hiveBee(server) {
+    await withPage(server, 'skipTo=hive&critters=0,1&order=4', async (api, page) => {
+      await api.step(2);
+      const skepX = (await api.summary()).top.skeps[2][0];
+      await parkAtSkep(page, skepX);
+      await api.hold(0, { action: true });
+      await api.step(1); await setBee(page, 1);
+      await api.step(BEE_AT - 1);
+      const landed = await seat0(page);
+      assert(landed.beeT === BEE_FRAMES && landed.bees === 1 && landed.dipT === BEE_AT, `${BEE_AT} frames in, the bee is on the nose (beeT ${landed.beeT}, bees ${landed.bees}, dipT ${landed.dipT})`);
+      await api.step(12);
+      await api.shot('hive-bee');
+      await api.step(BEE_FRAMES - 12);
+      const paused = await seat0(page);
+      assert(paused.beeT === 0 && paused.dipT === BEE_AT && paused.count === 0, `the hold waited for the bee (dipT ${paused.dipT}, beeT ${paused.beeT}, count ${paused.count})`);
+      await api.step(DIP_HOLD - BEE_AT + 1);
+      await api.release(0);
+      const done = await seat0(page);
+      assert(done.count === 1 && done.total === 1, `and ran on to the honey once it had gone (count ${done.count})`);
+    });
+  },
   async hive(server) {
     await withPage(server, 'skipTo=hive&critters=0,1,2,3&order=4', async (api, page) => {
       await api.step(2);
@@ -72,7 +101,8 @@ export const SCENARIOS = {
       const skepX = moved.top.skeps[2][0];
       const before = await parkAtSkep(page, skepX);
       await api.hold(0, { action: true });
-      await api.step(DIP_SHOT);
+      await api.step(1); await setBee(page, 0);   // this hold is the rule under test, not the bee
+      await api.step((DIP_SHOT) - 1);
       const mid = await seat0(page);
       assert(mid.dipT === DIP_SHOT && mid.dipSkep === 2 && mid.count === before.count, `${DIP_SHOT} frames in, the hold is running and nothing has landed yet (dipT ${mid.dipT}, skep ${mid.dipSkep})`);
       await api.shot('hive-dip');
@@ -87,7 +117,8 @@ export const SCENARIOS = {
       // ---- half two: letting go early costs nothing and leaves the skep full ----
       const early = await parkAtSkep(page, skepX);
       await api.hold(0, { action: true });
-      await api.step(DIP_HOLD >> 1);
+      await api.step(1); await setBee(page, 0);   // this hold is the rule under test, not the bee
+      await api.step((DIP_HOLD >> 1) - 1);
       await api.release(0);
       await api.step(2);
       const released = await seat0(page);
@@ -98,7 +129,8 @@ export const SCENARIOS = {
       const dry = await parkAtSkep(page, skepX);
       await page.evaluate(() => { window.__game.game.screen.skeps[2].refill = 100; });
       await api.hold(0, { action: true });
-      await api.step(DIP_HOLD + 5);
+      await api.step(1); await setBee(page, 0);   // this hold is the rule under test, not the bee
+      await api.step((DIP_HOLD + 5) - 1);
       await api.release(0);
       const nothing = await seat0(page);
       assert(nothing.count === dry.count && nothing.dipT === 0, `a hold at an empty skep is nothing (count ${nothing.count}, dipT ${nothing.dipT})`);
