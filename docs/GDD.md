@@ -68,7 +68,7 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
   orchard drops pears, peaches and avocados as well as apples; the farm pulls six vegetables besides the
-  carrot; the dairy's pails go on to butter; the mill's chutes fill rice sacks. A mini-game gathers whichever of
+  carrot; the dairy's pails go on through the churn to butter; the mill's chutes fill rice sacks. A mini-game gathers whichever of
   its landmark's ingredients the list is still short of (`run.js gatherTarget`: the first short one in
   `INGREDIENTS` order, else the first the list asks for, else the landmark's first — so a bare dev jump still
   catches apples), and draws that ingredient's glyph and colour on the clock, in the basket and on the end sign.
@@ -161,7 +161,10 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   back of the floor and touch nobody.
 - **Dairy — PUMP** (*tap*). A stool and a cow per seat, nobody moves. Every `action` press is a squirt; twelve fill a
   pail — +1 milk, the pail hops to the churn rack, a fresh one slides under the cow. Any rhythm works, and the cows
-  never kick.
+  never kick. A **butter** visit adds the churn: a barrel churn stands beside every stall, the full pail pours into
+  it instead of banking, the milker turns round on the stool and every `action` press is a turn of the crank;
+  twelve turns bring a pat of butter (+1 butter, the pat hops to the rack) and the milker turns back to the cow.
+  Butter is milk plus the churn, so a pat is exactly two dozen taps.
 - **Mill — FILL** (*move + hold*). Four chutes along the back wall wake on a seeded 70–130 frame timer, at most two
   at once: 24 frames of telegraph, then 110 frames of pouring. Seats walk left and right on their own depth lanes;
   standing anywhere under a pouring chute (36 px either side) with `action` **held** fills the sack at 1/90 per frame (1.5 s from

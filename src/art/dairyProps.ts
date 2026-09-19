@@ -361,6 +361,70 @@ export function drawSplash(ctx, x, y, step) {
   if (step < 2) { ctx.fillStyle = INK; ctx.fillRect(x - rx - 4, y - 2, 3, 3); ctx.fillRect(x + rx + 2, y - 3, 3, 3); }
 }
 
+// ---------------------------------------------------------------- the butter churn
+/**
+ * The BARREL CHURN a butter visit stands beside every stall: an upright oak barrel on a trestle with a crank on its
+ * near face, whose handle the milker turns. It is a different object from the tin churns on the rack on purpose -
+ * those are the milk's score and this is a machine the crew works - so it wears the byre's oak (the furniture tone,
+ * two steps up from the floor like the stool) with the cool tin kept for its hoops and the crank, so the one thing
+ * that moves on it is the one cool mark.
+ *
+ * `hubY` is where the crank's axle is, handed in by the screen because it is worked out from the milker's OWN arm
+ * the way the cow's udder is (screens/dairy.js): the barrel is then cut to reach 12 px above that hub and stands on
+ * the trestle at `y`, so a mouse's churn is a hand shorter than a sheep's and each paw lands on its own handle.
+ * `angle` is the crank in degrees (draw-only: the screen derives it from the press count), and `handle` false
+ * draws the barrel without its crank arm, so the screen can lay the arm back over the milker's paw afterwards.
+ */
+export const CHURN_W = 22, CHURN_ABOVE_HUB = 12, TRESTLE_H = 6, CRANK_R = 8;
+const OAK_LIT = mix(DAIRY.oak, MILK_HI, 0.25), OAK_SH = mix(DAIRY.oak, PLUM.shadow, 0.38);
+export function drawBarrelChurn(ctx, x, y, hubY, angle, handle) {
+  x = R(x); y = R(y); hubY = R(hubY);
+  const top = hubY - CHURN_ABOVE_HUB, bot = y - TRESTLE_H, hw = CHURN_W >> 1;
+  // the trestle: two splayed legs under the barrel's chime, the same oak dark the stool's legs are
+  ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - hw + 4, bot); ctx.lineTo(x - hw - 2, y); ctx.moveTo(x + hw - 4, bot); ctx.lineTo(x + hw + 2, y); ctx.stroke();
+  ctx.strokeStyle = DAIRY.oakDark; ctx.lineWidth = 3; ctx.stroke();
+  // the barrel: one inked body bellied 2 px at the waist, staves as dark seams, a lit stave on the light side
+  ctx.beginPath();
+  ctx.moveTo(x - hw, top); ctx.lineTo(x + hw, top); ctx.quadraticCurveTo(x + hw + 4, (top + bot) / 2, x + hw, bot);
+  ctx.lineTo(x - hw, bot); ctx.quadraticCurveTo(x - hw - 4, (top + bot) / 2, x - hw, top); ctx.closePath();
+  ink(ctx, DAIRY.oak);
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = OAK_SH; ctx.fillRect(x + 2, top, hw + 4, bot - top);
+  ctx.fillStyle = OAK_LIT; ctx.fillRect(x - hw + 2, top + 2, 3, bot - top - 4);
+  ctx.fillStyle = DAIRY.oakDark; ctx.fillRect(x - 3, top, 1, bot - top); ctx.fillRect(x + 5, top, 1, bot - top);
+  // two tin hoops, each inside its own ink line
+  for (let k = 0; k < 2; k++) {
+    const hy = top + 6 + k * (bot - top - 15);
+    ctx.fillStyle = INK; ctx.fillRect(x - hw - 4, hy - 1, CHURN_W + 8, 5);
+    ctx.fillStyle = TIN; ctx.fillRect(x - hw - 4, hy, CHURN_W + 8, 3);
+    ctx.fillStyle = TIN_SH; ctx.fillRect(x + 2, hy, hw + 4, 3);
+  }
+  ctx.restore();
+  // the lid, a shade of milk showing at its rim: what is in there
+  ctx.fillStyle = INK; ctx.fillRect(x - hw - 2, top - 4, CHURN_W + 4, 5);
+  ctx.fillStyle = DAIRY.oakDark; ctx.fillRect(x - hw - 1, top - 3, CHURN_W + 2, 3);
+  ctx.fillStyle = MILK; ctx.fillRect(x - hw + 2, top - 1, CHURN_W - 4, 1);
+  // the crank's hub on the near face, and the arm if asked for
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x, hubY, 4, 0, TAU); ctx.fill();
+  ctx.fillStyle = TIN_SH; ctx.beginPath(); ctx.arc(x, hubY, 2.5, 0, TAU); ctx.fill();
+  if (handle) drawCrankArm(ctx, x, hubY, angle);
+}
+/**
+ * The crank arm alone: a tin bar from the hub at (x, hubY) to a round oak knob CRANK_R out at `angle` degrees.
+ * Drawn AFTER the milker in the churn phase so the knob reads on top of the paw that is turning it - the thing a
+ * tapping player is watching go round.
+ */
+export function drawCrankArm(ctx, x, hubY, angle) {
+  x = R(x); hubY = R(hubY);
+  const kx = R(x + Math.cos(angle * DEG) * CRANK_R), ky = R(hubY + Math.sin(angle * DEG) * CRANK_R);
+  ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, hubY); ctx.lineTo(kx, ky); ctx.stroke();
+  ctx.strokeStyle = TIN; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(kx, ky, 4, 0, TAU); ctx.fill();
+  ctx.fillStyle = DAIRY.oak; ctx.beginPath(); ctx.arc(kx, ky, 2.5, 0, TAU); ctx.fill();
+}
+
 /** A churn standing on the rack with its base at (x, y): the party's score, one churn per milk banked. */
 export function drawChurn(ctx, x, y) {
   x = R(x); y = R(y);

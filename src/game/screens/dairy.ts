@@ -4,6 +4,12 @@
 // the churn rack as +1 milk for the PARTY and a fresh one slides under the cow. The cows are placid: nothing in
 // this byre kicks, refuses or costs anything, and the only question the scene asks is how fast you can tap.
 //
+// A BUTTER visit is the same byre with a second beat: a barrel churn stands beside every stall, the full pail pours
+// into it instead of flying to the rack, the milker turns round on the stool and CRANKS - the same tapping, on a
+// handle - and CHURN_PRESSES turns later a pat of butter hops to the rack as +1 butter, a fresh pail slides in and
+// the milker turns back to the cow. Milk is what you pump and butter is what you turn, so the two visits are two
+// jobs and not one job with two glyphs (docs/GDD.md section 5).
+//
 // Determinism (docs/ARCHITECTURE.md section 0): every seat is a plain sim object built in enter() and never grown;
 // nothing in update() draws from rng, calls Math.sin/cos or reads a clock, and input is read by seat slot only. The
 // stall geometry is arithmetic on each rig's own proportions with the two trig constants below precomputed, so four
@@ -21,7 +27,10 @@ import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { gatherTarget } from '../run.ts';
 import { ROWS, SEAT_X, SEAT_PITCH, CHURN_X, dairyLayers } from '../../art/backgrounds/dairy.ts';
-import { drawCow, drawStool, drawPail, drawJet, drawChevrons, drawChurn, drawSwallow, TEAT_DX, TEAT_DY, PAIL_H } from '../../art/dairyProps.ts';
+import {
+  drawCow, drawStool, drawPail, drawJet, drawChevrons, drawChurn, drawSwallow, drawBarrelChurn, drawCrankArm,
+  TEAT_DX, TEAT_DY, PAIL_H, CHURN_W, CHURN_ABOVE_HUB,
+} from '../../art/dairyProps.ts';
 import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -40,6 +49,19 @@ const R = Math.round;
  */
 const PUMP_PER_PAIL = 12;
 /**
+ * CHURN_PRESSES 12: the same dozen as the pail, so a pat of butter is exactly twice the tapping of a pail of milk.
+ * The butter orders ask for one or two (content/recipes.js), which is 24..48 taps at a child's pace inside a
+ * 2400-frame round with half the clock to spare; asking more per pat would make butter the one thing in the game a
+ * slow tapper cannot finish, and the whole point of the dozen is that nobody can.
+ */
+const CHURN_PRESSES = 12;
+/** The crank turns this far per press (draw-only), so twelve presses are one full turn: the round is the number. */
+const CRANK_STEP = 360 / CHURN_PRESSES;
+/** The two beats a butter seat is in: pumping the cow, or cranking the churn. */
+const MILK = 0, CHURN = 1;
+/** The barrel stands this far right of the crank hub (its axle is on the near face, in from the chime). */
+const CHURN_DX = 10;
+/**
  * The squirt beat. At a comfortable 12-frame press cadence a 6-frame jet is up for half of a fast player's frames
  * and reads as continuous milking, and it is still well inside the 12, so a jet never survives into the next press.
  */
@@ -48,6 +70,12 @@ const SQUIRT_FRAMES = 6;
 const PAIL_LAND = 5, PAIL_LAND_K = 0.03;
 /** The full pail's flight to the rack, and how high it arcs over the cows on the way. */
 const HOP_FRAMES = 16, HOP_LIFT = 26, MAX_HOPS = 4;
+/** What is in the air: a pail to the rack (milk), a pail into the churn (the pour), a pat of butter to the rack. */
+const HOP_PAIL = 0, HOP_POUR = 1, HOP_BUTTER = 2;
+/** The pour is a short hop and a low one: the pail goes over the milker's shoulder into the barrel beside it. */
+const POUR_FRAMES = 12, POUR_LIFT = 20;
+/** The pat of butter on the rack and in the air: art/food.js's own glyph at this half-size. */
+const PAT_S = 6;
 /** Odd stalls stand five rows nearer, so four identical stalls read as a row of stalls and not one stamp repeated. */
 const STALL_DY = 5;
 /**
@@ -190,6 +218,14 @@ export interface DairySeat extends Seat {
   pailT: number;
   /** This stall's cow. */
   cow: Cow;
+  /** MILK or CHURN: which of the two beats a butter seat is in (always MILK on a milk visit). */
+  phase: number;
+  /** Turns of the crank on the current pat (0..CHURN_PRESSES). */
+  churn: number;
+  /** The barrel churn beside this stall: its base on the milker's row, its crank hub where the turned paw lands. */
+  churnX: number;
+  hubX: number;
+  hubY: number;
 }
 
 /** A full pail on its way to the churn rack (cosmetic). */
@@ -204,6 +240,11 @@ export interface Hop {
   ty: number;
   /** The player slot whose pail it is, for the tin's band. */
   slot: number;
+  /** HOP_PAIL, HOP_POUR or HOP_BUTTER: what is flying and where it lands. */
+  kind: number;
+  /** Frames the flight takes and how high it arcs: the rack hop's, or the pour's shorter, lower ones. */
+  frames: number;
+  lift: number;
 }
 
 export class DairyScreen extends Screen {
@@ -216,7 +257,8 @@ export class DairyScreen extends Screen {
   /** One seat per party member, in party order (not slot order); empty until enter() builds the stalls. */
   declare seats: DairySeat[];
   /**
-   * What this visit gathers (game/run.js gatherTarget): milk by the pail, or the butter the same pails go on to the churn rack for. `icon`/`hex` are its glyph, the sign prefix its name.
+   * What this visit gathers (game/run.js gatherTarget): milk by the pail, or butter, which is a pail of milk and
+   * then the churn (see `butter`). `icon`/`hex` are its glyph, the sign prefix its name.
    */
   declare ing: string;
   declare icon: string;
@@ -243,7 +285,9 @@ export class DairyScreen extends Screen {
   declare cardKey: string;
   /** The round's clock and its ending (game/minigame.ts). */
   declare clock: Clock;
-  /** The sorted pass's fixed index array: four objects per stall (the cow, its pail, the stool, the milker). */
+  /** True on a butter visit: the barrel churns stand, and a full pail pours instead of banking. */
+  declare butter: boolean;
+  /** The sorted pass's fixed index array: five objects per stall (the cow, its pail, the stool, the churn, the milker). */
   declare sortIdx: Int16Array;
   /** Their sort keys (the row * 32 + the tiebreak), sorted alongside `sortIdx`. */
   declare sortKey: Float64Array;
@@ -279,16 +323,22 @@ export class DairyScreen extends Screen {
       s.stoolH = Math.max(STOOL_MIN, R(-rig.hipY * rig.scale) - SIT_ROOT_Y + 1);
       s.fill = 0; s.count = 0; s.bumpT = 0; s.squirtT = 0; s.pailT = 0;
       s.cow = { kind: i & 1 };
+      // the churn: on the milker's other side, its crank hub where the SAME paw lands once the milker has turned
+      // round on the stool (the mirror of the udder's placement, off this rig's own arm)
+      s.phase = MILK; s.churn = 0;
+      s.hubX = R(s.x + p.shoulderX * rig.scale + reach * PAW_FWD); s.hubY = R(pawY);
+      s.churnX = s.hubX + CHURN_DX;
       seatAnim(s, 'milkIdle', true);
       // four people at four stools, not one pose printed four times: each breath starts a beat later (pose only)
       for (let k = i * 11; k > 0; k--) s.player.tick();
     }
     this.hops = [];
-    for (let i = 0; i < MAX_HOPS; i++) this.hops.push({ t: HOP_FRAMES, x0: 0, y0: 0, tx: 0, ty: 0, slot: 0 });
+    for (let i = 0; i < MAX_HOPS; i++) this.hops.push({ t: HOP_FRAMES, x0: 0, y0: 0, tx: 0, ty: 0, slot: 0, kind: HOP_PAIL, frames: HOP_FRAMES, lift: HOP_LIFT });
     this.hopCursor = 0;
     this.ing = gatherTarget(run, params.place, 'dairy');
     const ing = INGREDIENTS[this.ing] || INGREDIENTS.milk;
     this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
+    this.butter = this.ing === 'butter';
     const icon = this.icon, hex = this.hex;
     this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
     const need = run ? run.need(this.ing) : null;
@@ -296,11 +346,12 @@ export class DairyScreen extends Screen {
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;
     this.countStr = '0/' + this.target;
-    this.hint = 'MILK: TAP ' + game.input.keyText(0, 'action') + ' OVER AND OVER';
-    this.cardKey = game.input.keyText(0, 'action');
+    const key = game.input.keyText(0, 'action');
+    this.hint = this.butter ? 'MILK: TAP ' + key + '   THEN CHURN: TAP ' + key + ' OVER AND OVER' : 'MILK: TAP ' + key + ' OVER AND OVER';
+    this.cardKey = key;
     this.clock = makeClock();
-    // the sorted pass's fixed index array: four objects per stall (the cow, its pail, the stool, the milker)
-    const total = n * 4;
+    // the sorted pass's fixed index array: five objects per stall (the cow, its pail, the stool, the churn, the milker)
+    const total = n * 5;
     this.sortIdx = new Int16Array(total); this.sortKey = new Float64Array(total);
   }
 
@@ -309,7 +360,7 @@ export class DairyScreen extends Screen {
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
-    for (let i = 0; i < this.hops.length; i++) if (this.hops[i].t < HOP_FRAMES) this.hops[i].t++;
+    for (let i = 0; i < this.hops.length; i++) { const h = this.hops[i]; if (h.t < h.frames) h.t++; }
     const clock = this.clock;
     if (clock.phase === 0) {
       for (let i = 0; i < this.seats.length; i++) this.stepSeat(this.seats[i], input);
@@ -341,7 +392,7 @@ export class DairyScreen extends Screen {
       s.player.tick();
       return;
     }
-    if (input.pressed(s.slot, 'action')) this.pump(s);
+    if (input.pressed(s.slot, 'action')) { if (s.phase === CHURN) this.crank(s); else this.pump(s); }
     if (s.bumpT === 0 && s.player.done) seatAnim(s, 'milkIdle');
     s.player.tick();
   }
@@ -353,7 +404,13 @@ export class DairyScreen extends Screen {
     s.squirtT = SQUIRT_FRAMES;
     seatAnim(s, down === 0 ? 'pumpR' : 'pumpL', true);
     ringAt(s.pailX, s.pailY - PAIL_H, 3, 10, UI.cream, 2, 10, true, true);
-    if (s.fill >= PUMP_PER_PAIL) this.bank(s);
+    if (s.fill >= PUMP_PER_PAIL) { if (this.butter) this.pour(s); else this.bank(s); }
+  }
+
+  /** A hop slot, filled in: what flies, from where to where, over how many frames and how high. */
+  hop(kind: number, x0: number, y0: number, tx: number, ty: number, slot: number, frames: number, lift: number): void {
+    const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
+    h.t = 0; h.kind = kind; h.x0 = x0; h.y0 = y0; h.tx = tx; h.ty = ty; h.slot = slot; h.frames = frames; h.lift = lift;
   }
 
   /**
@@ -363,11 +420,44 @@ export class DairyScreen extends Screen {
   bank(s: DairySeat): void {
     s.fill = 0; s.pailT = PAIL_LAND;
     s.count++; this.setTotal(this.total + 1);
-    const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     const slot = Math.min(this.total - 1, CHURN_X.length - 1);
-    h.t = 0; h.x0 = s.pailX; h.y0 = s.pailY; h.tx = CHURN_X[slot]; h.ty = ROWS.rack; h.slot = s.slot;
+    this.hop(HOP_PAIL, s.pailX, s.pailY, CHURN_X[slot], ROWS.rack, s.slot, HOP_FRAMES, HOP_LIFT);
     ringAt(s.pailX, s.pailY - PAIL_H, 4, 18, SIGNAL.dairy, 2, 16, false, true);
     floatText(s.pailX, s.pailY - PAIL_H - 16, PLUS_ONE, s.colour, 1, true);
+  }
+
+  /**
+   * A full pail on a butter visit: nothing is banked yet. The pail hops over the milker's shoulder into the barrel,
+   * the milker turns round on the stool to face the crank, and the seat is in its CHURN beat until the pat is out.
+   * The fresh pail slides in now rather than after the pat, so the cow is never left without one.
+   */
+  pour(s: DairySeat): void {
+    s.fill = 0; s.pailT = PAIL_LAND;
+    s.phase = CHURN; s.churn = 0; s.facing = 1;
+    this.hop(HOP_POUR, s.pailX, s.pailY, s.churnX, s.hubY - CHURN_ABOVE_HUB - 4, s.slot, POUR_FRAMES, POUR_LIFT);
+    ringAt(s.pailX, s.pailY - PAIL_H, 4, 18, SIGNAL.dairy, 2, 16, false, true);
+    seatAnim(s, 'milkIdle', true);
+  }
+
+  /** One turn of the crank: the paws swap over as they do on the udder, and the twelfth turn brings the butter. */
+  crank(s: DairySeat): void {
+    const down = s.churn & 1;
+    s.churn++;
+    s.squirtT = SQUIRT_FRAMES;   // the crank's swing between one press and the next reads this, as the jet does
+    seatAnim(s, down === 0 ? 'pumpR' : 'pumpL', true);
+    ringAt(s.hubX, s.hubY, 3, 10, UI.cream, 2, 10, true, true);
+    if (s.churn >= CHURN_PRESSES) this.pat(s);
+  }
+
+  /** The butter comes: +1 for the PARTY, the pat hops out of the barrel to the rack, and the milker turns back to the cow. */
+  pat(s: DairySeat): void {
+    s.churn = 0; s.phase = MILK; s.facing = -1;
+    s.count++; this.setTotal(this.total + 1);
+    const slot = Math.min(this.total - 1, CHURN_X.length - 1);
+    this.hop(HOP_BUTTER, s.churnX, s.hubY - CHURN_ABOVE_HUB - 6, CHURN_X[slot], ROWS.rack, s.slot, HOP_FRAMES, HOP_LIFT);
+    ringAt(s.churnX, s.hubY - CHURN_ABOVE_HUB, 4, 18, SIGNAL.dairy, 2, 16, false, true);
+    floatText(s.churnX, s.hubY - CHURN_ABOVE_HUB - 18, PLUS_ONE, s.colour, 1, true);
+    seatAnim(s, 'milkIdle', true);
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
@@ -396,6 +486,7 @@ export class DairyScreen extends Screen {
       drawShadow(ctx, s.cowX - 6, s.cowY, 78, 0.38, 0);
       drawShadow(ctx, s.pailX, s.pailY, 26, 0.32, 0);
       drawShadow(ctx, s.x, s.y, s.rig.width + 18, 0.4, 0);   // wide enough to carry the stool's feet too
+      if (this.butter) drawShadow(ctx, s.churnX, s.y, CHURN_W + 12, 0.35, 0);
     }
     this.drawSorted(ctx, f);
     for (let i = 0; i < this.seats.length; i++) this.drawJetAt(ctx, this.seats[i]);
@@ -403,10 +494,12 @@ export class DairyScreen extends Screen {
     blitAt(ctx, L.near.L, 0, L.near.y);
     particles.draw(ctx, null, 'front');
     // the chevrons after the near lip: the one thing a first-time player must read is never behind anything. The
-    // lit chevron swaps sides with every press, so a tapping player sees the taps land.
+    // lit chevron swaps sides with every press, so a tapping player sees the taps land - at the pail's foot while
+    // the seat pumps, at the churn's foot while it cranks, so the tag is always under the thing the taps go into.
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      drawChevrons(ctx, s.pailX, s.pailY + CHEV_DY, s.fill & 1, s.colour, SIGNAL.dairy, 0, ((f >> 3) & 1) === 0);
+      if (s.phase === CHURN) drawChevrons(ctx, s.churnX, s.y + CHEV_DY, s.churn & 1, s.colour, SIGNAL.dairy, 0, ((f >> 3) & 1) === 0);
+      else drawChevrons(ctx, s.pailX, s.pailY + CHEV_DY, s.fill & 1, s.colour, SIGNAL.dairy, 0, ((f >> 3) & 1) === 0);
     }
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
@@ -418,18 +511,21 @@ export class DairyScreen extends Screen {
 
   /**
    * Back to front by the row each thing stands on, slot as the tiebreak: the cow is behind its pail, the pail is
-   * behind the stool, and the milker is in front of all three. Odd stalls stand five rows nearer, so this really
-   * does interleave - a nearer stall's cow draws over the stall behind it where their edges meet.
+   * behind the stool, the churn (a butter visit only) behind the milker, and the milker is in front of all four.
+   * Odd stalls stand five rows nearer, so this really does interleave - a nearer stall's cow draws over the stall
+   * behind it where their edges meet. The crank's arm is laid back over the milker straight after it, so the knob
+   * a cranking seat is turning reads on top of the paw that is turning it.
    */
   drawSorted(ctx: CanvasRenderingContext2D, f: number): void {
     const idx = this.sortIdx, key = this.sortKey, ns = this.seats.length;
     let n = 0;
     for (let i = 0; i < ns; i++) {
       const s = this.seats[i];
-      idx[n] = i * 4; key[n++] = s.cowY * 32 + i;
-      idx[n] = i * 4 + 1; key[n++] = s.pailY * 32 + 4 + i;
-      idx[n] = i * 4 + 2; key[n++] = s.y * 32 + 8 + i;
-      idx[n] = i * 4 + 3; key[n++] = s.y * 32 + 12 + i;
+      idx[n] = i * 5; key[n++] = s.cowY * 32 + i;
+      idx[n] = i * 5 + 1; key[n++] = s.pailY * 32 + 4 + i;
+      idx[n] = i * 5 + 2; key[n++] = s.y * 32 + 8 + i;
+      if (this.butter) { idx[n] = i * 5 + 3; key[n++] = s.y * 32 + 12 + i; }
+      idx[n] = i * 5 + 4; key[n++] = s.y * 32 + 16 + i;
     }
     for (let i = 1; i < n; i++) {
       const k = key[i], id = idx[i]; let j = i - 1;
@@ -437,12 +533,23 @@ export class DairyScreen extends Screen {
       key[j + 1] = k; idx[j + 1] = id;
     }
     for (let i = 0; i < n; i++) {
-      const id = idx[i], s = this.seats[(id / 4) | 0], kind = id & 3;
+      const id = idx[i], s = this.seats[(id / 5) | 0], kind = id % 5;
       if (kind === 0) this.drawCowAt(ctx, s, f);
       else if (kind === 1) this.drawPailAt(ctx, s);
       else if (kind === 2) drawStool(ctx, s.x, s.y, s.stoolH);
-      else this.drawSeat(ctx, s);
+      else if (kind === 3) drawBarrelChurn(ctx, s.churnX, s.y, s.hubY, this.crankAngle(s), s.phase !== CHURN);
+      else { this.drawSeat(ctx, s); if (s.phase === CHURN) drawCrankArm(ctx, s.churnX, s.hubY, this.crankAngle(s)); }
     }
+  }
+
+  /**
+   * The crank's angle, draw-only: CRANK_STEP per press, and through the SQUIRT_FRAMES after a press it swings the
+   * last step in rather than snapping, so a tap is seen to turn the handle. The arm starts pointing at the milker
+   * (180, the handle at rest where the paw is) so the first turn goes over the top.
+   */
+  crankAngle(s: DairySeat): number {
+    const swing = s.phase === CHURN && s.squirtT > 0 ? CRANK_STEP * (s.squirtT / SQUIRT_FRAMES) : 0;
+    return 180 + s.churn * CRANK_STEP - swing;
   }
 
   /**
@@ -465,7 +572,7 @@ export class DairyScreen extends Screen {
    * leaves from under the paw and still ends at the rim, so it reads as milk going INTO the tin.
    */
   drawJetAt(ctx: CanvasRenderingContext2D, s: DairySeat): void {
-    if (s.squirtT <= 0 || s.bumpT > 0) return;
+    if (s.squirtT <= 0 || s.bumpT > 0 || s.phase === CHURN) return;
     const k = 1 - s.squirtT / SQUIRT_FRAMES;
     drawJet(ctx, s.teatX - 5, s.teatY, s.pailX + 2, s.pailY - PAIL_H + 2, SIGNAL.dairy, k);
   }
@@ -484,19 +591,23 @@ export class DairyScreen extends Screen {
    * own pail shadow, so the tin leaves the floor with the shadow it was already standing in.
    */
   drawHop(ctx: CanvasRenderingContext2D, h: Hop): void {
-    if (h.t >= HOP_FRAMES) return;
-    const k = h.t / HOP_FRAMES;
-    const x = h.x0 + (h.tx - h.x0) * k, y = h.y0 + (h.ty - h.y0) * k - Math.sin(k * Math.PI) * HOP_LIFT;
+    if (h.t >= h.frames) return;
+    const k = h.t / h.frames;
+    const x = h.x0 + (h.tx - h.x0) * k, y = h.y0 + (h.ty - h.y0) * k - Math.sin(k * Math.PI) * h.lift;
+    if (h.kind === HOP_BUTTER) { drawShadow(ctx, x, h.y0, 16, 0.3, h.y0 - y); drawFood(ctx, 'butter', R(x), R(y), PAT_S, this.hex); return; }
     drawShadow(ctx, x, h.y0, 26, 0.32, h.y0 - y);
     drawPail(ctx, x, y, 1, h.slot, 1);
   }
 
-  /** The rack is the party's score: one churn per banked milk, minus whatever is still in the air. */
+  /**
+   * The rack is the party's score: one tin churn per banked milk, or one pat of butter per pat churned, minus
+   * whatever is still in the air on its way there.
+   */
   drawChurns(ctx: CanvasRenderingContext2D): void {
     let flying = 0;
-    for (let i = 0; i < this.hops.length; i++) if (this.hops[i].t < HOP_FRAMES) flying++;
+    for (let i = 0; i < this.hops.length; i++) { const h = this.hops[i]; if (h.t < h.frames && h.kind !== HOP_POUR) flying++; }
     const n = Math.min(CHURN_X.length, Math.max(0, this.total - flying));
-    for (let i = 0; i < n; i++) drawChurn(ctx, CHURN_X[i], ROWS.rack);
+    for (let i = 0; i < n; i++) { if (this.butter) drawFood(ctx, 'butter', CHURN_X[i], ROWS.rack - PAT_S, PAT_S, this.hex); else drawChurn(ctx, CHURN_X[i], ROWS.rack); }
   }
 
   /**
@@ -511,7 +622,7 @@ export class DairyScreen extends Screen {
   override summary() {
     return {
       total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
-      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), fill: s.fill, count: s.count, bumpT: s.bumpT })),
+      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), fill: s.fill, count: s.count, bumpT: s.bumpT, phase: s.phase, churn: s.churn })),
       cows: this.seats.map((s) => s.cow.kind),
     };
   }
@@ -522,7 +633,7 @@ export class DairyScreen extends Screen {
     f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      f.push(s.fill, s.count, s.bumpT, s.squirtT, s.pailT);
+      f.push(s.fill, s.count, s.bumpT, s.squirtT, s.pailT, s.phase, s.churn, s.facing);
     }
     return f;
   }

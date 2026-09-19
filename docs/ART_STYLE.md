@@ -120,7 +120,8 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
   (cool, L .32), hens rust `#A8623A` and speckled grey; signal: fresh-egg gold sparkle `#F2C14E`.
 - **Dairy**: a dim stone byre, slate eave `#453F4C`, lime-washed stone `#806A4B`, oak beams `#5C3E22`, byre floor
   `#5E4C33` under straw `#A07C42`, one bright hay hatch of `#FBE3C4` sky; cows `#A8724A` with cream patches, four
-  stalls on a 126 px pitch; signal: mint `#5FD3C0` on the pump chevron and the full pail.
+  stalls on a 126 px pitch; on a butter visit an oak barrel churn beside each stall with tin hoops and a tin crank
+  (the one thing that moves on it is the one cool mark); signal: mint `#5FD3C0` on the pump chevron and the full pail.
 - **Mill**: a dark timber tower, boarded wall `#4A3A2C` (the plane the whole cast reads against), oak frame
   `#6B543A`, plank floor `#7A6144` (L .40, so dark hooves keep their contact), hessian `#8A7350`; the flour and the
   sacks are the lightest things in the room; signal: gold `#F2C14E` at a pouring chute's mouth.
