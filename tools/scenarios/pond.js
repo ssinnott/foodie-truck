@@ -3,7 +3,7 @@
 //
 //   pond - four seats on the millpond jetty: seat 0 casts, the float lands in its column, a press during the wait
 //          does nothing at all, the fish bites on its own, and REEL_PRESSES taps of action reel it in (count 1, the
-//          bucket shows it). Forcing the clock drops the FISH sign and returns to the map with the catch gathered.
+//          bucket shows it). Reaching the target drops the FISH sign and returns to the map with the catch gathered.
 //          Writes pond-cast / pond-bite / pond-reel / pond-hooked / pond-columns / pond-sign into tools/screens.
 import { withPage, assert } from '../playtest.js';
 
@@ -79,13 +79,17 @@ export const SCENARIOS = {
       await api.step(20);
       await api.shot('pond-columns');
 
-      // the clock runs out: the FISH sign drops, the catch is gathered, and the pond hands back to the map
+      // the target is reached: the FISH sign drops, the catch is gathered, and the pond hands back to the map. There
+      // is no clock to force - a round ends only when the party's total reaches the target - so the finish line is
+      // brought down to what the bucket holds.
       const errsBefore = (await api.errors()).length;
       await api.step(20);
-      await page.evaluate(() => { window.__game.game.screen.clock.timer = 1; });
+      const before = await api.summary();
+      assert(before.top.total >= 1, `something was reeled in before the ending (total ${before.top.total})`);
+      await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = Math.max(1, sc.total); sc.countStr = sc.total + '/' + sc.target; });
       await api.step(2);
       const e = await api.summary();
-      assert(e.top.ending === true, 'the round ends when the clock runs out');
+      assert(e.top.ending === true, 'the round ends when the target is reached');
       await api.step(20);
       await api.shot('pond-sign');
       await api.step(SIGN_SLAM + SIGN_HOLD + 10);

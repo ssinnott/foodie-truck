@@ -6,8 +6,8 @@
 // the moment it reaches the brim it ties itself off: +1 flour, the sack hops onto the barrow, a ring and a '+1', and
 // a fresh empty sack is in the paw. Letting go early keeps the part sack to be topped up at the next chute (this is
 // the co-op bit). Nothing bursts and nothing is ever lost: the only skill is being under the gold when it pours.
-// The round ends when the party's total reaches the order's amount or the 40-second clock runs out; the FLOUR sign
-// drops, is held, then run.gather('flour') and back to the map.
+// The round ends when the party's total reaches the order's amount, and not before (there is no clock to run out);
+// the FLOUR sign drops, is held, then run.gather('flour') and back to the map.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): the chutes and the seats are fixed pools of plain sim objects, the
 // only randomness is `rng` inside update() (the wake timer and which spout takes it), input is read by seat slot
@@ -449,7 +449,7 @@ export class MillScreen extends Screen {
         return;
       }
     }
-    if (tickClock(clock)) this.finish();
+    tickClock(clock);
   }
 
   /** A mote of flour somewhere in the shaft's quad: cosmetic, its own seeded stream, never in the checksum. */
@@ -572,7 +572,7 @@ export class MillScreen extends Screen {
     particles.draw(ctx, null, 'front');
     blitAt(ctx, L.beam.L, 0, L.beam.y);                 // the ceiling boards: the gear's teeth run up into them
     this.drawPlates(ctx);
-    drawClock(ctx, this.clock, this.countStr, this.clockIcon, TITLE);
+    drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
@@ -647,7 +647,7 @@ export class MillScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, timer: this.clock.timer, phase: this.clock.phase, sign: this.clock.signText,
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
       tied: this.tied, wake: this.wake,
       // fill is rounded to three places so a test can read it without chasing float tails
       seats: this.seats.map((s) => [s.slot, R(s.x), s.count, Math.round(s.fill * 1000) / 1000, s.chute]),
@@ -661,7 +661,7 @@ export class MillScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.timer, this.clock.phase, this.clock.signT, this.total, this.wake, this.tied);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.wake, this.tied);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       f.push(s.x, s.facing, s.count, s.fill, s.bumpT, s.tieT, s.chute, s.moving ? 1 : 0);
