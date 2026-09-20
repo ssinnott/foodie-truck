@@ -14,6 +14,10 @@
 //        real device does not use - this one goes in through the DOM listeners and through toInternal, so a
 //        button pressed at 1.08 CSS pixels per game pixel is the button under the thumb.
 //
+//   touchlinks - the two listeners that now share the canvas. engine/links.ts opens a tab when a drawn address
+//        is clicked, and a tap synthesizes a click, so the thumb controls have to be able to say "that one was
+//        mine": BACK opening a browser tab mid-game is not something a player can undo from a phone.
+//
 //   touchtyping - the room code, which is the one thing on a phone that needs letters. Driven through the real
 //        lobby, because the question is not whether a code arrives but whether somebody holding a phone can JOIN
 //        A TABLE at all: a thumb walks the menu, the off-screen field engine/touch.js raises is fed the way a
@@ -223,6 +227,57 @@ export const SCENARIOS = {
       assert(!down.focused && down.value === '', 'and the keyboard goes away with the screen that asked for it');
       await api.touch(null);
     });
+  },
+
+  async touchlinks(server) {
+    await withPage(server, 'skipTo=title', async (api, page) => {
+      await api.step(5);
+      const layout = await api.touchLayout();
+      assert((await api.inputState()).touchOn === true, 'a phone has the controls up over the title');
+      // Every tab this page would open, caught rather than taken: window.open returning null is a blocked popup
+      // as far as engine/links.ts is concerned, which is a case it already handles.
+      await page.evaluate(() => { window.__opened = []; window.open = (u) => { window.__opened.push(u); return null; }; });
+      const opened = () => page.evaluate(() => window.__opened.slice());
+      const tapAt = async (gx, gy) => {
+        const at = await clientOf(page, gx, gy);
+        await page.touchscreen.tap(at.x, at.y);
+        await api.step(2);
+      };
+      // The addresses claim their rects in the title's enter(); this is the same line ui.hintSpans lays out.
+      const zones = await page.evaluate(async () => {
+        const ui = await import('/src/game/ui.ts');
+        const c = await import('/src/constants.ts');
+        return ui.hintSpans([c.REPO_LABEL, c.KOFI_LABEL], 346);
+      });
+      const kofi = zones[1];
+
+      // ---- the guard does not block what it is not for ----
+      await tapAt(kofi.x + kofi.w / 2, kofi.y + kofi.h / 2);
+      assert((await opened()).length === 1, `a tap on the Ko-fi address opens it with the controls up (${JSON.stringify(await opened())})`);
+
+      // ---- and a tap that lands on a control is a press, not a click on the page under it ----
+      // The title is re-entered before each one because some of these buttons are a confirm: they open PLAY, and
+      // the screen that leaves takes its addresses with it (title.ts exit -> clearZones).
+      const before = (await opened()).length;
+      for (const b of layout.buttons) {
+        if (b.action === 'alt') continue;                   // not on offer on the title: nothing there to press
+        await api.goto('title');
+        await api.step(4);
+        await tapAt(b.cx, b.cy);
+      }
+      await api.goto('title');
+      await api.step(4);
+      await tapAt(layout.pad.cx, layout.pad.cy);            // the pad's dead centre: it presses nothing, and is still the pad's
+      assert((await opened()).length === before, `no thumb control opens a tab (${JSON.stringify((await opened()).slice(before))})`);
+
+      // What keeps them apart today is 19 px of screen, which is why the check above exists rather than the gap.
+      const x = buttonAt(layout, 'cancel');
+      assert(x.cx - x.r > kofi.x + kofi.w, `X clears the end of the address it sits beside (${x.cx - x.r} vs ${kofi.x + kofi.w})`);
+
+      // ---- the address still opens after all that ----
+      await tapAt(kofi.x + kofi.w / 2, kofi.y + kofi.h / 2);
+      assert((await opened()).length === before + 1, 'and the address beside them still opens');
+    }, PHONE);
   },
 
   async touchphone(server) {

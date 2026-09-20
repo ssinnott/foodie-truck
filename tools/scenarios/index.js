@@ -25,5 +25,6 @@ import { SCENARIOS as week } from './week.js';
 import { SCENARIOS as book } from './book.js';
 import { SCENARIOS as playthrough } from './playthrough.js';
 import { SCENARIOS as audio } from './audio.js';
+import { SCENARIOS as links } from './links.js';
 
-export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...beach, ...holt, ...wood, ...terrace, ...kitchen, ...ui, ...pads, ...touch, ...controls, ...stage, ...week, ...book, ...playthrough, ...audio };
+export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...beach, ...holt, ...wood, ...terrace, ...kitchen, ...ui, ...pads, ...touch, ...controls, ...stage, ...week, ...book, ...playthrough, ...audio, ...links };

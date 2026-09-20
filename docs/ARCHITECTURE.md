@@ -60,7 +60,8 @@ src/constants.js         every shared number and UI colour (never hardcode these
 src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, actions (the eight, frozen), bindings (which key/button each one is on), input
                (8-action masks), touch (the on-screen controls a phone presses, and the field it types into),
-               rng, math, trig, text (5x7 pixel font), audio (the WebAudio facade) +
+               links (the only module that navigates anywhere), rng, math, trig, text (5x7 pixel font),
+               audio (the WebAudio facade) +
                audio/ (this game's SFX library and its tracks; the primitives and the sequencer are lib/audio/)
 src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (the paper-doll), layers (offscreen
                backdrop helpers), palettes, portraits, food (ingredient glyphs), fx, truck (the milk-float),
@@ -147,6 +148,11 @@ it. A keyboard
 or pad mask stands it down (`suppressTouch`), the next touch brings it back, and `keyText` names the button on the
 glass while it is up, so the hint lines screens build in `enter()` read as instructions rather than as a keyboard
 nobody in the room has.
+
+`touchHitAt(x, y)` answers whether the overlay owns a point at all (the pad's whole square, its still centre
+included, and every button on offer) rather than what that point presses, which is what `engine/links.js` asks
+before it treats a tap as a click on an address underneath: the controls lie along the bottom of the screen where
+the addresses are drawn, and BACK opening a browser tab mid-game is not something a player can undo from a phone.
 
 The mask is sampled from the live contacts ONCE a step, not on the DOM event, so a seat's input is stable for the
 whole of a fixed step; a press is held until the step after it so a tap shorter than 16 ms is still played
@@ -237,6 +243,20 @@ holds the NPC diners.
 Offscreen pre-render: `makeLayer(w, h, paint(g, w, h, rnd), seed)`, `blitTiled`, `blitAt`, `blitWorld(ctx, L, camX,
 camY)`, `vGradient`, `radialGlow`, `makeGlowSprite`, `boxOutlined`, `boxShaded`, `discShaded`, `polyOutlined`,
 `makePool`, `pulse`, `PARALLAX`, `INK`. Backdrops paint ONCE with a seeded rng and blit per frame at integer offsets.
+
+### `engine/links.js` (ported)
+The only module in the build that leaves the page, for the two addresses on one paper strip along the bottom of
+the title: the repository this build came from, and the Ko-fi address beside it.
+`links.setZones([{ x, y, w, h, url, onOpen }, ...])` claims their rects (internal 640x360 px, measured by
+`ui.ts hintSpans` so the paper drawn and the rect clicked are one rectangle); the title claims them in `enter()`
+and releases them with `clearZones()` in `exit()`, one screen's worth at a time. A click lands through a real
+user gesture, so it always opens - and that is the Ko-fi address's ONLY road: it gets no menu row and no key,
+because the eight actions are the game's. `links.open(url)` is the other road, for the SOURCE row: called from
+the fixed step it is a rAF callback rather than a gesture, so a browser may refuse the tab, and it returns
+whether one ACTUALLY opened rather than leaving the row looking broken. `links.hotUrl` is the address the mouse
+rests on, which is what lights that one address up. Either way both stay drawn, so a player whose browser
+refuses the tab can read one off the screen. Nothing here is simulation: no screen's `checksumFields` sees a
+link, and a peer never hears about one (docs/MULTIPLAYER.md).
 
 ### `engine/particles.js`, `art/fx.js` (ported)
 One 600-slot pool, visual only (its own rng stream): `particles.spawn(kind, x, y, opts)`, `burst(kind, x, y, n, opts)`,
@@ -408,7 +428,9 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
   own cannot hand over. The `audio` scenario renders every SFX and every track through an OfflineAudioContext and
   fails on a silent or a throwing one, then walks the screens and reads which track each asked for, presses M for
   real and reads the mute, and opens the closed board for its own track.
-  The `touch` scenario plays the same walk `pads` does — title to day board — on nothing but thumbs, and the
+  The `touch` scenario plays the same walk `pads` does — title to day board — on nothing but thumbs, `touchlinks`
+  presses every control over the title's addresses and checks no tab opens (and that the addresses beside them
+  still do), and the
   `touchtyping` one feeds the off-screen field the way a soft keyboard feeds one (an input event and no keydown at
   all) to check what comes out is the code stream the lobby reads.
 - `npm run capture -- <dir> [screen[:params]...]` — screenshots of any screen at 2x (`tools/capture.js`).

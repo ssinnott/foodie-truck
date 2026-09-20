@@ -1,5 +1,7 @@
 # Foodie Truck
 
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-support-F2C14E?logo=kofi&logoColor=white&labelColor=2A1F1A)](https://ko-fi.com/seansinnott)
+
 A cozy co-op cooking adventure for one to four players, drawn entirely in code. The crew of a countryside food
 truck opens for the day with a menu and a shopping list that adds up everything the day's
 customers will order. They drive round the countryside gathering it all — a short mini-game at every landmark —

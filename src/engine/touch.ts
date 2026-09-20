@@ -104,22 +104,42 @@ export function touchVisible(): boolean { return touchAvailable() && !suppressed
 /** engine/input.js: a keyboard or a pad produced input, so the thumb controls step aside until the next touch. */
 export function suppressTouch(on: boolean): void { suppressed = !!on; }
 
+/** Is a point inside the d-pad's hit square? Its dead centre is inside it: the pad owns the point either way. */
+function onPad(x: number, y: number): boolean {
+  const p = TOUCH_PAD;
+  return Math.abs(x - p.cx) <= p.half && Math.abs(y - p.cy) <= p.half;
+}
+/** The button a point is inside, or null. ALT is not one of them unless the screen on top reads it. */
+function buttonAt(x: number, y: number): TouchButton | null {
+  for (const b of TOUCH_BUTTONS) {
+    if (b.action === 'alt' && !altOn) continue;
+    const bx = x - b.cx, by = y - b.cy;
+    if (bx * bx + by * by <= b.r * b.r) return b;
+  }
+  return null;
+}
 /** The mask one contact point presses: the d-pad square by which side of centre it is, or whichever button it is inside. */
 export function maskAt(x: number, y: number): number {
   const p = TOUCH_PAD;
-  const dx = x - p.cx, dy = y - p.cy;
-  if (Math.abs(dx) <= p.half && Math.abs(dy) <= p.half) {
+  if (onPad(x, y)) {
+    const dx = x - p.cx, dy = y - p.cy;
     let m = 0;
     if (dx < -p.dead) m |= BIT.left; else if (dx > p.dead) m |= BIT.right;
     if (dy < -p.dead) m |= BIT.up; else if (dy > p.dead) m |= BIT.down;
     return m;
   }
-  for (const b of TOUCH_BUTTONS) {
-    if (b.action === 'alt' && !altOn) continue;
-    const bx = x - b.cx, by = y - b.cy;
-    if (bx * bx + by * by <= b.r * b.r) return BIT[b.action];
-  }
-  return 0;
+  const b = buttonAt(x, y);
+  return b ? BIT[b.action] : 0;
+}
+/**
+ * Does the overlay OWN this point - the pad's whole square, its still centre included, and every button actually
+ * on offer? `maskAt` answers what a point presses, which is nothing in the middle of the pad; this answers whose
+ * point it is, which is the question engine/links.js has to ask before it treats a tap as a click on the page
+ * underneath. False whenever the controls are not up, so a mouse on a desktop is never refused anything.
+ */
+export function touchHitAt(x: number, y: number): boolean {
+  if (!touchVisible()) return false;
+  return onPad(x, y) || !!buttonAt(x, y);
 }
 /**
  * main.js, every step: does the screen on top read `alt`? Only three do (the road's horn, the crew gallery's

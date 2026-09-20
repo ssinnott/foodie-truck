@@ -4,6 +4,7 @@ import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.ts';
 import { setTouchTyping, setTouchAlt, setTouchVirtual, TOUCH_PAD, TOUCH_BUTTONS } from './engine/touch.ts';
 import { drawTouchPad } from './game/touchpad.ts';
+import { links } from './engine/links.ts';
 import { audio } from './engine/audio.ts';
 import { rng } from './lib/engine/rng.ts';
 import { createCanvas } from './lib/engine/canvas.ts';
@@ -97,6 +98,9 @@ function boot() {
   // The view, not just the element: engine/touch.js maps a contact through it into the 640x360 the overlay is
   // laid out in, so a thumb presses the button it is actually over at any window size.
   input.init(view.canvas, view);
+  // The outward links' own listeners: a click on a drawn address is a real user gesture, which the fixed step's
+  // call is not (engine/links.ts). Nothing else on the canvas listens for a click.
+  links.init(view);
   // Sound comes on with the first key or tap (the browser's autoplay rule); in autotest no context is ever made.
   audio.testMode = options.autotest;
   audio.init();
