@@ -60,5 +60,25 @@ for (const f of files) {
   }
 }
 
+// ---- THE ALT BUTTON'S INVARIANT (src/engine/touch.ts, docs/ARCHITECTURE.md section 3) ----
+//
+//     A screen that READS the `alt` action declares `touchAlt`, or a phone is never offered the button.
+//
+// The other four thumb controls are on every screen because every screen uses them. ALT is not: three screens
+// read it, and on the rest that circle would lie over a ticket saying nothing. So it is drawn and hit-tested
+// only where `touchAlt` is set - which makes forgetting to set it a control a player cannot find, on a device
+// with no key to reach for instead. Cheaper to catch here than on a phone.
+const ALT_READ = /(?:anyPressed|pressed|held|buffered|consume)\s*\([^)]*'alt'/;
+for (const f of files) {
+  const rel = path.relative(ROOT, f).split(path.sep).join('/');
+  if (!rel.startsWith('src/game/screens/')) continue;
+  const src = fs.readFileSync(f, 'utf8');
+  if (ALT_READ.test(src) && !/touchAlt/.test(src)) {
+    bad++;
+    console.log(`TOUCH ${rel}\n  reads the alt action but does not declare \`touchAlt = true\`.`);
+    console.log('  A phone is offered ALT only on the screens that set it, so without it the button is not there to press.');
+  }
+}
+
 console.log(`${files.length} files checked, ${bad} with errors`);
 process.exit(bad ? 1 : 0);

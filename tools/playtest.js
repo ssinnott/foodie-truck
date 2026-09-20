@@ -38,6 +38,12 @@ export function makeApi(page) {
     pads: (specs) => page.evaluate((g) => window.__game.setPads(g), specs || null),
     /** Which pad is sitting in a seat, or -1. */
     padOf: (p) => page.evaluate((pp) => window.__game.padOf(pp), p),
+    /** Thumbs on the glass: a list of { x, y } in game space, null to let go. */
+    touch: (points) => page.evaluate((pts) => window.__game.touch(pts), points || null),
+    /** Where the on-screen controls are (engine/touch.js), so a test presses what a player would. */
+    touchLayout: () => page.evaluate(() => window.__game.touchLayout()),
+    /** A seat's mask, live device and typed codes. */
+    inputState: (p = 0) => page.evaluate((pp) => window.__game.inputState(pp), p),
     hold: (p, actions) => page.evaluate(([pp, a]) => window.__game.setInput(pp, a), [p, actions]),
     release: (p) => page.evaluate((pp) => window.__game.clearInput(pp), p),
     errors: () => page.evaluate(() => window.__game.errors.slice()),
@@ -45,9 +51,14 @@ export function makeApi(page) {
   };
 }
 
-export async function withPage(server, params, fn) {
+/**
+ * One page on one browser. `pageOptions` is merged over the desktop default, which is how a scenario asks for a
+ * phone: `{ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true }` is a page whose
+ * `(hover: none) and (pointer: coarse)` matches, and whose `page.touchscreen` sends real contacts.
+ */
+export async function withPage(server, params, fn, pageOptions = {}) {
   const browser = await launch();
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, ...pageOptions });
   const consoleErrors = [];
   page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push('console: ' + m.text()); if (process.env.KEEP) console.log('   [browser]', m.text()); });

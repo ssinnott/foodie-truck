@@ -305,7 +305,7 @@ export class MapScreen extends Screen {
   /** The reused drawTruck options object; built on the first draw (see `truckOpts`). */
   declare _to?: TruckDrawOpts;
 
-  constructor(game: Game) { super(game, 'map'); this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.sum = [0, 0, 0, 0, 0, 0]; this.lineRows = []; this.lineTags = []; }
+  constructor(game: Game) { super(game, 'map'); this.touchAlt = true; this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.sum = [0, 0, 0, 0, 0, 0]; this.lineRows = []; this.lineTags = []; }
   override enter(params: ScreenParams): void {
     super.enter(params);
     const run = this.game.run, truck = run.truck;
