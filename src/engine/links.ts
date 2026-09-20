@@ -17,12 +17,20 @@
 //    the game no key. The screen that draws the addresses claims their rects in `enter()` and releases them in
 //    `exit()`; the zones are in internal 640x360 px like everything else on screen.
 //
-// One `click` listener covers both a mouse and a finger: unlike Aether & Brass, nothing in this game
-// preventDefaults `touchstart` (there is no on-screen touch pad to defend), so a tap still synthesizes the click
-// - and a synthesized click carries the activation `window.open` wants.
+// One `click` listener covers both a mouse and a finger: nothing in this game preventDefaults `touchstart` - the
+// on-screen controls hold the canvas with pointer events and `touch-action: none` rather than by swallowing the
+// touch (engine/touch.ts) - so a tap still synthesizes the click, and a synthesized click carries the activation
+// `window.open` wants.
+//
+// That is also why a tap the thumb controls own is dropped below. The overlay lies along the bottom of the
+// screen, which is where the addresses are drawn, and the two are clear of each other by 19 px today: a longer
+// address, or a button moved a little, and pressing BACK would open a browser tab in the middle of a game. There
+// is no undoing that from a phone, so the geometry is not what keeps them apart - the check is.
 //
 // And whichever way it goes, the address stays drawn: a player whose browser refuses the tab can read it off the
 // screen and type it in.
+
+import { touchHitAt } from './touch.ts';
 
 /** The bit of the canvas view this module needs: the element listeners go on, and the px conversion. */
 export interface LinkView {
@@ -92,7 +100,10 @@ export const links = {
     el.addEventListener('mouseleave', () => { mx = -1; my = -1; setHot(null); });
     el.addEventListener('click', (e: MouseEvent) => {
       if (e.button !== 0) return;
-      const z = zoneAt(v.toInternal(e.clientX, e.clientY));
+      const p = v.toInternal(e.clientX, e.clientY);
+      // A tap on a thumb control is a press, not a click on whatever is drawn under it.
+      if (touchHitAt(p.x, p.y)) return;
+      const z = zoneAt(p);
       if (!z) return;
       const opened = links.open(z.url);
       if (z.onOpen) z.onOpen(opened);

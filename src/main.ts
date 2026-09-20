@@ -2,6 +2,8 @@
 import { VIEW_W, VIEW_H } from './constants.ts';
 import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.ts';
+import { setTouchTyping, setTouchAlt, setTouchVirtual, TOUCH_PAD, TOUCH_BUTTONS } from './engine/touch.ts';
+import { drawTouchPad } from './game/touchpad.ts';
 import { links } from './engine/links.ts';
 import { audio } from './engine/audio.ts';
 import { rng } from './lib/engine/rng.ts';
@@ -93,7 +95,9 @@ function boot() {
   // read through the player's own bindings rather than the defaults (engine/bindings.js). `?defaults=1` boots on
   // stock bindings without touching what is stored - a way back in for a player who has bound themselves out.
   if (!options.defaults) bindings.load();
-  input.init(view.canvas);
+  // The view, not just the element: engine/touch.js maps a contact through it into the 640x360 the overlay is
+  // laid out in, so a thumb presses the button it is actually over at any window size.
+  input.init(view.canvas, view);
   // The outward links' own listeners: a click on a drawn address is a real user gesture, which the fixed step's
   // call is not (engine/links.ts). Nothing else on the canvas listens for a click.
   links.init(view);
@@ -138,12 +142,24 @@ function boot() {
         // M mutes, unless a seat has bound M to an action, a rebind is listening for it, or the lobby is spelling a
         // host key with it. Local only: mute is not simulation state, so a peer never hears about it.
         if (!input.capturing() && !bindings.isKeyBound('KeyM') && !(game.screen && game.screen.typing) && input.typedCodes().indexOf('KeyM') >= 0) audio.toggleMute();
+        // A screen reading text (the lobby spelling a host key) is the one thing a phone needs a system keyboard
+        // for; it goes away again the moment that screen stops asking.
+        setTouchTyping(!!(game.screen && game.screen.typing));
+        // ALT is offered on the three screens that read it and on no other: everywhere else that circle would be
+        // a thumb control that does nothing, lying over a ticket that says something.
+        setTouchAlt(!!(game.screen && game.screen.touchAlt));
         game.update();
         if (game.net && game.net.afterStep) game.net.afterStep();
       } catch (e) { recordError(e); }
     },
     render() {
-      try { game.draw(ctx); view.present(); } catch (e) { recordError(e); }
+      try {
+        game.draw(ctx);
+        // Over the fade as well as the scene: the controls are the player's hands, not part of what is being
+        // faded between, and a d-pad that dips to black on every screen change looks like it stopped working.
+        drawTouchPad(ctx, input);
+        view.present();
+      } catch (e) { recordError(e); }
     },
     testMode: options.autotest,
     canUpdate: () => !(game.net && game.net.active && game.net.canStep && !game.net.canStep()),
@@ -191,6 +207,16 @@ function boot() {
       } : null)));
     },
     padOf(p) { return input.padOf(p); },
+    /**
+     * Test hook: stand a list of contact points in for real thumbs. Each is `{ x, y }` in GAME space (640x360,
+     * the coordinates engine/touch.js lays the controls out in), and null lets go of the glass again. A list also
+     * makes the overlay available, so a desktop test browser can press it.
+     */
+    touch(points) { setTouchVirtual(points || null); },
+    /** Where the on-screen controls are, so a test can press one without copying its coordinates. */
+    touchLayout() { return { pad: TOUCH_PAD, buttons: TOUCH_BUTTONS.map((b) => ({ action: b.action, cx: b.cx, cy: b.cy, r: b.r })) }; },
+    /** A seat's mask, its live device and the codes typed for the step in progress: what a device test asserts on. */
+    inputState(p = 0) { return { mask: input.mask(p), device: input.device(p), touchOn: input.touchOn(), typed: input.typedCodes().slice() }; },
     /** Bindings, for the tests that drive the CONTROLS screen: read them, set them, put them back to stock. */
     bindings: {
       get() { return bindings.serialize(); },

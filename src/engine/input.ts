@@ -1,12 +1,18 @@
-// Keyboard + gamepad -> per-player action state with edge detection and an input buffer (docs/ARCHITECTURE.md
-// section 3). Eight actions, so a player's whole input for one frame is one byte; packMask / unpackMask are
-// the only place the bit layout lives, and net/protocol.js sends exactly that mask.
+// Keyboard + gamepad + touch -> per-player action state with edge detection and an input buffer
+// (docs/ARCHITECTURE.md section 3). Eight actions, so a player's whole input for one frame is one byte; packMask /
+// unpackMask are the only place the bit layout lives, and net/protocol.js sends exactly that mask.
 //
 // Couch play seats FOUR (LOCAL_PLAYERS). The keyboard reaches the first two: P1 on arrows/WASD + Z X C, P2 on
 // T F G H + V B N (the same block shifted three columns right, exactly as the sibling game does it). Seats 3 and
 // 4 have no keys - there is no third nine-key block left on a keyboard worth playing on - so they are GAMEPAD
 // seats, and a pad claims the lowest seat no keyboard is already driving on its first press. Four pads fill the
 // truck; a pad and the two key blocks fill it just as well.
+//
+// A PHONE reaches seat 0 and only seat 0, through the on-screen controls in engine/touch.js: four thumbs on one
+// piece of glass is not couch play. Its mask is folded in beside the keyboard's and the pad's, so nothing
+// downstream - edges, the buffer, the wire - can tell which of the three a press came from, and a player who
+// picks up a pad mid-game simply has both. The one thing touch DOES change is what the hint lines say: while a
+// thumb is the live device keyText() names the button on the glass, not a keycap nobody has.
 //
 // Online, everyone is on the first block on their own keyboard, and net/session.js reads the local device through
 // pollRaw() while injecting the peers' delayed masks with setVirtual() - so update() computes edges from whatever
@@ -16,6 +22,7 @@
 import { INPUT_BUFFER, MAX_PLAYERS, LOCAL_PLAYERS } from '../constants.ts';
 import { ACTIONS, BIT } from './actions.ts';
 import { keyboardMap, padMap, keyLabel, padLabel, bindingRevision, onBindingsChanged } from './bindings.ts';
+import { attachTouch, touchMask, touchTapped, touchVisible, suppressTouch, endTouchStep, drainSoftTyped, TOUCH_LABELS } from './touch.ts';
 import { createPadSource, createPadSeats, DIR } from '../lib/input/pad.ts';
 
 export { ACTIONS };
@@ -46,6 +53,8 @@ let typedStep = [];
 let anyKeyPending = false, anyKeyThisStep = false;
 let boundCodes = null;
 let boundRev = -1;
+/** What the thumbs held for the step in progress: sampled once by update(), read again by the overlay's draw. */
+let touchHeld = 0;
 /**
  * REBINDING (game/screens/controls.js). While capturing, every seat is held at neutral and the first key or button
  * to go down is reported instead of being played: the press that picks a binding must not also drive the menu it
@@ -159,9 +168,13 @@ function claimPads() {
 
 export const input = {
   ACTIONS, packMask, unpackMask,
-  /** Attach DOM listeners; `canvasEl` is focused so keys go to the game. */
-  init(canvasEl) {
+  /**
+   * Attach DOM listeners; `canvasEl` is focused so keys go to the game. `view` is the canvas api (lib/engine/canvas.js)
+   * and is what the touch layer measures a contact against - without it there are simply no on-screen controls.
+   */
+  init(canvasEl, view = null) {
     rebuildBoundCodes();
+    if (view) attachTouch(view);
     window.addEventListener('keydown', onKeyDown, { passive: false });
     window.addEventListener('keyup', onKeyUp, { passive: false });
     window.addEventListener('blur', onBlur);
@@ -172,9 +185,14 @@ export const input = {
   },
   /** Poll devices once per fixed step; ages buffers; computes edges. */
   update() {
-    typedStep = typed; typed = [];      // hand this step its own codes; the DOM keeps filling a fresh array
+    // Hand this step its own codes; the DOM keeps filling a fresh array. A phone's keyboard is an off-screen
+    // field rather than the window (engine/touch.js), so what it spelled joins the stream here and nowhere else.
+    const soft = drainSoftTyped();
+    typedStep = soft.length ? typed.concat(soft) : typed;
+    typed = [];
     freshBoundCodes();
-    anyKeyThisStep = anyKeyPending; anyKeyPending = false;
+    touchHeld = touchMask();
+    anyKeyThisStep = anyKeyPending || touchTapped(); anyKeyPending = false;
     // One device read a step, before anything else looks at a pad: this is what turns "held now" into "held last
     // step", so the button edges below and the capture above are the same two samples.
     padSource.poll();
@@ -201,8 +219,12 @@ export const input = {
         const kb = map ? keyMask(map) : 0;
         const own = padSeats.padOf(p);
         const gp = own >= 0 ? padMask(own) : (p === 0 ? unboundPadsMask() : 0);
-        pl.cur = kb | gp;
-        if (kb) pl.device = 'keyboard'; else if (gp) pl.device = 'gamepad';
+        const tc = p === 0 ? touchHeld : 0;
+        pl.cur = kb | gp | tc;
+        // Keys and a pad both stand the overlay down until the next touch: a phone with a controller paired to it
+        // should not keep a d-pad drawn over the scene that the player has stopped pressing.
+        if (kb || gp) suppressTouch(true);
+        if (kb) pl.device = 'keyboard'; else if (gp) pl.device = 'gamepad'; else if (tc) pl.device = 'touch';
         if (p > 0 && p < LOCAL_PLAYERS && kb && !pl.joined) { pl.joined = true; pl.joinNow = true; }
       }
       pl.pressedNow = pl.cur & ~pl.prev;
@@ -211,6 +233,9 @@ export const input = {
       pl.ax = ((pl.cur & BIT.right) ? 1 : 0) - ((pl.cur & BIT.left) ? 1 : 0);
       pl.ay = ((pl.cur & BIT.down) ? 1 : 0) - ((pl.cur & BIT.up) ? 1 : 0);
     }
+    // The short tap has been served: a press that went down and came back up inside this one step was still
+    // played, and must not be played again on the next.
+    endTouchStep();
   },
   /** The mask a seat holds this step. */
   mask(p) { return players[p].cur; },
@@ -241,7 +266,7 @@ export const input = {
   pollRaw(p = 0) {
     freshBoundCodes();
     const map = keyboardMap(p);
-    return ((map ? keyMask(map) : 0) | allPadsMask()) & 0xff;
+    return ((map ? keyMask(map) : 0) | allPadsMask() | touchMask()) & 0xff;
   },
   /** Couch seats: joined flags and the drop-in edge. */
   joined(p) { return players[p].joined; },
@@ -256,13 +281,25 @@ export const input = {
   setPadClaims(on) { padSeats.setClaiming(!!on); },
   /** Which pad drives a seat, or -1 for none (hints, tests). */
   padOf(p) { return padSeats.padOf(p); },
-  /** Last device that produced input for the seat ('keyboard' | 'gamepad' | 'virtual' | 'none'). */
+  /** Last device that produced input for the seat ('keyboard' | 'gamepad' | 'touch' | 'virtual' | 'none'). */
   device(p) { return players[p].device; },
+  /** Are the on-screen controls up? game/touchpad.js draws them, and a screen may move a hint out from under them. */
+  touchOn() { return touchVisible(); },
+  /** What the thumbs held this step, for the overlay's own pressed/unpressed faces. */
+  touchMask() { return touchHeld; },
   idleFrames(p) { return players[p].idleFrames; },
   /** Test hook: feed fake gamepads shaped like navigator.getGamepads() entries. */
   setPadVirtual(list) { padSource.setPads(list); },
-  /** Key label for hints ('Z', '←', 'ENTER'), as the seat is bound RIGHT NOW - a rebind changes what hints say. */
-  keyText(p, a) { const map = keyboardMap(p) || keyboardMap(0); return keyLabel((map[a] || [])[0] || ''); },
+  /**
+   * Key label for hints ('Z', '←', 'ENTER'), as the seat is bound RIGHT NOW - a rebind changes what hints say.
+   * On a phone there is no key to name, so the button on the glass answers instead ('GO', 'BACK'): the hint lines
+   * screens build in enter() then read as instructions rather than as a keyboard nobody in the room has.
+   */
+  keyText(p, a) {
+    if (touchVisible() && TOUCH_LABELS[a]) return TOUCH_LABELS[a];
+    const map = keyboardMap(p) || keyboardMap(0);
+    return keyLabel((map[a] || [])[0] || '');
+  },
   /**
    * The button an action sits on ('A', 'RT', 'D-UP'). A screen builds BOTH lines in enter() and picks one in
    * draw() by device(p): seats 3 and 4 have no keyboard block, so keyText would hand them somebody else's keys.

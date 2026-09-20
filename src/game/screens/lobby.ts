@@ -204,6 +204,8 @@ export class LobbyScreen extends Screen {
   /** The hint strip of each phase, joined once in enter() because they name the player's own keys. */
   declare roleHint: string;
   declare codeHint: string;
+  /** The same line for a thumb: a soft keyboard's RETURN, and the X that stands in for the ESC it has not got. */
+  declare codeHintTouch: string;
   declare lobbyHint: string;
   declare endHint: string;
   /** The session's state callback: re-read everything the screen shows. Handed to the session, and taken back
@@ -246,7 +248,12 @@ export class LobbyScreen extends Screen {
     this.readyT = [0, 0, 0, 0];
     this.bustOpts = { margin: 8, facing: 1 };
     this.roleHint = `${game.input.keyText(0, 'action')}: CHOOSE    ${game.input.keyText(0, 'cancel')}: BACK`;
+    // The one hint line in the game that cannot be built out of keyText: the two keys it names are the soft
+    // keyboard's own, and a phone has neither of them under those names. Both are joined here, and draw() picks
+    // by the live device like every other pair on this screen. RETURN is what a phone's keyboard shows for
+    // ENTER (`enterkeyhint`), and X is the button engine/touch.js spells ESCAPE with while a screen is typing.
     this.codeHint = 'TYPE THE TABLE NUMBER    ENTER: JOIN    ESC: BACK';
+    this.codeHintTouch = `TYPE THE TABLE NUMBER    RETURN: JOIN    ${game.input.keyText(0, 'cancel')}: BACK`;
     this.lobbyHint = `${game.input.keyText(0, 'left')} ${game.input.keyText(0, 'right')}: CRITTER    ${game.input.keyText(0, 'action')}: READY    ${game.input.keyText(0, 'cancel')}: LEAVE`;
     this.endHint = `${game.input.keyText(0, 'action')}: BACK TO TITLE`;
     this.onState = () => { this.refresh(); };
@@ -533,7 +540,7 @@ export class LobbyScreen extends Screen {
       this.drawSeats(ctx);
       this.drawTable(ctx, this.codeChars, true);
       drawTextOutlined(ctx, 'JOIN A TABLE', TICKET.x + TICKET.w / 2, BANNER_Y, { size: 2, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
-      drawHint(ctx, this.codeHint);
+      drawHint(ctx, this.game.input.touchOn() ? this.codeHintTouch : this.codeHint);
       return;
     }
     if (phase === 'error') {

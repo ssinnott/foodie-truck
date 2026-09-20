@@ -142,7 +142,13 @@ const SWING = 0.02, SWING_RATE = 0.045;
 const BLINK_PERIOD = 60, BLINK_ON = 40;
 const START_Y = 314;
 const TRUCK_OPTS = { scale: 2, wheel: 0 };
-const START_TEXT = 'PRESS START';
+/**
+ * PRESS START, and what it says to somebody holding a phone. Two constants rather than one string built from
+ * `keyText`, because this line is drawn at size 2 in the middle of the screen: it is the one prompt in the game
+ * that has to be right the FIRST time it is read, and a player who has no keyboard should not be hunting for a
+ * key that is not there. Picked in draw() by the live device, the way every other hint line in the game is.
+ */
+const START_TEXT = 'PRESS START', START_TEXT_TOUCH = 'TAP GO';
 
 /**
  * One seat of the lineup: the rig, the player walking that seat's own beat, the beat itself and where the beat has
@@ -309,7 +315,7 @@ export class TitleScreen extends Screen {
     // the sign hangs over everything, swinging about its top centre
     drawLogoSign(ctx, VIEW_W / 2, 0, SWING * Math.sin(this.frame * SWING_RATE));
     if (this.frame % BLINK_PERIOD < BLINK_ON) {
-      drawTextOutlined(ctx, START_TEXT, VIEW_W / 2, START_Y, { size: 2, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
+      drawTextOutlined(ctx, this.game.input.touchOn() ? START_TEXT_TOUCH : START_TEXT, VIEW_W / 2, START_Y, { size: 2, color: UI.cream, outline: UI.ink, thickness: 1, align: 'center', shadow: false });
     }
     // The two addresses, each underlined so it reads as something to follow, and each lit on its own: the one
     // under the mouse, or the repository while the row that opens it is selected. What the last follow did sits

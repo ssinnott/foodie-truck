@@ -72,6 +72,8 @@ export class ControlsScreen extends Screen {
 
   constructor(game: Game) {
     super(game, 'controls');
+    // ALT is a column reset here, so the touch overlay draws its ALT button on this screen.
+    this.touchAlt = true;
     this.grid = createRebindGrid({
       rows: ACTIONS.length, cols: COLS.length,
       noticeFrames: MESSAGE_FRAMES, captureFrames: CAPTURE_FRAMES,
