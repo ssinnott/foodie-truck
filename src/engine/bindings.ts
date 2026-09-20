@@ -18,6 +18,7 @@
 // entry all mean "use the defaults", never a thrown error on boot. Read and written from screen enter/exit only -
 // never from an update() (docs/MULTIPLAYER.md: no localStorage on the simulation path).
 import { ACTIONS } from './actions.ts';
+import { keyLabel as labelForKey, padLabel as labelForPad } from '../lib/input/labels.ts';
 
 /** Where a saved set of bindings lives, and the shape version that invalidates it. */
 const STORE_KEY = 'foodie-truck.bindings';
@@ -82,15 +83,25 @@ export function bindingRevision() { return revision; }
 /** Call `fn` whenever a binding changes. */
 export function onBindingsChanged(fn) { listeners.push(fn); }
 
+/**
+ * How this game spells a key, handed to the library's label algorithm (lib/input/labels.js): the table above
+ * first, then KeyA -> A and Digit1 -> 1 and Numpad7 -> NUM7, then this fallback. The words are ours because the
+ * tickets are narrow ('BKSP', not 'BACKSPACE'); the order is the library's.
+ */
+const KEY_LABEL_OPTS = {
+  names: KEY_LABELS,
+  fallback: (code) => {
+    const bare = code.replace(/^Key|^Digit|^Numpad/, '');
+    return (code.startsWith('Numpad') ? 'NUM' + bare : bare).toUpperCase();
+  },
+};
+/** Same, for a button index past the end of PAD_LABELS. */
+const PAD_LABEL_OPTS = { labels: PAD_LABELS, fallback: (button) => 'BTN' + button };
+
 /** What an action's first binding is called on a hint line ('Z', '←', 'ENTER'), or '' if it has none. */
-export function keyLabel(code) {
-  if (!code) return '';
-  if (KEY_LABELS[code]) return KEY_LABELS[code];
-  const bare = code.replace(/^Key|^Digit|^Numpad/, '');
-  return (code.startsWith('Numpad') ? 'NUM' + bare : bare).toUpperCase();
-}
+export function keyLabel(code) { return labelForKey(code, KEY_LABEL_OPTS); }
 /** What a pad button is called ('A', 'RT', 'D-UP'). */
-export function padLabel(button) { return PAD_LABELS[button] || ('BTN' + button); }
+export function padLabel(button) { return labelForPad(button, PAD_LABEL_OPTS); }
 
 /** The seat and action a keyboard code is currently bound to, or null. */
 function keyOwner(code) {

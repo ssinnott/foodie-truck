@@ -111,6 +111,17 @@ Claims are COUCH-ONLY. `setPadClaims(false)` turns them off for the whole of an 
 on the way in, back on for the couch on the way out), because seats 1–3 belong to other machines; online, every pad
 in the room reaches the local seat through `pollRaw()`, which reads every pad whether or not it is claimed.
 
+A pad that is UNPLUGGED gives its seat back (`lib/input/pad.js` `dropDisconnected`, called once a step). The seat
+itself stays joined — a critter mid-run does not vanish because a controller rolled under the sofa — and the same
+pad plugged back in claims again by the usual rule, which may well be a different seat. This used not to happen at
+all: a pad that went away held its seat, and its critter, for the rest of the session.
+
+The DEVICE half of all of this is the library's (`lib/input/pad.js`): polling `navigator.getGamepads()` in a
+`try`, the `pressed || value > 0.5` threshold, the held/pressed button masks, the stick past the dead zone, the
+swallow that keeps a just-bound button quiet, the capture the CONTROLS screen binds from, and the seat table with
+its "lowest free seat" rule. What stays here is everything that knows what an ACTION is — which button means
+`cancel`, the eight-bit mask, and the callback that says which seats this game is willing to give away.
+
 API: `update()` once per step; `held(p,a)`, `pressed(p,a)`, `buffered(p,a,window)`, `consume(p,a)`, `axisX(p)`,
 `axisY(p)`, `mask(p)`, `anyPressed(a)` → slot or −1, `typedCodes()` (text entry), `setVirtual(p, mask|actions)` /
 `clearVirtual(p)` (netplay + tests), `pollRaw(p)` (the local devices as a mask, no edge state — netplay samples this

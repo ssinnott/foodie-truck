@@ -19,6 +19,8 @@ import { drawText, measureText } from '../../engine/text.ts';
 import { drawTicket, drawSign, drawHint, drawDim, ROW } from '../ui.ts';
 import { drawLane } from '../../art/logo.ts';
 import { navX, navY, cancelPressed } from '../menuinput.ts';
+import { createRebindGrid } from '../../lib/input/rebind.ts';
+import type { RebindGrid } from '../../lib/input/rebind.ts';
 
 const R = Math.round;
 const HEAD_TEXT = 'CONTROLS';
@@ -55,35 +57,40 @@ export class ControlsScreen extends Screen {
   // a screen's own declaration would define the base's field back to undefined and wipe what the constructor
   // just wrote. `declare` erases under tsc, esbuild and Node's type stripping alike.
 
-  /** Cursor row: which action is selected, indexing ACTIONS. */
-  declare row: number;
-  /** Cursor column: which binding column is selected, indexing COLS. */
-  declare col: number;
+  /**
+   * The cursor, the capture, the timeout and the transient line under the grid: lib/input/rebind.js owns all
+   * four, because the sibling game's controls plate needed exactly the same four and got the awkward parts
+   * right separately. What it does NOT own is a single word or pixel of this screen.
+   */
+  declare grid: RebindGrid;
   /** The label grid, `cells[col][row]`, rebuilt by refresh() whenever a binding changes. */
   declare cells: string[][];
-  /** True while waiting for the player to press the key or button they want bound. */
-  declare listening: boolean;
-  /** Frames spent listening, which drives the prompt's blink. */
-  declare listenT: number;
-  /** A transient line under the grid ('' for none), shown for MESSAGE_FRAMES. */
-  declare message: string;
-  /** Frames left on `message`. */
-  declare messageT: number;
-  /** True once a binding has been changed, so exit() knows to persist. */
-  declare dirty: boolean;
   /** The hint strip, joined once in enter() because it names this player's own keys. */
   declare hint: string;
   /** The hint strip shown instead while listening. */
   declare listenHint: string;
 
-  constructor(game: Game) { super(game, 'controls'); this.row = 0; this.col = 0; }
+  constructor(game: Game) {
+    super(game, 'controls');
+    this.grid = createRebindGrid({
+      rows: ACTIONS.length, cols: COLS.length,
+      noticeFrames: MESSAGE_FRAMES, captureFrames: CAPTURE_FRAMES,
+      // No settle window: while a capture is live engine/input.js already holds every seat at neutral and
+      // swallows the key and the button it hands over, so there is no release edge left to absorb.
+      settleFrames: 0,
+    });
+  }
+
+  /** Cursor row: which action is selected, indexing ACTIONS. */
+  get row(): number { return this.grid.row; }
+  /** Cursor column: which binding column is selected, indexing COLS. */
+  get col(): number { return this.grid.col; }
+  /** True while waiting for the player to press the key or button they want bound. */
+  get listening(): boolean { return this.grid.capturing; }
 
   override enter(params: ScreenParams) {
     super.enter(params);
-    this.row = 0; this.col = 0;
-    this.listening = false; this.listenT = 0;
-    this.message = ''; this.messageT = 0;
-    this.dirty = false;
+    this.grid.reset();
     // Every cell's text, rebuilt only when a binding actually changes: draw() joins no strings (ARCHITECTURE 8).
     this.cells = COLS.map(() => ACTIONS.map(() => ''));
     this.refresh();
@@ -93,7 +100,7 @@ export class ControlsScreen extends Screen {
 
   /** Written on the way out, once: storage is not the simulation's business (docs/MULTIPLAYER.md). */
   override exit() {
-    if (this.dirty) bindings.save();
+    if (this.grid.dirty) bindings.save();
   }
 
   /** Re-read every cell from engine/bindings.js. Called after an edit, never per frame. */
@@ -110,19 +117,20 @@ export class ControlsScreen extends Screen {
     }
   }
 
-  say(text: string) { this.message = text; this.messageT = MESSAGE_FRAMES; }
+  say(text: string) { this.grid.say(text); }
 
   override update() {
     super.update();
     const inp = this.game.input;
-    if (this.messageT > 0) this.messageT--;
-    if (this.listening) { this.listen(); return; }
+    const phase = this.grid.tick();
+    if (phase === 'timeout') { this.say('REBIND TIMED OUT'); inp.endCapture(); return; }
+    if (phase === 'capturing') { this.listen(); return; }
 
     const dx = navX(inp), dy = navY(inp), audio = this.game.audio;
-    if (dx) { this.col = (this.col + dx + COLS.length) % COLS.length; audio.play('menu_move'); }
-    if (dy) { this.row = (this.row + dy + ACTIONS.length) % ACTIONS.length; audio.play('menu_move'); }
+    if (dx) { this.grid.moveCol(dx); audio.play('menu_move'); }
+    if (dy) { this.grid.moveRow(dy); audio.play('menu_move'); }
     if (inp.anyPressed('action') >= 0 || inp.anyPressed('start') >= 0) {
-      this.listening = true; this.listenT = 0;
+      this.grid.beginCapture();
       inp.capture();
       audio.play('menu_confirm');
       return;
@@ -132,9 +140,9 @@ export class ControlsScreen extends Screen {
     if (inp.anyPressed('alt') >= 0) {
       const col = COLS[this.col];
       if (col.seat < 0) bindings.resetPad(); else bindings.resetKeyboard(col.seat);
-      this.dirty = true;
+      // finish() outside a capture is how a change that was not a capture still marks the screen worth saving.
+      this.grid.finish(true, `${col.title} BACK TO DEFAULTS`);
       this.refresh();
-      this.say(`${col.title} BACK TO DEFAULTS`);
       audio.play('stamp');
       return;
     }
@@ -147,25 +155,24 @@ export class ControlsScreen extends Screen {
    */
   listen() {
     const inp = this.game.input;
-    this.listenT++;
     const code = inp.capturedKey(), button = inp.capturedButton();
     const col = COLS[this.col], action = ACTIONS[this.row];
     let done = false;
-    if (code === 'Escape') { this.say('REBIND CANCELLED'); this.game.audio.play('menu_back'); done = true; }
+    if (code === 'Escape') { this.grid.cancelCapture(); this.say('REBIND CANCELLED'); this.game.audio.play('menu_back'); done = true; }
     else if (col.seat < 0 && button >= 0) { done = this.apply(bindings.bindPad(action, button)); }
     else if (col.seat >= 0 && code) { done = this.apply(bindings.bindKey(col.seat, action, code)); }
     // a key pressed at the pad column (or a button at a key column) is the wrong device for this cell, and saying
     // so is friendlier than a cell that silently refuses to change
-    else if (col.seat < 0 && code) { this.say('THAT COLUMN WANTS A BUTTON'); done = true; }
-    else if (col.seat >= 0 && button >= 0) { this.say('THAT COLUMN WANTS A KEY'); done = true; }
-    else if (this.listenT >= CAPTURE_FRAMES) { this.say('REBIND TIMED OUT'); done = true; }
-    if (done) { inp.endCapture(); this.listening = false; }
+    else if (col.seat < 0 && code) { this.grid.cancelCapture(); this.say('THAT COLUMN WANTS A BUTTON'); done = true; }
+    else if (col.seat >= 0 && button >= 0) { this.grid.cancelCapture(); this.say('THAT COLUMN WANTS A KEY'); done = true; }
+    if (done) inp.endCapture();
   }
 
   /** One binding attempt: keep the refusal on screen, and only a change is worth saving. */
   apply(result) {
-    if (result.ok) { this.dirty = true; this.refresh(); this.say(''); this.game.audio.play('rebind_ok'); }
-    else { this.say(result.reason || 'REBIND REFUSED'); this.game.audio.play('rebind_refused'); }
+    this.grid.finish(!!result.ok, result.ok ? '' : (result.reason || 'REBIND REFUSED'));
+    if (result.ok) { this.refresh(); this.game.audio.play('rebind_ok'); }
+    else this.game.audio.play('rebind_refused');
     return true;
   }
 
@@ -204,14 +211,14 @@ export class ControlsScreen extends Screen {
         drawText(ctx, text, COL_X[c] + CELL_W / 2, y, { size: 1, color: UI.ink, align: 'center', shadow: false });
       }
     }
-    drawHint(ctx, this.listening ? this.listenHint : (this.messageT > 0 && this.message ? this.message : this.hint));
+    drawHint(ctx, this.listening ? this.listenHint : (this.grid.notice || this.hint));
   }
 
   override summary() {
     return {
       row: ACTIONS[this.row], col: COLS[this.col].title, rowIndex: this.row, colIndex: this.col, listening: this.listening,
-      message: this.messageT > 0 ? this.message : '',
-      cells: this.cells.map((c) => c.slice()), dirty: this.dirty, isDefault: bindings.isDefault(),
+      message: this.grid.notice,
+      cells: this.cells.map((c) => c.slice()), dirty: this.grid.dirty, isDefault: bindings.isDefault(),
     };
   }
   /** Nothing here is simulated, but the screen contract asks for the cursor (docs/ARCHITECTURE.md section 5). */

@@ -16,6 +16,7 @@
 import { INPUT_BUFFER, MAX_PLAYERS, LOCAL_PLAYERS } from '../constants.ts';
 import { ACTIONS, BIT } from './actions.ts';
 import { keyboardMap, padMap, keyLabel, padLabel, bindingRevision, onBindingsChanged } from './bindings.ts';
+import { createPadSource, createPadSeats, DIR } from '../lib/input/pad.ts';
 
 export { ACTIONS };
 
@@ -23,6 +24,15 @@ export { ACTIONS };
 const STICK_DEAD = 0.45;
 /** Buttons a standard pad reports. Wider than what is bound, because a REBIND has to see the button first. */
 const PAD_BUTTON_COUNT = 17;
+
+/**
+ * The pads themselves (lib/input/pad.js): polling, held and pressed button masks, the stick's four
+ * directions, the swallow that keeps a just-bound button quiet, and the pad-to-seat table. The
+ * library owns the device; which button is which ACTION is still this file's business, because the
+ * eight-action byte mask is this game's wire format and no library is going to know about it.
+ */
+const padSource = createPadSource({ buttons: PAD_BUTTON_COUNT, deadzone: STICK_DEAD });
+const padSeats = createPadSeats();
 
 const NEVER = 1e9;
 const keysDown = new Set();
@@ -36,9 +46,6 @@ let typedStep = [];
 let anyKeyPending = false, anyKeyThisStep = false;
 let boundCodes = null;
 let boundRev = -1;
-let virtualPads = null;
-/** Couch-only: while this is off no pad takes a seat, and every pad falls through to slot 0 / pollRaw. */
-let padClaims = true;
 /**
  * REBINDING (game/screens/controls.js). While capturing, every seat is held at neutral and the first key or button
  * to go down is reported instead of being played: the press that picks a binding must not also drive the menu it
@@ -46,13 +53,6 @@ let padClaims = true;
  * capture opens is not mistaken for a fresh press.
  */
 let capturing = false, capturedCode = '', capturedPad = -1;
-const padRawPrev = [];
-/**
- * Buttons to ignore until they are let go, one raw mask per pad. A bind lands while the button is still down; on
- * the next step that held button would read as a brand new press of whatever it now means, and a player who bound
- * CANCEL would be thrown off the screen by the very press that bound it.
- */
-const padSwallow = [];
 
 /** Pack an action map ({ left: true, action: true }) into a mask. */
 export function packMask(a) { let m = 0; for (let i = 0; i < ACTIONS.length; i++) if (a && a[ACTIONS[i]]) m |= 1 << i; return m & 0xff; }
@@ -60,7 +60,7 @@ export function packMask(a) { let m = 0; for (let i = 0; i < ACTIONS.length; i++
 export function unpackMask(m) { const a = {}; for (let i = 0; i < ACTIONS.length; i++) a[ACTIONS[i]] = (m & (1 << i)) !== 0; return a; }
 
 function makePlayer() {
-  return { cur: 0, prev: 0, pressedNow: 0, bufAge: new Int32Array(ACTIONS.length).fill(NEVER), virtual: -1, device: 'none', pad: -1, joined: false, joinNow: false, idleFrames: 0, ax: 0, ay: 0 };
+  return { cur: 0, prev: 0, pressedNow: 0, bufAge: new Int32Array(ACTIONS.length).fill(NEVER), virtual: -1, device: 'none', joined: false, joinNow: false, idleFrames: 0, ax: 0, ay: 0 };
 }
 const players = Array.from({ length: MAX_PLAYERS }, makePlayer);
 players[0].joined = true;
@@ -91,91 +91,69 @@ function keyMask(map) {
   for (let i = 0; i < ACTIONS.length; i++) { const codes = map[ACTIONS[i]]; if (codes) for (let k = 0; k < codes.length; k++) if (keysDown.has(codes[k])) { m |= 1 << i; break; } }
   return m;
 }
-function pads() {
-  if (virtualPads) return virtualPads;
-  try { return typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : []; } catch { return []; }
+/** The library's four direction bits, as this game's action bits. */
+function stickBits(dirs) {
+  return ((dirs & DIR.left) ? BIT.left : 0) | ((dirs & DIR.right) ? BIT.right : 0)
+    | ((dirs & DIR.up) ? BIT.up : 0) | ((dirs & DIR.down) ? BIT.down : 0);
 }
-/** Which of the 17 standard buttons a pad is holding, as a bitfield. Triggers count past half pull. */
-function rawPadMask(gp) {
-  if (!gp || !gp.buttons) return 0;
-  let m = 0;
-  for (let i = 0; i < PAD_BUTTON_COUNT; i++) { const b = gp.buttons[i]; if (b && (b.pressed || b.value > 0.5)) m |= 1 << i; }
-  return m;
-}
-/**
- * Mask from one gamepad: its bound buttons, plus the left stick, which is wired to the four directions and is not
- * bindable - a stick that could be mapped onto CANCEL is a player walking out of a mini-game by leaning left.
- * `idx` is the pad's index, and is what lets a just-bound button stay swallowed until it is released.
- */
-function padMask(gp, idx = -1) {
-  if (!gp) return 0;
-  const raw = rawPadMask(gp) & ~(idx >= 0 ? padSwallow[idx] | 0 : 0);
+/** Which actions a held-button bitfield means, under the pad table every controller shares. */
+function actionBits(raw) {
   const map = padMap();
   let m = 0;
   for (const a of ACTIONS) { const list = map[a]; if (!list) continue; for (let k = 0; k < list.length; k++) if (raw & (1 << list[k])) { m |= BIT[a]; break; } }
-  const ax = gp.axes ? gp.axes[0] || 0 : 0, ay = gp.axes ? gp.axes[1] || 0 : 0;
-  if (ax < -STICK_DEAD) m |= BIT.left; else if (ax > STICK_DEAD) m |= BIT.right;
-  if (ay < -STICK_DEAD) m |= BIT.up; else if (ay > STICK_DEAD) m |= BIT.down;
   return m;
 }
 /**
- * Raw button bookkeeping, every step whether capturing or not: what each pad holds now (so the NEXT step can tell
- * a fresh press from a held one) and which swallowed buttons have finally been let go.
+ * Mask from one polled gamepad: its bound buttons, plus the left stick, which is wired to the four directions and
+ * is not bindable - a stick that could be mapped onto CANCEL is a player walking out of a mini-game by leaning
+ * left. Swallowed buttons are already out of `activeMask`, which is what lets a just-bound button stay quiet
+ * until it is released.
  */
-function trackPadsRaw() {
-  const list = pads();
-  for (let i = 0; i < list.length; i++) {
-    const raw = list[i] ? rawPadMask(list[i]) : 0;
-    if (padSwallow[i]) padSwallow[i] &= raw;
-    padRawPrev[i] = raw;
-  }
+function padMask(idx) {
+  return actionBits(padSource.activeMask(idx)) | stickBits(padSource.dirMask(idx));
 }
-/** The lowest button that went down on any pad since the last step, or -1. */
-function firstPadPress() {
-  const list = pads();
-  for (let i = 0; i < list.length; i++) {
-    const down = (list[i] ? rawPadMask(list[i]) : 0) & ~(padRawPrev[i] | 0);
-    if (!down) continue;
-    for (let b = 0; b < PAD_BUTTON_COUNT; b++) if (down & (1 << b)) { padSwallow[i] = (padSwallow[i] | 0) | (1 << b); return b; }
-  }
-  return -1;
+/** The same, read LIVE rather than from the step's poll: pollRaw only (see there). */
+function livePadMask(list, idx) {
+  const gp = list[idx];
+  if (!gp) return 0;
+  return actionBits(padSource.maskOf(gp) & ~padSource.swallowedMask(idx)) | stickBits(padSource.dirMaskOf(gp));
 }
-/** Is pad `i` already sitting in a seat? */
-function padBound(i) { for (const p of players) if (p.pad === i) return true; return false; }
-/** Mask of every pad not bound to a slot (slot 0 reads them all when nobody has claimed them). */
+/** Mask of every pad not sitting in a seat (slot 0 reads them all when nobody has claimed them). */
 function unboundPadsMask() {
   let m = 0;
-  const list = pads();
-  for (let i = 0; i < list.length; i++) { if (!list[i] || padBound(i)) continue; m |= padMask(list[i], i); }
+  for (let i = 0; i < padSource.count(); i++) { if (!padSource.pad(i) || padSeats.seatOf(i) >= 0) continue; m |= padMask(i); }
   return m;
 }
-/** Mask of EVERY pad, claimed or not: what the local human is holding, which is what netplay sends. */
+/**
+ * Mask of EVERY pad, claimed or not: what the local human is holding, which is what netplay sends. Read live,
+ * because net/session.js samples it in beforeStep() - before update() has polled for this step.
+ */
 function allPadsMask() {
+  const list = padSource.readPads();
   let m = 0;
-  const list = pads();
-  for (let i = 0; i < list.length; i++) if (list[i]) m |= padMask(list[i], i);
+  for (let i = 0; i < list.length; i++) m |= livePadMask(list, i);
   return m;
 }
 /**
  * Can a pad take couch seat `s`? Not one a keyboard block is already driving - the pad player would be sharing a
- * critter with the person next to them while a seat stood empty - and not one a net session is injecting.
+ * critter with the person next to them while a seat stood empty - and not one a net session is injecting. (That
+ * the seat has no pad already is the library's own rule, so it is not repeated here.)
  */
 function seatFreeForPad(s) {
   const pl = players[s];
-  return pl.pad < 0 && pl.virtual < 0 && pl.device !== 'keyboard';
+  return pl.virtual < 0 && pl.device !== 'keyboard';
 }
 /**
- * A pad whose button went down claims the LOWEST free couch seat. Lowest, not first-found: a run's party is a
- * dense array whose index is the input slot (game/run.js startRun), so a hole at seat 1 would hand seat 2's pad
- * somebody else's critter.
+ * A pad showing any action claims the LOWEST free couch seat. Lowest, not first-found: a run's party is a dense
+ * array whose index is the input slot (game/run.js startRun), so a hole at seat 1 would hand seat 2's pad
+ * somebody else's critter. The table and the "lowest free" rule are the library's (lib/input/pad.js); which
+ * seats this game will give away is the callback.
  */
 function claimPads() {
-  if (!padClaims) return;
-  const list = pads();
-  for (let i = 0; i < list.length; i++) {
-    const gp = list[i]; if (!gp || padBound(i)) continue;
-    if (!padMask(gp, i)) continue;
-    for (let s = 0; s < LOCAL_PLAYERS; s++) if (seatFreeForPad(s)) { players[s].pad = i; players[s].joined = true; players[s].joinNow = true; break; }
+  for (let i = 0; i < padSource.count(); i++) {
+    if (!padSource.pad(i) || padSeats.seatOf(i) >= 0 || !padMask(i)) continue;
+    const s = padSeats.claim(i, LOCAL_PLAYERS, seatFreeForPad);
+    if (s >= 0) { players[s].joined = true; players[s].joinNow = true; }
   }
 }
 
@@ -197,15 +175,21 @@ export const input = {
     typedStep = typed; typed = [];      // hand this step its own codes; the DOM keeps filling a fresh array
     freshBoundCodes();
     anyKeyThisStep = anyKeyPending; anyKeyPending = false;
+    // One device read a step, before anything else looks at a pad: this is what turns "held now" into "held last
+    // step", so the button edges below and the capture above are the same two samples.
+    padSource.poll();
+    // A pad that has been unplugged gives its seat back. The seat itself stays joined - a critter mid-run does
+    // not vanish because a controller rolled under the sofa - and the same pad plugged back in claims by the
+    // usual rule, which may well be a different seat.
+    padSeats.dropDisconnected(padSource);
     // While a rebind is being captured, the first key or button down is REPORTED rather than played, and nobody
     // takes a seat on it: the press that picks a binding belongs to the binding, not to the menu it was picked in.
     if (capturing) {
       if (!capturedCode) for (let i = 0; i < typedStep.length; i++) { capturedCode = typedStep[i]; break; }
-      if (capturedPad < 0) capturedPad = firstPadPress();
+      if (capturedPad < 0) capturedPad = padSource.captureButton();
     } else {
       claimPads();
     }
-    const list = pads();
     for (let p = 0; p < players.length; p++) {
       const pl = players[p];
       pl.prev = pl.cur;
@@ -215,7 +199,8 @@ export const input = {
       else {
         const map = keyboardMap(p);
         const kb = map ? keyMask(map) : 0;
-        const gp = pl.pad >= 0 ? padMask(list[pl.pad], pl.pad) : (p === 0 ? unboundPadsMask() : 0);
+        const own = padSeats.padOf(p);
+        const gp = own >= 0 ? padMask(own) : (p === 0 ? unboundPadsMask() : 0);
         pl.cur = kb | gp;
         if (kb) pl.device = 'keyboard'; else if (gp) pl.device = 'gamepad';
         if (p > 0 && p < LOCAL_PLAYERS && kb && !pl.joined) { pl.joined = true; pl.joinNow = true; }
@@ -226,7 +211,6 @@ export const input = {
       pl.ax = ((pl.cur & BIT.right) ? 1 : 0) - ((pl.cur & BIT.left) ? 1 : 0);
       pl.ay = ((pl.cur & BIT.down) ? 1 : 0) - ((pl.cur & BIT.up) ? 1 : 0);
     }
-    trackPadsRaw();
   },
   /** The mask a seat holds this step. */
   mask(p) { return players[p].cur; },
@@ -262,21 +246,21 @@ export const input = {
   /** Couch seats: joined flags and the drop-in edge. */
   joined(p) { return players[p].joined; },
   joinPressed(p) { return players[p].joinNow; },
-  setJoined(p, on) { players[p].joined = !!on; if (!on) { players[p].pad = -1; } },
+  setJoined(p, on) { players[p].joined = !!on; if (!on) { const own = padSeats.padOf(p); if (own >= 0) padSeats.release(own); } },
   /** Reset pad claims (title screen, and the match boundary in net/roster.js). */
-  resetClaims() { for (const p of players) p.pad = -1; for (let s = 1; s < players.length; s++) players[s].joined = false; },
+  resetClaims() { padSeats.releaseAll(); for (let s = 1; s < players.length; s++) players[s].joined = false; },
   /**
    * Couch on/off. Claiming seats is a couch-only idea: online, seats 1..3 belong to other machines, so the lobby
    * switches this off and every pad in the room drives the local seat through pollRaw() instead.
    */
-  setPadClaims(on) { padClaims = !!on; },
+  setPadClaims(on) { padSeats.setClaiming(!!on); },
   /** Which pad drives a seat, or -1 for none (hints, tests). */
-  padOf(p) { return players[p].pad; },
+  padOf(p) { return padSeats.padOf(p); },
   /** Last device that produced input for the seat ('keyboard' | 'gamepad' | 'virtual' | 'none'). */
   device(p) { return players[p].device; },
   idleFrames(p) { return players[p].idleFrames; },
   /** Test hook: feed fake gamepads shaped like navigator.getGamepads() entries. */
-  setPadVirtual(list) { virtualPads = list; },
+  setPadVirtual(list) { padSource.setPads(list); },
   /** Key label for hints ('Z', '←', 'ENTER'), as the seat is bound RIGHT NOW - a rebind changes what hints say. */
   keyText(p, a) { const map = keyboardMap(p) || keyboardMap(0); return keyLabel((map[a] || [])[0] || ''); },
   /**
@@ -289,7 +273,7 @@ export const input = {
    * first key or button pressed is held here instead. The pad button is swallowed until it is released, so the
    * press that bound it cannot immediately fire as whatever it now means.
    */
-  capture() { capturing = true; capturedCode = ''; capturedPad = -1; },
+  capture() { capturing = true; capturedCode = ''; capturedPad = -1; padSource.beginCapture(); },
   /** The key code captured so far, or ''. */
   capturedKey() { return capturedCode; },
   /** The pad button captured so far, or -1. */
@@ -299,6 +283,7 @@ export const input = {
   /** Stop capturing. A captured key is forgotten as held, so it does not read as a fresh press on the next step. */
   endCapture() {
     capturing = false;
+    padSource.endCapture();
     if (capturedCode) keysDown.delete(capturedCode);
     capturedCode = ''; capturedPad = -1;
   },

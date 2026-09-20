@@ -8,11 +8,15 @@
 //        that). The last beat is the one that used to be impossible: a fifth pad has no seat to take.
 import { withPage, assert } from '../playtest.js';
 
+// Four pads PLUGGED IN and resting -- `{ down: [] }`, not `null`. The difference used to be invisible, because
+// engine/input.js never released the seat of a pad that went away; it does now (lib/input/pad.js
+// dropDisconnected), so a list of nulls between presses would stand every player up and empty the couch. Which is
+// right: four people on a sofa do not unplug their controllers between button presses.
 /** Four ports, all resting; `press(i, ...buttons)` is that list with one pad holding something. */
-const IDLE = [null, null, null, null];
+const IDLE = [{ down: [] }, { down: [] }, { down: [] }, { down: [] }];
 const A = 0, B = 1, RIGHT = 15;
 function press(i, ...buttons) {
-  const list = IDLE.slice();
+  const list = IDLE.map((g) => ({ down: g.down.slice() }));
   list[i] = { down: buttons };
   return list;
 }
@@ -98,7 +102,8 @@ export const SCENARIOS = {
       assert(s5.run.party.join() === 'barley,sorrel,chicory,cress', `one per pad, in seat order (${s5.run.party.join()})`);
 
       // ---- a fifth controller has nowhere to sit ----
-      await api.pads([null, null, null, null, { down: [A] }]);
+      // The four seated pads are still plugged in; the fifth is the one pressing.
+      await api.pads([...IDLE, { down: [A] }]);
       await api.step(4);
       await api.pads(null);
       assert((await api.errors()).length === 0, 'and a fifth pad pressing against a full couch breaks nothing');
