@@ -9,7 +9,12 @@
 //   MIX   hold for 240 frames while a dial fills; letting go pauses it, and it picks up where it left off
 //   STOVE hold for 240 frames while a bar fills; letting go pauses it the same way
 //   OVEN  hold for 240 frames while the bake runs; letting go pauses it the same way
-//   PLATE a press at the hatch plates the dish and rings the bell: ORDER UP!, then results
+//   PLATE a press at the hatch plates the dish and rings the bell
+// THE WHOLE LINE IS COOKED IN ONE GO: the kitchen is handed every order still waiting in the queue (`batch`, front
+// first) and works them one after another at the same counter. The bell on every dish but the last stamps NEXT UP!
+// and the next order comes to the hatch - its customer leaning in, its ticket on the rail, its steps on the card -
+// with the crew left standing where they were; the bell on the last stamps ORDER UP! and hands every dish's stars
+// to results together, which serves the whole line at once. The finished dishes wait on the pass beside the bell.
 // THE FOOD MOVES DOWN THE LINE: the order's items are one batch that is always at exactly one station (`batchAt`).
 // The fridge sends them to the first cooking step, and the frame a step completes, everything at its station -
 // the pile and the item on the board, what is in the bowl, in the pot, on the oven's tray - takes off on a
@@ -27,7 +32,7 @@
 // peer draws the same one, but nothing reads it back). Rigs and the flight pool are built once, never in draw().
 import { VIEW_W, UI, SIGNAL, PLAYER_COLORS } from '../../constants.ts';
 import { Screen } from '../game.ts';
-import type { CritterDef, Game, Input, ScreenParams } from '../game.ts';
+import type { CritterDef, Game, Input, Order, ScreenParams } from '../game.ts';
 import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
 import { blitAt, INK } from '../../art/layers.ts';
@@ -79,8 +84,12 @@ const OVEN_FRAMES = 240;
 const FLY_FRAMES = 28, FLY_STAGGER = 4, FLY_POOL = 16;
 /** The plate squashes for this long under a component that has just landed on it. */
 const LAND_SQUASH = 3;
-/** After the bell: the stamp slams, then results. */
-const SERVE_FRAMES = 96, STAMP_AT = 40;
+/** After the bell: the stamp slams, then results - or, with more of the line still to cook, the next order comes up. */
+const SERVE_FRAMES = 96, NEXT_FRAMES = 72, STAMP_AT = 40;
+/** The finished dishes waiting on the pass: along the hatch shelf right of the bell, PASS_PITCH apart. */
+const PASS_PITCH = 30;
+/** The empty ingredient table a finished dish's plate is drawn with: the dish is the picture, not a stack. */
+const NO_ICONS: string[] = [];
 /** The sound each hold station makes while its button is down, and the frames between replays (by station). */
 const HOLD_SOUND = { [MIX]: 'stir', [STOVE]: 'sizzle', [OVEN_S]: 'bake' };
 const HOLD_SOUND_EVERY = { [MIX]: 14, [STOVE]: 18, [OVEN_S]: 24 };
@@ -104,7 +113,7 @@ const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18, rowan: 18 };
  *  156..200, where the pot, the bowl and the board's ingredient are. A tall crown lifts a plate above this. */
 const PLATE_Y_MAX = 160;
 const HINTS = { fridge: 'FRIDGE: TAP TO PULL IT OUT', chop: 'CHOP: TAP OVER AND OVER', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD TO COOK', oven: 'OVEN: HOLD TO BAKE', plate: 'PLATE: RING THE BELL' };
-const PERFECT = 'PERFECT!', DONE = 'DONE', NOM = 'NOM', ORDER_UP = 'ORDER UP!', RING = 'RING!';
+const PERFECT = 'PERFECT!', DONE = 'DONE', NOM = 'NOM', ORDER_UP = 'ORDER UP!', NEXT_UP = 'NEXT UP!', RING = 'RING!';
 const CARD_X = RECIPE.x, CARD_Y = RECIPE.y, CARD_W = RECIPE.w;
 // the recipe card is the SMALLER paper: it hangs below the rail on two strings and carries no perforated top, so
 // it never reads as the order ticket's twin at the other end of the same rail (the two papers used to match)
@@ -200,6 +209,16 @@ export class KitchenScreen extends Screen {
   declare fields: number[];
   /** The room, pre-rendered once (art/backgrounds/kitchen.ts kitchenLayer) and blitted per frame. */
   declare layer: { canvas: HTMLCanvasElement; w: number; h: number };
+  /** Every order still waiting in the line, front first: the kitchen cooks them all before anyone is served. */
+  declare batch: Order[];
+  /** The one on the counter now: an index into `batch`. */
+  declare dish: number;
+  /** The stars each finished dish of the batch earned, in batch order: what results hands out. */
+  declare dishStars: number[];
+  /** Every finished dish's banked step score, summed. */
+  declare banked: number;
+  /** The finished dishes waiting on the pass: their ORDERS ids, in batch order. */
+  declare passIds: string[];
   /** The order's steps as station indices (CHOP..PLATE_S), worked in this order. */
   declare steps: number[];
   /** Those steps' station names, one recipe-card row each. */
@@ -298,10 +317,37 @@ export class KitchenScreen extends Screen {
     const game = this.game, run = game.run;
     this.layer = kitchenLayer(paintStations);
     particles.clear();
-    // the order: its steps as station indices, the ingredients' glyphs for the board and the plate
-    const order = run.order;
+    // the batch: everyone still waiting in the line, front first, all cooked before anyone is served
+    this.batch = [];
+    const ln = run.lines[run.line];
+    if (ln) for (let k = run.customer; k < ln.customers.length; k++) this.batch.push(run.orderFor(k));
+    if (!this.batch.length) this.batch.push(run.order);
+    this.dish = 0; this.dishStars = []; this.banked = 0; this.passIds = []; this.lids = 0; this.poofs = 0;
+    this.keyName = game.input.keyText(0, 'action');
+    // one seat per party member: rig, player, standing spot spread along the counter
+    this.seats.length = 0;
+    for (let i = 0; i < run.party.length; i++) {
+      const p = run.party[i], def = getCritter(p.critter), rig = critterRig(def, p.slot), player = new AnimPlayer(def.anims);
+      player.play('idle');
+      this.seats.push({
+        slot: p.slot, def, rig, player, name: def.name, crown: CROWN[def.id] != null ? CROWN[def.id] : 8,
+        x: STATION_X[i % STATION_X.length], facing: 1, moving: false, station: -1, anim: 'idle', actT: 0, eatT: 0, weapon: '',
+        opts: { x: 0, y: ROWS.feet, facing: 1 }, head: { x: 0, y: 0 },
+      });
+    }
+    this.fields.length = 0;
+    this.loadOrder();
+  }
+
+  /**
+   * Put `batch[dish]` on the counter: its steps on the recipe card, its items in the fridge, its ticket on the rail
+   * and its customer in the hatch, every step unclaimed. The crew stay where they stand.
+   */
+  loadOrder(): void {
+    const run = this.game.run, order = this.batch[this.dish];
+    run.order = order;
     this.steps = order.steps.map((id) => STATION_IDX[id] != null ? STATION_IDX[id] : PLATE_S);
-    this.chops = order.chops || CHOP_HITS; this.lidT = 0; this.lids = 0; this.poofs = 0;
+    this.chops = order.chops || CHOP_HITS; this.lidT = 0;
     this.stepNames = order.steps.map((id) => (STATIONS.find((s) => s.id === id) || STATIONS[0]).name);
     this.scores = this.steps.map(() => -1);
     this.owners = this.steps.map(() => -1);
@@ -321,7 +367,7 @@ export class KitchenScreen extends Screen {
     for (const fl of this.flights) fl.active = false;
     this.batchAt = this.pullDest; this.batchFrom = FRIDGE_S; this.landed = 0; this.waiting = 0; this.landT = LAND_SQUASH;
     this.dishId = order.id;
-    this.ticketOpts = { icons: {}, hexes: {} };
+    this.ticketOpts = { icons: {}, hexes: {}, title: this.batch.length > 1 ? `DISH ${this.dish + 1} OF ${this.batch.length}` : undefined };
     this.ticketHead = [`FOR ${getCustomer(order.customer).name}`, order.dish];
     for (const n of order.needs) { const ing = INGREDIENTS[n.id]; if (ing) { this.ticketOpts.icons[n.id] = ing.icon; this.ticketOpts.hexes[n.id] = ing.hex; } }
     this.stepIdx = 0; this.total = 0;
@@ -329,24 +375,11 @@ export class KitchenScreen extends Screen {
     this.served = false; this.serveT = 0; this.stars = 0;
     this.ovenGlow = 0;
     this.tak = 0; this.ringT = -1;
-    this.keyName = game.input.keyText(0, 'action');
     this.setHint();
     // the customer leaning into the hatch
     const cust = getCustomer(order.customer);
     this.custRig = critterRig(cust, -1); this.custPlayer = new AnimPlayer(cust.anims); this.custPlayer.play('idle');
     this.custPose = idlePoseOf(cust); this.custOpts = { facing: -1, margin: BUST.margin };
-    // one seat per party member: rig, player, standing spot spread along the counter
-    this.seats.length = 0;
-    for (let i = 0; i < run.party.length; i++) {
-      const p = run.party[i], def = getCritter(p.critter), rig = critterRig(def, p.slot), player = new AnimPlayer(def.anims);
-      player.play('idle');
-      this.seats.push({
-        slot: p.slot, def, rig, player, name: def.name, crown: CROWN[def.id] != null ? CROWN[def.id] : 8,
-        x: STATION_X[i % STATION_X.length], facing: 1, moving: false, station: -1, anim: 'idle', actT: 0, eatT: 0, weapon: '',
-        opts: { x: 0, y: ROWS.feet, facing: 1 }, head: { x: 0, y: 0 },
-      });
-    }
-    this.fields.length = 0;
   }
 
   setHint(): void {
@@ -370,9 +403,17 @@ export class KitchenScreen extends Screen {
     if (this.ovenGlow > 0 && !(this.currentStation() === OVEN_S && this.st.phase === 1)) this.ovenGlow--;
     this.updateSeats(inp);
     if (!this.served) this.stepStation(inp);
-    else if (++this.serveT >= SERVE_FRAMES) { game.replace('results', { stars: this.stars, score: this.total }); return; }
+    else if (++this.serveT >= (this.lastDish() ? SERVE_FRAMES : NEXT_FRAMES)) {
+      // the whole line is cooked: results hands every dish out at once. Otherwise the next order comes up
+      if (this.lastDish()) { game.replace('results', { stars: this.dishStars.slice(), score: this.banked }); return; }
+      this.dish++;
+      this.loadOrder();
+    }
     for (let i = 0; i < this.seats.length; i++) this.pickAnim(this.seats[i]);
   }
+
+  /** True while the dish on the counter is the last of the line's batch. */
+  lastDish(): boolean { return this.dish >= this.batch.length - 1; }
 
   currentStation(): number { return this.stepIdx < this.steps.length ? this.steps[this.stepIdx] : -1; }
 
@@ -517,6 +558,7 @@ export class KitchenScreen extends Screen {
     this.served = true; this.serveT = 0; this.ringT = 0;
     const n = Math.max(1, this.steps.length);
     this.stars = Math.max(1, Math.min(3, R(this.total / (2 * n) * 3)));
+    this.dishStars.push(this.stars); this.banked += this.total; this.passIds.push(this.dishId);
     ringAt(BELL.x + BELL.w / 2, BELL.y + 4, 4, 22, UI.cream, 2, 16, false, true);
     this.game.audio.play('bell');
     this.game.audio.play('stamp', { delay: STAMP_AT / 60 });
@@ -658,6 +700,10 @@ export class KitchenScreen extends Screen {
     let plated = 0;
     if (this.batchAt === PLATE_S) for (let j = 0; j < this.dishFirst.length; j++) if (this.landed > this.dishFirst[j]) plated++;
     drawPlate(ctx, PLATE.x + 13, PLATE.y, this.icons, this.hexes, plated, plated > 0 && this.landT < LAND_SQUASH ? 1.25 : 1, this.dished() ? this.dishId : null);
+    // the finished dishes of the line so far, waiting on the pass beside the bell for the whole line to be cooked
+    // (the one just belled is still on the plate until the next order comes up)
+    const waiting = this.passIds.length - (this.served ? 1 : 0);
+    for (let k = 0; k < waiting; k++) drawPlate(ctx, BELL.x + BELL.w + 14 + k * PASS_PITCH, PLATE.y, NO_ICONS, NO_ICONS, 0, 1, this.passIds[k]);
     drawBellRing(ctx, this.ringT);
     drawKettleSteam(ctx, f);   // the room's pilot light: one plume that never stops, whatever the party is doing
     if (this.lidT > 0) this.drawLid(ctx, f);
@@ -720,15 +766,16 @@ export class KitchenScreen extends Screen {
       else if (i === this.stepIdx && !this.served) drawText(ctx, '>', CARD_X + 18 + ((f >> 4) & 1), ry, CARD_TEXT);
     }
     drawHint(ctx, this.hint);
-    if (this.served && this.serveT >= STAMP_AT) drawStamp(ctx, ORDER_UP, VIEW_W / 2, STAMP_Y, (this.serveT - STAMP_AT) / 24);
+    if (this.served && this.serveT >= STAMP_AT) drawStamp(ctx, this.lastDish() ? ORDER_UP : NEXT_UP, VIEW_W / 2, STAMP_Y, (this.serveT - STAMP_AT) / 24);
   }
 
   override summary() {
     return {
+      dish: this.dished() ? this.dishId : '', dishes: this.batch.length, cooking: this.dish, dishStars: this.dishStars.slice(), pass: this.passIds.slice(),
       step: this.stepIdx, steps: this.stepNames, scores: this.scores.slice(), owners: this.owners.slice(), total: this.total, stars: this.stars, served: this.served,
       phase: this.st.phase, t: this.st.t, count: this.st.count, pulled: this.pulled, pulls: this.pullIcons.length, pullDest: this.pullDest,
       chops: this.chops, lidT: this.lidT, lids: this.lids, poofs: this.poofs,
-      batchAt: this.batchAt, landed: this.landed, flying: this.flights.reduce((n, fl) => n + (fl.active ? 1 : 0), 0), dish: this.dished() ? this.dishId : '',
+      batchAt: this.batchAt, landed: this.landed, flying: this.flights.reduce((n, fl) => n + (fl.active ? 1 : 0), 0),
       seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
     };
   }
@@ -736,7 +783,7 @@ export class KitchenScreen extends Screen {
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.stepIdx, this.total, this.st.phase, this.st.t, this.st.count, this.pulled, this.served ? 1 : 0, this.serveT, this.stars);
+    f.push(this.dish, this.dishStars.length, this.banked, this.stepIdx, this.total, this.st.phase, this.st.t, this.st.count, this.pulled, this.served ? 1 : 0, this.serveT, this.stars);
     for (let i = 0; i < this.steps.length; i++) f.push(this.scores[i], this.owners[i]);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.station, s.moving ? 1 : 0, s.actT, s.eatT); }
     return f;
