@@ -254,7 +254,7 @@ face (`markings`) or replace the hook; whichever, keep the rows of §0.6 and the
 
 Paint once, blit per frame (`art/layers.js`): every scene pre-renders its layers with a seeded rng (seed blocks:
 map 140–159, orchard 100–109, pond 110–119, coop 120–129, kitchen 130–139,
-title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, farm 200–209, bramble bank 210–219, beach 220–229) and blits at integer
+title/select/lobby 160–169, dairy 170–179, mill 180–189, hive 190–199, farm 200–209, bramble bank 210–219, beach 220–229, garage 260–269) and blits at integer
 offsets; parallax
 `far 0.2 / mid 0.5 / ground 1 / near 1.2` for side views, none in the kitchen, chunks for the map. 16 rows of bleed.
 Nothing solid in the near layer at critter height; walk lanes carry no scatter; the plane behind the critters'

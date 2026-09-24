@@ -306,7 +306,7 @@ than rolling a fresh order, and once `dayComplete()` is true the day board close
 the run into tomorrow (a new menu, a new list, an empty pantry, the truck re-parked), and once `weekComplete()` is
 true the only way on is the title screen.
 
-### `game/week.js` and `game/book.js` — the two saved files
+### `game/week.js`, `game/book.js` and `game/garage.ts` — the saved files
 `week.js` is the WEEK IN PROGRESS: `{ seed, day, critters, stars, takings }` under `foodie-truck.week`, written at
 the closed day board and read by the title's `enter()` to turn PLAY into CONTINUE. It stores nothing derivable —
 `planWeek(seed)[day]` rebuilds the rest. Online peers do NOT write it (`saveWeek(rec, online)` refuses): a guest
@@ -317,11 +317,17 @@ plays the host's week, which arrives in START.
 byte-identical days. `tools/check.js` fails the build on any other module importing the read side, and the
 `bookInvariant` playtest scenario proves the same thing from outside. Both obey `engine/bindings.js`'s storage
 rules: fragile on purpose, and touched from screen `enter()` / `exit()` only.
+`garage.ts` is THE GARAGE under `foodie-truck.garage` (docs/GDD.md section 13): the coin tin, the truck pieces
+bought and what is worn. `bankDay` pays each closed night's coins in once (keyed on seed and day); the garage
+screen buys into its own copy and saves it in `exit()`; `truckStyleFor(game)` is what the truck-drawing screens
+read in `enter()` - the stock truck in a live match. Like the book it never reaches the simulation, and online it
+banks nothing.
 
 ### Flow
 ```
 title -> select -> stage -> map -> <orchard|pond|coop|dairy|mill|hive|garden> -> map -> ... (run.complete())
       -> map -> line -> kitchen -> results -> map -> line -> kitchen -> results ... -> results -> stage (closed)
+      -> garage -> stage (tomorrow) ...  (online: stage (closed) -> stage (tomorrow), no garage)
 title -> lobby (host key) -> select (shared) -> stage ...  (online: the host's START opens the same scene everywhere)
 ```
 - `screens/map.js`: the truck drives (`run.truck`); arriving at a landmark pushes whatever `run.screenForPlace(id)`

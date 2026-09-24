@@ -9,8 +9,8 @@
 //        another, ?order= forces a recipe onto the menu and into the first customer's paws, and ?recipes= fixes
 //        the menu outright. What keeps four online machines on one day and lets a scenario pick its landmarks.
 //   stageClosing - the END: with every line served the board closes the truck for the night, prints the day's
-//        card with each customer's stars, and the only thing left to press goes back to the title. Writes
-//        tools/screens/stage-closing.png.
+//        card with each customer's stars, and the only thing left to press drives into the garage, whose way out
+//        opens tomorrow. Writes tools/screens/stage-closing.png.
 import { withPage, assert } from '../playtest.js';
 import { ORDERS, INGREDIENTS } from '../../src/content/recipes.ts';
 import { PLACES } from '../../src/content/places.ts';
@@ -109,11 +109,15 @@ export const SCENARIOS = {
       assert(s.top.strip.length === DAYS_PER_WEEK && s.top.strip[0] === `${want}/${dishesIn(DAY_SHAPES[0]) * 3}`, `the week strip carries tonight's stars (${s.top.strip.join(' ')})`);
       assert(s.top.strip.slice(1).every((c) => c.startsWith('-')), 'and the days still to come are blank');
       await api.shot('stage-closing');
-      // the hinge: the one press opens TOMORROW, not the title
+      // the hinge: the one press drives into the garage, and the garage's way out opens TOMORROW, not the title
       await api.press(0, { action: true }, 2, 6);
       await api.step(70);
+      const g = await api.summary();
+      assert(g.screen === 'garage' && g.top.from === 'night' && g.top.exit === 'OPEN TOMORROW', `the press off a closed first day drives into the garage (on ${g.screen}, '${g.top.exit}')`);
+      await api.press(0, { cancel: true }, 2, 6);
+      await api.step(70);
       const t = await api.summary();
-      assert(t.screen === 'stage', `the press off a closed first day opens the next board (on ${t.screen})`);
+      assert(t.screen === 'stage', `leaving the garage opens the next board (on ${t.screen})`);
       assert(t.run.day === 1 && t.top.closed === false, `which is day 2, open (day ${t.run.day + 1}, closed ${t.top.closed})`);
       assert(t.run.needs.every((n) => n.split(':')[1].startsWith('0/')), 'with an empty pantry: nothing carries between days');
       assert(t.run.truckAt === 'home' && t.run.served === 0 && t.run.linesServed === 0, 'the truck back in the yard and nothing served');
@@ -143,8 +147,12 @@ export const SCENARIOS = {
       assert(s.run.weekComplete === true, 'and the run says so');
       await api.shot('stage-week');
       await api.press(0, { action: true }, 2, 6);
-      await api.step(10);
-      assert((await api.screen()) === 'title', `the last press of the week goes back to the title (on ${await api.screen()})`);
+      await api.step(70);
+      s = await api.summary();
+      assert(s.screen === 'garage' && s.top.exit === 'SEE THE WEEK OUT', `the last night of the week still ends in the garage (on ${s.screen}, '${s.top.exit}')`);
+      await api.press(0, { cancel: true }, 2, 6);
+      await api.step(70);
+      assert((await api.screen()) === 'title', `and the way out of it at the end of the week is the title (on ${await api.screen()})`);
     });
   },
 };

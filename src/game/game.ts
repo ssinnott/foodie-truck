@@ -193,7 +193,7 @@ export interface Run {
   week: DayPlan[];
   /** The stars each finished day earned, one entry per day closed so far, in day order. */
   weekStars: number[];
-  /** The takings each finished day earned, in day order; `score` is this week's running total. */
+  /** The takings each finished day earned, in coins, in day order; `score` is this week's running total. */
   weekTakings: number[];
   /** The day's menu: ORDERS ids, in the order the board prints them. */
   recipes: string[];
@@ -211,6 +211,7 @@ export interface Run {
   served: number;
   /** The line `serve()` finished last; -1 before the first one. */
   lastServed: number;
+  /** The week's takings in coins: game/run.ts TIP_COINS for every dish served. */
   score: number;
   truck: TruckState;
   /** The day's crossings on the road, in the order they come out. */

@@ -49,10 +49,12 @@ live in `src/content/critters/`. Customers are NPC critters built with the same 
 ```
 title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> map -> line -> kitchen -> results -> map -> line -> kitchen -> results -> map ...
                                                                                                                                                               |
-   the day: a menu, a line per queue, one shopping list; when the last line is served -> stage (CLOSED) --NEXT DAY--> stage (OPEN, tomorrow) -> map -> ...
-                                                                                                          |
-                                                                                    ... and on the LAST day of the week -> title. That is the end of the game.
+   the day: a menu, a line per queue, one shopping list; when the last line is served -> stage (CLOSED) -> garage --OPEN TOMORROW--> stage (OPEN, tomorrow) -> map -> ...
+                                                                                                                     |
+                                                                                    ... and on the LAST day of the week -> garage -> title. That is the end of the game.
 ```
+
+(Online there is no garage yet: the closed board's press goes straight on to tomorrow, or to the title.)
 
 - **A week** is `DAYS_PER_WEEK` (5) days, and a run is a week. The whole week is planned ONCE from the run's seed
   (`game/run.js planWeek`) before day 1 opens, purely, on one stream in day order. All five up front for two
@@ -139,14 +141,18 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   gets a 1–3 star rating over their head; `run.serveAll(stars)` banks each customer's stars and takes every dish's
   ingredients back out of the pantry. Then back to the map for the next line (the map says
   `LINE SERVED! 2 TO GO`); when that was the last line, to the day board, which opens **closed** — the day's stars
-  and takings totted up, and the **week strip** under them.
-- **The closed board is the hinge, not the exit.** On any day but the last, the one press left says `NEXT DAY`:
+  and coins totted up, and the **week strip** under them. Every dish tips `TIP_COINS[stars]` — 4, 8 or 12 coins —
+  and those coins are the day's takings: the game has one money, and the garage (section 13) spends it.
+- **The closed board is the hinge, not the exit.** It pays the night's coins into the garage's tin, and its one
+  press drives the truck into **the garage** (section 13); the garage's way out, `OPEN TOMORROW`, is what used to
+  be the board's own `NEXT DAY` (and online, where there is no garage yet, the board's press still is):
   `run.nextDay()` banks the day into the week's record and rebuilds every per-day field from the week's own plan —
   a new menu, a new shopping list, an empty pantry, the road laid out again and the truck back in the yard — and
   the board comes straight back up open on tomorrow. What carries between days is the week's record, the takings
   and the party, and **nothing else**: the pantry deliberately does not, or the board would stop being the whole
-  truth about the day. On the **last** day of the week the board closes the week, prints its totals, and the one
-  press goes back to the title. **That is the end of the game.**
+  truth about the day. On the **last** day of the week the board closes the week and prints its totals, the garage
+  opens one last time (`SEE THE WEEK OUT`), and its way out goes back to the title. **That is the end of the game**
+  — of the week, anyway: the tin and whatever the truck is wearing carry on into the next one.
 - **A week is resumable at day boundaries** (`game/week.ts`), because at one a run holds nothing that is not
   derivable: the record is the seed, the day, the party and what the closed days were worth — about sixty bytes.
   The title's first row is `CONTINUE` instead of `PLAY` while one is in progress, and it reseats the saved party
@@ -445,7 +451,7 @@ player has bound M to something, while a rebind is listening, and while a host k
 
 ## 10. Screens — what each must do
 
-- **title**: logo, the parked truck with the cast idling, menu PLAY / ONLINE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Six rows, so the A-frame is 18 px taller than it was at five. Along the bottom, on one paper strip, the two addresses this game has: the repository - the SOURCE row's other half, lit while that row is selected - and the Ko-fi address beside it, which is a click and nothing else, no row and no key. Both are underlined, and both stay readable to type where a browser refuses the tab (`engine/links.ts`).
+- **title**: logo, the parked truck (wearing what the garage put on it) with the cast idling, menu PLAY / ONLINE / GARAGE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Seven rows, so the A-frame is 14 px taller than it was at six, grown upward so its legs stay put. Along the bottom, on one paper strip, the two addresses this game has: the repository - the SOURCE row's other half, lit while that row is selected - and the Ko-fi address beside it, which is a click and nothing else, no row and no key. Both are underlined, and both stay readable to type where a browser refuses the tab (`engine/links.ts`).
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
 - **select**: five 116×200 cards (the kit's 140 fitted four across), one cursor per joined seat, READY stamps;
   `next` = stage (starts the run).
@@ -459,11 +465,12 @@ player has bound M to something, while a rebind is listening, and while a host k
   dishes, and a CLOSING TIME slate over it with the lines and dishes served, the day's stars and its takings, and
   under them the **week strip** - one chip per day of the week, a closed day chalked up with its stars (tonight's
   landing on the same stamp beat the SERVED cards use), a day still to come pencilled in, so the week reads as a
-  week from the first night. The one press left says `NEXT DAY` and rolls the run over into tomorrow's open board;
-  on the LAST day of the week it says `TITLE` and ends the game. The closed board is also **the one write of the
-  night**: `run.closeDay()`, `recordDay()` into the book and `saveWeek()` all happen in its `enter()`, at a screen
-  boundary and never in an `update()`, and all three are keyed on the day so a board that opens closed twice counts
-  once. BACK (open board only) leaves for the title, and is refused
+  week from the first night. The one press left says `TO THE GARAGE` (section 13), whose way out rolls the run over
+  into tomorrow's open board, or on the LAST day of the week ends the game; online, where there is no garage, it
+  says `NEXT DAY` / `TITLE` and does that itself. The closed board is also **the one write of the night**:
+  `run.closeDay()`, `recordDay()` into the book, `saveWeek()` and `bankDay()` into the garage's tin all happen in
+  its `enter()`, at a screen boundary and never in an `update()`, and all four are keyed on the day so a board that
+  opens closed twice counts once. BACK (open board only) leaves for the title, and is refused
   online (a peer walking out of a live room stalls the rest, as with the pause overlay).
 - **line**: the truck pulled up at a queue on the dusk lane, turned so its hatch faces the diners still waiting (one
   rig each, front first, the crew's heads in the windows); the front diner waves, a paper bubble over their head
@@ -475,6 +482,8 @@ player has bound M to something, while a rebind is listening, and while a host k
 - **map**, **orchard**, **pond**, **coop**, **dairy**, **mill**, **hive**, **garden**, **bramble**, **beach**, **holt**,
   **wood**, **terrace**, **kitchen**, **results**:
   as above. Every one exposes `summary()` and `checksumFields()` and reads input only by seat.
+- **garage**: section 13. The truck under a bulb in a plank garage, the tin top left, and a chalk slate of three
+  slots (PAINT / AWNING / ROOF) and the way out; local only.
 - **pause**: transparent overlay (RESUME / QUIT TO TITLE); refused while `game.net.active`.
 - **gallery**: the cast contact sheet in game.
 - **book**: the recipe book (section 12), the gallery's sibling: left/right through the pages, CANCEL out.
@@ -566,4 +575,42 @@ thrown on: a book written by a build with sixty-three recipes has to load on a b
 again. The book is reachable from the title and from nowhere else, so it can never be open while a run is live;
 and unlike the week, **every peer in an online match does write it**, because what it records is what that player
 themselves cooked.
+
+## 13. The garage
+
+Where the night ends, and what the tips are for. The closed day board pays the day's coins into **the tin** and
+drives the truck into the garage; the crew spends the tin on the truck, and `OPEN TOMORROW` rolls on to the next
+day's board (on the last night, `SEE THE WEEK OUT` goes to the title). The title's `GARAGE` row opens it between
+weeks too, where the way out is `BACK`.
+
+**What it sells** (`content/garage.ts`; the art for every option is `art/truck.ts`'s): three slots, each with the
+stock piece the truck is built with and **two to buy** — six pieces in all.
+
+| Slot | Stock | To buy |
+|---|---|---|
+| **Paint** | Beetroot | Seafoam mint (220), **Ketchup and mustard** (320) — red, with a mustard sill and a red zigzag down it |
+| **Awning** | Mustard stripes | Cherry gingham (200), **Salad** (280) — a lettuce awning with a leafy frill and tomato slices |
+| **Roof** | The FOODIE TRUCK board | Big apple (260), **Hot dog** (360) — bun, sausage and a mustard zigzag, on the board's posts |
+
+**The balance: about one piece a week.** A dish tips 4, 8 or 12 coins by its stars (`TIP_COINS`, game/run.ts),
+and a week is 31 dishes, so a week of two-star cooking tips 248, three stars 372, and a steady two-and-a-half about
+310. Every piece costs 200–360: the first week always buys the cheapest, the food pieces want a good week each,
+and the six together are five or six weeks of work. `garagePrices` in the playtest holds the catalogue to that.
+
+**The screen.** One screen, no tabs: up and down pick PAINT, AWNING, ROOF or the way out; left and right flip
+through the slot's options, and the truck **wears whichever one is showing at once**, bought or not — seeing it on
+the truck is what sells it. An owned piece is worn the moment it is flipped to. One not bought is only tried on (a
+`TRYING ON - 320 COINS` tag hangs under the truck) and its price shows on the slate; confirm asks
+(`BUY FOR 320? PRESS AGAIN`), confirm again buys it — the tin pays, `SOLD` slams over the roof, the truck hops and
+the crew cheers in the windows. A piece the tin cannot cover says how much more it needs, and shakes. Leaving on a
+piece only tried on puts the owned one back.
+
+**The record** (`game/garage.ts`, one record under `foodie-truck.garage`): the coins, the pieces bought, what is
+worn, and which night was banked last (so a board that opens closed twice pays in once). It outlives the week —
+`week.ts` forgets a week the night it ends; the tin has to carry on. Read and written from screen `enter()` /
+`exit()` only: the garage buys into its own copy and writes it on the way out.
+
+**It never reaches the simulation.** The coins are read by the garage screen and the style by `drawTruck`, and
+neither can change a frame. **Online there is no garage yet**: a match banks nothing, the closed board goes
+straight on, and every peer draws the stock truck, so a match looks the same on every machine.
 

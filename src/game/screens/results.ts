@@ -34,6 +34,9 @@ import { drawLane, TRUCK_Y, CREW_Y } from '../../art/logo.ts';
 import { drawPlate, PROPS } from '../../art/kitchenProps.ts';
 import { ITEMS } from '../../content/critters/items.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
+import { TIP_COINS } from '../run.ts';
+import { truckStyleFor } from '../garage.ts';
+import type { TruckStyle } from '../../art/truck.ts';
 import { TRUCK_X, QUEUE_X0, QUEUE_PITCH, QUEUE_SCALE, DRIVER } from './line.ts';
 import type { LineHead } from './line.ts';
 // The diners hold their dishes, so their rigs are the kitchen's own rig-plus-held-food type rather than a bare Rig.
@@ -55,7 +58,6 @@ const CHEER_LAG = 5;
 const CONFIRM_AT = 20;
 /** Index by stars (1..3); index 0 is unreachable (stars are clamped to 1) but keeps the lookup flat. */
 const STAMPS = ['EDIBLE', 'EDIBLE', 'TASTY', 'DELICIOUS'];
-const COINS = [0, 4, 8, 12];
 /** Each diner's stars over their head. */
 const HEAD_STARS_Y = 176, HEAD_STAR_R = 6;
 /** The tip's coins lie in rows under the receipt: the picture counts what the paper printed. */
@@ -67,7 +69,7 @@ const COIN_COLS = 16, COIN_PITCH = 10, COIN_R = 4;
 const RECEIPT_W = 212, RECEIPT_X = VIEW_W - 8 - RECEIPT_W, RECEIPT_Y = 34, ROW_STAR_R = 4;
 const SIGN_Y = 2;
 const RECEIPT_OPTS: TicketOpts = { title: 'RECEIPT', rules: false }, ROW_TEXT: DrawTextOptions = { size: 1, color: UI.ink, shadow: false }, ROW_RIGHT: DrawTextOptions = { size: 1, color: UI.ink, shadow: false, align: 'right' };
-const TIP_LABEL = 'TIP', TOTAL_LABEL = 'TOTAL';
+const TIP_LABEL = 'TIP', TOTAL_LABEL = 'THIS WEEK';
 
 /** One crew member in the truck: the rig in its seat's apron and the player whose pose the head in the window shares. */
 export interface Watcher {
@@ -130,7 +132,7 @@ export class ResultsScreen extends Screen {
   /** The heads in the truck's windows: the driver first, then the rest. */
   declare heads: LineHead[];
   /** The truck's draw options, reused every frame. */
-  declare truckOpts: { scale: number; wheel: number; facing: number; heads: LineHead[] };
+  declare truckOpts: { scale: number; wheel: number; facing: number; heads: LineHead[]; style: TruckStyle };
   /** The diners being served, front of the line first. */
   declare diners: Served[];
   /** The stars per dish, in line order, clamped to 1..3: what `serveAll` banks. */
@@ -145,11 +147,11 @@ export class ResultsScreen extends Screen {
   declare signW: number;
   /** The red stamp's word: STAMPS for the line's average stars. */
   declare stampText: string;
-  /** The tip in coins, COINS summed over every dish: the receipt's row and the discs under it count the same number. */
+  /** The tip in coins, TIP_COINS summed over every dish: the receipt's row and the discs under it count the same number. */
   declare tip: number;
   /** Its TIP row. */
   declare tipText: string;
-  /** Its TOTAL row: the run's score with this line's stars banked. */
+  /** Its TOTAL row: the week's coins with this line's tip banked. */
   declare totalText: string;
   /** The receipt's height: one row per dish, then the tip and the total and the stamp's blank foot. */
   declare receiptH: number;
@@ -175,7 +177,7 @@ export class ResultsScreen extends Screen {
       this.heads.push({ rig: this.crew[di].rig, pose: this.crew[di].player.pose as Pose });
       for (let i = 0; i < this.crew.length; i++) if (i !== di) this.heads.push({ rig: this.crew[i].rig, pose: this.crew[i].player.pose as Pose });
     }
-    this.truckOpts = { scale: 2, wheel: 0, facing: -1, heads: this.heads };
+    this.truckOpts = { scale: 2, wheel: 0, facing: -1, heads: this.heads, style: truckStyleFor(game) };
     // the line: everyone still waiting, front first, each with the stars the kitchen earned on their dish
     const ln = run.lines[run.line];
     const given = Array.isArray(params.stars) ? params.stars : params.stars != null ? [params.stars] : null;
@@ -205,9 +207,9 @@ export class ResultsScreen extends Screen {
     this.signText = `LINE ${run.line + 1} OF ${run.lines.length} SERVED  -  ${place ? place.name : ln ? ln.place.toUpperCase() : ''}`;
     this.signW = measureText(this.signText, 1) + 24;
     this.stampText = STAMPS[Math.max(1, Math.min(3, R(sum / this.stars.length)))];
-    this.tip = 0; for (const s of this.stars) this.tip += COINS[s];
+    this.tip = 0; for (const s of this.stars) this.tip += TIP_COINS[s];
     this.tipText = `${this.tip} COINS`;
-    this.totalText = String(run.score + sum * 100);
+    this.totalText = `${run.score + this.tip} COINS`;
     this.receiptH = 16 + 6 + ROW * this.diners.length + 8 + ROW * 2 + 46;
     this.prompt = `PRESS ${game.input.keyText(0, 'action')}`;
     this.fields.length = 0;

@@ -45,6 +45,8 @@ import { INGREDIENTS } from '../../content/recipes.ts';
 import { drawFood } from '../../art/food.ts';
 import { INK } from '../../art/layers.ts';
 import { drawTruck } from '../../art/truck.ts';
+import type { TruckStyle } from '../../art/truck.ts';
+import { truckStyleFor } from '../garage.ts';
 import {
   CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, RIVER_BLOCK, SPOTS, SIGN_AT, PARK_AT,
   ROADSIDE_TREES, GLINTS, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, waterBlocked,
@@ -218,6 +220,8 @@ export interface TruckDrawOpts {
   /** Vertical scale about the tyre line; 1 at rest. */
   squash: number;
   heads: MapHead[];
+  /** What the truck is wearing (game/garage.ts truckStyleFor): cosmetic, read by drawTruck alone. */
+  style: TruckStyle;
 }
 
 export class MapScreen extends Screen {
@@ -304,12 +308,15 @@ export class MapScreen extends Screen {
   declare cam: MapCamera;
   /** The reused drawTruck options object; built on the first draw (see `truckOpts`). */
   declare _to?: TruckDrawOpts;
+  /** The livery the token is drawn in, read once in enter() (game/garage.ts: never from update()). */
+  declare truckStyle: TruckStyle;
 
   constructor(game: Game) { super(game, 'map'); this.touchAlt = true; this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.sum = [0, 0, 0, 0, 0, 0]; this.lineRows = []; this.lineTags = []; }
   override enter(params: ScreenParams): void {
     super.enter(params);
     const run = this.game.run, truck = run.truck;
     particles.clear();
+    this.truckStyle = truckStyleFor(this.game);
     if (truck.x === 0 && truck.y === 0) { truck.x = PARK_AT.x; truck.y = PARK_AT.y; truck.heading = 0; truck.at = 'home'; }
     this.truck = truck;
     this.speed = 0; this.want = -1; this.turnCd = 0; this.facing = COS[truck.heading] < 0 ? -1 : 1;
@@ -747,8 +754,8 @@ export class MapScreen extends Screen {
 
   /** Reuse one options object for drawTruck (zero allocation in draw). */
   truckOpts(bob: number): TruckDrawOpts {
-    const o = this._to || (this._to = { scale: TOKEN_SCALE, facing: 1, bob: 0, wheel: 0, squash: 1, heads: this.heads });
-    o.facing = this.facing; o.bob = bob; o.wheel = this.wheelStep; o.squash = this.squashT > 0 ? 1.1 : 1; o.heads = this.heads;
+    const o = this._to || (this._to = { scale: TOKEN_SCALE, facing: 1, bob: 0, wheel: 0, squash: 1, heads: this.heads, style: this.truckStyle });
+    o.facing = this.facing; o.bob = bob; o.wheel = this.wheelStep; o.squash = this.squashT > 0 ? 1.1 : 1; o.heads = this.heads; o.style = this.truckStyle;
     return o;
   }
 

@@ -11,7 +11,9 @@ import { drawTextOutlined } from '../../engine/text.ts';
 import { drawRig } from '../../lib/art/rig.ts';
 import type { Rig, RigWeapon } from '../../lib/art/rig.ts';
 import { drawShadow } from '../../art/fx.ts';
-import { drawTruck } from '../../art/truck.ts';
+import { drawTruck, STOCK_STYLE } from '../../art/truck.ts';
+import type { TruckStyle } from '../../art/truck.ts';
+import { truckStyleFor } from '../garage.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { ITEMS } from '../../content/critters/items.ts';
 import { drawFood } from '../../art/food.ts';
@@ -33,7 +35,7 @@ import { drawLane, drawLogoSign, drawCrate, drawBlock, TRUCK_Y, CREW_Y } from '.
  * week in progress (game/week.ts). PLAY starts a fresh week at the character select; CONTINUE reseats the party
  * the saved week was being played by and opens its board straight away.
  */
-const ROWS = ['PLAY', 'ONLINE', 'BOOK', 'CONTROLS', 'CREW', 'SOURCE'];
+const ROWS = ['PLAY', 'ONLINE', 'GARAGE', 'BOOK', 'CONTROLS', 'CREW', 'SOURCE'];
 const PLAY_ROW = 0, PLAY_TEXT = 'PLAY', CONTINUE_TEXT = 'CONTINUE';
 const SOURCE_ROW = ROWS.length - 1;
 /**
@@ -60,8 +62,9 @@ const LINK_LIT = UI.wood;
  * fifth member takes the lane up to ~478, so the board is 36 px narrower and starts where the lineup stops (its
  * widest row, CONTINUE, is 56 px of the 140). It grew 18 px taller when BOOK joined the list: five rows at a 14
  * pitch cleared the old 104, six do not, and a row clipped by the frame is worse than a slightly taller A-frame.
+ * GARAGE made seven, and the board grew one more pitch UPWARD so its legs still stand on the same patch of lane.
  */
-const SLATE = { x: 482, y: 166, w: 140, h: 122 };
+const SLATE = { x: 482, y: 152, w: 140, h: 136 };
 /**
  * Where the truck parks, the crate it was loaded from, and where the crew lines up.
  *
@@ -141,7 +144,7 @@ const SWING = 0.02, SWING_RATE = 0.045;
 /** PRESS START is on for 40 of every 60 frames: a blink, not a strobe. */
 const BLINK_PERIOD = 60, BLINK_ON = 40;
 const START_Y = 314;
-const TRUCK_OPTS = { scale: 2, wheel: 0 };
+const TRUCK_OPTS = { scale: 2, wheel: 0, style: STOCK_STYLE as TruckStyle };
 /**
  * PRESS START, and what it says to somebody holding a phone. Two constants rather than one string built from
  * `keyText`, because this line is drawn at size 2 in the middle of the screen: it is the one prompt in the game
@@ -205,6 +208,8 @@ export class TitleScreen extends Screen {
     this.week = readWeek();
     this.rows = ROWS.slice();
     this.rows[PLAY_ROW] = this.week ? CONTINUE_TEXT : PLAY_TEXT;
+    // the parked truck wears what the garage has put on it
+    TRUCK_OPTS.style = truckStyleFor(this.game);
     this.crew = CRITTERS.map((def, i) => {
       // nobody is seated on the title, so the crew wears the off-duty apron: the four player colours mean "this
       // seat is taken" everywhere else (constants.js OFF_DUTY_APRON, docs/ART_STYLE.md section 4)
@@ -259,6 +264,7 @@ export class TitleScreen extends Screen {
     if (row === CONTINUE_TEXT) this.resume();
     else if (row === PLAY_TEXT) this.game.replace('select');
     else if (row === 'ONLINE') this.game.replace('lobby');
+    else if (row === 'GARAGE') this.game.replace('garage', { from: 'title' });
     else if (row === 'BOOK') this.game.replace('book');
     else if (row === 'CONTROLS') this.game.replace('controls');
     else if (row === 'CREW') this.game.replace('gallery');

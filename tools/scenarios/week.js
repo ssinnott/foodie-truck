@@ -27,6 +27,14 @@ export function serveDay(page, stars = 3) {
   }, stars);
 }
 
+/** Confirm a closed board off the net: into the garage, and straight out of it again into tomorrow. */
+export async function nightInGarage(api) {
+  await api.press(0, { action: true }, 2, 6);
+  await api.step(70);
+  await api.press(0, { cancel: true }, 2, 6);
+  await api.step(70);
+}
+
 export const SCENARIOS = {
   async week(server) {
     // every day, opened on its own through ?day=, is the shape DAY_SHAPES says it is
@@ -69,9 +77,8 @@ export const SCENARIOS = {
       const starsD1 = s.run.stars;
       assert(s.top.strip[0] === `${starsD1}/${dishesIn(DAY_SHAPES[0]) * 3}`, `tonight lands on the strip (${s.top.strip.join(' ')})`);
       await api.shot('week-strip');
-      // the hinge
-      await api.press(0, { action: true }, 2, 6);
-      await api.step(70);
+      // the hinge: the closed board, the garage, and out into tomorrow
+      await nightInGarage(api);
       s = await api.summary();
       assert(s.screen === 'stage' && s.run.day === 1 && s.top.closed === false, `confirming opens day 2's board (day ${s.run.day + 1}, closed ${s.top.closed})`);
       assert(s.run.recipes.join() !== menu1 || s.run.needs.join() !== list1, 'tomorrow is a different day, not the same one again');
@@ -83,8 +90,7 @@ export const SCENARIOS = {
       await serveDay(page, 2);
       await api.goto('stage');
       await api.step(20);
-      await api.press(0, { action: true }, 2, 6);
-      await api.step(70);
+      await nightInGarage(api);
       s = await api.summary();
       assert(s.run.day === 2 && s.top.closed === false, `and on to day 3 (day ${s.run.day + 1})`);
       assert(s.run.weekStars.length === 2, `two days banked (${JSON.stringify(s.run.weekStars)})`);
