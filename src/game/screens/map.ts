@@ -49,7 +49,7 @@ import { INK } from '../../art/layers.ts';
 import { drawTruck } from '../../art/truck.ts';
 import {
   CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, RIVER_BLOCK, SPOTS, SIGN_AT, PARK_AT,
-  ROADSIDE_TREES, GLINTS, STOP_LAMPS, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, waterBlocked,
+  ROADSIDE_TREES, GLINTS, STOP_LAMPS, TOWER, TOWER_TIP, towerSprite, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, waterBlocked,
   wallBlocked, drawSails, drawHen, drawBee, drawPhoneRing, drawSheep, drawDuck, drawDiner, MAP,
 } from '../../art/backgrounds/map.ts';
 import type { Crossing } from '../game.ts';
@@ -64,7 +64,7 @@ const BEE_X = new Int8Array(32), BEE_Y = new Int8Array(32);
 for (let i = 0; i < 32; i++) { BEE_X[i] = Math.round(Math.cos(i * Math.PI / 16) * 10); BEE_Y[i] = Math.round(Math.sin(i * Math.PI / 16) * 6); }
 const LANE_SPEED = 2.2, FIELD_SPEED = 1.0, TURN_EVERY = 4, ARRIVE_R = 40, DRIVER = 'chicory', DRIVER_WEIGHT = 1.5;
 const HONK_FRAMES = 30, SQUASH_FRAMES = 4, SIGN_FRAMES = 90, RING_FRAMES = 60, TOKEN_SCALE = 0.5;
-const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3, KIND_HERD = 4, KIND_CART = 5, KIND_DINER = 6;
+const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3, KIND_HERD = 4, KIND_CART = 5, KIND_DINER = 6, KIND_TOWER = 7;
 /** The tipped cart: the truck takes its spill within CART_R of the spot. */
 const CART_R = 36, THANKS = 'THANKS!';
 /** The mud patch's reach, the fog's clear radius and its full-milk radius, and the rain's streak count. */
@@ -151,7 +151,7 @@ export interface WorldPoint {
  * themselves, so their `L` is null and `w`/`h` exist only to cull them.
  */
 export interface MapSprite {
-  /** KIND_TREE, KIND_SIGN, KIND_SAILS, KIND_TRUCK, KIND_HERD (one walker of a crossing: `ci` is the crossing, `k` the walker), KIND_CART or KIND_DINER (one diner in a town queue: `ci` is the line, `k` the diner). */
+  /** KIND_TREE, KIND_SIGN, KIND_SAILS, KIND_TRUCK, KIND_HERD (one walker of a crossing: `ci` is the crossing, `k` the walker), KIND_CART, KIND_DINER (one diner in a town queue: `ci` is the line, `k` the diner) or KIND_TOWER (the town's skyscraper). */
   kind: number;
   /** World position of the anchor: bottom centre of the sprite. */
   x: number;
@@ -362,6 +362,7 @@ export class MapScreen extends Screen {
     this.sprites.length = 0;
     for (const t of ROADSIDE_TREES) { const L = treeSprite(t[2]); this.sprites.push({ kind: KIND_TREE, x: t[0], y: t[1], L, w: L.w, h: L.h, shadow: 18 + t[2] * 4 }); }
     for (const p of PLACES) { const s = SIGN_AT[p.id], L = signSprite(p.sign); this.sprites.push({ kind: KIND_SIGN, x: s.x, y: s.y, L, w: L.w, h: L.h, shadow: 16 }); }
+    { const L = towerSprite(); this.sprites.push({ kind: KIND_TOWER, x: TOWER.x, y: TOWER.y, L, w: L.w, h: L.h, shadow: TOWER.w + 12 }); }
     this.sprites.push({ kind: KIND_SAILS, x: SPOTS.millHub.x, y: SPOTS.millHub.y + 52, L: null, w: 70, h: 100, shadow: 0 });
     this.truckSprite = { kind: KIND_TRUCK, x: truck.x, y: truck.y, L: null, w: 44, h: 40, shadow: 40 };
     this.sprites.push(this.truckSprite);
@@ -689,7 +690,11 @@ export class MapScreen extends Screen {
       else if (s.kind === KIND_HERD) this.drawWalker(ctx, s, sx, sy, f);
       else if (s.kind === KIND_CART) this.drawCart(ctx, sx, sy);
       else if (s.kind === KIND_DINER) this.drawQueuer(ctx, s, sx, sy, f);
-      else ctx.drawImage(s.L.canvas, sx - (s.L.w >> 1), sy - s.L.h);
+      else {
+        ctx.drawImage(s.L.canvas, sx - (s.L.w >> 1), sy - s.L.h);
+        // the skyscraper's aircraft beacon, blinking on the spire's tip
+        if (s.kind === KIND_TOWER && ((f >> 5) & 1)) { ctx.fillStyle = MAP.roof; ctx.fillRect(sx + TOWER_TIP.dx - 1, sy + TOWER_TIP.dy - 2, 3, 3); }
+      }
     }
     // the lantern glow over the destination's sign (the map's one signal colour), then the drifting cloud shadows
     const gs = this.destSign, gx = gs.x - cam.x, gy = gs.y - 18 - cam.y;

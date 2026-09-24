@@ -212,7 +212,6 @@ export function inCity(x, y, m = 0) { return x >= CITY.x0 - m && x <= CITY.x1 + 
 const TOWN: [number, number, number, number, string, string, string, string, number][] = [
   [1366, 688, 52, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
   [1426, 688, 56, 34, MAP.sand, '#B8A57A', MAP.roof, MAP.roofShade, 3],
-  [1120, 714, 50, 28, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, 0],
   [1098, 768, 56, 34, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 2],
   [1374, 808, 56, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
   [1438, 808, 46, 30, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, 0],
@@ -223,6 +222,12 @@ const TOWN: [number, number, number, number, string, string, string, string, num
   [1106, 928, 56, 30, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, 0],
   [1172, 932, 36, 28, MAP.sand, '#B8A57A', MAP.slate, '#243A2E', 0],
 ];
+/**
+ * The town's one skyscraper, on the north edge of town behind the chapel: base centre (x, y), a shaft `w` wide and
+ * `h` tall. It is far too tall to bake into the ground (a truck in the meadow behind it would drive over its top
+ * floors), so it is a y-sorted sprite (`towerSprite`) and only its footprint is a wall.
+ */
+export const TOWER = Object.freeze({ x: 1154, y: 716, w: 40, h: 104 });
 /** The market square's fountain: a stone basin the truck drives round. */
 const FOUNTAIN = Object.freeze({ x: 1328, y: 788, r: 14 });
 /**
@@ -244,6 +249,8 @@ const WALLS = [
   FARM.x - 70, FARM.y - 68, FARM.x - 6, FARM.y - 30,        // the farm's barn (the plot beside it stays drivable, like a field)
   FOUNTAIN.x - FOUNTAIN.r - 4, FOUNTAIN.y - FOUNTAIN.r - 2, FOUNTAIN.x + FOUNTAIN.r + 4, FOUNTAIN.y + FOUNTAIN.r,
 ];
+// ...the skyscraper's footprint...
+WALLS.push(TOWER.x - TOWER.w / 2 - 4, TOWER.y - 26, TOWER.x + TOWER.w / 2 + 4, TOWER.y - 6);
 // ...and every building in the town, its roof included, a few px wider than the walls
 for (const b of TOWN) WALLS.push(b[0] - 4, b[1] - b[3] - Math.round(b[3] * 0.5), b[0] + b[2] + 4, b[1] - 6);
 /** True where a wall stands: the truck stops against it (comparisons only, so the sim stays deterministic). */
@@ -682,6 +689,39 @@ export function signSprite(text) {
     signSprites.set(text, L);
   }
   return L;
+}
+let towerLayer = null;
+/**
+ * The skyscraper: a stone-grey shaft with its shaded east face, a grid of windows (a few lit gold, it being dusk),
+ * a glazed lobby with an awning at the foot, and two setbacks up to a spire. Anchor = bottom centre. The beacon on
+ * the spire's tip is the map screen's per-frame mark (TOWER_TIP is where it goes, from the anchor).
+ */
+export const TOWER_TIP = Object.freeze({ dx: 0, dy: -(TOWER.h + 30) });
+export function towerSprite() {
+  if (towerLayer) return towerLayer;
+  const W = TOWER.w, H = TOWER.h, lw = W + 8, lh = H + 34, cx = lw / 2, base = lh - 1, x0 = cx - W / 2, top = base - H;
+  towerLayer = makeLayer(lw, lh, (g) => {
+    // the spire and the two setbacks, top down
+    boxOutlined(g, cx - 1, top - 30, 2, 12, MAP.rock);
+    boxShaded(g, cx - 7, top - 18, 14, 10, MAP.churn, MAP.rock, INK, 1, 0.3);
+    boxShaded(g, cx - 13, top - 9, 26, 10, MAP.churn, MAP.rock, INK, 1, 0.3);
+    g.fillStyle = MAP.window; g.fillRect(cx - 9, top - 6, 18, 2);
+    // the shaft: lit west face, shaded east face, a parapet band
+    boxOutlined(g, x0, top, W, H, MAP.churn);
+    g.fillStyle = MAP.rock; g.fillRect(x0 + W - 12, top, 12, H);
+    g.fillStyle = MAP.hillFar; g.fillRect(x0, top, W, 3);
+    // the windows: four columns, a row every 8 px, lit by a fixed hash of row and column
+    for (let r = 0, y = top + 7; y < base - 20; r++, y += 8) for (let c = 0; c < 4; c++) {
+      const lit = ((r * 7 + c * 13) % 5) === 0;
+      g.fillStyle = INK; g.fillRect(x0 + 4 + c * 9, y, 6, 5);
+      g.fillStyle = lit ? MAP.mustard : c === 3 ? '#8E8A78' : MAP.window; g.fillRect(x0 + 5 + c * 9, y + 1, 4, 3);
+    }
+    // the lobby: glass doors under a plum awning
+    boxOutlined(g, cx - 9, base - 15, 18, 14, '#3F3A48');
+    g.fillStyle = MAP.window; g.fillRect(cx - 7, base - 13, 6, 12); g.fillRect(cx + 1, base - 13, 6, 12);
+    g.fillStyle = INK; g.fillRect(cx - 12, base - 19, 24, 5); g.fillStyle = '#7E3A56'; g.fillRect(cx - 11, base - 18, 22, 3);
+  }, SEED0 + 13);
+  return towerLayer;
 }
 let cloudSprite = null;
 /** One soft plum ellipse for the drifting cloud shadows (the map's only soft mark besides steam). */
