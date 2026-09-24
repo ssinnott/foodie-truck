@@ -115,6 +115,9 @@ function paintRail(g, w) {
 
 /** A view of the lane outside: dusk sky, a plum tree-line, the hedge, a strip of lane. Shared by window and hatch. */
 function paintOutside(g, x, y, w, h, rnd, hedgeY) {
+  // clipped to the opening: the round crowns start and end past its edges, and without the clip they spilled out
+  // over the frame and onto the wall as green and plum half-discs either side of the window and the hatch
+  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
   g.fillStyle = OUT.sky; g.fillRect(x, y, w, h);
   g.fillStyle = OUT.skyHi; g.fillRect(x, y, w, R(h * 0.34));
   // the far tree-line: one plum band of low crowns behind the hedge
@@ -130,6 +133,7 @@ function paintOutside(g, x, y, w, h, rnd, hedgeY) {
   for (let cx = x + 3; cx < x + w; cx += 13) { g.beginPath(); g.arc(cx + R(rnd() * 4), y + hedgeY, 4, 0, Math.PI * 2); g.fill(); }
   g.fillStyle = OUT.lane; g.fillRect(x, laneY, w, h - (laneY - y));
   g.fillStyle = OUT.laneEdge; g.fillRect(x, laneY, w, 2);
+  g.restore();
 }
 
 /** The window: a 2 px ink frame, the lane outside, one cross bar, a wooden sill. */
