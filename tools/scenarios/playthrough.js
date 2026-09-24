@@ -5,8 +5,8 @@
 //        the critter select onto the day board, the truck opened, then driven along the real lane network to each
 //        landmark the shopping list names, both mini-games PLAYED (apples chased under the basket and caught, eggs
 //        walked to and plucked) round after round until the whole list is aboard, then to the nearest queue: the
-//        first customer's order taken at the hatch, cooked across the stations and eaten on results, the second
-//        called up and served the same way, and the truck back on the map with one line served and two to go.
+//        whole queue's orders taken at the hatch at once, both dishes cooked across the stations at the same time, both
+//        eaten together on results, and the truck back on the map with one line served and the rest to go.
 //        Every other scenario starts its screen with ?skipTo and pokes the run where it needs it; this one only
 //        ever sends input, so it is the test that fails when two screens that each work on their own cannot hand
 //        over. The menu is fixed to the pie and the omelette (?recipes=0,2, a dev option) so the list only ever
@@ -17,7 +17,7 @@
 import { withPage, assert } from '../playtest.js';
 import { PLACES } from '../../src/content/places.ts';
 import { LANES } from '../../src/art/backgrounds/map.ts';
-import { walkTo, chopOnce, pullAll } from './kitchen.js';
+import { cook } from './kitchen.js';
 import { DAY_SHAPES } from '../../src/game/run.ts';
 
 /** A real PLAY always starts a fresh week, so an uninterrupted playthrough is always DAY 1: the opening day. */
@@ -233,34 +233,6 @@ async function pluckEggs(api) {
 
 // ---------------------------------------------------------------- the kitchen, cooked
 
-/** Station index per step name (game/screens/kitchen.js STATION_IDX). */
-const STATION = { fridge: 0, chop: 1, mix: 2, stove: 3, oven: 4, plate: 5 };
-
-/**
- * Cook whatever steps the order carries, each with the input its station asks for: a tap per item at the fridge,
- * ten taps on the board, a hold on the bowl, a hold on the stove, a hold on the oven, and the bell. Every hold is
- * kept down until the step advances, which is what a player does. Leaves the kitchen on the hand-over to results.
- */
-async function cook(api) {
-  let s = await api.summary();
-  const steps = s.top.steps.map((n) => n.toLowerCase());
-  for (let k = 0; k < steps.length; k++) {
-    const name = steps[k];
-    if (name === 'fridge') { s = await pullAll(api); continue; }
-    s = await walkTo(api, STATION[name]);
-    if (name === 'chop') { for (let i = 0; i < 10; i++) s = await chopOnce(api); }
-    else if (name === 'plate') await api.press(0, { action: true }, 1, 0);
-    else {
-      await api.hold(0, { action: true });
-      for (let i = 0; i < 80 && (await api.summary()).top.step === k; i++) await api.step(4);
-      await api.release(0);
-      await api.step(2);
-    }
-    s = await api.summary();
-  }
-  return s;
-}
-
 /** Drive to the landmark the ticket names, play whatever screen opens, and come back with the map's summary. */
 async function gatherNextStop(api, page) {
   const before = await api.summary();
@@ -313,29 +285,30 @@ export const SCENARIOS = {
       s = await driveTo(api, place);
       assert(s.screen === 'line', `driving to the queue opens the line screen (on ${s.screen})`);
       assert(s.run.line === lineIdx && s.top.waiting === 2, `the run stands on that line with two waiting (line ${s.run.line}, ${s.top.waiting})`);
-      let servedStars = 0;
-      for (let k = 0; k < 2; k++) {
-        await api.step(40);
-        s = await api.summary();
-        assert(s.top.bubble.length > 0, `customer ${k + 1} says their order (${s.top.bubble})`);
-        await api.press(0, { action: true }, 2, 4);
-        for (let i = 0; i < 20 && (await api.screen()) !== 'kitchen'; i++) await api.step(6);
-        s = await api.summary();
-        assert(s.screen === 'kitchen' && s.run.customer === k, `taking the order opens the kitchen on customer ${k + 1} (on ${s.screen}, customer ${s.run.customer})`);
-        s = await cook(api);
-        assert(s.top.served === true && s.top.stars >= 1, `the bell serves the dish (total ${s.top.total} -> ${s.top.stars} stars)`);
-        const stars = s.top.stars;
-        servedStars += stars;
-        for (let i = 0; i < 40 && (await api.screen()) !== 'results'; i++) await api.step(6);
-        s = await api.summary();
-        assert(s.screen === 'results' && s.top.stars === stars, `the kitchen hands the stars to results (on ${s.screen}, ${s.top.stars})`);
-        await api.step(140);
-        if (k === 0) await api.shot('playthrough-served');
-        await api.press(0, { action: true }, 1, 2);
-        s = await api.summary();
-        assert(s.run.served === k + 1 && s.run.lines[lineIdx].customers[k].endsWith(':' + stars), `confirm banks customer ${k + 1} at their stars (served ${s.run.served}, ${s.run.lines[lineIdx].customers.join()})`);
-        if (k === 0) assert(s.screen === 'line' && s.top.waiting === 1, `...and calls the next in line (on ${s.screen}, ${s.top.waiting} waiting)`);
-      }
+      // everyone in the queue says what they want, and one press takes every order into the kitchen
+      await api.step(80);
+      s = await api.summary();
+      assert(s.top.bubbles.length === 2 && s.top.bubbles.every((b) => b.length > 0), `both customers say their order at once (${s.top.bubbles.join(' / ')})`);
+      await api.press(0, { action: true }, 2, 4);
+      for (let i = 0; i < 20 && (await api.screen()) !== 'kitchen'; i++) await api.step(6);
+      s = await api.summary();
+      assert(s.screen === 'kitchen' && s.run.customer === 0 && s.top.orders.length === 2, `taking the orders opens the kitchen on the whole line (on ${s.screen}, customer ${s.run.customer}, ${s.top.orders.length} orders)`);
+      // the kitchen cooks both dishes at the same time: one run of the counter, one bell
+      assert(s.top.custs === 2 && s.top.orders.length === 2, `both customers are at the hatch and on the ticket (${s.top.custs}, ${s.top.orders.join()})`);
+      s = await cook(api);
+      assert(s.top.served === true && s.top.dishStars.length === 2 && s.top.dishStars.every((v) => v >= 1), `the bell serves both dishes at once (${s.top.dishStars.join()})`);
+      const stars = s.top.dishStars.slice();
+      const servedStars = stars[0] + stars[1];
+      for (let i = 0; i < 40 && (await api.screen()) !== 'results'; i++) await api.step(6);
+      s = await api.summary();
+      assert(s.screen === 'results' && s.top.stars.join() === stars.join() && s.top.diners === 2, `the kitchen hands both dishes' stars to results together (on ${s.screen}, ${s.top.stars})`);
+      await api.step(180);
+      s = await api.summary();
+      assert(s.top.chews.every((c) => c === 3), `both customers eat at once (chews ${s.top.chews})`);
+      await api.shot('playthrough-served');
+      await api.press(0, { action: true }, 1, 2);
+      s = await api.summary();
+      assert(s.run.served === 2 && stars.every((st, k) => s.run.lines[lineIdx].customers[k].endsWith(':' + st)), `confirm banks the whole line at their stars (served ${s.run.served}, ${s.run.lines[lineIdx].customers.join()})`);
       // ---- the line served: back to the map with two to go ----
       assert(s.screen === 'map' && s.run.linesServed === 1 && s.run.dayComplete === false, `the last customer served sends the truck back to the map, one line down (on ${s.screen}, ${s.run.linesServed} served)`);
       assert(s.run.score === servedStars * 100 && s.run.stars === servedStars, `the run scores what the customers gave it (${s.run.score} for ${servedStars} stars)`);

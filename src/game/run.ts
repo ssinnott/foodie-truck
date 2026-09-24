@@ -6,14 +6,14 @@
 // Screens read it, call the few mutators below, and hand off to the next screen through `nextScreen()`.
 //
 //   title -> (lobby) -> select -> stage (OPEN THE TRUCK) -> map -> <mini-game> -> map -> ... (the pantry fills)
-//         -> map -> line -> kitchen -> results -> line -> kitchen -> results -> map -> line ... -> stage (CLOSED)
+//         -> map -> line -> kitchen -> results -> map -> line -> kitchen -> results ... -> stage (CLOSED)
 //
 // A DAY is planned once from the seed (`planDay`): RECIPES_PER_DAY recipes drawn from content/recipes.js ORDERS,
 // and LINES_PER_DAY queues of LINE_LENGTH customers, each queue waiting at a different landmark and each customer
 // ordering one of the day's recipes. The SHOPPING LIST (`needs`) is every ingredient of every order in every
 // line, summed: the truck drives round the landmarks until the pantry holds all of it, and only then do the
-// lines open. Arriving at a landmark with a line opens the `line` screen; the customer at its front orders, the
-// kitchen cooks, results banks the stars and the next in line steps up. When the third line has been served the
+// lines open. Arriving at a landmark with a line opens the `line` screen; everyone in the queue orders at once,
+// the kitchen cooks every dish in turn, and results hands them all out together and banks the stars. When the third line has been served the
 // day is done - `dayComplete()` - and the board closes the truck for the night. That is the game's end.
 //
 // Nothing in here draws, and nothing in here reads the clock or Math.random: the day plan is drawn from its own
@@ -391,6 +391,23 @@ export function startRun(game, o) {
       run.customer++;
       if (run.customer >= ln.customers.length) { ln.served = true; run.lastServed = run.line; }
       else run.order = makeOrder(ln.customers[run.customer]);
+    },
+    /** What customer `k` of the line the truck stands at ordered (clamped into the line), as the kitchen cooks it. */
+    orderFor(k) {
+      const ln = run.lines[run.line];
+      if (!ln || !ln.customers.length) return run.order;
+      return makeOrder(ln.customers[Math.max(0, Math.min(ln.customers.length - 1, k | 0))]);
+    },
+    /**
+     * THE WHOLE LINE SERVED AT ONCE: the kitchen cooks every order in the queue before anyone is handed a plate,
+     * and results banks them together - `stars[i]` against the i-th customer still waiting, front first. Each is
+     * `serve()` in turn, so the pantry, the takings and the line's served flag move exactly as they always did.
+     */
+    serveAll(stars) {
+      const ln = run.lines[run.line];
+      if (!ln) return;
+      run.order = makeOrder(ln.customers[Math.min(run.customer, ln.customers.length - 1)]);
+      for (let i = 0; i < stars.length && run.customer < ln.customers.length; i++) run.serve(stars[i]);
     },
     /** True once everyone in the line the truck stands at has been served. */
     lineDone() { const ln = run.lines[run.line]; return !ln || run.customer >= ln.customers.length; },

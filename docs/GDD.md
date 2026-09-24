@@ -47,7 +47,7 @@ live in `src/content/critters/`. Customers are NPC critters built with the same 
 ## 3. The loop
 
 ```
-title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> map -> line -> kitchen -> results -> line -> kitchen -> results -> map -> line ...
+title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> map -> line -> kitchen -> results -> map -> line -> kitchen -> results -> map ...
                                                                                                                                                               |
    the day: a menu, a line per queue, one shopping list; when the last line is served -> stage (CLOSED) --NEXT DAY--> stage (OPEN, tomorrow) -> map -> ...
                                                                                                           |
@@ -126,13 +126,18 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   anywhere else does nothing but show a sign. `run.gather(id, n)` banks a round; `run.complete()` is the pantry
   full.
 - **Serving.** The moment the pantry is full the lines open: the HUD swaps the list for the lines, a tag over each
-  waiting queue's signpost says how many are in it, and arriving at one opens the **line** screen — the customer at
-  its front steps up and says what they want. Confirm takes the order into the kitchen (`run.startLine(i)` on
-  arrival; `run.order` is the customer at the hatch). A landmark with no line, or one already served, shows a sign.
-- **The kitchen** walks `order.steps` in order across the stations; when the plate is served it opens results.
-- **Results** shows the customer eating and a 1–3 star rating; `run.serve(stars)` banks the stars against that
-  customer and takes the dish's ingredients back out of the pantry. While the line still has someone in it, back to
-  the line screen and the next one steps up; when it is empty, back to the map for the next line (the map says
+  waiting queue's signpost says how many are in it, and arriving at one opens the **line** screen — everyone in
+  the queue says what they want at once, a bubble over each diner's head. Confirm takes every order into the
+  kitchen (`run.startLine(i)` on arrival).
+  A landmark with no line, or one already served, shows a sign.
+- **The kitchen** cooks the WHOLE LINE AT THE SAME TIME: every order in the queue (`run.orderFor(k)`) is on the
+  ticket and every customer crowds the hatch. Their steps are merged into one run of the counter - the fridge once
+  for every item, each station once for every dish that uses it (each order's own steps stay in its own order), and
+  one bell. The food splits as it goes, each ingredient flying to the next station ITS dish needs, onto its own
+  plate on the hatch shelf. The bell stamps `ORDER UP!` and opens results with every dish's stars.
+- **Results** serves everyone at once, out on the lane: each diner is handed their plate, they all eat, and each
+  gets a 1–3 star rating over their head; `run.serveAll(stars)` banks each customer's stars and takes every dish's
+  ingredients back out of the pantry. Then back to the map for the next line (the map says
   `LINE SERVED! 2 TO GO`); when that was the last line, to the day board, which opens **closed** — the day's stars
   and takings totted up, and the **week strip** under them.
 - **The closed board is the hinge, not the exit.** On any day but the last, the one press left says `NEXT DAY`:
@@ -393,9 +398,11 @@ made either way so every peer draws the same day.
 
 ## 7. Results
 
-The customer's bust at the hatch, the plate sliding out, three chews, a stamp (`DELICIOUS` / `TASTY` / `EDIBLE`),
-1–3 stars, the tip in coins, then `PRESS Z` (auto-return after 600 frames) → `run.serve(stars)` → the line screen
-(someone still in the queue), the map (the line is served) or the closed day board (that was the last line).
+The whole line served at once on the lane the line screen stood on: a plate arcs out of the truck's hatch into
+every diner's paws on a stagger, everyone chews three times, each diner's 1–3 stars pop up over their head, and one
+receipt lists every dish with its stars, the tip in coins and a stamp for the line as a whole (`DELICIOUS` /
+`TASTY` / `EDIBLE`, from the average), then `PRESS Z` (auto-return after 600 frames) → `run.serveAll(stars)` →
+the map (the line is served) or the closed day board (that was the last line).
 
 ## 8. Multiplayer
 

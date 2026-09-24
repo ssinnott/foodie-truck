@@ -247,6 +247,10 @@ export interface Run {
   startLine(i: number): Order;
   /** Bank the stars against the customer at the hatch, cook their dish out of the pantry, call the next. */
   serve(stars: number): void;
+  /** What customer `k` of the line the truck stands at ordered, as the kitchen cooks it. */
+  orderFor(k: number): Order;
+  /** Serve everyone still waiting in the line at once: `stars[i]` for the i-th of them, front first. */
+  serveAll(stars: readonly number[]): void;
   /** True once everyone in the line the truck stands at has been served. */
   lineDone(): boolean;
   /** How many lines have been served. */
@@ -304,8 +308,8 @@ export interface ScreenParams {
   autoRoom?: boolean;
   /** Map / mini-game: the landmark a dev jump (?place=) lands on. */
   place?: string;
-  /** Results: the stars the kitchen awarded. */
-  stars?: number;
+  /** Results: the stars the kitchen awarded, one per dish of the line it cooked (a bare number is one dish). */
+  stars?: number | number[];
   /** Results: the score the kitchen banked. */
   score?: number;
   [key: string]: any;
