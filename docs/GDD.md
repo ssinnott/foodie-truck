@@ -130,10 +130,11 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   the queue says what they want at once, a bubble over each diner's head. Confirm takes every order into the
   kitchen (`run.startLine(i)` on arrival).
   A landmark with no line, or one already served, shows a sign.
-- **The kitchen** cooks the WHOLE LINE in one go: every order in the queue (`run.orderFor(k)`), one after another
-  at the same counter, each walking `order.steps` in order across the stations. The bell on every dish but the last
-  stamps `NEXT UP!` and the next order comes to the hatch while the finished dish waits on the pass; the bell on the
-  last stamps `ORDER UP!` and opens results with every dish's stars.
+- **The kitchen** cooks the WHOLE LINE AT THE SAME TIME: every order in the queue (`run.orderFor(k)`) is on the
+  ticket and every customer crowds the hatch. Their steps are merged into one run of the counter - the fridge once
+  for every item, each station once for every dish that uses it (each order's own steps stay in its own order), and
+  one bell. The food splits as it goes, each ingredient flying to the next station ITS dish needs, onto its own
+  plate on the hatch shelf. The bell stamps `ORDER UP!` and opens results with every dish's stars.
 - **Results** serves everyone at once, out on the lane: each diner is handed their plate, they all eat, and each
   gets a 1–3 star rating over their head; `run.serveAll(stars)` banks each customer's stars and takes every dish's
   ingredients back out of the pantry. Then back to the map for the next line (the map says

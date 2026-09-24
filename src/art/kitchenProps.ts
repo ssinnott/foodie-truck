@@ -464,10 +464,17 @@ function hub(ctx, cx, cy, slot) {
 
 /** A tally card: a row of `total` pips, one lit green per hit landed - a tally, not a beat. Over six go on a 4 px pitch. */
 function pips(ctx, station, hits, total, slot) {
-  const x = WIDGET_POS[station][0], y = WIDGET_POS[station][1], pitch = total > 6 ? 4 : 7, w = pitch - 1, bx = x + 24 - R((total * pitch - 1) / 2), by = y + 13;
+  // more than PIP_ROW pips (a whole line's fridge) wrap onto rows of their own, so the row never outgrows the card
+  const rows = Math.ceil(total / PIP_ROW) || 1, cols = Math.ceil(total / rows);
+  const x = WIDGET_POS[station][0], y = WIDGET_POS[station][1], pitch = cols > 6 ? 4 : 7, w = pitch - 1, bx = x + 24 - R((cols * pitch - 1) / 2), by = y + 13 - (rows - 1) * 2;
   card(ctx, x, y, 48, 26, slot);
-  for (let i = 0; i < total; i++) { ctx.fillStyle = UI.ink; ctx.fillRect(bx + i * pitch, by, w, w); ctx.fillStyle = i < hits ? SIGNAL.good : UI.paperDark; ctx.fillRect(bx + i * pitch + 1, by + 1, w - 2, w - 2); }
+  for (let i = 0; i < total; i++) {
+    const px = bx + (i % cols) * pitch, py = by + ((i / cols) | 0) * pitch;
+    ctx.fillStyle = UI.ink; ctx.fillRect(px, py, w, w); ctx.fillStyle = i < hits ? SIGNAL.good : UI.paperDark; ctx.fillRect(px + 1, py + 1, w - 2, w - 2);
+  }
 }
+/** The most pips one row of a timing card holds (ten fit the card's 48 px on a 4 px pitch). */
+const PIP_ROW = 10;
 /** FRIDGE: one pip per item the order wants out of it. */
 export function drawPullBar(ctx, pulls, total, slot) { pips(ctx, FRIDGE_I, pulls, total, slot); }
 /** CHOP: one pip per chop landed. Ten pips go on a 4 px pitch. */

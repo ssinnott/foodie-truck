@@ -337,7 +337,7 @@ title -> lobby (host key) -> select (shared) -> stage ...  (online: the host's S
   the kitchen.
 - `screens/kitchen.js`: one critter per seat, stations from `content/places.js STATIONS` (fridge, chop, mix, stove, oven,
   plate), steps from `run.order.steps` (every recipe's first is the fridge). It cooks every order still in the line
-  (`run.orderFor(k)`, setting `run.order` to the one on the counter), one after another, and finishes with
+  (`run.orderFor(k)`) at the same time, their steps merged into one run of the counter (`mergeSteps`), and finishes with
   `game.replace('results', { stars: [...] })`. `screens/results.js` serves the whole line at once with
   `run.serveAll(stars)` then replaces itself with `stage` (`run.dayComplete()`) or `map`.
 - Screens read input by SEAT: `run.party[i].slot` is the input slot to poll for party member i. Online, every
@@ -424,7 +424,7 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
 - `npm run lint` — `node --check` every module + `tsc`. `npm run nettest` — pure-node protocol/lockstep/trig tests.
 - `npm run playtest` — headless Playwright: boots every screen, walks the flow, holds a netplay room. The
   `playthrough` scenario is the one that never jumps: title → select → day board → drive → mini-games until the list
-  is full → the queue → kitchen (both dishes, back to back) → results (both served at once) → map, on input alone (the menu
+  is full → the queue → kitchen (both dishes at once) → results (both served at once) → map, on input alone (the menu
   fixed with `?recipes=` to the two landmarks it can play), so it fails when two screens that each pass on their
   own cannot hand over. The `audio` scenario renders every SFX and every track through an OfflineAudioContext and
   fails on a silent or a throwing one, then walks the screens and reads which track each asked for, presses M for
