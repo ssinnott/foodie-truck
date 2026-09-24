@@ -87,7 +87,7 @@ Every module imports only from `engine/`, `art/`, `game/`, `content/`, `net/` â€
 ## 2. Coordinate systems
 
 - **Screen:** 640x360, origin top-left, y down. Everything in `draw()` is screen space unless a screen says otherwise.
-- **World map** (`screens/map.js`): a `WORLD_W x WORLD_H` px plane (`content/places.js`, 1920x1080), y down, a camera
+- **World map** (`screens/map.js`): a `WORLD_W x WORLD_H` px plane (`content/places.js`, 2560x1440), y down, a camera
   `{ x, y }` at the top-left of the visible 640x360 window, clamped to the world. Landmarks are `PLACES[i].x/y`.
 - **Side-view scenes** (mini-games, kitchen): screen space with a floor line per scene; critters stand with their
   feet on that line. Depth, where a scene wants it, is a simple y-sort.

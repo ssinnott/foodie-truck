@@ -181,7 +181,7 @@ export const SCENARIOS = {
       // the north junction: the only place the camera clamps high enough to show the dusk-peach horizon strip and the
       // plum tree-line that close the top of the world (docs/ART_STYLE.md section 1 "Map"). Written out so the art
       // pass can read the far edge of the plane, not just the meadow around home.
-      await teleport(page, 760, 140, 0);
+      await teleport(page, 1013, 156, 0);
       await api.step(90);
       await api.shot('map-horizon');
 

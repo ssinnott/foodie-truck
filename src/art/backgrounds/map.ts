@@ -1,5 +1,5 @@
 // The world map's backdrop (docs/ART_STYLE.md section 1 "Map", section 7; docs/GDD.md section 4): the palette, the
-// lane / river / bridge / pond / sea data the sim drives on, and the ground painted as 3x3 chunks of 640x360 with seeds 140..148.
+// lane / river / bridge / pond / sea data the sim drives on, and the ground painted as 4x4 chunks of 640x360 with seeds 140..155.
 //
 // A chunk is a PURE function of its index: every chunk paints the whole world's authored content (lanes, river,
 // landmarks, hand-placed fields, module-seeded trees) translated by its origin and clipped by its own canvas, so the
@@ -40,7 +40,7 @@ export const MAP = Object.freeze({
 });
 
 export const CHUNK_W = VIEW_W, CHUNK_H = VIEW_H, CHUNKS_X = WORLD_W / VIEW_W, CHUNKS_Y = WORLD_H / VIEW_H;
-/** Seed block 140-159 belongs to the map (ART_STYLE section 7): 140..148 the chunks, 150+ the module-level scatter. */
+/** Seed block 140-159 belongs to the map (ART_STYLE section 7): 140..155 the chunks (the last few share a seed with a module-level stream, which only means the same draws), 154+ the module-level scatter. */
 const SEED0 = 140;
 /** Rows 0..HORIZON_H of the world are the dusk-peach sky beyond the far hedge; the truck never drives up there. */
 export const HORIZON_H = 96;
@@ -50,28 +50,32 @@ export const DRIVE_MIN_X = 24, DRIVE_MAX_X = WORLD_W - 24, DRIVE_MIN_Y = HORIZON
 
 /** Lanes as polylines (flat x,y lists) ending on landmark door points (PLACES x/y). 45-degree legs read as drawn. */
 export const LANES = Object.freeze([
-  [960, 600, 960, 200],
-  [960, 600, 720, 600, 420, 300],
-  [720, 600, 500, 820, 300, 820],
-  [960, 600, 960, 700, 760, 900, 700, 900],
-  [960, 600, 1040, 520, 1250, 520, 1500, 520, 1500, 280],
-  [960, 200, 1200, 200, 1280, 280, 1500, 280],
-  [960, 700, 1240, 700, 1400, 700, 1400, 760, 1480, 760],
-  [1500, 520, 1560, 580, 1560, 760, 1480, 760],
+  // the town's streets keep their shape inside CITY; each lane out of town gets a vertex on the town's edge, and from
+  // there runs out across the wider countryside to its landmark
+  [1280, 784, 1280, 646, 1280, 520, 1280, 238],
+  [1280, 784, 1080, 784, 960, 784, 560, 375],
+  [960, 784, 667, 1085, 400, 1085],
+  [1280, 784, 1280, 884, 1218, 946, 1013, 1194, 933, 1194],
+  [1280, 784, 1360, 704, 1490, 704, 1667, 675, 2000, 675, 2000, 347],
+  [1280, 238, 1600, 238, 1707, 347, 2000, 347],
+  [1280, 884, 1490, 884, 1653, 921, 1867, 921, 1867, 1003, 1973, 1003],
+  [2000, 675, 2080, 757, 2080, 1003, 1973, 1003],
   // the second pass: the farm lane carries on east to the cove; a spur drops off the pond lane to the berry bank
-  [1500, 520, 1760, 520],
-  [1150, 700, 1150, 850, 1180, 880],
+  [2000, 675, 2347, 675],
+  [1470, 884, 1470, 946, 1533, 1126, 1573, 1167],
   // the third pass: the holt's lane climbs north-west out of the orchard; the wood's runs east out of the coop
-  [420, 300, 180, 150],
+  [560, 375, 240, 170],
   // ...and the wood's runs east out of the coop's yard and climbs, keeping clear of the coop's own signpost
-  [1500, 280, 1560, 310, 1760, 180],
-  // ...and the terrace's spur climbs off the orchard lane's bend
-  [720, 600, 680, 440],
+  [2000, 347, 2080, 388, 2347, 211],
+  // ...and the terrace's spur runs west off the mill road and climbs to its gate
+  [1280, 520, 1000, 520, 1000, 430],
+  // the farm's own lane, out past the millpond on the river's far side
+  [2080, 1003, 2280, 1003],
 ]);
 /** The river's centreline, top to bottom, splitting the coop and pond off on the east bank. */
-export const RIVER = Object.freeze([1340, HORIZON_H - 10, 1340, 120, 1370, 220, 1340, 340, 1330, 470, 1370, 600, 1350, 720, 1360, 860, 1330, WORLD_H + 10]);
+export const RIVER = Object.freeze([1787, HORIZON_H - 10, 1787, 129, 1827, 265, 1787, 429, 1773, 607, 1827, 784, 1800, 948, 1813, 1140, 1773, WORLD_H + 10]);
 /** Plank bridges where the three east-going lanes cross the river; the only drivable water. */
-export const BRIDGES = Object.freeze([280, 520, 700].map((y) => Object.freeze({ x: riverXAt(y), y })));
+export const BRIDGES = Object.freeze([347, 675, 921].map((y) => Object.freeze({ x: riverXAt(y), y })));
 export const BRIDGE_HALF_W = 36, BRIDGE_HALF_H = 14;
 
 function riverXAt(y) {
@@ -117,7 +121,7 @@ const place = (id) => PLACES.find((p) => p.id === id);
 const HOME = place('home'), ORCHARD = place('orchard'), POND = place('pond'), COOP = place('coop'), DAIRY = place('dairy'), MILL = place('mill'), HIVE = place('hive'), FARM = place('garden');
 const SHORE = place('shore'), BRAMBLE = place('bramble'), HOLT = place('holt'), WOOD = place('wood'), TERRACE = place('terrace');
 /** Wheat fields (hand-placed so no landmark sits in one); lanes cut gates through their hedges. */
-const WHEAT = [[1020, 130, 260, 120], [110, 420, 230, 160], [1580, 860, 280, 180], [60, 960, 200, 90]];
+const WHEAT = [[1360, 142, 347, 164], [147, 539, 306, 218], [2107, 1140, 373, 245], [80, 1276, 267, 123]];
 /** The animated bits the map screen draws per frame, in world coordinates. */
 export const SPOTS = Object.freeze({
   // the depot's chimney pot and the telephone box on the pavement beside its west wall (see paintTown)
@@ -197,7 +201,7 @@ export const PARK_AT = Object.freeze({ x: HOME.x, y: HOME.y - 4 });
  * (content/places.ts STOPS), no tree or wildflower grows in it, and no herd crosses or cart tips over in it - the
  * countryside's road events stay in the countryside.
  */
-export const CITY = Object.freeze({ x0: 760, y0: 462, x1: 1170, y1: 762 });
+export const CITY = Object.freeze({ x0: 1080, y0: 646, x1: 1490, y1: 946 });
 /** True inside the town, grown by `m` px. */
 export function inCity(x, y, m = 0) { return x >= CITY.x0 - m && x <= CITY.x1 + m && y >= CITY.y0 - m && y <= CITY.y1 + m; }
 /**
@@ -206,21 +210,21 @@ export function inCity(x, y, m = 0) { return x >= CITY.x0 - m && x <= CITY.x1 + 
  * Every one is in WALLS too; none of them stands on a street, a pavement queue or the depot's forecourt.
  */
 const TOWN: [number, number, number, number, string, string, string, string, number][] = [
-  [1046, 504, 52, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
-  [1106, 504, 56, 34, MAP.sand, '#B8A57A', MAP.roof, MAP.roofShade, 3],
-  [800, 530, 50, 28, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, 0],
-  [778, 584, 56, 34, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 2],
-  [1054, 624, 56, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
-  [1118, 624, 46, 30, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, 0],
-  [806, 668, 56, 34, MAP.sand, '#B8A57A', MAP.slate, '#243A2E', 1],
-  [984, 684, 56, 34, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, 1],
-  [1100, 684, 64, 38, MAP.sand, '#B8A57A', MAP.roof, MAP.roofShade, 1],
-  [872, 690, 58, 34, MAP.board, MAP.boardShade, MAP.slate, '#243A2E', 0],
-  [786, 744, 56, 30, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, 0],
-  [852, 748, 36, 28, MAP.sand, '#B8A57A', MAP.slate, '#243A2E', 0],
+  [1366, 688, 52, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
+  [1426, 688, 56, 34, MAP.sand, '#B8A57A', MAP.roof, MAP.roofShade, 3],
+  [1120, 714, 50, 28, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, 0],
+  [1098, 768, 56, 34, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 2],
+  [1374, 808, 56, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
+  [1438, 808, 46, 30, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, 0],
+  [1126, 852, 56, 34, MAP.sand, '#B8A57A', MAP.slate, '#243A2E', 1],
+  [1304, 868, 56, 34, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, 1],
+  [1420, 868, 64, 38, MAP.sand, '#B8A57A', MAP.roof, MAP.roofShade, 1],
+  [1192, 874, 58, 34, MAP.board, MAP.boardShade, MAP.slate, '#243A2E', 0],
+  [1106, 928, 56, 30, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, 0],
+  [1172, 932, 36, 28, MAP.sand, '#B8A57A', MAP.slate, '#243A2E', 0],
 ];
 /** The market square's fountain: a stone basin the truck drives round. */
-const FOUNTAIN = Object.freeze({ x: 1008, y: 604, r: 14 });
+const FOUNTAIN = Object.freeze({ x: 1328, y: 788, r: 14 });
 /**
  * The lamp post that stands at the front of every stop's queue, one pace ahead of the front diner: the map hangs
  * its gold lantern on the one the compass points at, as it does on a landmark's signpost.
@@ -249,14 +253,14 @@ export function wallBlocked(px, py) {
 }
 
 /** Meadow shade blobs and the tree scatter come from module seeds, so every chunk agrees on where they fall. */
-const SHADE = (() => { const r = makeRng(SEED0 + 18), out = []; for (let i = 0; i < 44; i++) out.push([r.int(0, WORLD_W), r.int(HORIZON_H + 40, WORLD_H), r.int(40, 120), r.int(18, 48)]); return out; })();
+const SHADE = (() => { const r = makeRng(SEED0 + 18), out = []; for (let i = 0; i < 78; i++) out.push([r.int(0, WORLD_W), r.int(HORIZON_H + 40, WORLD_H), r.int(40, 120), r.int(18, 48)]); return out; })();
 /** True on the cove's sand or sea (SPOTS.cove), with `m` px of margin: no tree or flower grows there. */
 function inCove(x, y, m) { const c = SPOTS.cove; return x > c.x - 36 - m && y > c.top - m && y < c.bottom + m; }
 function inWheat(x, y, m) { for (const f of WHEAT) if (x >= f[0] - m && x <= f[0] + f[2] + m && y >= f[1] - m && y <= f[1] + f[3] + m) return true; return false; }
 function nearLandmark(x, y, d) { for (let i = 0; i < PLACES.length; i++) { const dx = PLACES[i].x - x, dy = PLACES[i].y - 40 - y; if (dx * dx + dy * dy < d * d) return true; } return false; }
 const TREES = (() => {
   const r = makeRng(SEED0 + 19), baked = [], roadside = [];
-  for (let i = 0; i < 700 && (baked.length < 48 || roadside.length < 22); i++) {
+  for (let i = 0; i < 1600 && (baked.length < 85 || roadside.length < 40); i++) {
     const x = r.int(30, WORLD_W - 30), y = r.int(HORIZON_H + 44, WORLD_H - 30), k = r.int(0, 2);
     if (riverDist(x, y) < 40 || nearLandmark(x, y, 130) || inWheat(x, y, 16) || inCove(x, y, 24) || inCity(x, y, 30)) continue;
     const ld = laneDist(x, y);
@@ -265,7 +269,7 @@ const TREES = (() => {
     for (const t of baked) if ((t[0] - x) * (t[0] - x) + (t[1] - y) * (t[1] - y) < 34 * 34) crowded = true;
     for (const t of roadside) if ((t[0] - x) * (t[0] - x) + (t[1] - y) * (t[1] - y) < 34 * 34) crowded = true;
     if (crowded) continue;
-    if (ld < 44) { if (roadside.length < 22) roadside.push([x, y, k]); } else if (baked.length < 48) baked.push([x, y, k]);
+    if (ld < 44) { if (roadside.length < 40) roadside.push([x, y, k]); } else if (baked.length < 85) baked.push([x, y, k]);
   }
   return { baked, roadside };
 })();
@@ -274,7 +278,7 @@ export const ROADSIDE_TREES = TREES.roadside;
 /** Cream glint spots on the river and the pond: index-hashed twinkles, 2x1 pre-sized rects. */
 export const GLINTS = (() => {
   const r = makeRng(SEED0 + 17), out = [];
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 32; i++) {
     const seg = r.int(0, RIVER.length / 2 - 2), t = r.next();
     const x = RIVER[seg * 2] + (RIVER[seg * 2 + 2] - RIVER[seg * 2]) * t, y = RIVER[seg * 2 + 1] + (RIVER[seg * 2 + 3] - RIVER[seg * 2 + 1]) * t;
     out.push([R(x + r.int(-14, 14)), R(y)]);
@@ -387,8 +391,8 @@ function paintLandmarks(g) {
   g.fillStyle = MAP.woodDark; g.fillRect(FARM.x - 66, FARM.y - 48, 56, 1); g.fillRect(FARM.x - 40, FARM.y - 66, 1, 36);   // the barn's boarding
   pathRR(g, FARM.x - 84, FARM.y - 44, 14, 12, 5); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = MAP.wheat; g.fill();
   g.save(); g.clip(); g.fillStyle = MAP.furrow; for (let y = FARM.y - 41; y < FARM.y - 32; y += 4) g.fillRect(FARM.x - 84, y, 14, 2); g.restore();
-  // the plot: tilled earth in a wattle fence, five furrows of green tops running with the lane. It stops at x + 54:
-  // the river's west bank runs about 60 px east of the door, and a bed under water is a bed nobody planted.
+  // the plot: tilled earth in a wattle fence, five furrows of green tops running with the lane. It stops at x + 54;
+  // it is kept small: the plot is a vegetable patch beside a barn, not a field.
   groundShade(g, FARM.x + 24, FARM.y - 42, 68, 0.08, 4);
   pathRR(g, FARM.x - 6, FARM.y - 90, 60, 46, 3); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = MAP.soil; g.fill();
   g.fillStyle = MAP.trunk; for (let y = FARM.y - 84; y < FARM.y - 46; y += 8) g.fillRect(FARM.x - 4, y, 56, 2);
@@ -577,14 +581,14 @@ function paintTown(g) {
   ellipse(g, F.x, F.y, F.r - 3, R(F.r * 0.6) - 3, MAP.river);
   boxOutlined(g, F.x - 1, F.y - 12, 3, 10, MAP.wallShade);
   g.fillStyle = MAP.skyTop; g.fillRect(F.x - 4, F.y - 14, 2, 2); g.fillRect(F.x + 4, F.y - 13, 2, 2); g.fillRect(F.x, F.y - 16, 2, 2);
-  groundShade(g, 1020, 484, 24); lollipop(g, 1020, 484, 10);
+  groundShade(g, 1340, 668, 24); lollipop(g, 1340, 668, 10);
   // a lamp post at the head of every queue
   for (const s of STOPS) { const L = STOP_LAMPS[s.id]; lampPost(g, L.x, L.y); }
 }
 
 function paintHorizon(g, rnd) {
   vGradient(g, 0, 0, WORLD_W, HORIZON_H, [[0, MAP.skyTop], [1, MAP.skyLow]]);
-  radialGlow(g, 1500, 34, 18, 'rgba(255,246,224,0.7)'); g.fillStyle = '#FFF6E0'; g.beginPath(); g.arc(1500, 34, 4, 0, TAU); g.fill();
+  radialGlow(g, 2000, 34, 18, 'rgba(255,246,224,0.7)'); g.fillStyle = '#FFF6E0'; g.beginPath(); g.arc(2000, 34, 4, 0, TAU); g.fill();
   for (let x = 0; x < WORLD_W; x += 4) {
     const far = 58 + 9 * Math.cos(x / 140) + 6 * Math.cos(x / 57 + 1), near = 74 + 6 * Math.cos(x / 90 + 2) + 4 * Math.cos(x / 33);
     g.fillStyle = MAP.hillFar; g.fillRect(x, R(far), 4, HORIZON_H - R(far));
@@ -642,7 +646,7 @@ function paintChunk(g, i, rnd) {
 
 // ---------------------------------------------------------------- chunk cache (repaint on demand)
 const chunks = new Array(CHUNKS_X * CHUNKS_Y).fill(null);
-/** The ground layer of chunk `i` (column-major index i = row * 3 + col), painted on first use. */
+/** The ground layer of chunk `i` (column-major index i = row * CHUNKS_X + col), painted on first use. */
 export function chunkLayer(i) {
   if (!chunks[i]) chunks[i] = makeLayer(CHUNK_W, CHUNK_H, (g, w, h, rnd) => paintChunk(g, i, rnd), SEED0 + i);
   return chunks[i];

@@ -1,4 +1,4 @@
-// The world map (docs/GDD.md section 4, docs/ARCHITECTURE.md section 5): one shared truck on a 1920x1080 storybook
+// The world map (docs/GDD.md section 4, docs/ARCHITECTURE.md section 5): one shared truck on a 2560x1440 storybook
 // plane. Every seated player's stick is a vector; they are summed (the driver's x1.5), quantised to 16 headings on
 // dcos/dsin tables built here, and the truck turns one step per 4 frames, rolling 2.2 px/frame on a lane and 1.0 in
 // the fields; water stops it - the river except on its bridges, the millpond, the cove's sea. The day opens with the
@@ -99,7 +99,7 @@ const DOORS: readonly { id: string; x: number; y: number }[] = Object.freeze([..
 const STOP_OF: Record<string, (typeof STOPS)[number]> = Object.fromEntries(STOPS.map((s) => [s.id, s]));
 /** The queues form one diner at a time, FORM_LAG frames apart, on the visit the pantry fills (visual only). */
 const FORM_LAG = 8;
-const CLOUDS = [[200, 260], [900, 700], [1500, 420]];
+const CLOUDS = [[267, 320], [1200, 921], [2000, 539]];
 /** The phone rings once, on the day's first drive: remembered per run so every later visit to the map stays quiet. */
 let rungRun: Run | null = null;
 /** The LINE SERVED sign is raised on the first visit after a line was finished: how many were served at the last visit. */
