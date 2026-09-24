@@ -35,7 +35,7 @@ export function drawShoppingHud(ctx, run) { drawNeedsTicket(ctx, 8, 8, SHOPPING_
  * compass points at (`dest`, an index into the rows, or -1).
  */
 export function drawLinesHud(ctx, run, rows, dest) {
-  const x = 8, y = 8, w = 120, h = 16 + ROW * rows.length + 4;
+  const x = 8, y = 8, w = 132, h = 16 + ROW * rows.length + 4;
   const top = drawTicket(ctx, x, y, w, h, { title: LINES_TITLE });
   for (let i = 0; i < rows.length; i++) {
     const ry = top + 2 + ROW * i, done = run.lines[i] && run.lines[i].served;
@@ -43,16 +43,6 @@ export function drawLinesHud(ctx, run, rows, dest) {
     if (done) { ctx.fillStyle = UI.ink; ctx.fillRect(x + w - 14, ry + 3, 2, 3); ctx.fillRect(x + w - 12, ry + 1, 2, 5); ctx.fillRect(x + w - 10, ry - 1, 2, 3); }
     else if (i === dest) { ctx.fillStyle = UI.ink; ctx.fillRect(x + w - 15, ry, 7, 7); ctx.fillStyle = SIGNAL.map; ctx.fillRect(x + w - 14, ry + 2, 2, 3); ctx.fillRect(x + w - 12, ry + 1, 2, 5); ctx.fillRect(x + w - 10, ry + 2, 2, 3); }
   }
-}
-
-/**
- * The paper tag over a landmark where a line is waiting: '2 IN LINE' on a small ticket pinned above its signpost
- * (screen space; the map screen converts). Built strings only: `text` and `w` come from the map's enter().
- */
-export function drawLineTag(ctx, sx, sy, text, w) {
-  const x = R(sx - w / 2), y = R(sy);
-  drawTicket(ctx, x, y, w, 14, { header: false, rules: false, perforated: false });
-  drawText(ctx, text, x + w / 2, y + 3, { size: 1, color: UI.ink, align: 'center', shadow: false });
 }
 
 /**

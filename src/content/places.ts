@@ -9,7 +9,9 @@
 export const WORLD_W = 1920, WORLD_H = 1080;
 
 export const PLACES = Object.freeze([
-  { id: 'home', name: 'HOLLOW LANE YARD', sign: 'HOME', x: 960, y: 600, screen: 'kitchen', accent: '#F2C14E' },
+  // Home is the DEPOT: the truck's own garage in the middle of the town, its door on the west road a few yards short
+  // of the crossroads (960, 600) every lane fans out of. The day starts with the truck parked inside it.
+  { id: 'home', name: 'HOLLOW LANE DEPOT', sign: 'HOME', x: 904, y: 590, screen: 'kitchen', accent: '#F2C14E' },
   { id: 'orchard', name: 'PIPPIN ORCHARD', sign: 'APPLES', x: 420, y: 300, screen: 'orchard', accent: '#D9463B' },
   { id: 'pond', name: 'MILLPOND', sign: 'FISH', x: 1480, y: 760, screen: 'pond', accent: '#5FD3C0' },
   { id: 'coop', name: 'CLUCKET COOP', sign: 'EGGS', x: 1500, y: 280, screen: 'coop', accent: '#F2C14E' },
@@ -36,6 +38,27 @@ export const PLACES = Object.freeze([
   // SNIPPED and grow back. Its accent is the leek's green.
   { id: 'terrace', name: 'THYME TERRACE', sign: 'HERBS', x: 680, y: 440, screen: 'terrace', accent: '#7DB35A' },
 ]);
+
+/**
+ * THE TOWN'S STOPS: where the day's queues form once the pantry is full. Every one stands on a street of the town
+ * round the depot (art/backgrounds/map.ts CITY), never at a landmark - the countryside is where the truck gathers,
+ * the town is where it sells. `x, y` is the kerb the truck pulls up to (a point on the street; arriving within the
+ * map's 40 px of it opens the line), `sign` the queue's short name on the map's LINES ticket, and the queue itself
+ * stands on the pavement: its front diner's feet at `qx, qy`, each diner behind them `qdx, qdy` further back.
+ * There are as many stops as the longest day has queues (the fete's four), and the day plan deals them out.
+ */
+export const STOPS = Object.freeze([
+  { id: 'square', name: 'THE MARKET SQUARE', sign: 'SQUARE', x: 960, y: 500, qx: 983, qy: 504, qdx: 0, qdy: -12 },
+  { id: 'station', name: 'STATION ROAD', sign: 'STATION', x: 1110, y: 520, qx: 1110, qy: 542, qdx: 14, qdy: 0 },
+  { id: 'market', name: 'THE HIGH STREET', sign: 'HIGH ST', x: 1090, y: 700, qx: 1090, qy: 722, qdx: 14, qdy: 0 },
+  { id: 'corner', name: 'CHAPEL CORNER', sign: 'CHAPEL', x: 790, y: 600, qx: 790, qy: 622, qdx: -14, qdy: 0 },
+]);
+
+/** The full name of a landmark or a town stop by id ('THE MARKET SQUARE'); an unknown id is shouted back as itself. */
+export function placeName(id: string): string {
+  const p = PLACES.find((x) => x.id === id) || STOPS.find((x) => x.id === id);
+  return p ? p.name : id.toUpperCase();
+}
 
 /** Kitchen stations, left to right along the truck's counter. `verb` is the interaction the station asks for. */
 export const STATIONS = Object.freeze([

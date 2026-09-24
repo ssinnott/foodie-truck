@@ -10,7 +10,7 @@ import { makeLayer, discShaded, boxShaded, boxOutlined, polyOutlined, vGradient,
 import { makeRng } from '../../lib/engine/rng.ts';
 import { clamp } from '../../lib/engine/math.ts';
 import { dsin } from '../../lib/engine/trig.ts';
-import { WORLD_W, WORLD_H, PLACES } from '../../content/places.ts';
+import { WORLD_W, WORLD_H, PLACES, STOPS } from '../../content/places.ts';
 import { VIEW_W, VIEW_H, PLUM, SIGNAL } from '../../constants.ts';
 import { drawText, measureText } from '../../engine/text.ts';
 import { pathRR } from '../../lib/art/shading.ts';
@@ -120,8 +120,9 @@ const SHORE = place('shore'), BRAMBLE = place('bramble'), HOLT = place('holt'), 
 const WHEAT = [[1020, 130, 260, 120], [110, 420, 230, 160], [1580, 860, 280, 180], [60, 960, 200, 90]];
 /** The animated bits the map screen draws per frame, in world coordinates. */
 export const SPOTS = Object.freeze({
-  chimney: { x: HOME.x - 108, y: HOME.y - 88 },
-  phone: { x: HOME.x - 34, y: HOME.y - 50 },
+  // the depot's chimney pot and the telephone box on the pavement beside its west wall (see paintTown)
+  chimney: { x: HOME.x + 19, y: HOME.y - 68 },
+  phone: { x: HOME.x - 46, y: HOME.y - 34 },
   millHub: { x: MILL.x, y: MILL.y - 60 },
   hiveCentre: { x: HIVE.x, y: HIVE.y - 46 },
   hens: [{ x: COOP.x - 18, y: COOP.y - 34 }, { x: COOP.x + 16, y: COOP.y - 42 }],
@@ -180,7 +181,7 @@ export function waterBlocked(px, py) { return riverBlocked(px, py) || pondBlocke
  * because lanes fan out from both doors - every entry clears SIGN_CLEAR of lane, which scenarios/map.js asserts.
  */
 export const SIGN_AT = Object.freeze({
-  home: { x: HOME.x + 76, y: HOME.y - 4 }, orchard: { x: ORCHARD.x + 30, y: ORCHARD.y - 18 }, pond: { x: POND.x + 56, y: POND.y - 28 },
+  home: { x: HOME.x, y: HOME.y + 36 }, orchard: { x: ORCHARD.x + 30, y: ORCHARD.y - 18 }, pond: { x: POND.x + 56, y: POND.y - 28 },
   coop: { x: COOP.x + 52, y: COOP.y - 18 }, dairy: { x: DAIRY.x - 52, y: DAIRY.y - 18 }, mill: { x: MILL.x - 40, y: MILL.y - 18 },
   hive: { x: HIVE.x - 30, y: HIVE.y - 18 }, garden: { x: FARM.x, y: FARM.y - 28 },
   shore: { x: SHORE.x - 34, y: SHORE.y - 26 }, bramble: { x: BRAMBLE.x + 40, y: BRAMBLE.y - 18 },
@@ -188,8 +189,43 @@ export const SIGN_AT = Object.freeze({
 });
 /** Every signpost clears this much lane: LANE_HALF plus half a truck, so nothing is driven through (scenarios/map.js). */
 export const SIGN_CLEAR = LANE_HALF + 8;
-/** Where a fresh run's truck parks: in the chalk bay beside home's door, close enough to count as "at home". */
-export const PARK_AT = Object.freeze({ x: HOME.x + 30, y: HOME.y + 26 });
+/** Where a fresh run's truck parks: INSIDE the depot, on the floor of its open bay, close enough to count as "at home". */
+export const PARK_AT = Object.freeze({ x: HOME.x, y: HOME.y - 4 });
+
+/**
+ * THE TOWN round the depot: the paved stretch of the plane, as a world rect. Every queue of the day forms in it
+ * (content/places.ts STOPS), no tree or wildflower grows in it, and no herd crosses or cart tips over in it - the
+ * countryside's road events stay in the countryside.
+ */
+export const CITY = Object.freeze({ x0: 760, y0: 462, x1: 1170, y1: 762 });
+/** True inside the town, grown by `m` px. */
+export function inCity(x, y, m = 0) { return x >= CITY.x0 - m && x <= CITY.x1 + m && y >= CITY.y0 - m && y <= CITY.y1 + m; }
+/**
+ * The town's buildings, painted back to front: [x, front y, w, h, wall, wall shade, roof, roof shade, kind] with kind
+ * 0 a plain house, 1 a shop under a striped awning, 2 the chapel (round window, bell cote), 3 the station (clock).
+ * Every one is in WALLS too; none of them stands on a street, a pavement queue or the depot's forecourt.
+ */
+const TOWN: [number, number, number, number, string, string, string, string, number][] = [
+  [1046, 504, 52, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
+  [1106, 504, 56, 34, MAP.sand, '#B8A57A', MAP.roof, MAP.roofShade, 3],
+  [800, 530, 50, 28, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, 0],
+  [778, 584, 56, 34, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 2],
+  [1054, 624, 56, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
+  [1118, 624, 46, 30, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, 0],
+  [806, 668, 56, 34, MAP.sand, '#B8A57A', MAP.slate, '#243A2E', 1],
+  [984, 684, 56, 34, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, 1],
+  [1100, 684, 64, 38, MAP.sand, '#B8A57A', MAP.roof, MAP.roofShade, 1],
+  [872, 690, 58, 34, MAP.board, MAP.boardShade, MAP.slate, '#243A2E', 0],
+  [786, 744, 56, 30, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, 0],
+  [852, 748, 36, 28, MAP.sand, '#B8A57A', MAP.slate, '#243A2E', 0],
+];
+/** The market square's fountain: a stone basin the truck drives round. */
+const FOUNTAIN = Object.freeze({ x: 1008, y: 604, r: 14 });
+/**
+ * The lamp post that stands at the front of every stop's queue, one pace ahead of the front diner: the map hangs
+ * its gold lantern on the one the compass points at, as it does on a landmark's signpost.
+ */
+export const STOP_LAMPS = Object.freeze(Object.fromEntries(STOPS.map((s) => [s.id, Object.freeze({ x: s.qx - Math.sign(s.qdx) * 14, y: s.qy - Math.sign(s.qdy) * 14 })])));
 
 /**
  * The five tall landmarks are painted into the ground chunks, so nothing y-sorts them against the truck: without a
@@ -197,12 +233,15 @@ export const PARK_AT = Object.freeze({ x: HOME.x + 30, y: HOME.y + 26 });
  * not. Flat [x0, y0, x1, y1] world rects, a little wider than the walls so the 40 px token stays clear of the brick.
  */
 const WALLS = [
-  HOME.x - 130, HOME.y - 88, HOME.x - 38, HOME.y - 14,      // the cottage at home
+  HOME.x - 44, HOME.y - 80, HOME.x + 44, HOME.y - 10,       // the depot: the truck starts parked just in front of this, in its bay
   COOP.x - 38, COOP.y - 110, COOP.x + 38, COOP.y - 56,      // the coop hut (its run and door stay open)
   DAIRY.x - 42, DAIRY.y - 84, DAIRY.x + 42, DAIRY.y - 14,   // the dairy barn
   MILL.x - 30, MILL.y - 82, MILL.x + 30, MILL.y - 6,        // the mill tower
   FARM.x - 70, FARM.y - 68, FARM.x - 6, FARM.y - 30,        // the farm's barn (the plot beside it stays drivable, like a field)
+  FOUNTAIN.x - FOUNTAIN.r - 4, FOUNTAIN.y - FOUNTAIN.r - 2, FOUNTAIN.x + FOUNTAIN.r + 4, FOUNTAIN.y + FOUNTAIN.r,
 ];
+// ...and every building in the town, its roof included, a few px wider than the walls
+for (const b of TOWN) WALLS.push(b[0] - 4, b[1] - b[3] - Math.round(b[3] * 0.5), b[0] + b[2] + 4, b[1] - 6);
 /** True where a wall stands: the truck stops against it (comparisons only, so the sim stays deterministic). */
 export function wallBlocked(px, py) {
   for (let i = 0; i < WALLS.length; i += 4) if (px > WALLS[i] && px < WALLS[i + 2] && py > WALLS[i + 1] && py < WALLS[i + 3]) return true;
@@ -219,7 +258,7 @@ const TREES = (() => {
   const r = makeRng(SEED0 + 19), baked = [], roadside = [];
   for (let i = 0; i < 700 && (baked.length < 48 || roadside.length < 22); i++) {
     const x = r.int(30, WORLD_W - 30), y = r.int(HORIZON_H + 44, WORLD_H - 30), k = r.int(0, 2);
-    if (riverDist(x, y) < 40 || nearLandmark(x, y, 130) || inWheat(x, y, 16) || inCove(x, y, 24)) continue;
+    if (riverDist(x, y) < 40 || nearLandmark(x, y, 130) || inWheat(x, y, 16) || inCove(x, y, 24) || inCity(x, y, 30)) continue;
     const ld = laneDist(x, y);
     if (ld < 20) continue;
     let crowded = false;
@@ -301,16 +340,6 @@ function skep(g, cx, by) {
 }
 
 function paintLandmarks(g) {
-  // home: the yard - cottage on the lane's north side, phone box, lamp post, the chalk-outlined parking bay
-  groundShade(g, HOME.x - 84, HOME.y - 16, 94, 0.1, 4);
-  building(g, HOME.x - 120, HOME.y - 16, 72, 48, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, { chimney: true });
-  boxOutlined(g, HOME.x - 40, HOME.y - 50, 12, 24, MAP.wall); g.fillStyle = MAP.plum; g.fillRect(HOME.x - 40, HOME.y - 50, 12, 4);
-  g.fillStyle = MAP.window; g.fillRect(HOME.x - 38, HOME.y - 44, 8, 10);
-  g.fillStyle = MAP.lane; pathRR(g, HOME.x + 16, HOME.y + 12, 48, 30, 4); g.fill();
-  // the parking bay's chalk line is DASHED: a solid cream rounded rect on the grass read as a HUD card lying in the
-  // world, which is the one thing the map's corners are being cleared of. 7 px marks keep it over the 2 px floor.
-  g.strokeStyle = MAP.wall; g.lineWidth = 2; g.setLineDash([7, 5]); pathRR(g, HOME.x + 19, HOME.y + 15, 42, 24, 3); g.stroke(); g.setLineDash([]);
-  boxOutlined(g, HOME.x - 62, HOME.y + 8, 3, 24, MAP.woodDark); boxOutlined(g, HOME.x - 64, HOME.y + 2, 7, 7, MAP.brass);
   // orchard: five lollipops with red apples
   for (let i = 0; i < 5; i++) {
     const bx = ORCHARD.x - 72 + i * 36, by = ORCHARD.y - 46 - (i & 1) * 12;
@@ -451,6 +480,108 @@ function paintLandmarks(g) {
   g.fillStyle = MAP.woodDark; g.fillRect(TERRACE.x + 48, TERRACE.y - 30, 8, 12);
 }
 
+// ---------------------------------------------------------------- the town
+/**
+ * The town's ground, under the streets: warm stone flags inside a darker kerb, and a darker kerb again along every
+ * street through it, so the lanes read as roads between pavements. Painted before the lanes, which go over it.
+ */
+function paintTownGround(g) {
+  const C = CITY, w = C.x1 - C.x0, h = C.y1 - C.y0;
+  g.save();
+  pathRR(g, C.x0, C.y0, w, h, 20); g.fillStyle = MAP.hillNear; g.fill();
+  g.clip();
+  // the flags: a row seam every 12 px, the joints staggered row by row
+  g.fillStyle = '#A6967E';
+  for (let y = C.y0 + 6; y < C.y1; y += 12) {
+    g.fillRect(C.x0, y, w, 1);
+    for (let x = C.x0 + (((y - C.y0) / 12) & 1) * 10; x < C.x1; x += 20) g.fillRect(x, y - 11, 1, 11);
+  }
+  for (const L of LANES) strokePoly(g, L, MAP.hillFar, LANE_HALF * 2 + 8);
+  g.restore();
+  pathRR(g, C.x0, C.y0, w, h, 20); g.strokeStyle = MAP.hillFar; g.lineWidth = 3; g.stroke();
+}
+/** Cobbles on the streets inside the town: rows of small setts across every lane, laid on a world grid. */
+function paintCobbles(g) {
+  g.save();
+  pathRR(g, CITY.x0, CITY.y0, CITY.x1 - CITY.x0, CITY.y1 - CITY.y0, 20); g.clip();
+  g.fillStyle = MAP.laneEdge;
+  for (let y = CITY.y0; y < CITY.y1; y += 6) for (let x = CITY.x0 + ((y / 6) & 1) * 4; x < CITY.x1; x += 8) {
+    if (laneDist(x, y) < LANE_HALF - 2) g.fillRect(x, y, 3, 1);
+  }
+  g.restore();
+}
+/** A street lamp on the pavement, foot at (x, y): an ink post, a brass lamp head 30 px up (the lantern's height). */
+function lampPost(g, x, y) {
+  groundShade(g, x, y, 8, 0.3, 1);
+  boxOutlined(g, x - 1, y - 28, 2, 28, INK);
+  boxOutlined(g, x - 3, y - 32, 6, 5, MAP.brass);
+  g.fillStyle = INK; g.fillRect(x - 4, y - 33, 8, 1);
+}
+/**
+ * The town: the depot with the truck's bay open onto the west road, the telephone box beside it, the houses and
+ * shops, the chapel and the station, the fountain in the square, and a lamp post at the front of every stop.
+ */
+function paintTown(g) {
+  // the town's buildings, back to front
+  for (const b of TOWN) {
+    const [x, y, w, h, wall, wallShade, roof, roofShade, kind] = b;
+    groundShade(g, x + w / 2, y, w + 16, 0.1, 4);
+    building(g, x, y, w, h, wall, wallShade, roof, roofShade, { round: kind >= 2, chimney: kind === 0 });
+    // a second window on the far side of the door, so a street front is a row of windows and not one each
+    boxOutlined(g, x + w - 15, y - h + 8, 8, 9, MAP.window); g.fillStyle = MAP.skyTop; g.fillRect(x + w - 15, y - h + 8, 3, 9);
+    if (kind === 1) {
+      // the shop's striped awning over the whole front, rose and cream
+      const ay = y - h + 20;
+      g.fillStyle = INK; g.fillRect(x - 3, ay - 1, w + 6, 8);
+      for (let k = 0; k < w + 4; k += 6) { g.fillStyle = (k / 6) & 1 ? MAP.wall : MAP.rose; g.fillRect(x - 2 + k, ay, Math.min(6, w + 4 - k), 6); }
+    } else if (kind === 2) {
+      // the chapel's bell cote on the ridge
+      const cx = x + R(w / 2);
+      boxOutlined(g, cx - 4, y - h - R(h * 0.5) - 10, 8, 10, MAP.wall);
+      g.fillStyle = MAP.brass; g.fillRect(cx - 2, y - h - R(h * 0.5) - 7, 4, 4);
+      polyOutlined(g, [cx - 6, y - h - R(h * 0.5) - 10, cx + 6, y - h - R(h * 0.5) - 10, cx, y - h - R(h * 0.5) - 17], roof, INK, 1);
+    } else if (kind === 3) {
+      // the station's clock face in the gable, its hands at ten to two
+      const cx = x + R(w / 2), cy = y - h - R(h * 0.25);
+      g.fillStyle = INK; g.fillRect(cx, cy - 4, 1, 4); g.fillRect(cx, cy, 3, 1);
+    }
+  }
+  // the depot: a plum-roofed garage whose whole front is one open bay, the shutter rolled up under the eaves and the
+  // DEPOT board on the roof. The truck starts the day parked in the bay (PARK_AT) and rolls straight out onto the road.
+  const gx = HOME.x - 32, gy = HOME.y - 2, gw = 64, gh = 40, rh = 20;
+  groundShade(g, HOME.x, gy, gw + 20, 0.12, 4);
+  boxShaded(g, gx, gy - gh, gw, gh, MAP.wall, MAP.wallShade, INK, 1, 0.3);
+  polyOutlined(g, [gx - 3, gy - gh, gx + gw + 3, gy - gh, gx + gw - 6, gy - gh - rh, gx + 6, gy - gh - rh], '#7E3A56', INK, 2);
+  g.fillStyle = '#5A2A40'; g.fillRect(gx - 1, gy - gh - 7, gw + 2, 6);
+  boxOutlined(g, HOME.x + 16, gy - gh - rh - 6, 6, 12, MAP.wall);
+  // the bay: dark inside, a back wall with a tool rack, the rolled shutter across the top of the opening
+  boxOutlined(g, gx + 6, gy - gh + 8, gw - 12, gh - 8, '#3F3A48');
+  g.fillStyle = '#4A3038'; g.fillRect(gx + 6, gy - gh + 8, gw - 12, 12);
+  g.fillStyle = MAP.brass; g.fillRect(gx + 12, gy - gh + 14, 2, 4); g.fillRect(gx + 18, gy - gh + 13, 2, 5); g.fillRect(gx + gw - 16, gy - gh + 14, 3, 3);
+  boxOutlined(g, gx + 5, gy - gh + 4, gw - 10, 6, MAP.churn);
+  g.fillStyle = MAP.rock; for (let k = gy - gh + 6; k < gy - gh + 10; k += 2) g.fillRect(gx + 5, k, gw - 10, 1);
+  // the board on the roof
+  pathRR(g, HOME.x - 20, gy - gh - rh + 3, 40, 11, 2); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = MAP.wood; g.fill();
+  drawText(g, 'DEPOT', HOME.x, gy - gh - rh + 5, { size: 1, color: '#FFF6E0', align: 'center', shadow: false });
+  // the forecourt's chalked bay line, dashed, out to the kerb
+  g.strokeStyle = MAP.wall; g.lineWidth = 2; g.setLineDash([5, 4]);
+  g.beginPath(); g.moveTo(gx + 6, gy + 1); g.lineTo(gx + gw - 6, gy + 1); g.stroke(); g.setLineDash([]);
+  // the telephone box on the pavement by the depot's west wall: the phone that rings with the day's orders
+  const px = SPOTS.phone.x - 6, py = SPOTS.phone.y;
+  boxOutlined(g, px, py, 12, 24, MAP.roof); g.fillStyle = MAP.plum; g.fillRect(px, py, 12, 4);
+  g.fillStyle = MAP.window; g.fillRect(px + 2, py + 6, 8, 10);
+  // the fountain in the square, and a planted tree on the square's corner
+  const F = FOUNTAIN;
+  groundShade(g, F.x, F.y + 6, F.r * 2 + 6, 0.3, 2);
+  ellipse(g, F.x, F.y, F.r + 2, R(F.r * 0.6) + 2, INK); ellipse(g, F.x, F.y, F.r, R(F.r * 0.6), MAP.wallShade);
+  ellipse(g, F.x, F.y, F.r - 3, R(F.r * 0.6) - 3, MAP.river);
+  boxOutlined(g, F.x - 1, F.y - 12, 3, 10, MAP.wallShade);
+  g.fillStyle = MAP.skyTop; g.fillRect(F.x - 4, F.y - 14, 2, 2); g.fillRect(F.x + 4, F.y - 13, 2, 2); g.fillRect(F.x, F.y - 16, 2, 2);
+  groundShade(g, 1020, 484, 24); lollipop(g, 1020, 484, 10);
+  // a lamp post at the head of every queue
+  for (const s of STOPS) { const L = STOP_LAMPS[s.id]; lampPost(g, L.x, L.y); }
+}
+
 function paintHorizon(g, rnd) {
   vGradient(g, 0, 0, WORLD_W, HORIZON_H, [[0, MAP.skyTop], [1, MAP.skyLow]]);
   radialGlow(g, 1500, 34, 18, 'rgba(255,246,224,0.7)'); g.fillStyle = '#FFF6E0'; g.beginPath(); g.arc(1500, 34, 4, 0, TAU); g.fill();
@@ -481,14 +612,17 @@ function paintChunk(g, i, rnd) {
   // the border hedge (the horizon's tree-line closes the top)
   pathRR(g, 6, HORIZON_H + 2, WORLD_W - 12, WORLD_H - HORIZON_H - 8, 8); g.strokeStyle = INK; g.lineWidth = 8; g.stroke(); g.strokeStyle = MAP.hedge; g.lineWidth = 6; g.stroke();
   strokePoly(g, RIVER, INK, RIVER_HALF * 2 + 6); strokePoly(g, RIVER, MAP.river, RIVER_HALF * 2); strokePoly(g, RIVER, MAP.deep, 20);
+  paintTownGround(g);
   for (const L of LANES) strokePoly(g, L, MAP.laneEdge, LANE_HALF * 2 + 2);
   for (const L of LANES) strokePoly(g, L, MAP.lane, LANE_HALF * 2);
+  paintCobbles(g);
   for (const b of BRIDGES) {
     boxOutlined(g, b.x - BRIDGE_HALF_W, b.y - BRIDGE_HALF_H, BRIDGE_HALF_W * 2, BRIDGE_HALF_H * 2, MAP.wood);
     g.fillStyle = MAP.woodDark; for (let x = b.x - BRIDGE_HALF_W + 6; x < b.x + BRIDGE_HALF_W - 2; x += 8) g.fillRect(x, b.y - BRIDGE_HALF_H, 2, BRIDGE_HALF_H * 2);
     g.fillRect(b.x - BRIDGE_HALF_W, b.y - BRIDGE_HALF_H - 2, BRIDGE_HALF_W * 2, 2); g.fillRect(b.x - BRIDGE_HALF_W, b.y + BRIDGE_HALF_H, BRIDGE_HALF_W * 2, 2);
   }
   paintLandmarks(g);
+  paintTown(g);
   // baked trees: all the plum contact shadows first, then all the canopies, so no shadow lands on a neighbour's
   // crown. Widths match the roadside sprites' `shadow` (18 + size*4) so the two kinds of tree sit on the same ground.
   for (const t of TREES.baked) if (t[0] > cx - 40 && t[0] < cx + CHUNK_W + 40 && t[1] > cy - 10 && t[1] < cy + CHUNK_H + 60) groundShade(g, t[0], t[1], 18 + t[2] * 4);
@@ -497,7 +631,7 @@ function paintChunk(g, i, rnd) {
   for (let n = 0; n < 220; n++) {
     const x = cx + Math.floor(rnd() * (CHUNK_W - 2)), y = cy + Math.floor(rnd() * (CHUNK_H - 3)), kind = Math.floor(rnd() * 4);
     if (y < HORIZON_H + 12 || laneDist(x, y) < LANE_HALF + 6 || riverDist(x, y) < RIVER_HALF + 8 || nearLandmark(x, y, 70)) continue;
-    if (inWheat(x, y, 4) || inCove(x, y, 4)) continue;
+    if (inWheat(x, y, 4) || inCove(x, y, 4) || inCity(x, y, 4)) continue;
     if (kind === 0) { g.fillStyle = MAP.rose; g.fillRect(x, y, 2, 2); }
     else if (kind === 1) { g.fillStyle = MAP.wall; g.fillRect(x, y, 2, 2); }
     else { g.fillStyle = MAP.shade; g.fillRect(x, y, 2, 3); }
@@ -596,7 +730,7 @@ export const CROSSING_SPOTS = (() => {
     for (let k = 0; k + 3 < L.length; k += 2) {
       const ax = L[k], ay = L[k + 1], bx = L[k + 2], by = L[k + 3];
       const mx = (ax + bx) / 2, my = (ay + by) / 2, len = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
-      if (len < 100 || riverDist(mx, my) < RIVER_BLOCK + 20) continue;
+      if (len < 100 || riverDist(mx, my) < RIVER_BLOCK + 20 || inCity(mx, my)) continue;
       let clear = true;
       for (const p of PLACES) { const dx = p.x - mx, dy = p.y - my; if (dx * dx + dy * dy < CROSSING_CLEAR * CROSSING_CLEAR) clear = false; }
       if (!clear) continue;
@@ -639,5 +773,50 @@ export function drawPhoneRing(ctx, sx, sy, shake) {
     const r = 8 + k * 5;
     ctx.beginPath(); ctx.arc(sx + 6 + shake, sy + 2, r, -2.6, -1.9); ctx.stroke();
     ctx.beginPath(); ctx.arc(sx + 6 + shake, sy + 2, r, -1.25, -0.55); ctx.stroke();
+  }
+}
+
+/**
+ * The village diners in the town's queues, feet at (sx, sy): a 10 px head on an 8 px body, small enough to stand
+ * shoulder to shoulder on a pavement and still read as the three customers of content/critters/customers.ts - the
+ * owl's cream eye discs, ear tufts and waistcoat, the otter's cream muzzle, blue shorts and tail, the goat's horns,
+ * droopy ears and beard. `kind` is the diner id, `facing` 1 = right, `bob` lifts them a pixel, `wave` raises an arm.
+ */
+const DINER_LOOK = Object.freeze({
+  owl: { fur: '#9C7B5C', dark: '#5A4030', cream: '#EAD9B8', cloth: '#5E5470' },
+  otter: { fur: '#6E5A48', dark: '#4A3A2C', cream: '#D9C7A0', cloth: '#3F6B7A' },
+  goat: { fur: '#C0B5A2', dark: '#6E6354', cream: '#F1E9DC', cloth: '#6B4E3A' },
+});
+export function drawDiner(ctx, sx, sy, kind, facing = 1, bob = 0, wave = 0) {
+  const L = DINER_LOOK[kind] || DINER_LOOK.owl, f = facing < 0 ? -1 : 1;
+  const X = (dx, w) => (f > 0 ? sx + dx : sx - dx - w);
+  const top = sy - bob;
+  // legs, body (the cloth band is shorts, or the owl's waistcoat), belly
+  ctx.fillStyle = INK; ctx.fillRect(sx - 3, sy - 3, 2, 3); ctx.fillRect(sx + 1, sy - 3, 2, 3);
+  if (kind === 'otter') { ctx.fillStyle = INK; ctx.fillRect(X(-7, 3), top - 6, 3, 5); ctx.fillStyle = L.dark; ctx.fillRect(X(-6, 1), top - 5, 1, 3); }
+  boxOutlined(ctx, sx - 4, top - 11, 8, 8, L.fur);
+  ctx.fillStyle = L.cloth; ctx.fillRect(sx - 4, kind === 'owl' ? top - 11 : top - 6, 8, kind === 'owl' ? 8 : 3);
+  ctx.fillStyle = L.cream; ctx.fillRect(X(0, 3), top - 10, 3, kind === 'owl' ? 7 : 4);
+  if (wave) { boxOutlined(ctx, X(5, 2), top - 19, 2, 8, L.fur); } else { ctx.fillStyle = L.fur; ctx.fillRect(X(4, 1), top - 9, 1, 4); }
+  // head
+  const hy = top - 20;
+  if (kind === 'owl') {
+    boxOutlined(ctx, X(0, 2), hy - 2, 2, 2, L.dark); boxOutlined(ctx, X(-4, 2), hy - 2, 2, 2, L.dark);   // the tufts
+    boxOutlined(ctx, sx - 5, hy, 10, 9, L.fur);
+    ctx.fillStyle = L.cream; ctx.fillRect(X(-4, 4), hy + 2, 4, 4); ctx.fillRect(X(1, 4), hy + 2, 4, 4);
+    ctx.fillStyle = INK; ctx.fillRect(X(-2, 1), hy + 3, 1, 2); ctx.fillRect(X(3, 1), hy + 3, 1, 2);
+    ctx.fillStyle = MAP.mustard; ctx.fillRect(X(0, 2), hy + 6, 2, 2);
+  } else if (kind === 'goat') {
+    ctx.fillStyle = '#9C8A70'; ctx.fillRect(X(-3, 2), hy - 3, 2, 3); ctx.fillRect(X(1, 2), hy - 3, 2, 3);   // the horns
+    boxOutlined(ctx, sx - 5, hy, 10, 9, L.fur);
+    ctx.fillStyle = L.dark; ctx.fillRect(X(-7, 3), hy + 2, 3, 4);                                               // the droopy far ear
+    ctx.fillStyle = L.cream; ctx.fillRect(X(2, 4), hy + 4, 4, 3);
+    ctx.fillStyle = INK; ctx.fillRect(X(1, 1), hy + 2, 1, 2);
+    ctx.fillStyle = L.dark; ctx.fillRect(X(3, 2), hy + 9, 2, 3);                                                // the beard
+  } else {
+    ctx.fillStyle = L.dark; ctx.fillRect(X(-4, 2), hy - 1, 2, 2); ctx.fillRect(X(2, 2), hy - 1, 2, 2);         // small round ears
+    boxOutlined(ctx, sx - 5, hy, 10, 9, L.fur);
+    ctx.fillStyle = L.cream; ctx.fillRect(X(1, 5), hy + 4, 5, 4);
+    ctx.fillStyle = INK; ctx.fillRect(X(1, 1), hy + 2, 1, 2); ctx.fillRect(X(5, 1), hy + 4, 1, 1);
   }
 }

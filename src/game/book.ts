@@ -144,8 +144,6 @@ export function recordDay(run: Run, weekDone = false): boolean {
   book.days = add(book.days, 1);
   if (weekDone) book.weeks = add(book.weeks, 1);
   for (const line of run.lines) {
-    // where the truck stood to serve: a queue's landmark is a place it has been
-    book.road[line.place] = add(book.road[line.place] || 0, 1);
     for (const c of line.customers) {
       if (!c.stars) continue;                                  // nobody left unserved should be in the book
       const dish = book.dishes[c.recipe] || { n: 0, stars: 0, first: 0 };

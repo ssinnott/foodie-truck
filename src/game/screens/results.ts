@@ -23,7 +23,7 @@ import { drawTruck } from '../../art/truck.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { getCritter } from '../../content/critters/index.ts';
 import { getCustomer } from '../../content/critters/customers.ts';
-import { PLACES } from '../../content/places.ts';
+import { placeName } from '../../content/places.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawTicket, drawStamp, drawStars, drawHint, drawSign, ROW } from '../ui.ts';
 import type { TicketOpts } from '../ui.ts';
@@ -201,8 +201,7 @@ export class ResultsScreen extends Screen {
     this.score = params.score != null ? params.score : sum * 2;
     this.left = false;
     // every string the screen draws is built here: draw() allocates nothing (docs/ARCHITECTURE.md section 8)
-    const place = ln ? PLACES.find((p) => p.id === ln.place) : null;
-    this.signText = `LINE ${run.line + 1} OF ${run.lines.length} SERVED  -  ${place ? place.name : ln ? ln.place.toUpperCase() : ''}`;
+    this.signText = `LINE ${run.line + 1} OF ${run.lines.length} SERVED  -  ${ln ? placeName(ln.place) : ''}`;
     this.signW = measureText(this.signText, 1) + 24;
     this.stampText = STAMPS[Math.max(1, Math.min(3, R(sum / this.stars.length)))];
     this.tip = 0; for (const s of this.stars) this.tip += COINS[s];

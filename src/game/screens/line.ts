@@ -1,4 +1,4 @@
-// THE LINE (docs/GDD.md sections 3 and 10): the truck pulled up at a landmark with a queue of village diners
+// THE LINE (docs/GDD.md sections 3 and 10): the truck pulled up at a town stop with a queue of village diners
 // waiting at its hatch. EVERYONE in the queue says what they want - each diner's order on a paper bubble over their
 // own head, front first, the bubbles stacked up the sky so each one's tail runs down behind the ones below it to
 // the diner who said it - and CONFIRM (or 600 frames) takes every order into the kitchen at once. The kitchen
@@ -20,7 +20,7 @@ import { drawTruck } from '../../art/truck.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { getCritter } from '../../content/critters/index.ts';
 import { getCustomer } from '../../content/critters/customers.ts';
-import { PLACES } from '../../content/places.ts';
+import { placeName } from '../../content/places.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawTicket, drawSign, drawHint } from '../ui.ts';
 import { confirmPressed } from '../menuinput.ts';
@@ -106,7 +106,7 @@ export class LineScreen extends Screen {
   override enter(params: ScreenParams): void {
     super.enter(params);
     const game = this.game, run = game.run;
-    const ln = run.lines[run.line], place = PLACES.find((p) => p.id === ln.place);
+    const ln = run.lines[run.line];
     // the crew: one rig per seat, idling; the driver's head in the cab, the rest at the hatch (as on the map)
     this.seats.length = 0; this.heads.length = 0;
     for (const p of run.party) {
@@ -134,7 +134,7 @@ export class LineScreen extends Screen {
       });
     }
     this.taken = 0;
-    this.signText = `LINE ${run.line + 1} OF ${run.lines.length}  -  ${place ? place.name : ln.place.toUpperCase()}`;
+    this.signText = `LINE ${run.line + 1} OF ${run.lines.length}  -  ${placeName(ln.place)}`;
     this.signW = measureText(this.signText, 1) + 24;
     this.hint = `${game.input.keyText(0, 'action')}: ${this.queue.length > 1 ? 'TAKE EVERYONE\'S ORDER' : 'TAKE THE ORDER'}`;
     this.fields.length = 0;

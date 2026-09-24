@@ -1,7 +1,7 @@
 // THE DAY BOARD (docs/GDD.md sections 3 and 10): the day's plan pinned up on paper before the truck opens - the
 // three LINES that will form (where each waits, who is in it and what they will order), and under them the
 // SHOPPING LIST every one of those orders adds up to. Confirm OPENS THE TRUCK and fades to the map; the truck then
-// drives round the landmarks until the pantry holds the whole list, and only then do the lines open.
+// drives out of the depot round the landmarks until the pantry holds the whole list, and only then do the queues form in town.
 //
 // `select` hands over to it once a crew is stamped, and `results` hands back to it after the LAST line has been
 // served: the board then opens CLOSED - every line stamped SERVED with each customer's stars printed on the card,
@@ -21,7 +21,7 @@ import { critterRig } from '../../content/critters/common.ts';
 import { getCustomer } from '../../content/critters/customers.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
-import { PLACES } from '../../content/places.ts';
+import { placeName } from '../../content/places.ts';
 import { drawFood } from '../../art/food.ts';
 import { drawTicket, drawSign, drawSlate, drawStamp, drawStars, drawHint, drawDim, cardX, CARD_W } from '../ui.ts';
 import { confirmPressed, cancelPressed } from '../menuinput.ts';
@@ -34,7 +34,7 @@ import { saveWeek, clearWeek } from '../week.ts';
 /** One card per line across the top: three of the select screen's own card width and gap. */
 const CARD_Y = 46, CARD_H = 124;
 /**
- * Inside a card: the header band, the landmark the line waits at, a rule, then one CUSTOMER block per person in
+ * Inside a card: the header band, the town stop the line waits at, a rule, then one CUSTOMER block per person in
  * the queue - their portrait in a plum window, their name beside it and the dish they will order under that, over
  * one or two rows (a name that fits whole stays whole). A served customer gives the dish rows up to their stars.
  */
@@ -221,11 +221,10 @@ export class StageScreen extends Screen {
     };
     const n = run.lines.length;
     this.cards = run.lines.map((ln, i) => {
-      const place = PLACES.find((p) => p.id === ln.place);
       return {
         x: cardX(i, n), y: CARD_Y,
         title: `LINE ${String(i + 1).padStart(2, '0')}`,
-        place: place ? place.name : ln.place.toUpperCase(),
+        place: placeName(ln.place),
         customers: ln.customers.map((c) => {
           const bi = bustOf(c.customer);
           return { bust: bi, name: this.busts[bi].def.name, lines: wrapDish(recipeOf(c.recipe).dish + twistTag(c)) };

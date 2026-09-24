@@ -19,12 +19,12 @@
 //              compass swings to the nearest queue, driving there opens the line screen, and the order taken
 //              there opens the kitchen. The one test that proves the loop's two halves hand over.
 import { withPage, assert } from '../playtest.js';
-import { PLACES } from '../../src/content/places.ts';
+import { PLACES, STOPS } from '../../src/content/places.ts';
 import { planWeek, WEATHER_DRIZZLE, WEATHER_FOG } from '../../src/game/run.ts';
 import { INGREDIENTS, ORDERS } from '../../src/content/recipes.ts';
 import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, SPOTS, CROSSING_SPOTS, riverDist, laneDist, wallBlocked, waterBlocked, pondBlocked, seaBlocked, shoreX } from '../../src/art/backgrounds/map.ts';
 
-const placeOf = (id) => PLACES.find((p) => p.id === id);
+const placeOf = (id) => PLACES.find((p) => p.id === id) || STOPS.find((p) => p.id === id);
 /** The road's crossings (screens/map.ts): take every herd off the road, for the scenarios that drive the lanes for other reasons. */
 const noCrossings = (page) => page.evaluate(() => { for (const c of window.__game.game.run.crossings) { c.state = 3; c.t = 0; } });
 const BLOCK_R = 40, CLEAR_FRAMES = 60, AUTO_DUCKS = 90;
@@ -340,21 +340,32 @@ export const SCENARIOS = {
         assert(have && have === amount, `the ${ing} line is full (${line})`);
       }
 
+      await api.step(40);   // the queues come out onto the pavements one diner at a time
       const done = await api.summary();
       assert(done.run.complete === true && done.run.phase === 'serve', `the list is aboard, so the lines open (${done.run.phase})`);
       assert(done.top.serving === true && done.top.destLine >= 0, `...and the compass swings to a queue (dest ${done.top.dest}, line ${done.top.destLine})`);
       const lineAt = done.run.lines[done.top.destLine].place;
-      assert(done.top.dest === lineAt, `the compass points at that line's landmark (${done.top.dest} vs ${lineAt})`);
-      // a landmark with no queue stays on the map behind a sign
-      const idle = PLACES.find((p) => p.id !== 'home' && !done.run.lines.some((l) => l.place === p.id));
-      await teleport(page, idle.x, idle.y + 60, 12);
+      assert(done.top.dest === lineAt && STOPS.some((p) => p.id === lineAt), `the compass points at that line's stop in town (${done.top.dest} vs ${lineAt})`);
+      const queued = done.run.lines.reduce((n, l) => n + l.customers.length, 0);
+      assert(done.top.queued === queued && done.top.queues.every((d) => STOPS.some((p) => p.id === done.run.lines[d.line].place)),
+        `every customer stands in a queue on a town pavement (${done.top.queued} of ${queued})`);
+      // a landmark stays on the map behind a sign: the queues are all in town
+      await teleport(page, placeOf('mill').x, placeOf('mill').y + 60, 12);
       await api.hold(0, { up: true }); await api.step(60); await api.release(0);
       const s1 = await api.summary();
-      assert(s1.screen === 'map' && s1.top.sign === 'NO LINE HERE', `${idle.id} has no queue: the truck stays on the map behind a NO LINE HERE sign (on ${s1.screen}, '${s1.top.sign}')`);
-      // the queue itself opens the line screen with its first customer at the hatch
-      const q = placeOf(lineAt);
-      await teleport(page, q.x, q.y + 60, 12);
-      await api.hold(0, { up: true }); await api.step(150); await api.release(0);
+      assert(s1.screen === 'map' && s1.top.sign === 'THE LINES ARE IN TOWN', `the mill has no queue: the truck stays on the map behind a THE LINES ARE IN TOWN sign (on ${s1.screen}, '${s1.top.sign}')`);
+      // ...and so does a town stop nobody queues at today
+      const idle = STOPS.find((p) => !done.run.lines.some((l) => l.place === p.id));
+      if (idle) {
+        await teleport(page, idle.x - 70, idle.y, 0);
+        await api.hold(0, { right: true }); await api.step(50); await api.release(0);
+        const si = await api.summary();
+        assert(si.screen === 'map' && si.top.sign === 'NO LINE HERE', `nobody queues at ${idle.id}: a NO LINE HERE sign (on ${si.screen}, '${si.top.sign}')`);
+      }
+      // the queue itself opens the line screen with its first customer at the hatch: drive up the street to it
+      const q = placeOf(lineAt), horiz = laneDist(q.x - 70, q.y) < 4;
+      await teleport(page, horiz ? q.x - 70 : q.x, horiz ? q.y : q.y + 70, horiz ? 0 : 12);
+      await api.hold(0, horiz ? { right: true } : { up: true }); await api.step(150); await api.release(0);
       const s2 = await api.summary();
       assert(s2.screen === 'line', `driving to the queue opens the line screen (now on ${s2.screen})`);
       assert(s2.run.line === done.top.destLine && s2.run.customer === 0 && s2.top.waiting === 2, `the run stands on that line with its first customer at the hatch (line ${s2.run.line}, customer ${s2.run.customer}, ${s2.top.waiting} waiting)`);
