@@ -18,7 +18,7 @@ import { withPage, assert } from '../playtest.js';
 import { PLACES, STOPS } from '../../src/content/places.ts';
 import { LANES } from '../../src/art/backgrounds/map.ts';
 import { cook } from './kitchen.js';
-import { DAY_SHAPES } from '../../src/game/run.ts';
+import { TIP_COINS, DAY_SHAPES } from '../../src/game/run.ts';
 
 /** A real PLAY always starts a fresh week, so an uninterrupted playthrough is always DAY 1: the opening day. */
 const DAY1 = DAY_SHAPES[0];
@@ -327,7 +327,7 @@ export const SCENARIOS = {
       assert(s.run.served === 2 && stars.every((st, k) => s.run.lines[lineIdx].customers[k].endsWith(':' + st)), `confirm banks the whole line at their stars (served ${s.run.served}, ${s.run.lines[lineIdx].customers.join()})`);
       // ---- the line served: back to the map with two to go ----
       assert(s.screen === 'map' && s.run.linesServed === 1 && s.run.dayComplete === false, `the last customer served sends the truck back to the map, one line down (on ${s.screen}, ${s.run.linesServed} served)`);
-      assert(s.run.score === servedStars * 100 && s.run.stars === servedStars, `the run scores what the customers gave it (${s.run.score} for ${servedStars} stars)`);
+      assert(s.run.score === TIP_COINS[stars[0]] + TIP_COINS[stars[1]] && s.run.stars === servedStars, `the run takes the tips the customers gave it (${s.run.score} coins for ${servedStars} stars)`);
       assert(s.top.sign === `LINE SERVED!  ${DAY1.lines.length - 1} TO GO`, `the map says so (sign '${s.top.sign}')`);
       assert(s.top.dest !== place && s.run.lines[s.top.destLine].served === false, `...and the compass has moved on to a line still waiting (dest ${s.top.dest})`);
       await api.step(30);

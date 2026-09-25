@@ -36,6 +36,14 @@ export const SCENES = Object.freeze(['map', 'orchard', 'pond', 'coop', 'kitchen'
 /** The scene an online match opens on: the day board, so the party reads the day's plan together and opens the truck. */
 export const START_SCENE = SCENES.indexOf('stage');
 
+/**
+ * THE TIP (docs/GDD.md sections 7 and 13): what one dish earns, in coins, by its stars (index 0 is unreachable -
+ * stars are clamped to 1 - but keeps the lookup flat). Coins are the game's one money: the receipt counts them,
+ * the day's takings are them, and the garage sells for them. content/garage.ts prices its pieces against a week
+ * of these, so a change here moves how often the garage can sell something.
+ */
+export const TIP_COINS: readonly number[] = Object.freeze([0, 4, 8, 12]);
+
 /** The day's shape (docs/GDD.md section 3): how many recipes are on the menu, how many lines form, how long each is. */
 export const RECIPES_PER_DAY = 3, LINES_PER_DAY = 3, LINE_LENGTH = 2;
 /**
@@ -310,7 +318,7 @@ export function startRun(game, o) {
     week,
     /** The stars each CLOSED day earned, in day order; today's land in it as the board shuts. */
     weekStars: [],
-    /** The takings each CLOSED day earned, in day order. */
+    /** The takings each CLOSED day earned, in coins, in day order. */
     weekTakings: [],
     /** The day's menu: the ORDERS ids on it, in the order the board prints them. */
     recipes: plan.recipes,
@@ -328,7 +336,7 @@ export function startRun(game, o) {
     served: 0,
     /** The line `serve()` finished last, so the map can say so on arrival; -1 before the first one. */
     lastServed: -1,
-    /** The week's takings: every day's, running. */
+    /** The week's takings in coins (TIP_COINS per dish served): every day's, running. */
     score: 0,
     /** World-map state the map screen keeps between visits (truck position, heading, which place it is at). */
     truck: { x: 0, y: 0, heading: 0, at: 'home' },
@@ -382,12 +390,13 @@ export function startRun(game, o) {
       run.order = makeOrder(run.lines[run.line].customers[0]);
       return run.order;
     },
-    /** Called by results: bank the stars against the customer at the hatch, take their dish out of the pantry, and call the next. */
+    /** Called by results: bank the stars (and their tip) against the customer at the hatch, take their dish out of the pantry, and call the next. */
     serve(stars) {
       const ln = run.lines[run.line], c = ln.customers[run.customer];
+      const st = Math.max(1, Math.min(3, stars | 0));
       run.served++;
-      run.score += stars * 100;
-      if (c) c.stars = Math.max(1, Math.min(3, stars | 0));
+      run.score += TIP_COINS[st];
+      if (c) c.stars = st;
       for (const n of run.order.needs) { const s = run.need(n.id); if (s) s.used += n.amount; }
       run.customer++;
       if (run.customer >= ln.customers.length) { ln.served = true; run.lastServed = run.line; }

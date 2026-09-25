@@ -28,6 +28,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withPage, assert } from '../playtest.js';
+import { TIP_COINS } from '../../src/game/run.ts';
 
 /** Where the harness writes its screenshots (tools/playtest.js SHOTS). */
 const SHOTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'screens');
@@ -252,7 +253,7 @@ export const SCENARIOS = {
       await api.shot('results-stamp');
       await api.press(0, { action: true }, 1, 2);
       s = await api.summary();
-      assert(s.screen === 'map' && s.run.served === 1 && s.run.score === 300, `confirm banks the line and sends the truck on (on ${s.screen}, served ${s.run.served}, score ${s.run.score})`);
+      assert(s.screen === 'map' && s.run.served === 1 && s.run.score === TIP_COINS[3], `confirm banks the line, and its tip, and sends the truck on (on ${s.screen}, served ${s.run.served}, coins ${s.run.score})`);
       assert(s.run.lines[0].customers[0].endsWith(':3') && s.run.lines[0].served, `...with the customer stamped at the stars they gave (${s.run.lines[0].customers.join()})`);
       const used = s.run.needs.map((n, i) => Number(n.split(':')[1].split('/')[0]) - Number(s.run.stock[i].split(':')[1]));
       assert(used.some((u) => u > 0), `the dish came out of the pantry (used ${used.join()})`);

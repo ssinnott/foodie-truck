@@ -17,6 +17,8 @@ import type { Rig } from '../../lib/art/rig.ts';
 import type { Pose } from '../../lib/art/poses.ts';
 import { drawShadow } from '../../art/fx.ts';
 import { drawTruck } from '../../art/truck.ts';
+import type { TruckStyle } from '../../art/truck.ts';
+import { truckStyleFor } from '../garage.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { getCritter } from '../../content/critters/index.ts';
 import { getCustomer } from '../../content/critters/customers.ts';
@@ -30,7 +32,7 @@ import { recipeOf, twistSay } from '../run.ts';
 /** The truck parks where the title parks it, turned to face LEFT so the hatch (its rear) opens on the queue.
  *  Exported with the queue's geometry below: results serves the whole line on this same lane, everyone where they stood. */
 export const TRUCK_X = 150;
-const TRUCK_OPTS = { scale: 2, wheel: 0, facing: -1, heads: null as unknown as LineHead[] };
+const TRUCK_OPTS = { scale: 2, wheel: 0, facing: -1, heads: null as unknown as LineHead[], style: null as unknown as TruckStyle };
 /** The queue: the front diner stands this far right of the hatch, the rest QUEUE_PITCH apart behind them. */
 export const QUEUE_X0 = 268, QUEUE_PITCH = 62, QUEUE_SCALE = 1.35;
 /** The driver in the cab, as on the map. */
@@ -91,6 +93,8 @@ export class LineScreen extends Screen {
   declare seats: LineSeat[];
   /** The heads in the truck's windows: the driver first, then the rest. */
   declare heads: LineHead[];
+  /** The livery the truck is drawn in, read once in enter() (game/garage.ts: never from update()). */
+  declare truckStyle: TruckStyle;
   /** The diners still waiting, front first. */
   declare queue: Diner[];
   /** 1 once confirm has taken the order and the fade is running. */
@@ -107,6 +111,7 @@ export class LineScreen extends Screen {
     super.enter(params);
     const game = this.game, run = game.run;
     const ln = run.lines[run.line];
+    this.truckStyle = truckStyleFor(game);
     // the crew: one rig per seat, idling; the driver's head in the cab, the rest at the hatch (as on the map)
     this.seats.length = 0; this.heads.length = 0;
     for (const p of run.party) {
@@ -162,7 +167,7 @@ export class LineScreen extends Screen {
     const f = this.frame;
     drawLane(ctx);
     drawShadow(ctx, TRUCK_X, TRUCK_Y, 112, 0.28);
-    TRUCK_OPTS.heads = this.heads;
+    TRUCK_OPTS.heads = this.heads; TRUCK_OPTS.style = this.truckStyle;
     drawTruck(ctx, TRUCK_X, TRUCK_Y, TRUCK_OPTS);
     // the queue, back to front so the diner at the hatch is drawn last and in front
     for (let i = this.queue.length - 1; i >= 0; i--) {

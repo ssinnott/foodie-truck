@@ -8,6 +8,7 @@ import { CRITTERS } from '../src/content/critters/index.ts';
 import { INK, CHIBI } from '../src/content/critters/common.ts';
 import { hexToRgb } from '../src/art/palettes.ts';
 import { PLAYER_COLORS, PLAYER_LABELS } from '../src/constants.ts';
+import { PAINTS, TRUCK } from '../src/art/truck.ts';
 
 const notes = process.argv.includes('--notes');
 const findings = [];
@@ -97,7 +98,19 @@ for (let i = 0; i < CRITTERS.length; i++) for (let j = i + 1; j < CRITTERS.lengt
 
 }
 
+// ---- the truck's paint jobs (art/truck.ts PAINTS, sold by the garage) ----
+// The crew's heads break out of the windows onto the body, so every paint has to clear the dusk glass the way the
+// stock beetroot does (value, or a hue family with both saturated: the same ART_STYLE 0.1 rule the cast is held
+// to), and its highlight and shade have to read as three tones of one body rather than one flat slab.
+for (const [id, p] of Object.entries(PAINTS)) {
+  const S = `paint:${id}`;
+  if (!separated(p.body, TRUCK.glass)) err(S, 'truck/body-vs-glass', `body ${p.body} vs glass ${TRUCK.glass}: relDiff ${relDiff(p.body, TRUCK.glass).toFixed(2)}, hue gap ${hueDelta(p.body, TRUCK.glass).toFixed(0)}`);
+  if (relDiff(p.body, INK) < 0.25) err(S, 'truck/body-vs-ink', `body ${p.body} vs ink ${INK}: relDiff ${relDiff(p.body, INK).toFixed(2)} < 0.25 (the outline must read)`);
+  if (relDiff(p.body, p.hi) < 0.12 || relDiff(p.body, p.shade) < 0.12) warn(S, 'truck/three-tones', `hi ${p.hi} / body ${p.body} / shade ${p.shade} sit too close to read as three tones`);
+  if (notes) console.log(`  ${S}: body ${p.body} (L ${lum(p.body).toFixed(2)}) vs glass ${TRUCK.glass} (L ${lum(TRUCK.glass).toFixed(2)})`);
+}
+
 const errors = findings.filter((f) => f.sev === 'error'), warns = findings.filter((f) => f.sev === 'warn');
 for (const f of findings) console.log(`${f.sev.toUpperCase().padEnd(5)} ${f.rule.padEnd(26)} ${f.subject}: ${f.msg}`);
-console.log(`art-check: ${CRITTERS.length} critters, ${errors.length} errors, ${warns.length} warnings`);
+console.log(`art-check: ${CRITTERS.length} critters, ${Object.keys(PAINTS).length} truck paints, ${errors.length} errors, ${warns.length} warnings`);
 process.exit(errors.length ? 1 : 0);

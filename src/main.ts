@@ -37,6 +37,7 @@ import { BookScreen } from './game/screens/book.ts';
 import { ControlsScreen } from './game/screens/controls.ts';
 import * as bindings from './engine/bindings.ts';
 import { PauseScreen } from './game/screens/pause.ts';
+import { GarageScreen } from './game/screens/garage.ts';
 
 /** Parse URL params into game options. */
 export function parseOptions(search = window.location.search) {
@@ -131,6 +132,7 @@ function boot() {
   game.registerScreen('book', (g) => new BookScreen(g));
   game.registerScreen('controls', (g) => new ControlsScreen(g));
   game.registerScreen('pause', (g) => new PauseScreen(g));
+  game.registerScreen('garage', (g) => new GarageScreen(g));
 
   const loop = createLoop({
     update() {

@@ -30,9 +30,15 @@ week has already served — the last customer of the week orders Monday's dish. 
 
 The whole week is laid out from the seed before the first day opens, so nothing about it is stored: the **day
 board** pins each day's plan up before the truck opens, and when the last queue is served it comes back **closed**
-— the day totted up, the week strip under it — and the one press left opens tomorrow. A week is two and a half
+— the day totted up, the week strip under it — and the one press left drives the truck into the garage. A week is two and a half
 hours across five sittings, so it is **resumable**: the title's first row turns into `CONTINUE`, and picking it up
 needs only the seed, the day and who was sitting down. Finish the fête and the truck shuts for the week.
+
+Every dish tips **coins** — 4, 8 or 12 by its stars — and each night they go into the **garage's** tin. The garage
+sells six things for the truck: a new paint (seafoam mint, or ketchup and mustard), a new awning (cherry gingham,
+or a salad) and something for the roof (a big apple, or a giant hot dog). Flip through them and the truck tries each
+one on; a good week buys about one. The tin and the truck's look carry on from week to week. (Local play only for
+now: an online match banks nothing, and everyone sees the stock truck.)
 
 The **recipe book** is what the week fills in. Every dish cooked is inked into it with its own picture, every
 diner fed and everything gathered is tallied, and everything not yet cooked sits there in pencil — so the
@@ -52,7 +58,8 @@ and forty-odd effects, all data in `src/engine/audio/`), so the repository stays
 
 | Part | Screen | What happens |
 |---|---|---|
-| **Day board** | `stage` | The day's plan on paper: the lines (where each waits, who is in it, what they order) and the shopping list they add up to. Confirm opens the truck. After the last line it comes back closed, every customer's stars on it, the week strip under them, and NEXT DAY on the way out — or, on the fête, the end of the week. |
+| **Day board** | `stage` | The day's plan on paper: the lines (where each waits, who is in it, what they order) and the shopping list they add up to. Confirm opens the truck. After the last line it comes back closed, every customer's stars on it, the week strip under them, and the garage on the way out — or, on the fête, the end of the week. |
+| **Garage** | `garage` | Where each night ends: the coin tin, and the truck's paint, awning and roof to change or buy, tried on the truck as you flip through them. OPEN TOMORROW on the way out. Also on the title menu. |
 | **Recipe book** | `book` | What this truck has cooked, who it has fed, what it has gathered and where it has been. Six pages of dishes and three of tallies. Reached from the title. |
 | **Overland map** | `map` | The truck drives a 2560×1440 countryside with a town in the middle, starting the day inside its depot there. A flock of sheep or a duck parade may be across a country lane: honk (ALT) and they scatter. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, the queues form on the town's pavements — little files of diners — and pulling up at one opens its line. |
 | **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden`, `bramble`, `beach`, `holt`, `wood`, `terrace` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows (and crank the churn for butter), hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, tap to pull carrots out of the farm's bed, pick berries off the bank's bushes, and chase crabs along the cove's beach. Everyone seated plays at once and the party's total counts. |
@@ -114,7 +121,7 @@ screen has to do to stay in sync.
   UI, determinism and process. Read this first if you want to reuse the approach elsewhere.
 - `docs/ART_STYLE.md` — the binding style guide for this game: the Hedgerow Dusk look, the cast table, palettes,
   outline and shading rules, animation bar, self-review checklist.
-- `docs/GDD.md` — the design: the week, loop, map, mini-game rules, kitchen stations, results, controls, rebinding, screen contract, the recipe book.
+- `docs/GDD.md` — the design: the week, loop, map, mini-game rules, kitchen stations, results, controls, rebinding, screen contract, the recipe book, the garage.
 - `docs/ARCHITECTURE.md` — the technical contract: modules, coordinate systems, screen API, test hooks, tooling.
 - `docs/MULTIPLAYER.md` — the online session.
 

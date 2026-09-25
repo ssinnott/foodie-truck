@@ -5,9 +5,11 @@
 //
 // `select` hands over to it once a crew is stamped, and `results` hands back to it after the LAST line has been
 // served: the board then opens CLOSED - every line stamped SERVED with each customer's stars printed on the card,
-// and a CLOSING TIME slate over it totting the day up - and the one press left goes back to the title, which is
-// where the game ends. There is no cursor: nothing on the board is picked, so everything it simulates is two
-// numbers (`checksumFields`), and any joined seat's confirm counts (game/menuinput.js).
+// and a CLOSING TIME slate over it totting the day up and paying its coins into the garage's tin - and the one
+// press left drives the truck into THE GARAGE (screens/garage.ts), which opens tomorrow, or on the last night of
+// the week goes back to the title. Online there is no garage: the press opens tomorrow (or ends) directly.
+// There is no cursor: nothing on the board is picked, so everything it simulates is two numbers
+// (`checksumFields`), and any joined seat's confirm counts (game/menuinput.js).
 //
 // Nothing here is random and nothing reads the clock: the cards, the rigs and every string are built in enter().
 import { VIEW_W, UI, PLUM } from '../../constants.ts';
@@ -30,6 +32,7 @@ import { TRUCK } from '../../art/truck.ts';
 import { recipeOf, twistTag, DAYS_PER_WEEK, shapeOf, dishesIn } from '../run.ts';
 import { recordDay } from '../book.ts';
 import { saveWeek, clearWeek } from '../week.ts';
+import { bankDay } from '../garage.ts';
 
 /** One card per line across the top: three of the select screen's own card width and gap. */
 const CARD_Y = 46, CARD_H = 124;
@@ -176,6 +179,8 @@ export class StageScreen extends Screen {
   declare closed: boolean;
   /** True on the closed board of the LAST day: the week is over and the only way on is the title. */
   declare weekDone: boolean;
+  /** True on a closed board off the net: the press drives into the garage rather than straight on to tomorrow. */
+  declare garage: boolean;
   /** The sign over the board: which day of the week this is, and its name where it has one. */
   declare head: string;
   /** One chip per day of the week: its stars, its best possible, and whether it has been closed yet. */
@@ -247,13 +252,16 @@ export class StageScreen extends Screen {
     // THE ONE WRITE OF THE NIGHT. Banking the day, the book and the week all happen here, at a screen boundary
     // and never in update() (docs/MULTIPLAYER.md: no localStorage on the simulation path). `closeDay` and
     // `recordDay` are both keyed on the day, so a board that opens closed twice counts once.
+    const online = !!(game.net && game.net.active);
     if (this.closed) {
       run.closeDay();
       recordDay(run, this.weekDone);
-      const online = !!(game.net && game.net.active);
       if (this.weekDone) clearWeek();
       else saveWeek({ seed: run.seed, day: run.day + 1, critters: run.party.map((p) => Math.max(0, game.critters.findIndex((c) => c.id === p.critter))), stars: run.weekStars.slice(), takings: run.weekTakings.slice() }, online);
+      // tonight's coins into the tin, once however often this board opens closed (and never from a match)
+      bankDay(run.seed, run.day, run.weekTakings[run.day] || 0, online);
     }
+    this.garage = this.closed && !online;
     // the week strip: every day of the week, the closed ones carrying what they earned
     this.strip.length = 0;
     for (let d = 0; d < DAYS_PER_WEEK; d++) {
@@ -265,14 +273,15 @@ export class StageScreen extends Screen {
     }
     this.rows.length = 0;
     const todayTakings = run.weekTakings[run.day] || 0;
-    this.rows.push(`LINES SERVED ${run.linesServed()} OF ${n}`, `DISHES ${run.served}`, `STARS ${run.stars()} OF ${run.lines.reduce((t, l) => t + l.customers.length * 3, 0)}`, `TAKINGS ${todayTakings}`);
+    this.rows.push(`LINES SERVED ${run.linesServed()} OF ${n}`, `DISHES ${run.served}`, `STARS ${run.stars()} OF ${run.lines.reduce((t, l) => t + l.customers.length * 3, 0)}`, `COINS ${todayTakings}`);
     const weekMax = this.strip.reduce((t, c) => t + c.max, 0);
     this.weekRow = this.weekDone
-      ? `THE WEEK: ${run.weekStarsTotal()} OF ${weekMax} STARS, ${run.score} TAKEN`
-      : `THE WEEK SO FAR: ${run.weekStarsTotal()} STARS, ${run.score} TAKEN`;
+      ? `THE WEEK: ${run.weekStarsTotal()} OF ${weekMax} STARS, ${run.score} COINS`
+      : `THE WEEK SO FAR: ${run.weekStarsTotal()} STARS, ${run.score} COINS`;
     this.hint = !this.closed
       ? `${game.input.keyText(0, 'action')}: OPEN THE TRUCK    ${game.input.keyText(0, 'cancel')}: BACK`
-      : this.weekDone ? `${game.input.keyText(0, 'action')}: TITLE` : `${game.input.keyText(0, 'action')}: NEXT DAY`;
+      : this.garage ? `${game.input.keyText(0, 'action')}: TO THE GARAGE`
+        : this.weekDone ? `${game.input.keyText(0, 'action')}: TITLE` : `${game.input.keyText(0, 'action')}: NEXT DAY`;
     this.portOpts = { bg: PLUM.shadow, fill: 0.6, facing: 1 };
     // the SERVED stamp lands as its slam finishes; at closing time the night's little bell follows it
     if (this.justServed >= 0) game.audio.play('stamp', { delay: STAMP_FRAMES / 60 });
@@ -289,6 +298,13 @@ export class StageScreen extends Screen {
     // up open, on a new menu and a new shopping list, with the pantry empty and the truck in the yard.
     if (this.closed) {
       if (confirmPressed(inp) < 0 || this.chosen) return;
+      // off the net, the night ends in the garage, which opens tomorrow (or ends the week) itself
+      if (this.garage) {
+        this.chosen = 1;
+        game.audio.play('truck_start');
+        game.fadeTo(() => game.replace('garage', { from: 'night' }));
+        return;
+      }
       if (this.weekDone) { game.audio.play('menu_confirm'); this.quit(); return; }
       this.chosen = 1;
       game.audio.play('menu_confirm');
@@ -416,7 +432,7 @@ export class StageScreen extends Screen {
     const run = this.game.run;
     return {
       lines: this.cards.length, places: this.cards.map((c) => c.place), chosen: this.chosen, closed: this.closed,
-      day: run.day, days: DAYS_PER_WEEK, dayName: shapeOf(run.day).name, head: this.head, weekDone: this.weekDone,
+      day: run.day, days: DAYS_PER_WEEK, dayName: shapeOf(run.day).name, head: this.head, weekDone: this.weekDone, garage: this.garage,
       strip: this.strip.map((c) => `${c.done ? c.stars : '-'}/${c.max}`), weekStars: run.weekStarsTotal(), takings: run.score,
       list: this.list.map((e) => e.text), menu: run.recipes.slice(),
       linesServed: run.linesServed(), served: run.served, stars: run.stars(),
