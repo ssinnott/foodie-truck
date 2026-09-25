@@ -13,7 +13,7 @@
 //        opens tomorrow. Writes tools/screens/stage-closing.png.
 import { withPage, assert } from '../playtest.js';
 import { ORDERS, INGREDIENTS } from '../../src/content/recipes.ts';
-import { PLACES } from '../../src/content/places.ts';
+import { STOPS } from '../../src/content/places.ts';
 import { planDay, planWeek, needsOf, DAY_SHAPES, DAYS_PER_WEEK, dishesIn } from '../../src/game/run.ts';
 
 export const SCENARIOS = {
@@ -28,7 +28,7 @@ export const SCENARIOS = {
       assert(s.run.day === 0 && s.run.days === DAYS_PER_WEEK, `a fresh run opens on day 1 of ${DAYS_PER_WEEK} (${s.run.day + 1})`);
       assert(s.top.head === `DAY 1 OF ${DAYS_PER_WEEK} - ${shape.name}`, `the sign over the board names the day (${s.top.head})`);
       const places = s.run.lines.map((l) => l.place);
-      assert(new Set(places).size === places.length && places.every((p) => p !== 'home' && PLACES.some((x) => x.id === p)), `every line waits at a different landmark, none of them home (${places.join()})`);
+      assert(new Set(places).size === places.length && places.every((p) => STOPS.some((x) => x.id === p)), `every line waits at a different stop in town (${places.join()})`);
       assert(s.run.lines.every((l, i) => l.customers.length === shape.lines[i]), `its lines are ${shape.lines.join()} customers long (${s.run.lines.map((l) => l.customers.length).join()})`);
       assert(s.run.recipes.length === shape.recipes && new Set(s.run.recipes).size === shape.recipes, `the menu is ${shape.recipes} different recipes (${s.run.recipes.join()})`);
       const ordered = s.run.lines.flatMap((l) => l.customers.map((c) => c.split(':')[1]));
