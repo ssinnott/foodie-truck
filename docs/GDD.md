@@ -9,8 +9,8 @@
 
 A cozy co-op cooking adventure for one to four players. The crew of a countryside food truck opens for the day
 with a menu and a shopping list, drive out to where every ingredient comes from and gather it in a short mini-game
-at each landmark, and then, with the pantry full, drive to the queues of villagers waiting at three of those
-landmarks and cook for them one order at a time. When the third line has been served the truck closes.
+at each landmark, and then, with the pantry full, drive back into the town round the depot, where the queues of
+villagers have formed on the pavements, and cook for each queue in turn. When the third line has been served the truck closes.
 
 The *structure* is borrowed from the Sesame Street "Foodie Truck" segments (an order → its ingredient → go to the
 source → cook). Everything else is original: the cast are anthropomorphic countryside animals with their own names,
@@ -78,7 +78,9 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   queues, one of them three deep, on a menu drawn from what this week has already served — the last customer of
   the week orders Monday's dish. Shapes are **appended, never filed in between**: the day index crosses the wire
   and is written into the save record.
-- Each day's queues wait at a different supply landmark (never home) and each customer orders one of that day's
+- The truck opens each day parked inside the depot in the middle of the town (`home`). Each day's queues wait at a
+  different stop in that town (`content/places.ts` STOPS: the market square, Station Road, the High Street and
+  Chapel Corner — never a landmark: the countryside is for gathering) and each customer orders one of that day's
   recipes — the menu is dealt round so every recipe is ordered at least once. The plan is drawn from its own
   seeded stream, so every online peer lays the same week out from the START packet, and it never touches the
   gameplay rng. `RECIPES_PER_DAY` (3), `LINES_PER_DAY` (3) and `LINE_LENGTH` (2) remain the ORDINARY day's
@@ -125,8 +127,9 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   to the map short. Arriving
   anywhere else does nothing but show a sign. `run.gather(id, n)` banks a round; `run.complete()` is the pantry
   full.
-- **Serving.** The moment the pantry is full the lines open: the HUD swaps the list for the lines, a tag over each
-  waiting queue's signpost says how many are in it, and arriving at one opens the **line** screen — everyone in
+- **Serving.** The moment the pantry is full the lines open: the HUD swaps the list for the lines, the queues come
+  out onto the town's pavements one diner at a time (the owl, the otter and the goat drawn small, in a file by a
+  lamp post, the front one waving the truck in), and pulling up at one opens the **line** screen — everyone in
   the queue says what they want at once, a bubble over each diner's head. Confirm takes every order into the
   kitchen (`run.startLine(i)` on arrival).
   A landmark with no line, or one already served, shows a sign.
@@ -142,7 +145,7 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   and takings totted up, and the **week strip** under them.
 - **The closed board is the hinge, not the exit.** On any day but the last, the one press left says `NEXT DAY`:
   `run.nextDay()` banks the day into the week's record and rebuilds every per-day field from the week's own plan —
-  a new menu, a new shopping list, an empty pantry, the road laid out again and the truck back in the yard — and
+  a new menu, a new shopping list, an empty pantry, the road laid out again and the truck back in the depot — and
   the board comes straight back up open on tomorrow. What carries between days is the week's record, the takings
   and the party, and **nothing else**: the pantry deliberately does not, or the board would stop being the whole
   truth about the day. On the **last** day of the week the board closes the week, prints its totals, and the one
@@ -157,7 +160,7 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 
 ## 4. The world map
 
-- World `1920 x 1080` px (`content/places.js WORLD_W/H`), one flat plane in 3/4 storybook view, y-sorted sprites
+- World `2560 x 1440` px (`content/places.js WORLD_W/H`), one flat plane in 3/4 storybook view, y-sorted sprites
   with ground-contact shadows. Camera follows the truck (0.1 lerp, integer snap, clamped to the world).
 - **Landmarks** (`PLACES`): home (the truck stop), orchard (apples, pears, peaches, avocados), pond (trout), coop
   (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
@@ -202,7 +205,7 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   short one) while gathering, then the lines (`sign  N IN LINE`, washed back once served, the arrow on the one the
   compass points at); the steering-wheel widget with one tick per seat that lights while that seat pushes; the
   crew's heads in the truck's windows; an off-screen destination arrow (the first short line's landmark, then the
-  nearest waiting queue); a paper tag over each waiting queue's signpost; one hint line. `alt` honks: a `HONK!`
+  nearest waiting queue in town, whose lamp post carries the lantern); one hint line. `alt` honks: a `HONK!`
   stamp and a truck squash. The telephone at home rings once as the truck opens.
 
 ## 5. The mini-games

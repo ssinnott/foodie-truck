@@ -1,9 +1,11 @@
-// The world map (docs/GDD.md section 4, docs/ARCHITECTURE.md section 5): one shared truck on a 1920x1080 storybook
+// The world map (docs/GDD.md section 4, docs/ARCHITECTURE.md section 5): one shared truck on a 2560x1440 storybook
 // plane. Every seated player's stick is a vector; they are summed (the driver's x1.5), quantised to 16 headings on
 // dcos/dsin tables built here, and the truck turns one step per 4 frames, rolling 2.2 px/frame on a lane and 1.0 in
-// the fields; water stops it - the river except on its bridges, the millpond, the cove's sea. Arriving within 40 px
-// of a landmark's door opens its mini-game while the shopping list is short, or the line waiting there once the
-// pantry is full (docs/GDD.md section 3); otherwise a wooden sign says why not.
+// the fields; water stops it - the river except on its bridges, the millpond, the cove's sea. The day opens with the
+// truck parked inside the depot in the middle of the town. Arriving within 40 px of a landmark's door opens its
+// mini-game while the shopping list is short; once the pantry is full the day's queues form in the town - little
+// files of diners on the pavements at the town's stops (content/places.ts STOPS) - and pulling up at one opens its
+// line (docs/GDD.md section 3). Anywhere else a wooden sign says why not.
 //
 // THE ROAD (docs/CONTENT_ROADMAP.md section B): the day's crossings, `run.crossings`, come out on their lane one at
 // a time - a flock of sheep dawdling across it, or a duck parade in single file. A crossing that is ON its lane
@@ -39,7 +41,7 @@ import { getCritter } from '../../content/critters/index.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import type { Pose } from '../../lib/art/poses.ts';
 import type { Rig } from '../../lib/art/rig.ts';
-import { WORLD_W, WORLD_H, PLACES } from '../../content/places.ts';
+import { WORLD_W, WORLD_H, PLACES, STOPS } from '../../content/places.ts';
 import { WEATHER_DRIZZLE, WEATHER_FOG } from '../run.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { drawFood } from '../../art/food.ts';
@@ -47,11 +49,11 @@ import { INK } from '../../art/layers.ts';
 import { drawTruck } from '../../art/truck.ts';
 import {
   CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, RIVER_BLOCK, SPOTS, SIGN_AT, PARK_AT,
-  ROADSIDE_TREES, GLINTS, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, waterBlocked,
-  wallBlocked, drawSails, drawHen, drawBee, drawPhoneRing, drawSheep, drawDuck, MAP,
+  ROADSIDE_TREES, GLINTS, STOP_LAMPS, TOWER, TOWER_TIP, towerSprite, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, waterBlocked,
+  wallBlocked, drawSails, drawHen, drawBee, drawPhoneRing, drawSheep, drawDuck, drawDiner, MAP,
 } from '../../art/backgrounds/map.ts';
 import type { Crossing } from '../game.ts';
-import { drawShoppingHud, drawLinesHud, drawLineTag, drawSeatPlates, drawWheel, drawDestArrow, drawHonk, drawSignPlate, drawMapHint } from '../maphud.ts';
+import { drawShoppingHud, drawLinesHud, drawSeatPlates, drawWheel, drawDestArrow, drawHonk, drawSignPlate, drawMapHint } from '../maphud.ts';
 
 const HEADINGS = 16;
 /** Unit vectors of the 16 headings (0 = east, clockwise on screen), from the deterministic trig. */
@@ -62,7 +64,7 @@ const BEE_X = new Int8Array(32), BEE_Y = new Int8Array(32);
 for (let i = 0; i < 32; i++) { BEE_X[i] = Math.round(Math.cos(i * Math.PI / 16) * 10); BEE_Y[i] = Math.round(Math.sin(i * Math.PI / 16) * 6); }
 const LANE_SPEED = 2.2, FIELD_SPEED = 1.0, TURN_EVERY = 4, ARRIVE_R = 40, DRIVER = 'chicory', DRIVER_WEIGHT = 1.5;
 const HONK_FRAMES = 30, SQUASH_FRAMES = 4, SIGN_FRAMES = 90, RING_FRAMES = 60, TOKEN_SCALE = 0.5;
-const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3, KIND_HERD = 4, KIND_CART = 5;
+const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3, KIND_HERD = 4, KIND_CART = 5, KIND_DINER = 6, KIND_TOWER = 7;
 /** The tipped cart: the truck takes its spill within CART_R of the spot. */
 const CART_R = 36, THANKS = 'THANKS!';
 /** The mud patch's reach, the fog's clear radius and its full-milk radius, and the rain's streak count. */
@@ -87,16 +89,23 @@ const DUST = { size: 2, life: 20, vy: -0.15 };
 const MUD_OPTS = { speed: 1.6, up: 1.8, color: '#7A6249', sizeJitter: 1 };
 const PUDDLE_OPTS = { speed: 1.2, up: 1.4 };
 // The signs an arrival that opens nothing drops in: while the pantry is short, a landmark the list does not need
-// (or home, which has no queue and nothing to gather); once it is full, a landmark with no line, one whose line has
-// been served, or home again.
-const NOTHING = 'NOTHING NEEDED HERE', GATHER = 'FILL THE PANTRY FIRST', NO_LINE = 'NO LINE HERE', LINE_DONE = 'THIS LINE IS SERVED', WAITING = 'THE LINES ARE WAITING';
-const CLOUDS = [[200, 260], [900, 700], [1500, 420]];
+// (or home, which has no queue and nothing to gather); once it is full, a landmark (the queues are all in town), a
+// town stop whose line has been served or where nobody queues today, or home again.
+const NOTHING = 'NOTHING NEEDED HERE', GATHER = 'FILL THE PANTRY FIRST', NO_LINE = 'NO LINE HERE', IN_TOWN = 'THE LINES ARE IN TOWN', LINE_DONE = 'THIS LINE IS SERVED', WAITING = 'THE LINES ARE WAITING';
+/** The sign the first visit with a full pantry raises, as the queues come out onto the town's pavements. */
+const FORMING = 'THE LINES ARE FORMING IN TOWN!';
+/** Everywhere an arrival can fire, landmarks first and then the town's stops: `truck.at` is one of these ids. */
+const DOORS: readonly { id: string; x: number; y: number }[] = Object.freeze([...PLACES, ...STOPS].map((p) => ({ id: p.id, x: p.x, y: p.y })));
+const STOP_OF: Record<string, (typeof STOPS)[number]> = Object.fromEntries(STOPS.map((s) => [s.id, s]));
+/** The queues form one diner at a time, FORM_LAG frames apart, on the visit the pantry fills (visual only). */
+const FORM_LAG = 8;
+const CLOUDS = [[267, 320], [1200, 921], [2000, 539]];
 /** The phone rings once, on the day's first drive: remembered per run so every later visit to the map stays quiet. */
 let rungRun: Run | null = null;
 /** The LINE SERVED sign is raised on the first visit after a line was finished: how many were served at the last visit. */
 let signedRun: Run | null = null, signedLines = 0;
-/** The line tag over a queue's signpost sits above the sign sprite (26 rows) and the lantern over it. */
-const TAG_ABOVE = 46;
+/** The queues come out onto the pavements once a day, on the first visit with a full pantry: that run and day. */
+let formedRun: Run | null = null, formedDay = -1;
 /**
  * A line that is waiting where the truck already stands (the pantry filled at that very landmark) opens on its
  * own after this many frames: arrival fires on `truck.at` CHANGING, and nobody should have to drive off and back
@@ -111,7 +120,7 @@ function lum(hex: string): number {
   const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
   return 0.2126 * r * r + 0.7152 * g * g + 0.0722 * b * b;
 }
-function placeIndex(id: string): number { for (let i = 0; i < PLACES.length; i++) if (PLACES[i].id === id) return i; return -1; }
+function placeIndex(id: string): number { for (let i = 0; i < DOORS.length; i++) if (DOORS[i].id === id) return i; return -1; }
 /** The heading whose unit vector is most aligned with (vx, vy): a dot-product argmax, so no atan2 in the sim. */
 function bestHeading(vx: number, vy: number): number {
   let best = 0, bd = -Infinity;
@@ -142,7 +151,7 @@ export interface WorldPoint {
  * themselves, so their `L` is null and `w`/`h` exist only to cull them.
  */
 export interface MapSprite {
-  /** KIND_TREE, KIND_SIGN, KIND_SAILS, KIND_TRUCK or KIND_HERD (one walker of a crossing: `ci` is the crossing, `k` the walker). */
+  /** KIND_TREE, KIND_SIGN, KIND_SAILS, KIND_TRUCK, KIND_HERD (one walker of a crossing: `ci` is the crossing, `k` the walker), KIND_CART, KIND_DINER (one diner in a town queue: `ci` is the line, `k` the diner) or KIND_TOWER (the town's skyscraper). */
   kind: number;
   /** World position of the anchor: bottom centre of the sprite. */
   x: number;
@@ -154,9 +163,13 @@ export interface MapSprite {
   h: number;
   /** Width of the ground shadow drawn under it; 0 draws none. */
   shadow: number;
-  /** KIND_HERD only: the crossing (an index into run.crossings) and the walker within it. */
+  /** KIND_HERD: the crossing (an index into run.crossings) and the walker within it. KIND_DINER: the line and the diner in it. */
   ci?: number;
   k?: number;
+  /** KIND_DINER only: the customer id (owl / otter / goat), which way they face, and their place in the day's queues. */
+  who?: string;
+  face?: number;
+  n?: number;
 }
 
 /** One party member on the map: the rig in the seat's apron colour, its player and its name plate. */
@@ -190,19 +203,6 @@ export interface MapCamera {
   /** The unrounded follow, eased toward the truck (see `snapCamera`). */
   fx: number;
   fy: number;
-}
-
-/** The paper tag over a landmark where a line is waiting: where its signpost is, and the words built in enter(). */
-export interface LineTag {
-  /** The line this tag belongs to (an index into run.lines), so a served one stops drawing. */
-  line: number;
-  /** World position of the signpost base. */
-  x: number;
-  y: number;
-  /** '2 IN LINE'. */
-  text: string;
-  /** Measured tag width. */
-  w: number;
 }
 
 /** The options object handed to art/truck.js drawTruck; one per screen, mutated rather than reallocated. */
@@ -280,8 +280,10 @@ export class MapScreen extends Screen {
   declare destLine: number;
   /** The lines HUD's rows, one per queue, worded once in enter(). */
   declare lineRows: string[];
-  /** One tag per queue, drawn over its signpost while it waits. */
-  declare lineTags: LineTag[];
+  /** One sprite per diner in every queue of the day, in line order; on the pavement while their line waits in town. */
+  declare diners: MapSprite[];
+  /** The frame the queues began to come out on this visit (they form one diner at a time), or -1 when they stand already. */
+  declare formAt: number;
   /** The signpost base of `destId`: where the lantern glow and the compass arrow sit. */
   declare destSign: WorldPoint;
   /** The one entry of `sprites` that moves: the truck, whose x/y are rewritten every update. */
@@ -305,7 +307,7 @@ export class MapScreen extends Screen {
   /** The reused drawTruck options object; built on the first draw (see `truckOpts`). */
   declare _to?: TruckDrawOpts;
 
-  constructor(game: Game) { super(game, 'map'); this.touchAlt = true; this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.sum = [0, 0, 0, 0, 0, 0]; this.lineRows = []; this.lineTags = []; }
+  constructor(game: Game) { super(game, 'map'); this.touchAlt = true; this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.sum = [0, 0, 0, 0, 0, 0]; this.lineRows = []; this.diners = []; }
   override enter(params: ScreenParams): void {
     super.enter(params);
     const run = this.game.run, truck = run.truck;
@@ -347,6 +349,9 @@ export class MapScreen extends Screen {
     this.pickDest();
     // the phone rings as the truck opens for the day, and never again
     if (rungRun !== run) { rungRun = run; this.ring = RING_FRAMES; }
+    // the first visit with a full pantry: the queues come out onto the town's pavements, one diner at a time
+    this.formAt = -1;
+    this.formQueues();
     // the first visit after a line was finished says so, and how many are left
     const servedNow = run.linesServed();
     if (signedRun === run && servedNow > signedLines) this.raiseSign(`LINE SERVED!  ${run.lines.length - servedNow} TO GO`);
@@ -357,6 +362,7 @@ export class MapScreen extends Screen {
     this.sprites.length = 0;
     for (const t of ROADSIDE_TREES) { const L = treeSprite(t[2]); this.sprites.push({ kind: KIND_TREE, x: t[0], y: t[1], L, w: L.w, h: L.h, shadow: 18 + t[2] * 4 }); }
     for (const p of PLACES) { const s = SIGN_AT[p.id], L = signSprite(p.sign); this.sprites.push({ kind: KIND_SIGN, x: s.x, y: s.y, L, w: L.w, h: L.h, shadow: 16 }); }
+    { const L = towerSprite(); this.sprites.push({ kind: KIND_TOWER, x: TOWER.x, y: TOWER.y, L, w: L.w, h: L.h, shadow: TOWER.w + 12 }); }
     this.sprites.push({ kind: KIND_SAILS, x: SPOTS.millHub.x, y: SPOTS.millHub.y + 52, L: null, w: 70, h: 100, shadow: 0 });
     this.truckSprite = { kind: KIND_TRUCK, x: truck.x, y: truck.y, L: null, w: 44, h: 40, shadow: 40 };
     this.sprites.push(this.truckSprite);
@@ -369,6 +375,18 @@ export class MapScreen extends Screen {
     this.placeHerds();
     this.cartSprite = { kind: KIND_CART, x: run.cart ? run.cart.x : -1000, y: run.cart ? run.cart.y : -1000, L: null, w: 40, h: 24, shadow: 26 };
     this.sprites.push(this.cartSprite);
+    // the town's queues: one sprite per diner of every line, standing in a file on its stop's pavement
+    this.diners = [];
+    let n = 0;
+    for (let li = 0; li < run.lines.length; li++) {
+      const ln = run.lines[li], st = STOP_OF[ln.place];
+      for (let k = 0; k < ln.customers.length; k++) {
+        const face = st && st.qdx !== 0 ? -Math.sign(st.qdx) : -1;
+        const sp: MapSprite = { kind: KIND_DINER, x: -1000, y: -1000, L: null, w: 14, h: 24, shadow: 10, ci: li, k, who: ln.customers[k].customer, face, n: n++ };
+        this.diners.push(sp); this.sprites.push(sp);
+      }
+    }
+    this.placeQueues();
     this.sum.length = 8 + run.crossings.length * 3;
     this.order.length = 0; for (let i = 0; i < this.sprites.length; i++) this.order.push(i);
     this.glow = destGlowSprite(); this.cloud = cloudShadowSprite();
@@ -453,15 +471,16 @@ export class MapScreen extends Screen {
     }
     if (this.splashCd > 0) this.splashCd--;
     if (COS[truck.heading] > 0.01) this.facing = 1; else if (COS[truck.heading] < -0.01) this.facing = -1;
-    // arrival: the first landmark whose door is within reach; leaving one clears `at` so it can fire again
+    // arrival: the first landmark door or town stop within reach; leaving one clears `at` so it can fire again
     let near = -1;
-    for (let i = 0; i < PLACES.length; i++) { const dx = PLACES[i].x - truck.x, dy = PLACES[i].y - truck.y; if (dx * dx + dy * dy < ARRIVE_R * ARRIVE_R) { near = i; break; } }
+    for (let i = 0; i < DOORS.length; i++) { const dx = DOORS[i].x - truck.x, dy = DOORS[i].y - truck.y; if (dx * dx + dy * dy < ARRIVE_R * ARRIVE_R) { near = i; break; } }
     if (this.reopen > 0 && --this.reopen === 0) truck.at = '';
     if (near < 0) truck.at = '';
-    else if (truck.at !== PLACES[near].id) { truck.at = PLACES[near].id; this.arrive(near); }
+    else if (truck.at !== DOORS[near].id) { truck.at = DOORS[near].id; this.arrive(near); }
     if (inp.anyPressed('alt') >= 0) { this.honk = HONK_FRAMES; this.squashT = SQUASH_FRAMES; game.audio.play('honk'); this.honkHerd(); }
     if (this.baaCd > 0) this.baaCd--;
     this.stepCrossings();
+    this.placeQueues();
     this.takeCart();
     if (this.honk > 0) this.honk--;
     if (this.squashT > 0) this.squashT--;
@@ -472,9 +491,9 @@ export class MapScreen extends Screen {
   }
   /**
    * Where the day wants us: the landmark of the first missing ingredient while the pantry is short; once it is
-   * full, the nearest line still waiting (squared distances, no sqrt: the compass is drawn, never hashed); home
-   * when the day is done. And the queues' HUD rows and signpost tags, worded once; a served line keeps its row
-   * (washed back) and loses its tag. Called on entry, and again the moment the tipped cart fills a line.
+   * full, the town stop of the nearest line still waiting (squared distances, no sqrt: the compass is drawn, never
+   * hashed); home when the day is done. And the queues' HUD rows, worded once; a served line keeps its row (washed
+   * back). Called on entry, and again the moment the tipped cart fills a line.
    */
   pickDest(): void {
     const run = this.game.run, truck = this.truck;
@@ -487,21 +506,34 @@ export class MapScreen extends Screen {
       let bd = Infinity;
       for (let i = 0; i < run.lines.length; i++) {
         if (run.lines[i].served) continue;
-        const p = PLACES.find((x) => x.id === run.lines[i].place);
+        const p = STOP_OF[run.lines[i].place];
         if (!p) continue;
         const dx = p.x - truck.x, dy = p.y - truck.y, d = dx * dx + dy * dy;
         if (d < bd) { bd = d; this.destLine = i; }
       }
       this.destId = this.destLine >= 0 ? run.lines[this.destLine].place : 'home';
     }
-    this.destSign = SIGN_AT[this.destId] || SIGN_AT.home;
-    this.lineRows.length = 0; this.lineTags.length = 0;
+    this.destSign = STOP_LAMPS[this.destId] || SIGN_AT[this.destId] || SIGN_AT.home;
+    this.lineRows.length = 0;
     for (let i = 0; i < run.lines.length; i++) {
-      const ln = run.lines[i], p = PLACES.find((x) => x.id === ln.place), sg = SIGN_AT[ln.place];
+      const ln = run.lines[i], p = STOP_OF[ln.place];
       const left = ln.customers.length - (i === run.line ? run.customer : 0);
       this.lineRows.push(`${p ? p.sign : ln.place.toUpperCase()}  ${ln.served ? 'SERVED' : left + ' IN LINE'}`);
-      const text = `${left} IN LINE`;
-      if (sg) this.lineTags.push({ line: i, x: sg.x, y: sg.y, text, w: measureText(text, 1) + 12 });
+    }
+  }
+
+  /**
+   * Stand every diner on their stop's pavement while their line waits and the pantry is full, the front one at
+   * the stop's `qx, qy` and each behind them a pace further back; a served line has gone home, and before the
+   * pantry is full nobody has come out yet. Positions only (the sprites are drawn, never hashed).
+   */
+  placeQueues(): void {
+    const run = this.game.run;
+    for (const sp of this.diners) {
+      const ln = run.lines[sp.ci], st = ln && STOP_OF[ln.place];
+      const out = this.formAt < 0 || this.frame >= this.formAt + sp.n * FORM_LAG;
+      if (!this.serving || !st || ln.served || !out) { sp.x = -1000; sp.y = -1000; continue; }
+      sp.x = st.qx + st.qdx * sp.k; sp.y = st.qy + st.qdy * sp.k;
     }
   }
 
@@ -521,6 +553,18 @@ export class MapScreen extends Screen {
     floatText(cart.x + 26, cart.y - 20, THANKS, MAP.skyTop);
     this.game.audio.play('catch');
     this.pickDest();
+    this.formQueues();   // the cart's +1 may be the last thing the list was short of
+  }
+
+  /**
+   * Once a day, the first moment the pantry is full with the map up: the queues come out onto the town's pavements
+   * one diner at a time from this frame on, under a sign that says so. Visual only (`formAt` is never hashed).
+   */
+  formQueues(): void {
+    const run = this.game.run;
+    if (!this.serving || (formedRun === run && formedDay === run.day)) return;
+    formedRun = run; formedDay = run.day;
+    if (run.linesServed() === 0) { this.formAt = this.frame; this.raiseSign(FORMING); }
   }
 
   /** True within MUD_R of the drizzle day's mud patch. */
@@ -588,7 +632,7 @@ export class MapScreen extends Screen {
   }
 
   arrive(i: number): void {
-    const run = this.game.run, id = PLACES[i].id, screen = run.screenForPlace(id);
+    const run = this.game.run, id = DOORS[i].id, screen = run.screenForPlace(id);
     if (screen) {
       // pulling up at a queue: the run stands on that line before its screen opens, so the first customer is at the hatch
       if (screen === 'line') run.startLine(run.lineAt(id));
@@ -596,8 +640,10 @@ export class MapScreen extends Screen {
       this.game.fadeTo(() => this.game.replace(screen, { place: id }));
       return;
     }
+    // a town stop before anyone is queueing there says nothing: it is only a street until the pantry is full
+    if (STOP_OF[id]) { if (this.serving) this.raiseSign(run.lines.some((l) => l.place === id) ? LINE_DONE : NO_LINE); return; }
     if (!this.serving) this.raiseSign(id === 'home' ? GATHER : NOTHING);
-    else this.raiseSign(id === 'home' ? WAITING : run.lines.some((l) => l.place === id) ? LINE_DONE : NO_LINE);
+    else this.raiseSign(id === 'home' ? WAITING : IN_TOWN);
   }
   /** Drop the wooden sign in with `text` on it. */
   raiseSign(text: string): void {
@@ -643,7 +689,12 @@ export class MapScreen extends Screen {
       else if (s.kind === KIND_SAILS) drawSails(ctx, SPOTS.millHub.x - cam.x, SPOTS.millHub.y - cam.y, f * 0.3);
       else if (s.kind === KIND_HERD) this.drawWalker(ctx, s, sx, sy, f);
       else if (s.kind === KIND_CART) this.drawCart(ctx, sx, sy);
-      else ctx.drawImage(s.L.canvas, sx - (s.L.w >> 1), sy - s.L.h);
+      else if (s.kind === KIND_DINER) this.drawQueuer(ctx, s, sx, sy, f);
+      else {
+        ctx.drawImage(s.L.canvas, sx - (s.L.w >> 1), sy - s.L.h);
+        // the skyscraper's aircraft beacon, blinking on the spire's tip
+        if (s.kind === KIND_TOWER && ((f >> 5) & 1)) { ctx.fillStyle = MAP.roof; ctx.fillRect(sx + TOWER_TIP.dx - 1, sy + TOWER_TIP.dy - 2, 3, 3); }
+      }
     }
     // the lantern glow over the destination's sign (the map's one signal colour), then the drifting cloud shadows
     const gs = this.destSign, gx = gs.x - cam.x, gy = gs.y - 18 - cam.y;
@@ -658,14 +709,6 @@ export class MapScreen extends Screen {
       if (cx > -160 && cx < VIEW_W && cy > -60 && cy < VIEW_H) ctx.drawImage(this.cloud.canvas, Math.round(cx), cy);
     }
     this.drawWeather(ctx, f);
-    // the tags over the queues that are still waiting: the picture says where the lines are before the HUD does
-    if (this.serving) {
-      for (let i = 0; i < this.lineTags.length; i++) {
-        const t = this.lineTags[i];
-        if (this.game.run.lines[t.line].served || !this.inView(t.x, t.y - TAG_ABOVE, 40)) continue;
-        drawLineTag(ctx, t.x - cam.x, t.y - TAG_ABOVE - cam.y, t.text, t.w);
-      }
-    }
     particles.draw(ctx, cam, 'front');
     if (this.honk > 0) drawHonk(ctx, truck.x - cam.x + this.facing * 8, truck.y - cam.y - 44, (HONK_FRAMES - this.honk) / HONK_FRAMES);
     // HUD
@@ -698,8 +741,8 @@ export class MapScreen extends Screen {
     const g = ctx.createRadialGradient(tx, ty, FOG_R, tx, ty, FOG_FAR);
     g.addColorStop(0, 'rgba(251,227,196,0)'); g.addColorStop(1, 'rgba(251,227,196,0.88)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    for (const p of PLACES) {
-      const sg = SIGN_AT[p.id]; if (!sg) continue;
+    for (const p of DOORS) {
+      const sg = STOP_OF[p.id] ? (this.serving && this.game.run.lineAt(p.id) >= 0 ? STOP_LAMPS[p.id] : null) : SIGN_AT[p.id]; if (!sg) continue;
       const gx = sg.x - cam.x, gy = sg.y - 18 - cam.y;
       if (gx < -24 || gx > VIEW_W + 24 || gy < -24 || gy > VIEW_H + 24) continue;
       ctx.globalAlpha = p.id === this.destId ? 0.9 : 0.55; ctx.drawImage(this.glow.canvas, gx - 22, gy - 22); ctx.globalAlpha = 1;
@@ -713,6 +756,17 @@ export class MapScreen extends Screen {
     // the mud it drove through, worn for the rest of the day: brown flecks about the wheel arches
     if (this.game.run.muddy) { ctx.fillStyle = MAP.soil; for (let i = 0; i < SPLATTER.length; i += 3) ctx.fillRect(sx + SPLATTER[i], sy + SPLATTER[i + 1], SPLATTER[i + 2], SPLATTER[i + 2]); }
   }
+  /**
+   * One diner in a town queue: they idle on their own beat, and the one at the front of the queue the compass points
+   * at waves the truck in. A diner who has just come out lands with a puff of dust (visual only).
+   */
+  drawQueuer(ctx: CanvasRenderingContext2D, s: MapSprite, sx: number, sy: number, f: number): void {
+    const bob = ((f + s.n * 11) >> 4) & 1;
+    const wave = s.k === 0 && s.ci === this.destLine && ((f >> 3) & 3) !== 0 ? 1 : 0;
+    drawDiner(ctx, sx, sy, s.who, s.face, bob, wave);
+    if (this.formAt >= 0 && f === this.formAt + s.n * FORM_LAG) particles.burst('dust', s.x, s.y - 2, 4, { speed: 1.2, up: 1 });
+  }
+
   /** One walker of a crossing: a sheep dawdling (the walk beat only while it scatters) or a duck in the file. */
   drawWalker(ctx: CanvasRenderingContext2D, s: MapSprite, sx: number, sy: number, f: number): void {
     const c = this.game.run.crossings[s.ci], moving = c.state === CROSS_CLEARING;
@@ -756,6 +810,8 @@ export class MapScreen extends Screen {
     const t = this.truck;
     return {
       truck: { x: Math.round(t.x), y: Math.round(t.y), heading: t.heading, at: t.at }, speed: Math.round(this.speed * 100) / 100, dest: this.destId, destLine: this.destLine, serving: this.serving, sign: this.signTimer > 0 ? this.signText : '', honk: this.honk > 0, blocked: this.blocked, seats: this.seats.length,
+      queued: this.diners.filter((d) => d.x > -1000).length,
+      queues: this.diners.filter((d) => d.x > -1000).map((d) => ({ line: d.ci, who: d.who, x: d.x, y: d.y })),
       crossings: this.game.run.crossings.map((c) => ({ x: c.x, y: c.y, kind: c.kind, herd: c.herd, state: c.state, t: c.t, waved: c.waved })),
       cart: this.game.run.cart ? { x: this.game.run.cart.x, y: this.game.run.cart.y, taken: this.game.run.cart.taken } : null,
       weather: this.game.run.weather, mud: this.game.run.mud ? { x: this.game.run.mud.x, y: this.game.run.mud.y } : null, muddy: this.game.run.muddy, inMud: this.inMud(t.x, t.y),

@@ -15,7 +15,7 @@
 //   playthroughLastLine - the day does not end with one line: the last customer of the LAST line hands results
 //        to the day board, which opens closed. What stops `serve()` from handing back a run with nowhere to go.
 import { withPage, assert } from '../playtest.js';
-import { PLACES } from '../../src/content/places.ts';
+import { PLACES, STOPS } from '../../src/content/places.ts';
 import { LANES } from '../../src/art/backgrounds/map.ts';
 import { cook } from './kitchen.js';
 import { DAY_SHAPES } from '../../src/game/run.ts';
@@ -44,10 +44,25 @@ const GRAPH = (() => {
   return nodes;
 })();
 
-/** Shortest lane route from a point to a landmark's door, as [x, y] waypoints (Dijkstra over GRAPH). */
+/**
+ * Shortest lane route from a point to a landmark's door or a town stop, as [x, y] waypoints (Dijkstra over GRAPH).
+ * A town stop stands part way along a street rather than on one of its vertices, so the route runs to the nearest
+ * vertex of that street and the stop itself is the last waypoint.
+ */
 function routeTo(from, placeId) {
-  const p = PLACES.find((x) => x.id === placeId);
-  const goal = GRAPH.get(p.x + ',' + p.y);
+  const p = PLACES.find((x) => x.id === placeId) || STOPS.find((x) => x.id === placeId);
+  let goal = GRAPH.get(p.x + ',' + p.y), tail = null;
+  if (!goal) {
+    // the street the stop stands on (the lane segment nearest it), and the nearer of its two ends
+    let bd = Infinity;
+    for (const lane of LANES) for (let i = 0; i + 3 < lane.length; i += 2) {
+      const ax = lane[i], ay = lane[i + 1], bx = lane[i + 2], by = lane[i + 3], l2 = (bx - ax) ** 2 + (by - ay) ** 2;
+      const t = Math.max(0, Math.min(1, ((p.x - ax) * (bx - ax) + (p.y - ay) * (by - ay)) / l2));
+      const d = Math.hypot(ax + (bx - ax) * t - p.x, ay + (by - ay) * t - p.y);
+      if (d < bd) { bd = d; goal = GRAPH.get(t < 0.5 ? ax + ',' + ay : bx + ',' + by); }
+    }
+    tail = [p.x, p.y];
+  }
   let start = null, bd = Infinity;
   for (const n of GRAPH.values()) { const d = Math.hypot(n.x - from.x, n.y - from.y); if (d < bd) { bd = d; start = n; } }
   const dist = new Map([[start, 0]]), prev = new Map(), done = new Set();
@@ -60,6 +75,7 @@ function routeTo(from, placeId) {
   }
   const path = [];
   for (let n = goal; n; n = prev.get(n)) path.unshift([n.x, n.y]);
+  if (tail) path.push(tail);
   return path;
 }
 

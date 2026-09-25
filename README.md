@@ -4,9 +4,10 @@
 
 A cozy co-op cooking adventure for one to four players, drawn entirely in code. The crew of a countryside food
 truck opens for the day with a menu and a shopping list that adds up everything the day's
-customers will order. They drive round the countryside gathering it all — a short mini-game at every landmark —
-until the pantry is full, then drive to the queues of villagers lined up at three of those landmarks and cook for
-each whole line at once — every order taken together, every dish cooked, everyone served in one go — until the
+customers will order. The truck starts the day parked in its depot in the middle of the town; the crew drive out
+round the countryside gathering it all — a short mini-game at every landmark — until the pantry is full, and then
+the queues form back in town: little files of villagers on the pavements at three of its street corners. They drive
+to each queue and cook for the whole line at once — every order taken together, every dish cooked, everyone served in one go — until the
 third line has been served. Then the truck closes for the night.
 
 Sixty-three recipes, forty ingredients, twelve landmarks, and **twelve mini-games** — each with its own verb:
@@ -53,7 +54,7 @@ and forty-odd effects, all data in `src/engine/audio/`), so the repository stays
 |---|---|---|
 | **Day board** | `stage` | The day's plan on paper: the lines (where each waits, who is in it, what they order) and the shopping list they add up to. Confirm opens the truck. After the last line it comes back closed, every customer's stars on it, the week strip under them, and NEXT DAY on the way out — or, on the fête, the end of the week. |
 | **Recipe book** | `book` | What this truck has cooked, who it has fed, what it has gathered and where it has been. Six pages of dishes and three of tallies. Reached from the title. |
-| **Overland map** | `map` | The truck drives a 1920×1080 countryside between landmarks. A flock of sheep or a duck parade may be across the lane: honk (ALT) and they scatter. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, arriving at a landmark with a line opens the queue. |
+| **Overland map** | `map` | The truck drives a 2560×1440 countryside with a town in the middle, starting the day inside its depot there. A flock of sheep or a duck parade may be across a country lane: honk (ALT) and they scatter. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, the queues form on the town's pavements — little files of diners — and pulling up at one opens its line. |
 | **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden`, `bramble`, `beach`, `holt`, `wood`, `terrace` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows (and crank the churn for butter), hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, tap to pull carrots out of the farm's bed, pick berries off the bank's bushes, and chase crabs along the cove's beach. Everyone seated plays at once and the party's total counts. |
 | **The line** | `line` | The truck pulled up at a queue: everyone in it says what they want at once. Take every order into the kitchen. |
 | **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to pull each ingredient out of the fridge; tap to chop; hold to mix, cook and bake; ring the bell to plate), for every dish in the line at the same time - one fridge run, one pass of each station, one bell. Then serve the whole line at once and watch them all eat, and the truck drives to the next one. |

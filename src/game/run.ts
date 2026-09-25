@@ -9,10 +9,11 @@
 //         -> map -> line -> kitchen -> results -> map -> line -> kitchen -> results ... -> stage (CLOSED)
 //
 // A DAY is planned once from the seed (`planDay`): RECIPES_PER_DAY recipes drawn from content/recipes.js ORDERS,
-// and LINES_PER_DAY queues of LINE_LENGTH customers, each queue waiting at a different landmark and each customer
-// ordering one of the day's recipes. The SHOPPING LIST (`needs`) is every ingredient of every order in every
-// line, summed: the truck drives round the landmarks until the pantry holds all of it, and only then do the
-// lines open. Arriving at a landmark with a line opens the `line` screen; everyone in the queue orders at once,
+// and LINES_PER_DAY queues of LINE_LENGTH customers, each queue waiting at a different stop in the town round the
+// depot (content/places.js STOPS) and each customer ordering one of the day's recipes. The day opens with the truck
+// parked inside the depot. The SHOPPING LIST (`needs`) is every ingredient of every order in every line, summed:
+// the truck drives out round the countryside's landmarks until the pantry holds all of it, and only then do the
+// queues form in town. Driving up to a queue opens the `line` screen; everyone in the queue orders at once,
 // the kitchen cooks every dish in turn, and results hands them all out together and banks the stars. When the third line has been served the
 // day is done - `dayComplete()` - and the board closes the truck for the night. That is the game's end.
 //
@@ -20,7 +21,7 @@
 // seeded stream (never the gameplay singleton, whose call count the checksum hashes), so four machines given the
 // same seed lay the same day out.
 import { ORDERS, INGREDIENTS, ingredientsAt } from '../content/recipes.ts';
-import { PLACES } from '../content/places.ts';
+import { PLACES, STOPS } from '../content/places.ts';
 import { CROSSING_SPOTS } from '../art/backgrounds/map.ts';
 import { makeRng } from '../lib/engine/rng.ts';
 import type { RngInstance } from '../lib/engine/rng.ts';
@@ -151,9 +152,10 @@ function planOneDay(r: RngInstance, shape: DayShape, o: { order?: number; recipe
     if (at >= 0) recipes.splice(at, 1); else if (recipes.length >= want) recipes.pop();
     recipes.unshift(forced);
   }
-  // the lines: one per entry of the shape, each at a distinct supply landmark (never home: the truck's own yard has no queue)
-  const supply = PLACES.filter((p) => p.id !== 'home').map((p) => p.id);
-  const places = shuffle(r, supply).slice(0, Math.min(shape.lines.length, supply.length));
+  // the lines: one per entry of the shape, each at a distinct stop in the town (never a landmark: the countryside is
+  // where the truck gathers, and the queues form where the people live)
+  const stops = STOPS.map((p) => p.id);
+  const places = shuffle(r, stops).slice(0, Math.min(shape.lines.length, stops.length));
   // the orders: the menu dealt round until every seat in every line has one, then shuffled - except that a forced
   // recipe stays at the front of the first line, which is what ?order= promises
   const fixed = !!(o.order != null && o.order > 0) || !!(o.recipes && o.recipes.length);
@@ -359,20 +361,19 @@ export function startRun(game, o) {
     missing() { return run.needs.filter((n) => n.have < n.amount); },
     /** The landmark that supplies an ingredient id (a content/places.js PLACES id, never 'home'). */
     placeFor(id) { const ing = INGREDIENTS[id]; return ing ? ing.place : ''; },
-    /** The line still waiting at a landmark (an index into `lines`), or -1. */
+    /** The line still waiting at a town stop (an index into `lines`), or -1. */
     lineAt(placeId) { for (let i = 0; i < run.lines.length; i++) if (run.lines[i].place === placeId && !run.lines[i].served) return i; return -1; },
     /**
-     * Which screen a landmark opens. While the pantry is short: its mini-game, if it supplies something still
-     * missing. Once the pantry is full: the line, if one is waiting there. Otherwise nothing but a sign.
+     * Which screen a landmark or a town stop opens. While the pantry is short: a landmark's mini-game, if it
+     * supplies something still missing (the town's stops have nobody queueing yet). Once the pantry is full: a
+     * stop's line, if one is waiting there - the landmarks have nothing left to give. Otherwise nothing but a sign.
      */
     screenForPlace(placeId) {
+      if (STOPS.some((x) => x.id === placeId)) return run.complete() && run.lineAt(placeId) >= 0 ? 'line' : '';
       const p = PLACES.find((x) => x.id === placeId);
-      if (!p) return '';
-      if (!run.complete()) {
-        const need = run.missing().find((n) => run.placeFor(n.id) === placeId);
-        return need && p.screen && placeId !== 'home' ? p.screen : '';
-      }
-      return run.lineAt(placeId) >= 0 ? 'line' : '';
+      if (!p || run.complete()) return '';
+      const need = run.missing().find((n) => run.placeFor(n.id) === placeId);
+      return need && p.screen && placeId !== 'home' ? p.screen : '';
     },
     /** Called by the map on pulling up at a line: stand on it, with its first customer at the hatch. */
     startLine(i) {
