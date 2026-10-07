@@ -1,12 +1,13 @@
-// RESULTS (docs/GDD.md section 7): THE WHOLE LINE SERVED AT ONCE. The kitchen has cooked every order in the queue,
-// so this is the lane the line screen stood on - the truck parked with its hatch on the queue, the crew's heads in
-// its windows - and every diner still in the line is handed their plate together: one plate after another arcs out
+// RESULTS (docs/GDD.md section 7): THE ROUND SERVED AT ONCE. The kitchen has cooked every order of the round at the
+// hatch (run.batch(): the front of the giant line), so this is the lane the line screen stood on - the truck parked
+// with its hatch on the queue, the crew's heads in its windows, the rest of the line waiting behind - and every diner
+// of the round is handed their plate together: one plate after another arcs out
 // of the hatch into the paws that ordered it (the recipe's own picture, art/dishes.ts), everyone chews three times
 // on a stagger of their own, and each diner's stars pop up over their head. Then ONE paper receipt carrying every
 // dish and the stars it earned, the tip in coins and - slammed across its foot - the red DELICIOUS / TASTY / EDIBLE
-// stamp for the line as a whole, and PRESS Z blinking. Confirm (or 600 frames) banks the whole line with
-// run.serveAll(stars) and sends the truck back to the map for the next line - or, when that was the day's last
-// line, to the board, which closes the truck for the night.
+// stamp for the round as a whole, and PRESS Z blinking. Confirm (or 600 frames) banks the round with
+// run.serveAll(stars) and steps the line up to the hatch again (the `line` screen) for the next round - or, when that
+// was the last of the line, to the board, which closes the truck for the night.
 //
 // The crew in the windows throw `cheer` when the stars land, each seat a few frames behind the last so four critters
 // never move as one body, and each diner cheers once their plate is empty. Params: { stars: number[] } (one per
@@ -37,8 +38,8 @@ import { INGREDIENTS } from '../../content/recipes.ts';
 import { TIP_COINS } from '../run.ts';
 import { truckStyleFor } from '../garage.ts';
 import type { TruckStyle } from '../../art/truck.ts';
-import { TRUCK_X, QUEUE_X0, QUEUE_PITCH, QUEUE_SCALE, DRIVER } from './line.ts';
-import type { LineHead } from './line.ts';
+import { TRUCK_X, QUEUE_SCALE, DRIVER, queueSpot, buildWaiters, drawWaiters } from './line.ts';
+import type { LineHead, Waiter } from './line.ts';
 // The diners hold their dishes, so their rigs are the kitchen's own rig-plus-held-food type rather than a bare Rig.
 // Imported, not redeclared: `import type` erases, so this adds no runtime edge between the two screens.
 import type { CritterRig } from './kitchen.ts';
@@ -133,8 +134,10 @@ export class ResultsScreen extends Screen {
   declare heads: LineHead[];
   /** The truck's draw options, reused every frame. */
   declare truckOpts: { scale: number; wheel: number; facing: number; heads: LineHead[]; style: TruckStyle };
-  /** The diners being served, front of the line first. */
+  /** The diners being served this round, front of the line first. */
   declare diners: Served[];
+  /** The rest of the line, still waiting behind them where the line screen left them. */
+  declare behind: Waiter[];
   /** The stars per dish, in line order, clamped to 1..3: what `serveAll` banks. */
   declare stars: number[];
   /** What the kitchen banked for the batch: `params.score`, or twice each dish's stars for a bare ?skipTo=results. */
@@ -158,7 +161,7 @@ export class ResultsScreen extends Screen {
   /** The blinking PRESS <key> line. */
   declare prompt: string;
 
-  constructor(game: Game) { super(game, 'results'); this.fields = []; this.crew = []; this.heads = []; this.diners = []; }
+  constructor(game: Game) { super(game, 'results'); this.fields = []; this.crew = []; this.heads = []; this.diners = []; this.behind = []; }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -183,7 +186,8 @@ export class ResultsScreen extends Screen {
     const given = Array.isArray(params.stars) ? params.stars : params.stars != null ? [params.stars] : null;
     this.diners.length = 0; this.stars = [];
     const first = ln ? Math.min(run.customer, ln.customers.length - 1) : 0;
-    const count = ln ? Math.max(1, ln.customers.length - run.customer) : 1;
+    const count = ln ? run.batch() : 1;
+    this.behind = buildWaiters(run, count);
     for (let i = 0; i < count; i++) {
       const c = ln ? ln.customers[first + i] : null;
       const order = c ? run.orderFor(first + i) : run.order;
@@ -194,7 +198,7 @@ export class ResultsScreen extends Screen {
       this.stars.push(stars);
       const ing = order.needs.length ? INGREDIENTS[order.needs[0].id] : null;
       this.diners.push({
-        rig: critterRig(def, -1), player, x: QUEUE_X0 + i * QUEUE_PITCH, dishId: order.id, dishText: order.dish,
+        rig: critterRig(def, -1), player, x: queueSpot(i).x, dishId: order.id, dishText: order.dish,
         hex: ing ? ing.hex : UI.cream, stars,
         passAt: PASS_AT + i * PASS_LAG, starsAt: STARS_AT + i * STAR_LAG, chews: 0, holding: false, cheered: false,
       });
@@ -203,7 +207,9 @@ export class ResultsScreen extends Screen {
     this.score = params.score != null ? params.score : sum * 2;
     this.left = false;
     // every string the screen draws is built here: draw() allocates nothing (docs/ARCHITECTURE.md section 8)
-    this.signText = `LINE ${run.line + 1} OF ${run.lines.length} SERVED  -  ${ln ? placeName(ln.place) : ''}`;
+    const left = ln ? ln.customers.length - run.customer - count : 0, where = ln ? placeName(ln.place) : '';
+    this.signText = run.lines.length > 1 ? `LINE ${run.line + 1} OF ${run.lines.length} SERVED  -  ${where}`
+      : left > 0 ? `${run.customer + count} OF ${run.customer + count + left} SERVED  -  ${where}` : `THE WHOLE LINE SERVED  -  ${where}`;
     this.signW = measureText(this.signText, 1) + 24;
     this.stampText = STAMPS[Math.max(1, Math.min(3, R(sum / this.stars.length)))];
     this.tip = 0; for (const s of this.stars) this.tip += TIP_COINS[s];
@@ -225,6 +231,7 @@ export class ResultsScreen extends Screen {
       c.player.tick();
       if (c.player.done) c.player.play('idle', { restart: true });
     }
+    for (const w of this.behind) { w.player.tick(); if (w.player.done) w.player.play('idle', { restart: true }); }
     for (let i = 0; i < this.diners.length; i++) {
       const d = this.diners[i];
       d.player.tick();
@@ -268,7 +275,9 @@ export class ResultsScreen extends Screen {
     drawLane(ctx);
     drawShadow(ctx, TRUCK_X, TRUCK_Y, 112, 0.28);
     drawTruck(ctx, TRUCK_X, TRUCK_Y, this.truckOpts);
-    // the line, back to front so the diner at the hatch is drawn last and in front
+    // the rest of the line, winding back up the lane behind the ones being served
+    drawWaiters(ctx, this.behind);
+    // the round at the hatch, back to front so the diner at the hatch is drawn last and in front
     for (let i = this.diners.length - 1; i >= 0; i--) {
       const d = this.diners[i];
       drawShadow(ctx, d.x, CREW_Y, 34, 0.4);

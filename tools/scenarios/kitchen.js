@@ -253,7 +253,7 @@ export const SCENARIOS = {
       await api.shot('results-stamp');
       await api.press(0, { action: true }, 1, 2);
       s = await api.summary();
-      assert(s.screen === 'map' && s.run.served === 1 && s.run.score === TIP_COINS[3], `confirm banks the line, and its tip, and sends the truck on (on ${s.screen}, served ${s.run.served}, coins ${s.run.score})`);
+      assert(s.screen === 'stage' && s.run.served === 1 && s.run.score === TIP_COINS[3], `confirm banks the line (a line of one: the day's only line), and its tip, and hands the closed day to the board (on ${s.screen}, served ${s.run.served}, coins ${s.run.score})`);
       assert(s.run.lines[0].customers[0].endsWith(':3') && s.run.lines[0].served, `...with the customer stamped at the stars they gave (${s.run.lines[0].customers.join()})`);
       const used = s.run.needs.map((n, i) => Number(n.split(':')[1].split('/')[0]) - Number(s.run.stock[i].split(':')[1]));
       assert(used.some((u) => u > 0), `the dish came out of the pantry (used ${used.join()})`);
@@ -389,8 +389,8 @@ export const SCENARIOS = {
       await page.evaluate(() => { const g = window.__game.game; g.run.startLine(g.run.lines.length - 1); g.reset('kitchen'); });
       await api.step(2);
       let s = await api.summary();
-      const want = await page.evaluate(() => { const r = window.__game.game.run; return r.lines[r.line].customers.map((c, k) => r.orderFor(k)).map((o) => ({ id: o.id, steps: o.steps.map((x) => x.toUpperCase()), units: o.needs.reduce((n, x) => n + x.amount, 0) })); });
-      assert(want.length === 3 && s.top.orders.join() === want.map((o) => o.id).join(), `the kitchen opens on all three orders in the line (${s.top.orders.join()})`);
+      const want = await page.evaluate(() => { const r = window.__game.game.run; return r.lines[r.line].customers.slice(r.customer, r.customer + r.batch()).map((c, k) => r.orderFor(r.customer + k)).map((o) => ({ id: o.id, steps: o.steps.map((x) => x.toUpperCase()), units: o.needs.reduce((n, x) => n + x.amount, 0) })); });
+      assert(want.length === 3 && s.top.orders.join() === want.map((o) => o.id).join(), `the kitchen opens on the three orders of the round at the hatch, the rest of the line of nine waiting outside (${s.top.orders.join()})`);
       assert(s.top.custs === 3, `all three customers are at the hatch (${s.top.custs})`);
       assert(want.every((o, d) => s.top.routes[d].join() === o.steps.join()), `each order keeps its own steps in its own order along the merged run (${s.top.routes.map((r) => r.join('>')).join(' | ')} on ${s.top.steps.join('>')})`);
       assert(s.top.steps.filter((x) => x === 'FRIDGE').length === 1 && s.top.steps.filter((x) => x === 'PLATE').length === 1, `one fridge run and one bell for the whole line (${s.top.steps.join()})`);
@@ -446,7 +446,7 @@ export const SCENARIOS = {
       assert(s1.top.chews.join() === '3,3' && s1.top.holding.every((h) => !h) && s1.top.stamp === 'TASTY', `both plates are cleaned and the line stamped TASTY (${s1.top.chews}, ${s1.top.holding}, '${s1.top.stamp}')`);
       await api.press(0, { action: true }, 1, 2);
       const s2 = await api.summary();
-      assert(s2.screen === 'map' && s2.run.served === 2 && s2.run.customer === 2 && s2.run.linesServed === 1, `action serves the whole line and sends the truck on (on ${s2.screen}, served ${s2.run.served}, customer ${s2.run.customer})`);
+      assert(s2.screen === 'line' && s2.run.served === 2 && s2.run.customer === 2 && s2.run.linesServed === 0, `action serves the round and the line steps up for the next one (on ${s2.screen}, served ${s2.run.served}, customer ${s2.run.customer})`);
     });
   },
 };

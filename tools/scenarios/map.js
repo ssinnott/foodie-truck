@@ -368,7 +368,7 @@ export const SCENARIOS = {
       await api.hold(0, horiz ? { right: true } : { up: true }); await api.step(150); await api.release(0);
       const s2 = await api.summary();
       assert(s2.screen === 'line', `driving to the queue opens the line screen (now on ${s2.screen})`);
-      assert(s2.run.line === done.top.destLine && s2.run.customer === 0 && s2.top.waiting === 2, `the run stands on that line with its first customer at the hatch (line ${s2.run.line}, customer ${s2.run.customer}, ${s2.top.waiting} waiting)`);
+      assert(s2.run.line === done.top.destLine && s2.run.customer === 0 && s2.top.waiting === s2.run.lines[s2.run.line].customers.length, `the run stands on that line with its first customer at the hatch and the whole line waiting behind (line ${s2.run.line}, customer ${s2.run.customer}, ${s2.top.waiting} waiting)`);
       await api.step(40);
       const s3 = await api.summary();
       assert(s3.top.bubble.length > 0 && s3.top.dish === s3.run.dish, `the customer says their order (${s3.top.bubble})`);

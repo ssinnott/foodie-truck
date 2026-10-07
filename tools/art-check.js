@@ -7,7 +7,9 @@
 import { CRITTERS } from '../src/content/critters/index.ts';
 import { INK, CHIBI } from '../src/content/critters/common.ts';
 import { hexToRgb } from '../src/art/palettes.ts';
-import { PLAYER_COLORS, PLAYER_LABELS } from '../src/constants.ts';
+import { CUSTOMERS, getCustomer } from '../src/content/critters/customers.ts';
+import { DINERS } from '../src/content/critters/diners.ts';
+import { PLAYER_COLORS, PLAYER_LABELS, OFF_DUTY_APRON } from '../src/constants.ts';
 import { PAINTS, TRUCK } from '../src/art/truck.ts';
 
 const notes = process.argv.includes('--notes');
@@ -98,6 +100,47 @@ for (let i = 0; i < CRITTERS.length; i++) for (let j = i + 1; j < CRITTERS.lengt
 
 }
 
+// ---- the village diners (content/critters/customers.ts + villagers.ts, rolled by diners.ts) ----
+// A customer is drawn on the hatch's plum wall in the off-duty apron, so the rules are the cast's own where they
+// still apply (slots, belly vs fur, height, the animation table) and the player-spot rule is replaced by two that
+// say what a diner has to clear instead: the plum wall by value, and the cream apron by value or hue family.
+const PLUM_WALL = '#4A3038';
+const dinerIds = Object.keys(CUSTOMERS);
+for (const id of DINERS) if (!CUSTOMERS[id]) err(id, 'diners/roll', 'listed in diners.ts but has no definition');
+for (const id of dinerIds) if (!DINERS.includes(id)) err(id, 'diners/roll', 'defined but missing from the roll in diners.ts (it would never be dealt)');
+if (new Set(DINERS).size !== DINERS.length) err('diners', 'diners/roll', 'duplicate id in diners.ts');
+if (getCustomer('no-such-diner') !== CUSTOMERS.owl) err('diners', 'diners/fallback', 'an unknown id must fall back to the owl');
+for (const id of dinerIds) {
+  const c = CUSTOMERS[id], S = 'diner:' + id;
+  if (c.id !== id) err(S, 'diners/id', `registered as ${id} but its id is ${c.id}`);
+  for (const k of ['name', 'fullName', 'role', 'species', 'build', 'anims']) if (!c[k]) err(S, 'registry/shape', `missing ${k}`);
+  if (!c.build) continue;
+  const b = c.build, pal = b.palette || {};
+  if (b.outline !== INK) err(S, 'palette/outline', `outline ${b.outline} is not the game ink ${INK}`);
+  for (const k of ['skin', 'hair', 'belly', 'secondary', 'shorts', 'accent', 'dark']) if (!pal[k]) err(S, 'palette/slots', `palette.${k} missing`);
+  if (relDiff(pal.skin, PLUM_WALL) < 0.25) err(S, 'diners/plum-wall', `fur ${pal.skin} vs the hatch wall ${PLUM_WALL}: relDiff ${relDiff(pal.skin, PLUM_WALL).toFixed(2)} < 0.25`);
+  if (!separated(pal.skin, OFF_DUTY_APRON, 0.15)) warn(S, 'diners/apron', `fur ${pal.skin} vs the off-duty apron ${OFF_DUTY_APRON}: relDiff ${relDiff(pal.skin, OFF_DUTY_APRON).toFixed(2)} < 0.15`);
+  if (relDiff(pal.skin, pal.belly) < 0.12) err(S, 'palette/belly-vs-fur', `belly ${pal.belly} vs fur ${pal.skin}: relDiff ${relDiff(pal.skin, pal.belly).toFixed(2)} < 0.12 (the muzzle must read)`);
+  if (relDiff(pal.skin, pal.hair) < 0.2) warn(S, 'palette/markings-vs-fur', `hair/markings ${pal.hair} vs fur ${pal.skin}: relDiff ${relDiff(pal.skin, pal.hair).toFixed(2)} < 0.20`);
+  if (lum(pal.dark) > 0.25) warn(S, 'palette/dark', `dark ${pal.dark} is not dark (lum ${lum(pal.dark).toFixed(2)})`);
+  const p = { ...CHIBI, ...(b.proportions || {}) };
+  const h = p.upperLeg + p.lowerLeg + p.footH - 2 + p.torsoH - 2 + p.neck + p.headR * 2;
+  if (h < 44 || h > 68) err(S, 'proportions/height', `standing height ${h} px outside 44..68`);
+  for (const n of REQUIRED_ANIMS) { const a = c.anims && c.anims[n]; if (!a || !a.frames || !a.frames.length) err(S, 'anim/table', `missing animation ${n}`); }
+  // the town map's queue sprite is drawn from this look: it needs the colours the sprite paints with
+  if (id !== 'owl' && id !== 'otter' && id !== 'goat') {
+    const m = c.map;
+    if (!m) err(S, 'diners/map-look', 'a village diner needs a map look (art/backgrounds/map.ts drawDiner)');
+    else for (const k of ['fur', 'dark', 'cream', 'cloth', 'ears', 'cue']) if (!m[k]) err(S, 'diners/map-look', `map look is missing ${k}`);
+  }
+}
+for (let i = 0; i < dinerIds.length; i++) for (let j = i + 1; j < dinerIds.length; j++) {
+  const a = CUSTOMERS[dinerIds[i]], b = CUSTOMERS[dinerIds[j]], pa = a.build.palette, pb = b.build.palette, S = `${a.id}+${b.id}`;
+  if (a.species === b.species) err(S, 'diners/species', 'two diners share a species');
+  if (a.name === b.name) err(S, 'diners/name', 'two diners share a name');
+  if (hueDelta(pa.skin, pb.skin) < 25 && relDiff(pa.skin, pb.skin) < 0.05) err(S, 'diners/fur', `fur ${pa.skin} vs ${pb.skin}: hue gap ${hueDelta(pa.skin, pb.skin).toFixed(0)} < 25 and relDiff ${relDiff(pa.skin, pb.skin).toFixed(2)} < 0.05`);
+}
+
 // ---- the truck's paint jobs (art/truck.ts PAINTS, sold by the garage) ----
 // The crew's heads break out of the windows onto the body, so every paint has to clear the dusk glass the way the
 // stock beetroot does (value, or a hue family with both saturated: the same ART_STYLE 0.1 rule the cast is held
@@ -112,5 +155,5 @@ for (const [id, p] of Object.entries(PAINTS)) {
 
 const errors = findings.filter((f) => f.sev === 'error'), warns = findings.filter((f) => f.sev === 'warn');
 for (const f of findings) console.log(`${f.sev.toUpperCase().padEnd(5)} ${f.rule.padEnd(26)} ${f.subject}: ${f.msg}`);
-console.log(`art-check: ${CRITTERS.length} critters, ${Object.keys(PAINTS).length} truck paints, ${errors.length} errors, ${warns.length} warnings`);
+console.log(`art-check: ${CRITTERS.length} critters, ${dinerIds.length} diners, ${Object.keys(PAINTS).length} truck paints, ${errors.length} errors, ${warns.length} warnings`);
 process.exit(errors.length ? 1 : 0);
