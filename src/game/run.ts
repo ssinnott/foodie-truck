@@ -9,13 +9,16 @@
 //         -> map -> line -> kitchen -> results -> map -> line -> kitchen -> results ... -> stage (CLOSED)
 //
 // A DAY is planned once from the seed (`planDay`): RECIPES_PER_DAY recipes drawn from content/recipes.js ORDERS,
-// and LINES_PER_DAY queues of LINE_LENGTH customers, each queue waiting at a different stop in the town round the
-// depot (content/places.js STOPS) and each customer ordering one of the day's recipes. The day opens with the truck
-// parked inside the depot. The SHOPPING LIST (`needs`) is every ingredient of every order in every line, summed:
-// the truck drives out round the countryside's landmarks until the pantry holds all of it, and only then do the
-// queues form in town. Driving up to a queue opens the `line` screen; everyone in the queue orders at once,
-// the kitchen cooks every dish in turn, and results hands them all out together and banks the stars. When the third line has been served the
-// day is done - `dayComplete()` - and the board closes the truck for the night. That is the game's end.
+// ONE GIANT LINE of LINE_LENGTH customers (a day's shape may name more than one queue, but no shipped day does),
+// waiting at a stop in the town round the depot (content/places.js STOPS), each customer a different animal from
+// the village (content/critters/diners.ts) ordering one of the day's recipes. The day opens with the truck
+// parked inside the depot. The SHOPPING LIST (`needs`) is every ingredient of every order in the line, summed:
+// the truck drives out round the countryside's landmarks until the pantry holds all of it, and only then does the
+// line form in town. Driving up to it opens the `line` screen. The line is far too long to cook at once, so it is
+// served in ROUNDS (`batchSize`): the front few at the hatch order together, the kitchen cooks their dishes,
+// results hands them out and banks the stars, and the line steps up - the `line` screen again - for the next round.
+// When the last diner has been served the day is done - `dayComplete()` - and the board closes the truck for the
+// night. That is the game's end.
 //
 // Nothing in here draws, and nothing in here reads the clock or Math.random: the day plan is drawn from its own
 // seeded stream (never the gameplay singleton, whose call count the checksum hashes), so four machines given the
@@ -25,6 +28,7 @@ import { PLACES, STOPS } from '../content/places.ts';
 import { CROSSING_SPOTS } from '../art/backgrounds/map.ts';
 import { makeRng } from '../lib/engine/rng.ts';
 import type { RngInstance } from '../lib/engine/rng.ts';
+import { DINERS } from '../content/critters/diners.ts';
 import type { Order, OrderNeed, Run, RunLine, RunCustomer, DayPlan, DayPlanLine, DayPlanCrossing, DayShape, Crossing, Cart } from './game.ts';
 
 /**
@@ -44,30 +48,38 @@ export const START_SCENE = SCENES.indexOf('stage');
  */
 export const TIP_COINS: readonly number[] = Object.freeze([0, 4, 8, 12]);
 
-/** The day's shape (docs/GDD.md section 3): how many recipes are on the menu, how many lines form, how long each is. */
-export const RECIPES_PER_DAY = 3, LINES_PER_DAY = 3, LINE_LENGTH = 2;
+/**
+ * The day's shape (docs/GDD.md section 3): how many recipes are on the menu, how many lines form, how long each is.
+ * One line a day, and a long one: the ordinary day's six dishes (the three queues of two it used to be) stand in a
+ * single queue, so what the village wants is one crowd at one stop and not three small ones.
+ */
+export const RECIPES_PER_DAY = 3, LINES_PER_DAY = 1, LINE_LENGTH = 6;
+/** The most diners the kitchen takes orders from at once: a round at the hatch is never longer than this (see `batchSize`). */
+export const BATCH_MAX = 3;
+/** The longest line the `line` screen can lay out (screens/line.ts QUEUE_SLOTS): no day's shape may be longer. */
+export const LINE_MAX = 18;
 /**
  * THE WEEK (docs/GDD.md section 3). A run is DAYS_PER_WEEK days, and what makes one day different from the last
- * is its SHAPE and not only its seed: how many queues form and how long each is, how big the menu is, whether
- * twists are dealt at all, and what the weather is allowed to do.
+ * is its SHAPE and not only its seed: how long the one line is, how big the menu is, whether twists are dealt at
+ * all, and what the weather is allowed to do.
  *
- * Day 1 is short and plain, so a first day teaches the loop without being labelled a tutorial. MARKET DAY keeps
- * three queues but cuts the menu, so the village wants the same things and the day is two long gathers instead
- * of eight short ones. Day 4 is always wet, so the fog and the mud patch - one day in five by chance today - are
- * guaranteed once a week. THE FETE is four queues, one of them three deep, on a menu drawn from what this week
- * has already served: the last customer of the week orders Monday's dish.
+ * Day 1 is short and plain (a line of four), so a first day teaches the loop without being labelled a tutorial.
+ * MARKET DAY keeps the full line but cuts the menu, so the village wants the same things and the day is two long
+ * gathers instead of eight short ones. Day 4 is always wet, so the fog and the mud patch - one day in five by
+ * chance today - are guaranteed once a week. THE FETE is one enormous line of nine, on a menu drawn from what this
+ * week has already served: the last customer of the week orders Monday's dish.
  *
  * Shapes are APPENDED, never filed in between: the day index crosses the wire (net/protocol.ts) and is written
  * into the save record (game/week.ts), so inserting a day would move every week already in progress.
  */
-/** The ordinary day's queues, built from the constants above so those three numbers stay load-bearing. */
+/** The ordinary day's queues, built from the constants above so those two numbers stay load-bearing. */
 const ORDINARY_LINES: readonly number[] = Object.freeze(new Array(LINES_PER_DAY).fill(LINE_LENGTH));
 export const DAY_SHAPES: readonly DayShape[] = Object.freeze([
-  Object.freeze({ name: 'OPENING DAY', lines: Object.freeze([2, 2]), recipes: 2, twists: false, weather: 'clear' }),
+  Object.freeze({ name: 'OPENING DAY', lines: Object.freeze([LINE_LENGTH - 2]), recipes: 2, twists: false, weather: 'clear' }),
   Object.freeze({ name: '', lines: ORDINARY_LINES, recipes: RECIPES_PER_DAY, twists: true, weather: 'roll' }),
   Object.freeze({ name: 'MARKET DAY', lines: ORDINARY_LINES, recipes: 2, twists: true, weather: 'roll' }),
   Object.freeze({ name: '', lines: ORDINARY_LINES, recipes: RECIPES_PER_DAY, twists: true, weather: 'wet' }),
-  Object.freeze({ name: 'THE FETE', lines: Object.freeze([...ORDINARY_LINES, LINE_LENGTH + 1]), recipes: RECIPES_PER_DAY, twists: true, weather: 'clear', fromWeek: true }),
+  Object.freeze({ name: 'THE FETE', lines: Object.freeze([LINE_LENGTH + 3]), recipes: RECIPES_PER_DAY, twists: true, weather: 'clear', fromWeek: true }),
 ]) as readonly DayShape[];
 export const DAYS_PER_WEEK = DAY_SHAPES.length;
 /** The ordinary day, and the shape a bare `planDay()` lays out: today's game, unchanged. */
@@ -78,6 +90,15 @@ export const WET_DRIZZLE_ODDS = 0.5;
 export function shapeOf(day: number): DayShape { return DAY_SHAPES[Math.max(0, Math.min(DAYS_PER_WEEK - 1, day | 0))]; }
 /** How many dishes a day's shape asks for, which is how many customers queue across all of its lines. */
 export function dishesIn(shape: DayShape): number { let n = 0; for (const len of shape.lines) n += len; return n; }
+/**
+ * How many diners go up to the hatch together in each round of a line `total` long. The rounds are as even as they
+ * can be and never bigger than BATCH_MAX (the most orders the kitchen's ticket and counter carry): a line of 4 is
+ * two rounds of 2, 6 is 3+3, 9 is 3+3+3, 7 is 3+3+1. A pure function of the line's length, so every peer agrees.
+ */
+export function batchSize(total: number): number {
+  const n = Math.max(1, total | 0);
+  return Math.min(BATCH_MAX, Math.ceil(n / Math.ceil(n / BATCH_MAX)));
+}
 /** Crossings on the road per day (docs/CONTENT_ROADMAP.md section B): distinct lane spots, one out at a time, in this order. */
 export const CROSSINGS_PER_DAY = 3;
 /** Sheep: 0, ducks: 1. About a third of crossings are the duck parade; a flock is 5..9, the ducks a mother and six. */
@@ -119,8 +140,8 @@ export function needsOf(c: { recipe: string; twist: string; extra: string }): { 
   return out;
 }
 
-/** The village diners who queue, by content/critters/customers.js id. */
-export const DINERS = Object.freeze(['owl', 'otter', 'goat']);
+/** The village diners who queue, by content/critters/customers.ts id: the roll in content/critters/diners.ts. */
+export { DINERS };
 /** Salt mixed into the run seed for the plan's own rng stream, so the same seed never draws the plan and the first apple alike. */
 const PLAN_SALT = 0x1d2b;
 
@@ -176,9 +197,15 @@ function planOneDay(r: RngInstance, shape: DayShape, o: { order?: number; recipe
   let k = 0, last = -1;
   for (let li = 0; li < places.length; li++) {
     const customers: { customer: string; recipe: string; twist: string; extra: string }[] = [];
+    // who is in the line: the village dealt like a deck, so a line is a crowd of DIFFERENT animals (nobody repeats
+    // until every diner in the village has queued, and nobody ever stands behind their own twin)
+    let deck: number[] = [], at = 0;
     for (let c = 0; c < shape.lines[li]; c++) {
-      let d = r.int(0, DINERS.length - 1);
-      if (d === last) d = (d + 1) % DINERS.length;    // nobody queues behind their own twin
+      if (at >= deck.length) {
+        deck = shuffle(r, DINERS.map((_, i) => i)); at = 0;
+        if (deck[0] === last && deck.length > 1) { const t = deck[0]; deck[0] = deck[1]; deck[1] = t; }
+      }
+      const d = deck[at++];
       last = d;
       const rec = ORDERS[orders[k++]];
       // the twist: one customer in TWIST_ODDS, never on a dev-jump day and never on a shape that deals none;
@@ -409,8 +436,17 @@ export function startRun(game, o) {
       return makeOrder(ln.customers[Math.max(0, Math.min(ln.customers.length - 1, k | 0))]);
     },
     /**
-     * THE WHOLE LINE SERVED AT ONCE: the kitchen cooks every order in the queue before anyone is handed a plate,
-     * and results banks them together - `stars[i]` against the i-th customer still waiting, front first. Each is
+     * How many diners are at the hatch in this round: the line is served in rounds (`batchSize`), the front of the
+     * queue ordering together while the rest wait behind them, clamped to however many are left.
+     */
+    batch() {
+      const ln = run.lines[run.line];
+      if (!ln) return 1;
+      return Math.max(1, Math.min(batchSize(ln.customers.length), ln.customers.length - run.customer));
+    },
+    /**
+     * A ROUND SERVED AT ONCE: the kitchen cooks every order of the round before anyone is handed a plate, and
+     * results banks them together - `stars[i]` against the i-th customer at the hatch, front first. Each is
      * `serve()` in turn, so the pantry, the takings and the line's served flag move exactly as they always did.
      */
     serveAll(stars) {
@@ -466,7 +502,7 @@ export function startRun(game, o) {
         weekComplete: run.weekComplete(),
         recipes: run.recipes.slice(), lines: run.lines.map((l) => ({ place: l.place, served: l.served, customers: l.customers.map((c) => `${c.customer}:${c.recipe}:${c.stars}` + (c.twist ? `:${c.twist}${c.extra ? '/' + c.extra : ''}` : '')) })),
         twist: run.order.twist, extra: run.order.extra, chops: run.order.chops,
-        line: run.line, customer: run.customer, dish: run.order.dish, customerId: run.order.customer,
+        line: run.line, customer: run.customer, batch: run.batch(), dish: run.order.dish, customerId: run.order.customer,
         needs: run.needs.map((n) => `${n.id}:${n.have}/${n.amount}`), stock: run.needs.map((n) => `${n.id}:${n.have - n.used}`),
         complete: run.complete(), served: run.served, score: run.score, linesServed: run.linesServed(), stars: run.stars(),
         dayComplete: run.dayComplete(), truckAt: run.truck.at,

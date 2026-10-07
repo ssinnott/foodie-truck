@@ -1,14 +1,17 @@
 // Contact-sheet generator for critter rigs (dev tool). Open tools/sheet.html (served by tools/server.js) with:
 //   ?critter=<id>              a cast member (content/critters), default the first
+//   &critter=<id> also takes a village diner (content/critters/customers.ts), e.g. &critter=fox
 //   &mode=anims|strip|closeup|cast   (default anims)
 //     anims    every keyframe of every animation (or &anims=a,b), one row per animation
 //     strip    N evenly spaced samples of looping animations (&anims=walk,run &samples=8): the motion test
 //     closeup  a few picks at high zoom (&anims=idle:0,chop:1 &zoom=6)
 //     cast     every cast member in the same picks (idle, walk, carry, cheer): palette and silhouette comparison
+//              (&who=diners swaps the cast for the whole village of diners)
 //   &zoom=3 &cols=8 &cw=96 &ch=110 &bg=#hex &facing=-1 (mirror test) &item=basket|rod|spoon|knife|food
 // Every cell is rendered at 1x through drawRig (chains, snapping and smears behave exactly as in game), then
 // pixel-zoomed. window.__sheet = { ready, error, bench(n) } for headless capture (tools/sheet-capture.js).
 import { CRITTERS } from '../src/content/critters/index.ts';
+import { CUSTOMERS } from '../src/content/critters/customers.ts';
 import { ITEMS } from '../src/content/critters/items.ts';
 import { buildRig, drawRig } from '../src/lib/art/rig.ts';
 import { AnimPlayer } from '../src/lib/art/animation.ts';
@@ -40,7 +43,7 @@ function cell(rig, anim, gx, gy, label, i, shade) {
 
 function main() {
   const id = q.get('critter') || CRITTERS[0].id;
-  const def = CRITTERS.find((c) => c.id === id) || CRITTERS[0];
+  const def = CRITTERS.find((c) => c.id === id) || CUSTOMERS[id] || CRITTERS[0];
   const item = q.get('item');
   const makeRig = (d) => { const r = buildRig(d.build); if (item && ITEMS[item]) r.weapon = ITEMS[item]; if (item === 'basket') r.basketFill = 0.75; return r; };
   const cols = Number(q.get('cols') || 8);
@@ -48,7 +51,7 @@ function main() {
   if (mode === 'cast') {
     const picks = (q.get('anims') || 'idle,walk,carry,cheer').split(',');
     const stage = [];
-    for (const d of CRITTERS) {
+    for (const d of (q.get('who') === 'diners' ? Object.values(CUSTOMERS) : CRITTERS)) {
       const rig = makeRig(d), anim = new AnimPlayer(d.anims);
       const cells = [];
       for (const p of picks) { anim.play(p, { restart: true }); anim.tick(); cells.push({ rig, pose: JSON.parse(JSON.stringify(anim.pose)), copy: true, label: p }); }

@@ -1,11 +1,13 @@
-// The customers (docs/GDD.md section 2): three village NPCs on the same chibi rig as the cast, drawn only as busts
-// leaning into the serving hatch and eating on the results screen. Small, distinct silhouettes - an owl with short
+// The customers (docs/GDD.md section 2): village NPCs on the same chibi rig as the cast, drawn only as busts
+// leaning into the serving hatch and eating on the results screen. These are the first three - the rest of the
+// village is villagers.ts, and diners.ts is the roll of them all. Small, distinct silhouettes - an owl with short
 // ear tufts, big whites and cheek discs; an otter with small ears and a thin tail; a goat with drooping ears, two
 // short horns and a beard - in muted village palettes that clear the hatch's plum wall (#4A3038, L .22) by value.
 // They wear the off-duty apron (critterRig(def, -1)): no seat, no player colour.
 import { celPoly } from '../../lib/art/shading.ts';
 import { critterBuild, makeCritterAnims, muzzleGeom } from './common.ts';
 import type { RigAccessory } from '../../lib/art/rig.ts';
+import { VILLAGERS } from './villagers.ts';
 
 const R = Math.round;
 const TAU = Math.PI * 2;
@@ -77,6 +79,7 @@ export const goat = {
   anims: makeCritterAnims(),
 };
 
-export const CUSTOMERS = Object.freeze({ owl, otter, goat });
+/** Every diner by id: these three, then the village of villagers.ts. The ids and their order are diners.ts's. */
+export const CUSTOMERS = Object.freeze({ owl, otter, goat, ...VILLAGERS });
 /** A customer by id (content/recipes.js ORDERS[].customer); an unknown id gets the owl, so a stale order still draws. */
 export function getCustomer(id) { return CUSTOMERS[id] || owl; }

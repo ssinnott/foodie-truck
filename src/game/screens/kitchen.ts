@@ -9,8 +9,8 @@
 //   MIX   hold for 240 frames while a dial fills; letting go pauses it, and it picks up where it left off
 //   STOVE hold for 240 frames while a bar fills; letting go pauses it the same way
 //   OVEN  hold for 240 frames while the bake runs; letting go pauses it the same way
-//   PLATE a press at the hatch rings the bell: ORDER UP!, and results serves the whole line
-// THE WHOLE LINE IS COOKED AT THE SAME TIME. The kitchen is handed every order still waiting in the queue (`orders`,
+//   PLATE a press at the hatch rings the bell: ORDER UP!, and results serves the round
+// THE WHOLE ROUND IS COOKED AT THE SAME TIME. The kitchen is handed the orders of the diners at the hatch (`orders`: the front of the line, run.batch() of them - the rest of the line waits outside for the next round,
 // front first) and their steps are MERGED into one run of the counter (`mergeSteps`): the fridge once for every
 // item of every order, then each station ONCE for every dish that uses it, then one bell that plates them all. Each
 // dish keeps its own route through that run (`routes`), so the pie's apples go from the board to the bowl to the
@@ -355,10 +355,10 @@ export class KitchenScreen extends Screen {
     const game = this.game, run = game.run;
     this.layer = kitchenLayer(paintStations);
     particles.clear();
-    // the orders: everyone still waiting in the line, front first, all cooked at once
+    // the orders: this round's diners at the hatch (run.batch(): the front of the line), front first, all cooked at once
     this.orders = [];
     const ln = run.lines[run.line];
-    if (ln) for (let k = run.customer; k < ln.customers.length; k++) this.orders.push(run.orderFor(k));
+    if (ln) for (let k = run.customer; k < run.customer + run.batch(); k++) this.orders.push(run.orderFor(k));
     if (!this.orders.length) this.orders.push(run.order);
     run.order = this.orders[0];
     // the merged run of the counter, and each order's own route through it

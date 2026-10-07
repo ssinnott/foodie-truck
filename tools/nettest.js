@@ -7,7 +7,7 @@ import { encodeInput, encodeChecksum, encodeStart, encodeDrop, encodeRelay, enco
 import { runChecksum } from '../src/net/checksum.ts';
 import { makeMember, packSeats, freeSlot, uniquePicks, critterTaken, firstFreeCritter, picksDistinct, sortRoster, resetSeats, releaseSeats } from '../src/net/roster.ts';
 import { LOCAL_PLAYERS, MAX_PLAYERS } from '../src/constants.ts';
-import { DAYS_PER_WEEK, DAY_SHAPES, planWeek, planDay, shapeOf, dishesIn } from '../src/game/run.ts';
+import { DAYS_PER_WEEK, DAY_SHAPES, planWeek, planDay, shapeOf, dishesIn, batchSize, BATCH_MAX, LINE_MAX, DINERS } from '../src/game/run.ts';
 import * as bindings from '../src/engine/bindings.ts';
 import { createNetSession, delayForRtt } from '../src/net/session.ts';
 
@@ -62,8 +62,24 @@ assert(decodeMessage(new Uint8Array([99])) === null && decodeMessage(new Uint8Ar
     if (!shape.twists) assert(plan.lines.every((l) => l.customers.every((cu) => !cu.twist)), `day ${d} deals no twists`);
     if (shape.weather === 'clear') assert(plan.weather === 0, `day ${d} is always clear`);
     if (shape.weather === 'wet') assert(plan.weather === 1 || plan.weather === 2, `day ${d} is always wet (got ${plan.weather})`);
+    // ONE GIANT LINE: a single queue a day, a crowd of different animals, served in even rounds the kitchen can carry
+    assert(plan.lines.length === 1 && shape.lines.length === 1, `day ${d} is one giant line`);
+    assert(plan.lines.every((l) => l.customers.length <= LINE_MAX), `day ${d}'s line fits the lane (${LINE_MAX} at most)`);
+    assert(plan.lines.every((l) => l.customers.every((cu) => DINERS.includes(cu.customer))), `day ${d}: everyone in the line is a diner on the roll`);
+    assert(plan.lines.every((l) => new Set(l.customers.map((cu) => cu.customer)).size === l.customers.length), `day ${d}: nobody in the line is the same animal twice`);
+    assert(plan.lines.every((l) => l.customers.every((cu, i) => i === 0 || cu.customer !== l.customers[i - 1].customer)), `day ${d}: nobody stands behind their own twin`);
     assert(shapeOf(d) === shape && dishesIn(shape) === shape.lines.reduce((t, n) => t + n, 0), `day ${d}'s shape reads back`);
   }
+  // the roll is big: across a week the village sends many different animals, not three on repeat
+  assert(DINERS.length >= 16 && new Set(DINERS).size === DINERS.length, `the village has ${DINERS.length} different diners`);
+  assert(new Set(a.flatMap((p) => p.lines.flatMap((l) => l.customers.map((cu) => cu.customer)))).size >= 12, 'a week of lines seats at least a dozen different animals');
+  // the rounds: as even as they can be, never more than the kitchen carries, and they always add back up to the line
+  for (let n = 1; n <= LINE_MAX; n++) {
+    const size = batchSize(n); let left = n, rounds = 0;
+    while (left > 0) { left -= Math.min(size, left); rounds++; }
+    assert(size >= 1 && size <= BATCH_MAX && rounds === Math.ceil(n / size) && (n > BATCH_MAX || size === n), `a line of ${n} is ${rounds} rounds of ${size}`);
+  }
+  assert([4, 6, 9].map(batchSize).join() === '2,3,3', 'a line of 4, 6 and 9 goes up 2, 3 and 3 at a time');
   // THE FETE cooks the week again: nothing on its menu is a dish the week has not already served
   const fete = DAY_SHAPES.findIndex((sh) => sh.fromWeek);
   if (fete > 0) {
