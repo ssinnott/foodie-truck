@@ -109,16 +109,16 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   soup, pea soup, raspberry jam tarts, cockle stew) are what the third pass's eight ingredients - cherries, plums,
   cheese, oats, tomatoes, peas, raspberries, cockles - are for; and the twelve after those are what the three new
   landmarks send the truck for (hazelnut brownies, walnut loaf, roast chestnuts, nut roast; mushroom soup,
-  mushrooms on toast, wild garlic butter, blackberry and apple pie; mint sauce, chive omelette, rosemary potatoes,
+  mushrooms on toast, wild garlic butter, blackberry and apple pie, whose blackberries come off Bramble Bank; mint sauce, chive omelette, rosemary potatoes,
   pea and mint soup). Sixty-three in all. Three of them never
   touch the stove or the oven and baked apples is two steps long: the kitchen's variety is which stations a recipe
   skips. Recipes are only ever appended, because `?order=N` and the scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
   orchard drops pears, peaches, avocados, cherries and plums as well as apples; the farm pulls six vegetables
   besides the carrot and grows tomatoes and peas up stakes; the dairy's pails go on through the churn to butter
-  and through the press to cheese; the mill's chutes fill rice and oat sacks; the bank has raspberries beside its
+  and through the press to cheese; the mill's chutes fill rice and oat sacks; the bank has raspberries and blackberries beside its
   strawberries and blueberries; the cove has cockles in its wet sand; Hazel Holt shakes down hazelnuts, walnuts
-  and chestnuts; Tangle Wood hides mushrooms, wild garlic and blackberries; Thyme Terrace grows mint, chives and
+  and chestnuts; Tangle Wood hides mushrooms and wild garlic; Thyme Terrace grows mint, chives and
   rosemary. Forty ingredients ship. A mini-game gathers whichever of
   its landmark's ingredients the list is still short of (`run.js gatherTarget`: the first short one in
   `INGREDIENTS` order, else the first the list asks for, else the landmark's first — so a bare dev jump still
@@ -171,8 +171,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **Landmarks** (`PLACES`): home (the truck stop), orchard (apples, pears, peaches, avocados), pond (trout), coop
   (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
-  south lane (strawberries, blueberries) and Hazel Holt in the north-west corner (hazelnuts, walnuts, chestnuts,
-  shaken down) and Tangle Wood in the north-east (mushrooms, wild garlic, blackberries, foraged out of the leaf
+  south lane (strawberries, blueberries, raspberries, blackberries) and Hazel Holt in the north-west corner (hazelnuts, walnuts, chestnuts,
+  shaken down) and Tangle Wood in the north-east (mushrooms, wild garlic, foraged out of the leaf
   litter) and Thyme Terrace between home and the orchard (mint, chives, rosemary, snipped off their clumps).
   **All twelve supply landmarks open a mini-game** while the list is short
   of what they supply — the cove its beach (crabs chased along the sand), the bank its bushes — and **any
@@ -323,7 +323,8 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
 
 - **Bramble Bank — PICK** (*move + tap*). Six berry bushes stand along the foot of the bank, three berry spots
   each; six berries are ripe when the truck pulls up and one more ripens every 70–120 frames on a bush with a green
-  spot left (the pea turns into the visit's own berry with the gold sparkle over it). `action` with a bush anywhere
+  spot left (the pea turns into the visit's own berry with the gold sparkle over it: strawberries, blueberries, raspberries
+  or blackberries, whichever the list is short of; blackberries moved here from Tangle Wood because they grow on brambles). `action` with a bush anywhere
   under the critter (34 px either side) picks its ripe berry (a 12-frame reach up into the bush, the berry hops
   into the basket, +1); a bush with nothing ripe on it does nothing. The bank used to borrow the farm's bed, and a
   strawberry pulled out of the ground by its top was the visit that said it should not.
@@ -344,7 +345,7 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   (four are already showing when the truck pulls up), takes 20 frames to rise, and then SHOWS with the gold
   sparkle over it; `action` with a showing bump anywhere under the critter (34 px either side) brushes the leaves
   off it (a 12-frame crouch), the thing hops into the basket, +1. A showing bump nobody wants sinks back after 900
-  frames. A visit is for mushrooms, wild garlic or blackberries. **The joke:** one bump in eight lifts as a
+  frames. A visit is for mushrooms or wild garlic. **The joke:** one bump in eight lifts as a
   toadstool, red with white spots; brushing it is a step back with the nose wrinkled, POOH!, 20 frames, and it
   sinks back. Nothing is lost.
 

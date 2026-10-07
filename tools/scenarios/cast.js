@@ -61,6 +61,8 @@ async function drawEveryKey(page, signature) {
 const THIRD_PASS = [
   ['cherry', 'orchard', 'orchard', 40], ['plum', 'orchard', 'orchard', 42], ['cheese', 'dairy', 'dairy', 43], ['oats', 'mill', 'mill', 45],
   ['tomato', 'garden', 'garden', 47], ['pea', 'garden', 'garden', 48], ['raspberry', 'bramble', 'bramble', 49], ['cockle', 'beach', 'shore', 50],
+  // not a third-pass ingredient, but it moved landmark (issue #28): blackberries are picked on the bank, not foraged in the wood
+  ['blackberry', 'bramble', 'bramble', 58],
 ];
 
 export const SCENARIOS = {
