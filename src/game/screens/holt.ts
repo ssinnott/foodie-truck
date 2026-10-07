@@ -41,9 +41,9 @@ const SPEED = 1.8, X_MIN = 24, X_MAX = 616;
 /** Seat i stands with its feet at LANE_Y0 - i * LANE_GAP: P1 in front, four lanes 8 px apart so bodies stack. */
 const LANE_Y0 = 322, LANE_GAP = 8;
 /** The shake: REACH either side of a trunk; SHAKE_HOLD held frames bring the shower; the tree is bare BARE_FRAMES after. */
-const REACH = 36, SHAKE_HOLD = 60, BARE_FRAMES = 150;
+const REACH = 36, SHAKE_HOLD = 90, BARE_FRAMES = 150;
 /** The shower: SHOWER_MIN..SHOWER_MAX nuts, one every SHOWER_EVERY frames, each on a NUT_FLIGHT-frame arc into the basket. */
-const SHOWER_MIN = 5, SHOWER_MAX = 8, SHOWER_EVERY = 5, NUT_FLIGHT = 14, MAX_FLIGHTS = 8;
+const SHOWER_MIN = 1, SHOWER_MAX = 3, SHOWER_EVERY = 5, NUT_FLIGHT = 14, MAX_FLIGHTS = 8;
 /** The squirrel: one shake in SQUIRREL_ODDS; it sits on the head SQUIRREL_FRAMES, the last SQUIRREL_RUN of them running off. */
 const SQUIRREL_ODDS = 6, SQUIRREL_FRAMES = 40, SQUIRREL_RUN = 10;
 /** The sway the canopy is drawn with as the bar fills: up to SWAY_MAX px, alternating every 4 frames. */

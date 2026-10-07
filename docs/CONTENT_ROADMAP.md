@@ -164,7 +164,7 @@ the wheat, river and lane tables go; the map's tree scatter (`nearLandmark`) wil
 - **Where:** the north-west corner, about (180, 150), on a new lane from the orchard.
 - **Gathers:** hazelnuts, walnuts, chestnuts.
 - **How it plays:** four nut trees along the back. Standing at a trunk (36 px either side) and **holding** ACTION
-  shakes it: the canopy sways harder as a bar fills over 60 frames, and at the top a shower of five to eight nuts
+  shakes it: the canopy sways harder as a bar fills over 90 frames, and at the top a shower of one to three nuts
   drops straight into the basket (one +1 per nut, the catch pip for each, four frames apart). That tree is bare for
   150 frames, so the party moves along like the hives. Letting go early keeps the bar. A chestnut visit drops
   spiky cases that pop open on the ground before they count.

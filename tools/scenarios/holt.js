@@ -7,7 +7,7 @@
 //          with the stick locked. Writes holt-shake and holt-squirrel.
 import { withPage, assert } from '../playtest.js';
 
-const SHAKE_HOLD = 60, SHOWER_EVERY = 5, SQUIRREL_FRAMES = 40, BARE_FRAMES = 150;
+const SHAKE_HOLD = 90, SHOWER_EVERY = 5, SQUIRREL_FRAMES = 40, BARE_FRAMES = 150;
 
 function seat0(page) {
   return page.evaluate(() => {
@@ -41,14 +41,14 @@ export const SCENARIOS = {
       await api.hold(0, { action: true }); await api.step(SHAKE_HOLD - 30 + 1);
       await api.shot('holt-shake');
       const sh = await seat0(page);
-      assert(sh.trees[1].refill > 0 && sh.trees[1].refill <= BARE_FRAMES && sh.trees[1].shower + sh.count >= 5, `the shower starts and the tree goes bare (refill ${sh.trees[1].refill}, shower left ${sh.trees[1].shower}, count ${sh.count})`);
+      assert(sh.trees[1].refill > 0 && sh.trees[1].refill <= BARE_FRAMES && sh.trees[1].shower + sh.count >= 1, `the shower starts and the tree goes bare (refill ${sh.trees[1].refill}, shower left ${sh.trees[1].shower}, count ${sh.count})`);
       await api.release(0);
       await api.step(SHOWER_EVERY * 9);
       const done = await seat0(page);
-      assert(done.count >= 5 && done.count <= 8 && done.total === done.count && done.trees[1].shower === 0, `five to eight nuts land in the basket (count ${done.count}, total ${done.total})`);
+      assert(done.count >= 1 && done.count <= 3 && done.total === done.count && done.trees[1].shower === 0, `one to three nuts land in the basket (count ${done.count}, total ${done.total})`);
       // never past the target: a shower on a target one away is one nut
       await park(page, 2);
-      await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = sc.total + 1; sc.setTotal(sc.total); sc.trees[2].shake = 59; });
+      await page.evaluate(() => { const sc = window.__game.game.screen; sc.target = sc.total + 1; sc.setTotal(sc.total); sc.trees[2].shake = 89; });
       await api.hold(0, { action: true }); await api.step(2); await api.release(0); await api.step(SHOWER_EVERY * 9);
       const capped = await seat0(page);
       assert(capped.total === capped.target && capped.trees[2].shower === 0, `a shower never counts past the target (total ${capped.total}, target ${capped.target})`);
@@ -61,7 +61,7 @@ export const SCENARIOS = {
       // the joke is rolled at the shower: run showers until one brings the squirrel, at most twelve tries
       let got = null;
       for (let k = 0; k < 12 && !got; k++) {
-        await page.evaluate(() => { const sc = window.__game.game.screen; sc.trees[1].refill = 0; sc.trees[1].shower = 0; sc.trees[1].shake = 59; sc.seats[0].tree = -1; sc.seats[0].squirrelT = 0; });
+        await page.evaluate(() => { const sc = window.__game.game.screen; sc.trees[1].refill = 0; sc.trees[1].shower = 0; sc.trees[1].shake = 89; sc.seats[0].tree = -1; sc.seats[0].squirrelT = 0; });
         await api.hold(0, { action: true }); await api.step(2); await api.release(0);
         const s = await seat0(page);
         if (s.squirrelT > 0) got = s;
@@ -76,7 +76,7 @@ export const SCENARIOS = {
       assert(held.x === x0 && held.squirrelT > 0, `the stick is locked while it sits there (x ${x0} -> ${held.x}, squirrelT ${held.squirrelT})`);
       await api.step(6);
       const off = await seat0(page);
-      assert(off.squirrelT === 0 && off.count >= 5, `it runs off and the nuts all landed (squirrelT ${off.squirrelT}, count ${off.count})`);
+      assert(off.squirrelT === 0 && off.count >= 1, `it runs off and the nuts all landed (squirrelT ${off.squirrelT}, count ${off.count})`);
     });
   },
 };
