@@ -250,7 +250,9 @@ export interface Run {
   serve(stars: number): void;
   /** What customer `k` of the line the truck stands at ordered, as the kitchen cooks it. */
   orderFor(k: number): Order;
-  /** Serve everyone still waiting in the line at once: `stars[i]` for the i-th of them, front first. */
+  /** How many diners are at the hatch in this round of the line (run.ts batchSize): the front of the line, clamped to who is left. */
+  batch(): number;
+  /** Serve this round's diners at once: `stars[i]` for the i-th of them, front first. */
   serveAll(stars: readonly number[]): void;
   /** True once everyone in the line the truck stands at has been served. */
   lineDone(): boolean;

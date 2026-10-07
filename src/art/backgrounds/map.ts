@@ -14,6 +14,7 @@ import { WORLD_W, WORLD_H, PLACES, STOPS } from '../../content/places.ts';
 import { VIEW_W, VIEW_H, PLUM, SIGNAL } from '../../constants.ts';
 import { drawText, measureText } from '../../engine/text.ts';
 import { pathRR } from '../../lib/art/shading.ts';
+import { CUSTOMERS } from '../../content/critters/customers.ts';
 
 const R = Math.round, TAU = Math.PI * 2;
 
@@ -822,19 +823,60 @@ export function drawPhoneRing(ctx, sx, sy, shake) {
 
 /**
  * The village diners in the town's queues, feet at (sx, sy): a 10 px head on an 8 px body, small enough to stand
- * shoulder to shoulder on a pavement and still read as the three customers of content/critters/customers.ts - the
+ * shoulder to shoulder on a pavement and still read as the customers of content/critters/customers.ts - the
  * owl's cream eye discs, ear tufts and waistcoat, the otter's cream muzzle, blue shorts and tail, the goat's horns,
- * droopy ears and beard. `kind` is the diner id, `facing` 1 = right, `bob` lifts them a pixel, `wave` raises an arm.
+ * droopy ears and beard; every other diner is drawn from the `map` look on its own definition (villagers.ts), by
+ * drawVillagerDiner above. `kind` is the diner id, `facing` 1 = right, `bob` lifts them a pixel, `wave` raises an arm.
  */
 const DINER_LOOK = Object.freeze({
   owl: { fur: '#9C7B5C', dark: '#5A4030', cream: '#EAD9B8', cloth: '#5E5470' },
   otter: { fur: '#6E5A48', dark: '#4A3A2C', cream: '#D9C7A0', cloth: '#3F6B7A' },
   goat: { fur: '#C0B5A2', dark: '#6E6354', cream: '#F1E9DC', cloth: '#6B4E3A' },
 });
+/**
+ * A village diner of content/critters/villagers.ts on the pavement: the same 10 px head on an 8 px body as the three
+ * above, drawn from the diner's own `map` look (its fur, dark, cream and cloth, its ears, and ONE cue - a comb, a
+ * shell, antlers, a bill - in `cueHex`), so the figure in the queue is the animal that reaches the hatch.
+ */
+function drawVillagerDiner(ctx, sx, sy, L, f, top, wave) {
+  const X = (dx, w) => (f > 0 ? sx + dx : sx - dx - w);
+  const hy = top - 20, cue = L.cue, cx = L.cueHex;
+  // back pieces first, so the body overlaps them
+  if (cue === 'shell') boxOutlined(ctx, X(-8, 6), top - 12, 6, 9, cx);
+  if (cue === 'tail') { ctx.fillStyle = INK; ctx.fillRect(X(-8, 4), top - 8, 4, 6); ctx.fillStyle = L.fur; ctx.fillRect(X(-7, 2), top - 7, 2, 4); ctx.fillStyle = cx; ctx.fillRect(X(-7, 2), top - 7, 2, 1); }
+  if (cue === 'quills') { ctx.fillStyle = INK; ctx.fillRect(X(-7, 4), top - 12, 4, 8); ctx.fillStyle = L.dark; ctx.fillRect(X(-6, 2), top - 11, 2, 6); }
+  boxOutlined(ctx, sx - 4, top - 11, 8, 8, L.fur);
+  ctx.fillStyle = L.cloth; ctx.fillRect(sx - 4, top - 6, 8, 3);
+  ctx.fillStyle = L.cream; ctx.fillRect(X(0, 3), top - 10, 3, 4);
+  if (wave) { boxOutlined(ctx, X(5, 2), top - 19, 2, 8, L.fur); } else { ctx.fillStyle = L.fur; ctx.fillRect(X(4, 1), top - 9, 1, 4); }
+  // ears behind the head
+  if (L.ears === 'round') { ctx.fillStyle = L.dark; ctx.fillRect(X(-4, 2), hy - 1, 2, 2); ctx.fillRect(X(2, 2), hy - 1, 2, 2); }
+  else if (L.ears === 'point') { boxOutlined(ctx, X(-4, 2), hy - 3, 2, 3, L.dark); boxOutlined(ctx, X(2, 2), hy - 3, 2, 3, L.dark); }
+  else if (L.ears === 'long') { boxOutlined(ctx, X(-3, 2), hy - 6, 2, 6, L.dark); boxOutlined(ctx, X(1, 2), hy - 6, 2, 6, L.dark); }
+  if (cue === 'antlers') { ctx.fillStyle = cx; ctx.fillRect(X(-4, 1), hy - 5, 1, 5); ctx.fillRect(X(3, 1), hy - 5, 1, 5); ctx.fillRect(X(-5, 1), hy - 5, 1, 1); ctx.fillRect(X(4, 1), hy - 5, 1, 1); }
+  if (cue === 'horns') { ctx.fillStyle = cx; ctx.fillRect(X(-4, 1), hy - 3, 1, 3); ctx.fillRect(X(3, 1), hy - 3, 1, 3); }
+  boxOutlined(ctx, sx - 5, hy, 10, 9, L.fur);
+  if (L.ears === 'droop') { ctx.fillStyle = L.dark; ctx.fillRect(X(-7, 3), hy + 2, 3, 4); }
+  // the face: eye, muzzle, nose, and the one cue
+  if (cue === 'mask') { ctx.fillStyle = cx; ctx.fillRect(sx - 5, hy + 2, 10, 3); }
+  if (cue === 'blaze') { ctx.fillStyle = L.cream; ctx.fillRect(X(1, 2), hy, 2, 6); }
+  ctx.fillStyle = L.cream; ctx.fillRect(X(1, 5), hy + 4, 5, 4);
+  ctx.fillStyle = INK; ctx.fillRect(X(1, 1), hy + 2, 1, 2); ctx.fillRect(X(5, 1), hy + 4, 1, 1);
+  if (cue === 'comb') { ctx.fillStyle = cx; ctx.fillRect(X(-1, 4), hy - 2, 4, 2); ctx.fillRect(X(6, 2), hy + 7, 2, 2); ctx.fillStyle = MAP.mustard; ctx.fillRect(X(6, 3), hy + 4, 3, 2); }
+  if (cue === 'bill') { ctx.fillStyle = cx; ctx.fillRect(X(5, 5), hy + 4, 5, 3); }
+  if (cue === 'snout') { ctx.fillStyle = cx; ctx.fillRect(X(5, 3), hy + 3, 3, 4); }
+  if (cue === 'teeth') { ctx.fillStyle = cx; ctx.fillRect(X(4, 2), hy + 8, 2, 2); }
+  if (cue === 'quills') { ctx.fillStyle = L.dark; ctx.fillRect(sx - 5, hy - 2, 8, 3); ctx.fillRect(X(-5, 3), hy + 1, 3, 5); }
+  if (cue === 'beanie') { ctx.fillStyle = INK; ctx.fillRect(sx - 6, hy - 4, 12, 6); ctx.fillStyle = cx; ctx.fillRect(sx - 5, hy - 3, 10, 3); ctx.fillStyle = L.cream; ctx.fillRect(sx - 5, hy - 1, 10, 2); ctx.fillRect(sx - 1, hy - 6, 2, 2); }
+  if (cue === 'cap') { ctx.fillStyle = INK; ctx.fillRect(sx - 6, hy - 3, 12, 4); ctx.fillStyle = cx; ctx.fillRect(sx - 5, hy - 2, 10, 2); ctx.fillRect(X(5, 3), hy - 1, 3, 1); }
+}
+
 export function drawDiner(ctx, sx, sy, kind, facing = 1, bob = 0, wave = 0) {
   const L = DINER_LOOK[kind] || DINER_LOOK.owl, f = facing < 0 ? -1 : 1;
   const X = (dx, w) => (f > 0 ? sx + dx : sx - dx - w);
   const top = sy - bob;
+  const V = !DINER_LOOK[kind] && CUSTOMERS[kind] ? CUSTOMERS[kind].map : null;
+  if (V) { ctx.fillStyle = INK; ctx.fillRect(sx - 3, sy - 3, 2, 3); ctx.fillRect(sx + 1, sy - 3, 2, 3); drawVillagerDiner(ctx, sx, sy, V, f, top, wave); return; }
   // legs, body (the cloth band is shorts, or the owl's waistcoat), belly
   ctx.fillStyle = INK; ctx.fillRect(sx - 3, sy - 3, 2, 3); ctx.fillRect(sx + 1, sy - 3, 2, 3);
   if (kind === 'otter') { ctx.fillStyle = INK; ctx.fillRect(X(-7, 3), top - 6, 3, 5); ctx.fillStyle = L.dark; ctx.fillRect(X(-6, 1), top - 5, 1, 3); }

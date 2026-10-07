@@ -1,10 +1,11 @@
 // THE DAY BOARD (docs/GDD.md sections 3 and 10): the day's plan pinned up on paper before the truck opens - the
-// three LINES that will form (where each waits, who is in it and what they will order), and under them the
-// SHOPPING LIST every one of those orders adds up to. Confirm OPENS THE TRUCK and fades to the map; the truck then
+// ONE GIANT LINE that will form in town (where it waits, who is in it - a crowd of different village animals, front
+// first, three or so across - and what each will order), and under it the SHOPPING LIST every one of those orders
+// adds up to. (A shape may still name several lines; they are drawn as a row of narrow tickets, as before.) Confirm OPENS THE TRUCK and fades to the map; the truck then
 // drives out of the depot round the landmarks until the pantry holds the whole list, and only then do the queues form in town.
 //
-// `select` hands over to it once a crew is stamped, and `results` hands back to it after the LAST line has been
-// served: the board then opens CLOSED - every line stamped SERVED with each customer's stars printed on the card,
+// `select` hands over to it once a crew is stamped, and `results` hands back to it after the LAST diner has been
+// served: the board then opens CLOSED - the line stamped SERVED with each customer's stars printed on the card,
 // and a CLOSING TIME slate over it totting the day up and paying its coins into the garage's tin - and the one
 // press left drives the truck into THE GARAGE (screens/garage.ts), which opens tomorrow, or on the last night of
 // the week goes back to the title. Online there is no garage: the press opens tomorrow (or ends) directly.
@@ -34,8 +35,13 @@ import { recordDay } from '../book.ts';
 import { saveWeek, clearWeek } from '../week.ts';
 import { bankDay } from '../garage.ts';
 
-/** One card per line across the top: three of the select screen's own card width and gap. */
+/** One card per line across the top. Several lines are narrow cards of the select screen's own width and gap; the one
+ *  giant line is a single wide ticket with its customers in a grid of columns (see `layout`). */
 const CARD_Y = 46, CARD_H = 124;
+/** The wide ticket of a lone line: customers across in blocks of GRID_BW, GRID_ROW apart, and the header and the foot. */
+const GRID_BW = 170, GRID_ROW = 32, GRID_PAD = 8, GRID_FOOT = 6;
+/** How many customers a row of the wide ticket holds: two across a short line, three across a long one. */
+function gridCols(n: number): number { return n <= 4 ? 2 : 3; }
 /**
  * Inside a card: the header band, the town stop the line waits at, a rule, then one CUSTOMER block per person in
  * the queue - their portrait in a plum window, their name beside it and the dish they will order under that, over
@@ -54,10 +60,10 @@ const DONE_WASH = 'rgba(216,192,147,0.45)';
  * The shopping list under the cards: one wide ticket, the ingredients across it in LIST_COLS columns of
  * LIST_COL_W, so seven of them take two rows and the whole day's gathering reads at a glance.
  */
-const LIST = { x: 60, y: 182, w: 520 }, LIST_COLS = 4, LIST_COL_W = 128, LIST_ROW = 12, LIST_TOP = 20, LIST_PAD = 8;
+const LIST = { x: 60, w: 520 }, LIST_GAP = 8, LIST_COLS = 4, LIST_COL_W = 128, LIST_ROW = 12, LIST_TOP = 20, LIST_PAD = 8;
 /** The pad under the list (PAD_GAP below it): the day's menu on one row and how the day goes on the other. */
 const PAD = { x: 60, w: 520, h: 30 }, PAD_GAP = 8;
-const HOW_TEXT = 'FILL THE PANTRY, THEN SERVE THE LINES';
+const HOW_TEXT = 'FILL THE PANTRY, THEN SERVE THE LINES', HOW_TEXT_ONE = 'FILL THE PANTRY, THEN SERVE THE LINE';
 const LIST_TITLE = 'SHOPPING LIST', MENU_LABEL = 'ON THE MENU: ';
 /** The sign over the board says which day of the week this is, and names the ones that have a name. */
 function headFor(day: number): string {
@@ -83,15 +89,13 @@ const STRIP_NUM_DY = 5, STRIP_STARS_DY = 17;
 /** The week's own total, under the strip. */
 const WEEK_ROW_DY = 142;
 const BLINK_PERIOD = 60, BLINK_ON = 40;
-/** The card's inner width a dish name has to fit in, right of the portrait. */
-const DISH_W = CARD_W - TEXT_X - 6;
-
 /**
  * A dish name over at most two rows: it breaks at the space nearest the middle, so 'APPLE OMELETTE' is two words
- * on two rows rather than one row clipped by the card. A name that fits whole stays whole.
+ * on two rows rather than one row clipped by the card. A name that fits whole stays whole. `w` is the block's inner
+ * width right of the portrait.
  */
-function wrapDish(dish: string): string[] {
-  if (measureText(dish, 1) <= DISH_W) return [dish];
+function wrapDish(dish: string, w: number): string[] {
+  if (measureText(dish, 1) <= w) return [dish];
   const words = dish.split(' ');
   if (words.length < 2) return [dish];
   let best = 1, bd = Infinity;
@@ -123,7 +127,13 @@ export interface StageCard {
   /** The card's top-left corner. */
   x: number;
   y: number;
-  /** Header band text ('LINE 01'). */
+  /** The ticket's size, and how its customers are laid out on it: `cols` blocks across, `bw` wide, `pitch` apart down. */
+  w: number;
+  h: number;
+  cols: number;
+  bw: number;
+  pitch: number;
+  /** Header band text ('LINE 01', or 'THE LINE: 9 DINERS'). */
   title: string;
   /** Where the line waits ('WINDLE MILL'). */
   place: string;
@@ -165,7 +175,7 @@ export class StageScreen extends Screen {
   // and this screen has to keep the runtime it shipped with. `declare` erases under tsc, under esbuild
   // (tools/build.js, tools/server.js) and under Node's type stripping alike, so the emitted class is the original.
 
-  /** The day's line tickets, one per run.lines entry in that order. */
+  /** The day's line tickets, one per run.lines entry in that order (one wide ticket on a day with one giant line). */
   declare cards: StageCard[];
   /** One entry per distinct diner, in the order the cards first ask for them; a customer block keeps its index. */
   declare busts: StageBust[];
@@ -197,9 +207,12 @@ export class StageScreen extends Screen {
   declare menuText: string;
   /** The hint line under the board, which the closed truck replaces with the way out. */
   declare hint: string;
-  /** The list ticket's height, from how many rows the day's ingredients take, and the pad's top under it. */
+  /** The list ticket's top (under the cards), its height from how many rows the day's ingredients take, and the pad's top under it. */
+  declare listY: number;
   declare listH: number;
   declare padY: number;
+  /** The pad's second row: how the day goes. */
+  declare howText: string;
   /** The drawHeadPortrait options, reused by every card (this file allocates nothing in draw()). */
   declare portOpts: PortraitDrawOpts;
 
@@ -226,22 +239,30 @@ export class StageScreen extends Screen {
     };
     const n = run.lines.length;
     this.cards = run.lines.map((ln, i) => {
+      // a lone line is one wide ticket with a grid of customers; several are narrow cards in a row, one customer to a row
+      const wide = n === 1, cols = wide ? gridCols(ln.customers.length) : 1;
+      const bw = wide ? GRID_BW : CARD_W, rowsN = Math.ceil(ln.customers.length / cols);
+      const w = wide ? cols * GRID_BW + GRID_PAD * 2 : CARD_W, pitch = wide ? GRID_ROW : CUST_PITCH;
+      const h = wide ? CUST_Y + rowsN * pitch + GRID_FOOT : CARD_H;
       return {
-        x: cardX(i, n), y: CARD_Y,
-        title: `LINE ${String(i + 1).padStart(2, '0')}`,
+        x: wide ? Math.round((VIEW_W - w) / 2) : cardX(i, n), y: CARD_Y, w, h, cols, bw, pitch,
+        title: wide ? `THE LINE: ${ln.customers.length} DINERS` : `LINE ${String(i + 1).padStart(2, '0')}`,
         place: placeName(ln.place),
         customers: ln.customers.map((c) => {
           const bi = bustOf(c.customer);
-          return { bust: bi, name: this.busts[bi].def.name, lines: wrapDish(recipeOf(c.recipe).dish + twistTag(c)) };
+          return { bust: bi, name: this.busts[bi].def.name, lines: wrapDish(recipeOf(c.recipe).dish + twistTag(c), bw - TEXT_X - 6) };
         }),
       };
     });
+    // the shopping list hangs under the tallest ticket
+    this.listY = CARD_Y + this.cards.reduce((t, c) => Math.max(t, c.h), CARD_H) + LIST_GAP;
     this.list = run.needs.map((need) => {
       const ing = INGREDIENTS[need.id] || INGREDIENTS.apple;
       return { icon: ing.icon, hex: ing.hex, text: `${ing.name} ${need.amount}` };
     });
     this.listH = LIST_TOP + LIST_ROW * Math.max(1, Math.ceil(this.list.length / LIST_COLS)) + LIST_PAD;
-    this.padY = LIST.y + this.listH + PAD_GAP;
+    this.padY = this.listY + this.listH + PAD_GAP;
+    this.howText = n === 1 ? HOW_TEXT_ONE : HOW_TEXT;
     this.menuText = MENU_LABEL + run.recipes.map((id) => recipeOf(id).dish).join(', ');
     this.closed = run.dayComplete();
     this.weekDone = this.closed && run.weekComplete();
@@ -273,7 +294,7 @@ export class StageScreen extends Screen {
     }
     this.rows.length = 0;
     const todayTakings = run.weekTakings[run.day] || 0;
-    this.rows.push(`LINES SERVED ${run.linesServed()} OF ${n}`, `DISHES ${run.served}`, `STARS ${run.stars()} OF ${run.lines.reduce((t, l) => t + l.customers.length * 3, 0)}`, `COINS ${todayTakings}`);
+    this.rows.push(n === 1 ? `THE LINE: ${run.served} OF ${run.lines[0].customers.length} SERVED` : `LINES SERVED ${run.linesServed()} OF ${n}`, `DISHES ${run.served}`, `STARS ${run.stars()} OF ${run.lines.reduce((t, l) => t + l.customers.length * 3, 0)}`, `COINS ${todayTakings}`);
     const weekMax = this.strip.reduce((t, c) => t + c.max, 0);
     this.weekRow = this.weekDone
       ? `THE WEEK: ${run.weekStarsTotal()} OF ${weekMax} STARS, ${run.score} COINS`
@@ -335,29 +356,32 @@ export class StageScreen extends Screen {
 
   card(ctx: CanvasRenderingContext2D, i: number): void {
     const c = this.cards[i], run = this.game.run, ln = run.lines[i], x = c.x, y = c.y;
-    drawTicket(ctx, x, y, CARD_W, CARD_H, { title: c.title, rules: false });
-    drawText(ctx, c.place, x + CARD_W / 2, y + PLACE_Y, { size: 1, color: UI.wood, align: 'center', shadow: false });
-    ctx.fillStyle = UI.paperLine; ctx.fillRect(x + 8, y + RULE_Y, CARD_W - 16, 1);
+    drawTicket(ctx, x, y, c.w, c.h, { title: c.title, rules: false });
+    drawText(ctx, c.place, x + c.w / 2, y + PLACE_Y, { size: 1, color: UI.wood, align: 'center', shadow: false });
+    ctx.fillStyle = UI.paperLine; ctx.fillRect(x + 8, y + RULE_Y, c.w - 16, 1);
+    // the customers in line order, front first: down the card, or across the wide ticket and then down
+    const left = c.cols > 1 ? GRID_PAD : 0;
     for (let k = 0; k < c.customers.length; k++) {
-      const cu = c.customers[k], b = this.busts[cu.bust], cy = y + CUST_Y + k * CUST_PITCH, stars = ln.customers[k] ? ln.customers[k].stars : 0;
-      // the diner, in a plum window: the three village furs are muted and two of them would sit pale on paper
-      ctx.fillStyle = UI.ink; ctx.fillRect(x + PORT_X - 1, cy - 1, PORT_S + 2, PORT_S + 2);
-      drawHeadPortrait(ctx, b.rig, b.player.pose, x + PORT_X, cy, PORT_S, this.portOpts);
-      drawText(ctx, cu.name, x + TEXT_X, cy + NAME_DY, { size: 1, color: UI.ink, shadow: false });
+      const cu = c.customers[k], b = this.busts[cu.bust], stars = ln.customers[k] ? ln.customers[k].stars : 0;
+      const bx = x + left + (k % c.cols) * c.bw, cy = y + CUST_Y + ((k / c.cols) | 0) * c.pitch;
+      // the diner, in a plum window: the village's muted furs would sit pale on paper
+      ctx.fillStyle = UI.ink; ctx.fillRect(bx + PORT_X - 1, cy - 1, PORT_S + 2, PORT_S + 2);
+      drawHeadPortrait(ctx, b.rig, b.player.pose, bx + PORT_X, cy, PORT_S, this.portOpts);
+      drawText(ctx, cu.name, bx + TEXT_X, cy + NAME_DY, { size: 1, color: UI.ink, shadow: false });
       // the dish they will order - or, once they have eaten it, the stars they gave it
-      if (stars > 0) drawStars(ctx, x + TEXT_X + STARS_DX, cy + STARS_DY, stars, 3, STAR_R);
-      else for (let r = 0; r < cu.lines.length; r++) drawText(ctx, cu.lines[r], x + TEXT_X, cy + DISH_DY + r * DISH_ROW, { size: 1, color: UI.wood, shadow: false });
+      if (stars > 0) drawStars(ctx, bx + TEXT_X + STARS_DX, cy + STARS_DY, stars, 3, STAR_R);
+      else for (let r = 0; r < cu.lines.length; r++) drawText(ctx, cu.lines[r], bx + TEXT_X, cy + DISH_DY + r * DISH_ROW, { size: 1, color: UI.wood, shadow: false });
     }
     if (ln.served) {
-      ctx.fillStyle = DONE_WASH; ctx.fillRect(x + 1, y + 1, CARD_W - 2, CARD_H - 2);
+      ctx.fillStyle = DONE_WASH; ctx.fillRect(x + 1, y + 1, c.w - 2, c.h - 2);
       const t = i === this.justServed ? this.stampT / STAMP_FRAMES : 1;
-      drawStamp(ctx, SERVED_TEXT, x + CARD_W / 2, y + STAMP_Y, Math.min(1, t), STAMP_OPTS);
+      drawStamp(ctx, SERVED_TEXT, x + c.w / 2, y + c.h - (CARD_H - STAMP_Y), Math.min(1, t), STAMP_OPTS);
     }
   }
 
   /** The shopping list under the cards: every ingredient of every order in every line, summed. */
   shopping(ctx: CanvasRenderingContext2D): void {
-    const top = drawTicket(ctx, LIST.x, LIST.y, LIST.w, this.listH, { title: LIST_TITLE, rules: false });
+    const top = drawTicket(ctx, LIST.x, this.listY, LIST.w, this.listH, { title: LIST_TITLE, rules: false });
     for (let i = 0; i < this.list.length; i++) {
       const e = this.list[i], col = i % LIST_COLS, row = (i / LIST_COLS) | 0;
       const ex = LIST.x + 10 + col * LIST_COL_W, ey = top + 4 + row * LIST_ROW;
@@ -371,7 +395,7 @@ export class StageScreen extends Screen {
     const y = this.padY;
     drawTicket(ctx, PAD.x, y, PAD.w, PAD.h, { rules: false, header: false });
     drawText(ctx, this.menuText, PAD.x + PAD.w / 2, y + 6, { size: 1, color: UI.ink, align: 'center', shadow: false });
-    drawText(ctx, HOW_TEXT, PAD.x + PAD.w / 2, y + 18, { size: 1, color: UI.wood, align: 'center', shadow: false });
+    drawText(ctx, this.howText, PAD.x + PAD.w / 2, y + 18, { size: 1, color: UI.wood, align: 'center', shadow: false });
   }
 
   /** Closing time: the day, totted up on the slate the title screen writes its menu on. */
@@ -431,7 +455,8 @@ export class StageScreen extends Screen {
   override summary() {
     const run = this.game.run;
     return {
-      lines: this.cards.length, places: this.cards.map((c) => c.place), chosen: this.chosen, closed: this.closed,
+      lines: this.cards.length, places: this.cards.map((c) => c.place), diners: this.cards.reduce((t, c) => t + c.customers.length, 0),
+      cols: this.cards.map((c) => c.cols), chosen: this.chosen, closed: this.closed,
       day: run.day, days: DAYS_PER_WEEK, dayName: shapeOf(run.day).name, head: this.head, weekDone: this.weekDone, garage: this.garage,
       strip: this.strip.map((c) => `${c.done ? c.stars : '-'}/${c.max}`), weekStars: run.weekStarsTotal(), takings: run.score,
       list: this.list.map((e) => e.text), menu: run.recipes.slice(),

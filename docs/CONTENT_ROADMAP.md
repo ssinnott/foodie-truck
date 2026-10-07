@@ -140,6 +140,7 @@ to its landmark's screen.
 | **Tomatoes** | Farm | A staked vine with red fruit; pulled as a whole plant like the others | TOMATO SOUP (tomato 3, onion 1), and a modifier for CRAB CAKES |
 | **Peas** | Farm | A pea row up a wigwam of sticks | PEA SOUP (pea 3, potato 1, milk 1) |
 | **Raspberries** | Bramble Bank | The same bush shape, pink berries in clusters | RASPBERRY JAM TARTS (raspberry 3, flour 2, butter 1) |
+| **Blackberries** | Bramble Bank | The same bush shape, dark purple-black berries (moved here from Tangle Wood: they grow on brambles) | BLACKBERRY AND APPLE PIE (blackberry 2, apple 2, flour 1) |
 | **Cockles** | Cockle Cove | At last. Raked off the wet sand like seaweed but they hide: a bump in the sand with a spit of water gives one away every 40–80 frames | COCKLE STEW (cockle 3, potato 1, milk 1) |
 
 Cherries and cheese first: cherries because a two-on-a-stem catch is a fresh feel under the same verb, and cheese
@@ -164,7 +165,7 @@ the wheat, river and lane tables go; the map's tree scatter (`nearLandmark`) wil
 - **Where:** the north-west corner, about (180, 150), on a new lane from the orchard.
 - **Gathers:** hazelnuts, walnuts, chestnuts.
 - **How it plays:** four nut trees along the back. Standing at a trunk (36 px either side) and **holding** ACTION
-  shakes it: the canopy sways harder as a bar fills over 60 frames, and at the top a shower of five to eight nuts
+  shakes it: the canopy sways harder as a bar fills over 90 frames, and at the top a shower of one to three nuts
   drops straight into the basket (one +1 per nut, the catch pip for each, four frames apart). That tree is bare for
   150 frames, so the party moves along like the hives. Letting go early keeps the bar. A chestnut visit drops
   spiky cases that pop open on the ground before they count.
@@ -174,19 +175,20 @@ the wheat, river and lane tables go; the map's tree scatter (`nearLandmark`) wil
 
 ### Tangle Wood — FORAGE (*move + tap*)
 
-> **Built** (`docs/GDD.md` section 5). Every bump hides the visit's own thing (garlic and blackberries lift out
-> of the litter like the mushrooms do, rather than growing at the wood's edge).
+> **Built** (`docs/GDD.md` section 5). Every bump hides the visit's own thing (wild garlic lifts out of the
+> litter like the mushrooms do). Blackberries were first planned here, but they grow on brambles, so they are
+> picked on Bramble Bank with the other berries (issue #28).
 
 - **Where:** the north-east corner, about (1760, 180), on a lane east from the coop; on the coop's side of the
   river so no new bridge is needed.
-- **Gathers:** mushrooms, wild garlic, and (in place of a fourth orchard tree) blackberries on the wood's edge.
+- **Gathers:** mushrooms and wild garlic.
 - **How it plays:** a leaf-littered floor under dark trees. Things hide: a mushroom is a bump in the leaves that
   lifts every 70–120 frames, drawn with a gold sparkle when it shows; ACTION anywhere over a showing bump (34 px
   either side) brushes the leaves off (a 12-frame crouch) and it hops into the basket. Wild garlic shows as a
-  white flower over the leaves; blackberries hang on a bramble at the wood's edge like the bank's berries.
+  white flower over the leaves.
 - **The joke:** the **toadstool**. One bump in eight lifts red with white spots; brushing it off is the bump
   beat, a wrinkled nose and a `pooh!` float, and it sinks back. Nothing lost.
-- **Recipes:** MUSHROOM SOUP, MUSHROOMS ON TOAST, GARLIC BUTTER (wild garlic + butter), BLACKBERRY AND APPLE PIE.
+- **Recipes:** MUSHROOM SOUP, MUSHROOMS ON TOAST, GARLIC BUTTER (wild garlic + butter). (BLACKBERRY AND APPLE PIE shipped with this landmark, but its blackberries are picked on Bramble Bank.)
 
 ### Thyme Terrace — SNIP (*move + tap*)
 

@@ -9,6 +9,7 @@
 //        byte-identical day off the same seed. This is what makes a saved file safe in a lockstep game.
 import { withPage, assert } from '../playtest.js';
 import { ORDERS } from '../../src/content/recipes.ts';
+import { DINERS } from '../../src/content/critters/diners.ts';
 import { serveDay } from './week.js';
 
 export const SCENARIOS = {
@@ -38,7 +39,7 @@ export const SCENARIOS = {
         titles.add(t.top.title);
         assert(t.top.page === i, `page ${i + 1} turns (${t.top.page + 1})`);
         if (t.top.title === 'THE DINERS') {
-          assert(t.top.busts === t.top.rows && t.top.busts > 0, `every diner has a portrait built for them (${t.top.busts} for ${t.top.rows} rows)`);
+          assert(t.top.busts === DINERS.length && t.top.rows > 0 && t.top.rows <= 6, `every diner has a portrait built for them (${t.top.busts} for ${DINERS.length}), six rows to a page (${t.top.rows})`);
           await api.shot('book-diners');
         }
       }
@@ -94,11 +95,14 @@ export const SCENARIOS = {
       assert(b.top.known >= 1, `and it is inked in rather than pencilled (${b.top.known} known on the page)`);
       await api.shot('book-cooked');
       // the diners page, with somebody actually fed on it
-      const dinersPage = b.top.pages - 3;
+      const dinerPages = Math.ceil(DINERS.length / 6), dinersPage = b.top.pages - 2 - dinerPages;
       for (let i = b.top.page; i < dinersPage; i++) await api.press(0, { right: true }, 2, 4);
-      const d = await api.summary();
+      let d = await api.summary();
       assert(d.top.title === 'THE DINERS', `paged to the diners (${d.top.title})`);
-      assert(d.top.known >= 1, `at least one of them has been fed (${d.top.known} of ${d.top.rows})`);
+      assert(dinerPages > 1, `the village is too big for one page of diners (${dinerPages} pages)`);
+      // somebody fed today is on one of the diner pages: turn through them until the page shows them
+      for (let i = 0; i < dinerPages && d.top.known < 1; i++) { await api.press(0, { right: true }, 2, 4); d = await api.summary(); }
+      assert(d.top.known >= 1, `at least one of them has been fed (${d.top.known} of ${d.top.rows} on the page)`);
       await api.shot('book-diners-fed');
       assert(b.top.strap.startsWith(`${distinct.length} OF `) || Number(b.top.strap.split(' ')[0]) >= 1, `and knows how much of the menu is cooked (${b.top.strap})`);
     });

@@ -55,11 +55,13 @@ const PANEL = { x: 44, y: 46, w: 552, h: 248 };
 const LIST_Y = PANEL.y + 46, LIST_ROW = 20, LIST_COLS = 2, LIST_COL_W = 264, LIST_X = PANEL.x + 20;
 const LIST_TALLY_DX = 150;
 /**
- * THE DINERS get a page of their own shape: there are only three of them, so each is a row deep enough to carry
+ * THE DINERS get pages of their own shape: each is a row deep enough to carry
  * the same head portrait the day board draws over its queues (`art/portraits.ts drawHeadPortrait`), in the same
  * plum window. A diner never served is the portrait faded to the pencil the dish cards use.
  */
-const DINER_Y = PANEL.y + 50, DINER_ROW = 56, DINER_X = PANEL.x + 56, DINER_PORT = 40;
+const DINER_Y = PANEL.y + 50, DINER_ROW = 56, DINER_X = PANEL.x + 24, DINER_PORT = 40;
+/** The village is big, so the diners run over several pages: two columns of three rows each. */
+const DINER_COLS = 2, DINER_COL_W = 264, DINERS_PER_PAGE = DINER_COLS * 3;
 const DINER_TEXT_DX = DINER_PORT + 16, DINER_NAME_DY = 6, DINER_TALLY_DY = 20, DINER_NOTE_DY = 32;
 /**
  * The pencil for a diner never served. Higher than the dish cards' PENCIL_ALPHA because this one sits on a dark
@@ -75,11 +77,11 @@ const LARDER_COLS = 4, LARDER_COL_W = 132, LARDER_ROW = 17, LARDER_X = PANEL.x +
 /** Which kind of page is open: the dish grid (several of them) or one of the three back pages. */
 const PAGE_DISHES = 0, PAGE_DINERS = 1, PAGE_LARDER = 2, PAGE_ROAD = 3;
 
-/** One page of the book: its kind, its title, and for a dish page which slice of ORDERS it shows. */
+/** One page of the book: its kind, its title, and for a dish or diners page which slice of ORDERS / DINERS it shows. */
 export interface BookPage {
   kind: number;
   title: string;
-  /** Dish pages only: the first ORDERS index on this page. */
+  /** Dish and diners pages: the first ORDERS (or DINERS) index on this page. */
   from: number;
 }
 
@@ -160,7 +162,7 @@ export class BookScreen extends Screen {
     for (let i = 0; i < ORDERS.length; i += PER_PAGE) {
       this.pages.push({ kind: PAGE_DISHES, title: 'THE DISHES', from: i });
     }
-    this.pages.push({ kind: PAGE_DINERS, title: 'THE DINERS', from: 0 });
+    for (let i = 0; i < DINERS.length; i += DINERS_PER_PAGE) this.pages.push({ kind: PAGE_DINERS, title: 'THE DINERS', from: i });
     this.pages.push({ kind: PAGE_LARDER, title: 'THE LARDER', from: 0 });
     this.pages.push({ kind: PAGE_ROAD, title: 'THE ROAD', from: 0 });
     // one portrait per diner, built ONCE here and never in draw(), each idling from its own offset
@@ -192,7 +194,7 @@ export class BookScreen extends Screen {
       const k = dishesKnown(book);
       this.strap = `${k.known} OF ${k.total} COOKED`;
     } else if (p.kind === PAGE_DINERS) {
-      for (const id of DINERS) {
+      for (const id of DINERS.slice(p.from, p.from + DINERS_PER_PAGE)) {
         const row = book.diners[id], def = getCustomer(id);
         this.list.push({
           id, label: def ? def.name : id.toUpperCase(), known: !!row, icon: '', hex: UI.wood,
@@ -200,7 +202,7 @@ export class BookScreen extends Screen {
           note: row && row.fav ? `LIKES ${recipeOf(row.fav).dish}` : '',
         });
       }
-      this.strap = `${this.list.filter((r) => r.known).length} OF ${DINERS.length} MET`;
+      this.strap = `${DINERS.filter((id) => !!book.diners[id]).length} OF ${DINERS.length} MET`;
     } else if (p.kind === PAGE_LARDER) {
       for (const id of Object.keys(INGREDIENTS)) {
         const ing = INGREDIENTS[id], n = book.larder[id] || 0;
@@ -252,15 +254,15 @@ export class BookScreen extends Screen {
   }
 
 /**
-   * THE DINERS: three deep rows, each headed by the same portrait the day board draws over its queues, in the
+   * THE DINERS: six deep rows to a page (two columns of three), each headed by the same portrait the day board draws over its queues, in the
    * same plum window and on the same idle beat. A diner this truck has never served is the portrait faded back
    * to the pencil the dish cards use - the village is all there from the first day, and who has eaten is not.
    */
   diners(ctx: CanvasRenderingContext2D): void {
     drawSlate(ctx, PANEL.x, PANEL.y, PANEL.w, PANEL.h, { title: this.pages[this.page].title });
     for (let i = 0; i < this.list.length; i++) {
-      const r = this.list[i], b = this.busts[i];
-      const x = DINER_X, y = DINER_Y + i * DINER_ROW;
+      const r = this.list[i], b = this.busts[this.pages[this.page].from + i];
+      const x = DINER_X + ((i / 3) | 0) * DINER_COL_W, y = DINER_Y + (i % 3) * DINER_ROW;
       if (b) {
         // the window first, then the head in it: an ink edge so a muted village fur never sits on bare slate
         ctx.fillStyle = UI.ink;

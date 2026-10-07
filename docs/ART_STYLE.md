@@ -97,6 +97,22 @@ head / white hat and coat / mid apron / dark trousers, a silhouette none of the 
 both wear a toque: Sorrel's is the low puffed one with two balls, Rowan's the tall straight pleated one, so the
 two chefs never read as one silhouette on the cast sheet.
 
+**The village diners** are the line's crowd: nineteen NPC critters on the same rig, the owl, otter and goat of
+`customers.ts` and sixteen more in `villagers.ts` (fox, badger, hedgehog, pig, cow, squirrel, deer, bear, raccoon,
+cat, dog, hen, duck, mole, tortoise, beaver). They are not seated, so they wear the off-duty apron and there is no
+player spot to protect; what they have to clear instead is the hatch's plum wall (fur at least .25 relative
+luminance away from `#4A3038`) and, softly, the cream apron. A diner is built from `critterBuild` with the same
+rules as the cast: a silhouette cue in the ears, tail and proportions (the bear is the biggest body at headR 14, the
+hedgehog and the squirrel the smallest), ONE face marking drawn inside the skull's own ink (a badger's blaze, a
+cow's patch, a raccoon's mask, a pig's snout, a duck's bill, a mole's pink nose, a beaver's teeth), and at most one
+piece of headgear or back-piece as its own inked object (antlers, horns, comb, beanie, acorn cap, hard hat, quill
+crown, shell, paddle tail), all in `villagerParts.ts`, whose hooks refill scratch polygons rather than allocate.
+Fur is varied across the roll so no two diners look alike at a squint (`diners/fur` in `tools/art-check.js`: a hue
+gap under 25 degrees AND a value gap under .05 is an error), and the roll is deliberately not all brown: a slate
+hen, a teal duck, a mauve hedgehog and a black bear sit among the tans. Each carries a `map` look (colours, ears and
+one cue) that the town map's 10 px queue sprites are drawn from (`art/backgrounds/map.ts drawVillagerDiner`).
+`node tools/sheet-capture.js <dir> "" none "who=diners&mode=cast&anims=idle,wave>diners.png"` is the contact sheet.
+
 ### The truck
 
 A rounded 1950s milk-float: beetroot-plum body `#7E3A56` (shadow `#5A2A40`, cap `#9A5470`), cream roof and

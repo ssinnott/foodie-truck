@@ -10,7 +10,8 @@
 A cozy co-op cooking adventure for one to four players. The crew of a countryside food truck opens for the day
 with a menu and a shopping list, drive out to where every ingredient comes from and gather it in a short mini-game
 at each landmark, and then, with the pantry full, drive back into the town round the depot, where the queues of
-villagers have formed on the pavements, and cook for each queue in turn. When the third line has been served the truck closes.
+villagers have formed on the pavements - one giant line of them, a crowd of different animals - and cook for it round
+by round. When the last diner in the line has been served the truck closes.
 
 The *structure* is borrowed from the Sesame Street "Foodie Truck" segments (an order → its ingredient → go to the
 source → cook). Everything else is original: the cast are anthropomorphic countryside animals with their own names,
@@ -41,15 +42,19 @@ differences, never gates: anyone can do any job.
 
 The cast index is what the START packet and `?critters=` carry, so new members are appended, never filed in
 between. Palettes, proportions and signature accessories are the art direction's (`docs/ART_STYLE.md` §1) and
-live in `src/content/critters/`. Customers are NPC critters built with the same rig (an owl, an otter, a goat) in
-`content/critters/customers.js`. Every cast member wears an apron in their seat's player colour.
+live in `src/content/critters/`. Customers are NPC critters built with the same rig: nineteen village diners - an owl, an otter and a goat
+(`content/critters/customers.ts`), then a fox, a badger, a hedgehog, a pig, a cow, a squirrel, a deer, a bear, a
+raccoon, a cat, a dog, a hen, a duck, a mole, a tortoise and a beaver (`content/critters/villagers.ts`, their markings
+and headgear in `villagerParts.ts`). Each is its own silhouette (ears, tail, build), fur palette, face marking and at
+most one piece of headgear, so a line reads as a crowd. `content/critters/diners.ts` is the roll of ids, in the order
+the day plan deals them: append, never reorder. Every cast member wears an apron in their seat's player colour.
 
 ## 3. The loop
 
 ```
-title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> map -> line -> kitchen -> results -> map -> line -> kitchen -> results -> map ...
-                                                                                                                                                              |
-   the day: a menu, a line per queue, one shopping list; when the last line is served -> stage (CLOSED) -> garage --OPEN TOMORROW--> stage (OPEN, tomorrow) -> map -> ...
+title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> map -> line -> kitchen -> results -> line -> kitchen -> results -> ...
+                                                                                                                                            |
+   the day: a menu, ONE giant line, one shopping list; when the last round is served -> stage (CLOSED) -> garage --OPEN TOMORROW--> stage (OPEN, tomorrow) -> map -> ...
                                                                                                                      |
                                                                                     ... and on the LAST day of the week -> garage -> title. That is the end of the game.
 ```
@@ -62,30 +67,38 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   already on the table; and resuming is then `planWeek(seed)[day]`, so two integers rebuild any day of any week
   and the save record holds no plan at all.
 - **A day** is one entry of that week, laid out by its **shape** (`game/run.js DAY_SHAPES`) and not only by its
-  seed. A shape names how many queues form and how long each is, how many recipes the menu draws, whether twists
+  seed. A shape names how long the day's line is (it can still name several queues, but every shipped day is one), how many recipes the menu draws, whether twists
   are dealt at all, and what the weather is allowed to do:
 
-  | Day | Name | Queues | Menu | Twists | Weather | Dishes |
+  | Day | Name | The line | Menu | Twists | Weather | Dishes |
   |---|---|---|---|---|---|---|
-  | 1 | **OPENING DAY** | 2 × 2 | 2 recipes | none | clear | 4 |
-  | 2 | — | 3 × 2 | 3 recipes | dealt | rolled | 6 |
-  | 3 | **MARKET DAY** | 3 × 2 | **2 recipes** | dealt | rolled | 6 |
-  | 4 | — | 3 × 2 | 3 recipes | dealt | **drizzle or fog** | 6 |
-  | 5 | **THE FETE** | 2, 2, 2, **3** | **the week's own** | dealt | clear | 9 |
+  | 1 | **OPENING DAY** | 4 | 2 recipes | none | clear | 4 |
+  | 2 | — | 6 | 3 recipes | dealt | rolled | 6 |
+  | 3 | **MARKET DAY** | 6 | **2 recipes** | dealt | rolled | 6 |
+  | 4 | — | 6 | 3 recipes | dealt | **drizzle or fog** | 6 |
+  | 5 | **THE FETE** | **9** | **the week's own** | dealt | clear | 9 |
 
   **Thirty-one dishes a week** against six today, and ten different recipes against three. Day 1 is short and
-  plain so a first day teaches the loop without being labelled a tutorial; MARKET DAY keeps its queues but cuts
+  plain so a first day teaches the loop without being labelled a tutorial; MARKET DAY keeps its long line but cuts
   the menu, so the village wants the same things and the day is two long gathers instead of eight short ones; day
-  4 guarantees once a week the fog and the mud that otherwise fire one day in five each; and THE FETE is four
-  queues, one of them three deep, on a menu drawn from what this week has already served — the last customer of
+  4 guarantees once a week the fog and the mud that otherwise fire one day in five each; and THE FETE is one
+  enormous line of nine, on a menu drawn from what this week has already served — the last customer of
   the week orders Monday's dish. Shapes are **appended, never filed in between**: the day index crosses the wire
   and is written into the save record.
-- The truck opens each day parked inside the depot in the middle of the town (`home`). Each day's queues wait at a
-  different stop in that town (`content/places.ts` STOPS: the market square, Station Road, the High Street and
+- **One giant line.** Every day's customers stand in a single queue (the day used to be three small queues at three
+  stops; the dish counts are unchanged, so a day's shopping list is no bigger). The line is dealt from the village
+  like a deck (`run.ts planOneDay`, on the plan's own seeded stream): nobody repeats until every diner on the roll
+  has queued, so a line is a crowd of different animals, never the same few. It is far too long to cook at once, so
+  it is **served in rounds** (`run.batchSize`): the front few at the hatch order together (as many as the kitchen's
+  ticket carries, `BATCH_MAX` 3, split as evenly as the line allows — 4 is 2 + 2, 6 is 3 + 3, 9 is 3 + 3 + 3),
+  `run.batch()` says how many are in this round, and after results the line steps up for the next round until
+  the last diner is fed.
+- The truck opens each day parked inside the depot in the middle of the town (`home`). Each day's line waits at a
+  stop in that town (`content/places.ts` STOPS: the market square, Station Road, the High Street and
   Chapel Corner — never a landmark: the countryside is for gathering) and each customer orders one of that day's
   recipes — the menu is dealt round so every recipe is ordered at least once. The plan is drawn from its own
   seeded stream, so every online peer lays the same week out from the START packet, and it never touches the
-  gameplay rng. `RECIPES_PER_DAY` (3), `LINES_PER_DAY` (3) and `LINE_LENGTH` (2) remain the ORDINARY day's
+  gameplay rng. `RECIPES_PER_DAY` (3), `LINES_PER_DAY` (1) and `LINE_LENGTH` (6) remain the ORDINARY day's
   numbers, which is day 2's shape and what a bare `planDay()` still lays out.
 - **Order twists** (`run.ts TWISTS`). One customer in four wants their dish a little different, and the twist is on
   the board, in the bubble at the hatch and in the kitchen: **EXTRA CRUNCHY** (the CHOP step takes 15 taps instead
@@ -94,8 +107,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   the truck to Thyme Terrace on a day nobody ordered a herb dish). The board prints the twist after the dish
   (`COLESLAW, CRUNCHY`, `STRAWBERRY TART +MINT`). A dev-jump day (`?order=`, `?recipes=`) never carries a twist:
   those promise a known dish and a known list.
-- **The day board** (`stage`) pins the plan up before the truck opens: the three lines and the **shopping list**
-  — every ingredient of every order in every line, summed. Confirm opens the truck.
+- **The day board** (`stage`) pins the plan up before the truck opens: the giant line, front first, and the **shopping list**
+  — every ingredient of every order in the line, summed. Confirm opens the truck.
 - **A recipe** (`ORDERS`) names a dish, a phone line, 2–3 ingredients with amounts, and the kitchen steps in order.
   Forty ship. The first seven — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup,
   griddle cakes — ask for the first seven ingredients (apples, trout, eggs, milk, flour, honey, carrots); the
@@ -109,16 +122,16 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   soup, pea soup, raspberry jam tarts, cockle stew) are what the third pass's eight ingredients - cherries, plums,
   cheese, oats, tomatoes, peas, raspberries, cockles - are for; and the twelve after those are what the three new
   landmarks send the truck for (hazelnut brownies, walnut loaf, roast chestnuts, nut roast; mushroom soup,
-  mushrooms on toast, wild garlic butter, blackberry and apple pie; mint sauce, chive omelette, rosemary potatoes,
+  mushrooms on toast, wild garlic butter, blackberry and apple pie, whose blackberries come off Bramble Bank; mint sauce, chive omelette, rosemary potatoes,
   pea and mint soup). Sixty-three in all. Three of them never
   touch the stove or the oven and baked apples is two steps long: the kitchen's variety is which stations a recipe
   skips. Recipes are only ever appended, because `?order=N` and the scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
   orchard drops pears, peaches, avocados, cherries and plums as well as apples; the farm pulls six vegetables
   besides the carrot and grows tomatoes and peas up stakes; the dairy's pails go on through the churn to butter
-  and through the press to cheese; the mill's chutes fill rice and oat sacks; the bank has raspberries beside its
+  and through the press to cheese; the mill's chutes fill rice and oat sacks; the bank has raspberries and blackberries beside its
   strawberries and blueberries; the cove has cockles in its wet sand; Hazel Holt shakes down hazelnuts, walnuts
-  and chestnuts; Tangle Wood hides mushrooms, wild garlic and blackberries; Thyme Terrace grows mint, chives and
+  and chestnuts; Tangle Wood hides mushrooms and wild garlic; Thyme Terrace grows mint, chives and
   rosemary. Forty ingredients ship. A mini-game gathers whichever of
   its landmark's ingredients the list is still short of (`run.js gatherTarget`: the first short one in
   `INGREDIENTS` order, else the first the list asks for, else the landmark's first — so a bare dev jump still
@@ -129,21 +142,21 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   to the map short. Arriving
   anywhere else does nothing but show a sign. `run.gather(id, n)` banks a round; `run.complete()` is the pantry
   full.
-- **Serving.** The moment the pantry is full the lines open: the HUD swaps the list for the lines, the queues come
-  out onto the town's pavements one diner at a time (the owl, the otter and the goat drawn small, in a file by a
-  lamp post, the front one waving the truck in), and pulling up at one opens the **line** screen — everyone in
-  the queue says what they want at once, a bubble over each diner's head. Confirm takes every order into the
-  kitchen (`run.startLine(i)` on arrival).
+- **Serving.** The moment the pantry is full the line opens: the HUD swaps the list for the line, the queue comes
+  out onto the town's pavement one diner at a time (every diner drawn small from their own `map` look, in a file
+  by a lamp post, the front one waving the truck in), and pulling up at it opens the **line** screen — the diners
+  at the front say what they want at once, a bubble over each head, with the rest of the line waiting behind them.
+  Confirm takes the round's orders into the kitchen (`run.startLine(i)` on arrival).
   A landmark with no line, or one already served, shows a sign.
-- **The kitchen** cooks the WHOLE LINE AT THE SAME TIME: every order in the queue (`run.orderFor(k)`) is on the
-  ticket and every customer crowds the hatch. Their steps are merged into one run of the counter - the fridge once
+- **The kitchen** cooks the WHOLE ROUND AT THE SAME TIME: every order of the round at the hatch
+  (`run.orderFor(k)` for the `run.batch()` diners at the front) is on the ticket and every one of them crowds the hatch. Their steps are merged into one run of the counter - the fridge once
   for every item, each station once for every dish that uses it (each order's own steps stay in its own order), and
   one bell. The food splits as it goes, each ingredient flying to the next station ITS dish needs, onto its own
   plate on the hatch shelf. The bell stamps `ORDER UP!` and opens results with every dish's stars.
-- **Results** serves everyone at once, out on the lane: each diner is handed their plate, they all eat, and each
+- **Results** serves the round at once, out on the lane: each diner is handed their plate, they all eat, and each
   gets a 1–3 star rating over their head; `run.serveAll(stars)` banks each customer's stars and takes every dish's
-  ingredients back out of the pantry. Then back to the map for the next line (the map says
-  `LINE SERVED! 2 TO GO`); when that was the last line, to the day board, which opens **closed** — the day's stars
+  ingredients back out of the pantry. Then the line steps up to the hatch for the next round (the `line` screen
+  again); when that was the last round, to the day board, which opens **closed** — the day's stars
   and coins totted up, and the **week strip** under them. Every dish tips `TIP_COINS[stars]` — 4, 8 or 12 coins —
   and those coins are the day's takings: the game has one money, and the garage (section 13) spends it.
 - **The closed board is the hinge, not the exit.** It pays the night's coins into the garage's tin, and its one
@@ -171,8 +184,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **Landmarks** (`PLACES`): home (the truck stop), orchard (apples, pears, peaches, avocados), pond (trout), coop
   (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
-  south lane (strawberries, blueberries) and Hazel Holt in the north-west corner (hazelnuts, walnuts, chestnuts,
-  shaken down) and Tangle Wood in the north-east (mushrooms, wild garlic, blackberries, foraged out of the leaf
+  south lane (strawberries, blueberries, raspberries, blackberries) and Hazel Holt in the north-west corner (hazelnuts, walnuts, chestnuts,
+  shaken down) and Tangle Wood in the north-east (mushrooms, wild garlic, foraged out of the leaf
   litter) and Thyme Terrace between home and the orchard (mint, chives, rosemary, snipped off their clumps).
   **All twelve supply landmarks open a mini-game** while the list is short
   of what they supply — the cove its beach (crabs chased along the sand), the bank its bushes — and **any
@@ -323,7 +336,8 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
 
 - **Bramble Bank — PICK** (*move + tap*). Six berry bushes stand along the foot of the bank, three berry spots
   each; six berries are ripe when the truck pulls up and one more ripens every 70–120 frames on a bush with a green
-  spot left (the pea turns into the visit's own berry with the gold sparkle over it). `action` with a bush anywhere
+  spot left (the pea turns into the visit's own berry with the gold sparkle over it: strawberries, blueberries, raspberries
+  or blackberries, whichever the list is short of; blackberries moved here from Tangle Wood because they grow on brambles). `action` with a bush anywhere
   under the critter (34 px either side) picks its ripe berry (a 12-frame reach up into the bush, the berry hops
   into the basket, +1); a bush with nothing ripe on it does nothing. The bank used to borrow the farm's bed, and a
   strawberry pulled out of the ground by its top was the visit that said it should not.
@@ -331,8 +345,8 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
 - **Hazel Holt — SHAKE** (*move + hold*). A nut grove in the north-west corner: four nut trees stand at fixed x
   (160 px apart) on the leaf litter, the crew walks the trodden band in front of them, and **holding** `action`
   anywhere at a trunk (36 px either side) that still has nuts in it shakes it. The shake belongs to the TREE: its
-  canopy sways harder as a bar over it fills over 60 held frames, letting go early keeps the bar for the next hold
-  (and a second seat can carry on where the first left off), and at the top a shower of 5..8 nuts comes down into
+  canopy sways harder as a bar over it fills over 90 held frames, letting go early keeps the bar for the next hold
+  (and a second seat can carry on where the first left off), and at the top a shower of 1..3 nuts comes down into
   the shaker's basket one every 5 frames, each one +1 and never past the target; that tree is bare for 150 frames,
   so the party is pushed along the grove. A visit is for hazelnuts, walnuts or chestnuts (`gatherTarget`), and the
   nuts in the canopy, in the shower and in the crate wear that nut's glyph. **The joke:** one shake in six brings
@@ -344,7 +358,7 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   (four are already showing when the truck pulls up), takes 20 frames to rise, and then SHOWS with the gold
   sparkle over it; `action` with a showing bump anywhere under the critter (34 px either side) brushes the leaves
   off it (a 12-frame crouch), the thing hops into the basket, +1. A showing bump nobody wants sinks back after 900
-  frames. A visit is for mushrooms, wild garlic or blackberries. **The joke:** one bump in eight lifts as a
+  frames. A visit is for mushrooms or wild garlic. **The joke:** one bump in eight lifts as a
   toadstool, red with white spots; brushing it is a step back with the nose wrinkled, POOH!, 20 frames, and it
   sinks back. Nothing is lost.
 
@@ -407,11 +421,12 @@ made either way so every peer draws the same day.
 
 ## 7. Results
 
-The whole line served at once on the lane the line screen stood on: a plate arcs out of the truck's hatch into
-every diner's paws on a stagger, everyone chews three times, each diner's 1–3 stars pop up over their head, and one
-receipt lists every dish with its stars, the tip in coins and a stamp for the line as a whole (`DELICIOUS` /
-`TASTY` / `EDIBLE`, from the average), then `PRESS Z` (auto-return after 600 frames) → `run.serveAll(stars)` →
-the map (the line is served) or the closed day board (that was the last line).
+The round at the hatch served at once on the lane the line screen stood on (the rest of the line waiting behind): a
+plate arcs out of the truck's hatch into every diner's paws on a stagger, everyone chews three times, each diner's
+1–3 stars pop up over their head, and one receipt lists every dish with its stars, the tip in coins and a stamp for
+the round as a whole (`DELICIOUS` / `TASTY` / `EDIBLE`, from the average), then `PRESS Z` (auto-return after 600
+frames) → `run.serveAll(stars)` → the `line` screen again (the line steps up for the next round) or the closed day
+board (that was the last round).
 
 ## 8. Multiplayer
 
@@ -458,12 +473,13 @@ player has bound M to something, while a rebind is listening, and while a host k
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
 - **select**: five 116×200 cards (the kit's 140 fitted four across), one cursor per joined seat, READY stamps;
   `next` = stage (starts the run).
-- **stage** (the day board): the day's three lines pinned up as 140×124 paper tickets across the top — each one
-  headed `LINE 01`, the landmark it waits at, and one block per customer (portrait, name, the dish they will order)
-  — with the SHOPPING LIST on one wide ticket under them (every ingredient with the day's total, in columns) and a
-  pad carrying the menu and `FILL THE PANTRY, THEN SERVE THE LINES`. The sign over it reads `DAY 2 OF 5`, with the
+- **stage** (the day board): the day's giant line pinned up as ONE wide paper ticket across the top — headed
+  `THE LINE: 9 DINERS`, the town stop it waits at, and one block per customer in line order (portrait, name, the
+  dish they will order) in rows of two or three — with the SHOPPING LIST on one wide ticket under it (every
+  ingredient with the day's total, in columns) and a pad carrying the menu and `FILL THE PANTRY, THEN SERVE THE LINE`.
+  (A shape with several lines still draws them as 140-wide tickets across the top, one customer to a row.) The sign over it reads `DAY 2 OF 5`, with the
   day's name after it where it has one. No cursor: any joined seat's CONFIRM opens the
-  truck and fades to the map. **When every line has been served the board opens closed**: each line washed back
+  truck and fades to the map. **When the line has been served the board opens closed**: the line washed back
   under a SERVED stamp (slammed on arrival for the one just finished) with its customers' stars in place of their
   dishes, and a CLOSING TIME slate over it with the lines and dishes served, the day's stars and its takings, and
   under them the **week strip** - one chip per day of the week, a closed day chalked up with its stars (tonight's
@@ -475,10 +491,12 @@ player has bound M to something, while a rebind is listening, and while a host k
   its `enter()`, at a screen boundary and never in an `update()`, and all four are keyed on the day so a board that
   opens closed twice counts once. BACK (open board only) leaves for the title, and is refused
   online (a peer walking out of a live room stalls the rest, as with the pause overlay).
-- **line**: the truck pulled up at a queue on the dusk lane, turned so its hatch faces the diners still waiting (one
-  rig each, front first, the crew's heads in the windows); the front diner waves, a paper bubble over their head
-  carries their name and their order, and CONFIRM (or 600 frames) fades to the kitchen. The sign over the scene says
-  `LINE 1 OF 3 - WINDLE MILL`.
+- **line**: the truck pulled up at the giant line on the dusk lane, turned so its hatch faces the diners still
+  waiting (one rig each, front first, the crew's heads in the windows). The front row stands along the lane at full
+  size; past six the line turns back on itself in smaller rows up the verge (`line.ts queueSpot`: an S winding
+  away, room for eighteen). The diners at the hatch this round (`run.batch()`) wave and each gets a paper bubble
+  with their name and their order; CONFIRM (or 600 frames) fades to the kitchen. After results the line comes back
+  here and steps up (an eased slide) for the next round. The sign over the scene says `9 IN THE LINE - STATION ROAD`.
 - **lobby**: HOST / JOIN, the host key large, invite link, four seats with busts, ready stamps, `STARTING!`; drives
   `net/session.js`; hands off to `select`-style picking on the same screen, then the host starts the match on the
   day board, so an online party reads the day's plan together and opens the truck.
@@ -568,7 +586,7 @@ the closed day board):
 | Page | Records | Drawn as |
 |---|---|---|
 | **The dishes** | Per `ORDERS` id: times cooked, best stars, which day of trading it was first served on | Four cards across, three down, six pages. A dish cooked is its own `art/dishes.ts` picture **inked in**, named, with its tally and best rating under it. One never cooked is the same card **in pencil**: the picture faded back to a shape, the name blanked to `- - -`. No new art - every dish drawing already exists. |
-| **The diners** | Per `DINERS` id: times fed, and the dish they have ordered most | Three deep rows on the slate, each headed by the same head portrait the day board draws over its queues (`art/portraits.ts`), in the same plum window and idling on its own beat, with the tally and what they like beside it. A diner this truck has never served is that portrait **in pencil** - the village is all there from the first day, and who has eaten is not. |
+| **The diners** | Per `DINERS` id: times fed, and the dish they have ordered most | Pages of six deep rows on the slate (two columns of three; nineteen diners, four pages), each headed by the same head portrait the day board draws over its queues (`art/portraits.ts`), in the same plum window and idling on its own beat, with the tally and what they like beside it. A diner this truck has never served is that portrait **in pencil** - the village is all there from the first day, and who has eaten is not. |
 | **The larder** | Per `INGREDIENTS` id: how many gathered | The forty glyphs from `art/food.ts` in a grid, greyed until gathered once. |
 | **The road** | Per `PLACES` id: how many days the truck has been there | Twelve rows, the map's own names. |
 | **The strap** | Dishes cooked out of the whole menu | `23 OF 63 COOKED` - the number the closed board has never been able to print. |

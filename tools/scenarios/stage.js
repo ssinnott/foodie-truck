@@ -1,10 +1,15 @@
 // Playtest scenarios for THE DAY BOARD (registered in tools/scenarios/index.js). Each export is
 // `async (server) => void` using withPage / assert from ../playtest.js.
 //
-//   stage - the board a run opens on: three lines pinned up, each at a different landmark with two customers in
-//        it, every customer ordering off the day's menu, and the shopping list under them adding every order up.
+//   stage - the board a run opens on: ONE giant line pinned up (a wide ticket, the town stop it waits at and every
+//        customer in it, all different animals), every customer ordering off the day's menu, and the shopping list
+//        under it adding every order up.
 //        CONFIRM opens the truck: the map, at home, with the whole list still to gather and the compass on the
 //        first missing ingredient's landmark. Writes tools/screens/stage-board.png.
+//   giantLine - the line screen on the fete's nine-long line: all nine diners stand in it (a front row along the lane
+//        and the rest winding back in a second row), a round of three at the hatch wave and order, the next press
+//        takes just those three orders into the kitchen, and the board lays the nine out as one wide ticket.
+//        Writes tools/screens/giant-line.png and giant-line-board.png.
 //   stagePlan - the plan is a pure function of the seed: the same seed lays the same day out, another seed lays
 //        another, ?order= forces a recipe onto the menu and into the first customer's paws, and ?recipes= fixes
 //        the menu outright. What keeps four online machines on one day and lets a scenario pick its landmarks.
@@ -14,9 +19,34 @@
 import { withPage, assert } from '../playtest.js';
 import { ORDERS, INGREDIENTS } from '../../src/content/recipes.ts';
 import { STOPS } from '../../src/content/places.ts';
-import { planDay, planWeek, needsOf, DAY_SHAPES, DAYS_PER_WEEK, dishesIn } from '../../src/game/run.ts';
+import { planDay, planWeek, needsOf, batchSize, DAY_SHAPES, DAYS_PER_WEEK, dishesIn } from '../../src/game/run.ts';
 
 export const SCENARIOS = {
+  async giantLine(server) {
+    const total = DAY_SHAPES[DAYS_PER_WEEK - 1].lines[0], round = batchSize(total);
+    await withPage(server, 'skipTo=stage&critters=0,1&day=5', async (api) => {
+      await api.step(5);
+      const s = await api.summary();
+      assert(s.top.lines === 1 && s.top.diners === total && s.top.cols[0] === 3, `the fete's board is one wide ticket of ${total} diners in three columns (${s.top.lines} ticket, ${s.top.diners} diners, ${s.top.cols})`);
+      await api.shot('giant-line-board');
+    });
+    await withPage(server, 'skipTo=line&critters=0,1&day=5', async (api) => {
+      await api.step(100);
+      let s = await api.summary();
+      assert(s.top.waiting === total && s.top.round === round, `all ${total} are in the line with ${round} at the hatch (${s.top.waiting}, round ${s.top.round})`);
+      assert(new Set(s.top.diners).size === total, `${total} different animals (${s.top.diners.join()})`);
+      const ys = new Set(s.top.spots.map((p) => p.split(',')[1]));
+      assert(ys.size >= 2, `the line winds back in more than one row (${[...ys].join()})`);
+      assert(s.top.bubbles.length === round, `only the round at the hatch orders (${s.top.bubbles.length} bubbles)`);
+      assert((await api.errors()).length === 0, 'no errors drawing the line');
+      await api.shot('giant-line');
+      await api.press(0, { action: true }, 2, 4);
+      for (let i = 0; i < 20 && (await api.screen()) !== 'kitchen'; i++) await api.step(6);
+      s = await api.summary();
+      assert(s.screen === 'kitchen' && s.top.orders.length === round, `the kitchen takes just the round's ${round} orders (${s.top.orders.length})`);
+    });
+  },
+
   async stage(server) {
     await withPage(server, 'skipTo=stage&critters=0,1', async (api) => {
       await api.step(5);
