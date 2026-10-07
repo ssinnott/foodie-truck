@@ -136,7 +136,7 @@ export class BrambleScreen extends Screen {
   /** Pricks taken this round (the joke's count, for the tests and the desync canary). */
   declare pricks: number;
   /**
-   * What the bank grows this visit (game/run.js gatherTarget): strawberries or blueberries. `icon`/`hex` are its
+   * What the bank grows this visit (game/run.js gatherTarget): strawberries, blueberries, raspberries or blackberries. `icon`/`hex` are its
    * glyph, the sign prefix its name, the title the landmark's.
    */
   declare ing: string;

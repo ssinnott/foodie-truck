@@ -55,10 +55,12 @@ export const INGREDIENTS = Object.freeze({
   hazelnut: { name: 'HAZELNUTS', place: 'holt', hex: '#B07A3A', icon: 'hazelnut' },
   walnut: { name: 'WALNUTS', place: 'holt', hex: '#8C6A48', icon: 'walnut' },
   chestnut: { name: 'CHESTNUTS', place: 'holt', hex: '#6E3B2A', icon: 'chestnut' },
-  // Tangle Wood: what hides under the leaves and on the wood's edge, brushed out and picked
+  // Tangle Wood: what hides under the leaves, brushed out of the litter
   mushroom: { name: 'MUSHROOMS', place: 'wood', hex: '#C9A57C', icon: 'mushroom' },
   wildGarlic: { name: 'WILD GARLIC', place: 'wood', hex: '#E8EFD6', icon: 'garlic' },
-  blackberry: { name: 'BLACKBERRIES', place: 'wood', hex: '#3B2A4A', icon: 'blackberry' },
+  // Blackberries grow on brambles, so they are picked off Bramble Bank's bushes with the other berries (issue #28).
+  // The entry keeps its slot in this table: INGREDIENTS order is the shopping list's order, and only `place` moved.
+  blackberry: { name: 'BLACKBERRIES', place: 'bramble', hex: '#3B2A4A', icon: 'blackberry' },
   // Thyme Terrace: the herbs, snipped off their clumps
   mint: { name: 'MINT', place: 'terrace', hex: '#5FA652', icon: 'mint' },
   chive: { name: 'CHIVES', place: 'terrace', hex: '#7DB35A', icon: 'chive' },

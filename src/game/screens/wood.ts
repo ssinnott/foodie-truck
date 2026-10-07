@@ -2,8 +2,8 @@
 // the coop's side of the river: things hide in the leaf litter along the band the crew walks. A BUMP lifts in the
 // leaves every SPAWN_MIN..SPAWN_MAX frames at a free x (LIFT_FRAMES of rising, then it SHOWS with the gold sparkle
 // over it), and `action` with a showing bump anywhere under the critter (REACH either side) brushes the leaves off
-// it: a BRUSH_FRAMES crouch, the thing hops into the basket, +1. A visit is for mushrooms, wild garlic or
-// blackberries (`gatherTarget`), and every bump hides that. THE JOKE: one bump in TOADSTOOL_ODDS lifts red with
+// it: a BRUSH_FRAMES crouch, the thing hops into the basket, +1. A visit is for mushrooms or wild garlic
+// (`gatherTarget`), and every bump hides that. THE JOKE: one bump in TOADSTOOL_ODDS lifts red with
 // white spots; brushing it off is the shared bump beat, a wrinkled nose and POOH!, and it sinks back into the
 // litter. Nothing is lost. The round ends when the party's total reaches the order's remainder, and not before.
 //
