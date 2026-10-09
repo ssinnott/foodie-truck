@@ -342,6 +342,20 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   bramble_shake: (c, d, t, o) => { for (let i = 0; i < 6; i++) noise(c, d, t + i * 0.045, { dur: 0.04, vol: (0.1 - i * 0.008) * o.v, type: 'bandpass', f0: (i & 1 ? 2400 : 1500) * o.p, q: 1.2, attack: 0.004 }); return t + 0.3; },
   /** ACHOO: a rising breath of noise, a bark of square wave, and a puff of lowpassed dust after it. */
   sneeze: (c, d, t, o) => { noise(c, d, t, { dur: 0.1, vol: 0.08 * o.v, type: 'highpass', f0: 1200 * o.p, f1: 2400 * o.p, attack: 0.08 }); osc(c, d, t + 0.1, { type: 'square', f0: 520 * o.p, f1: 180 * o.p, glide: 0.1, dur: 0.14, vol: 0.09 * o.v, attack: 0.003, lp: 1800 }); return noise(c, d, t + 0.12, { dur: 0.22, vol: 0.14 * o.v, type: 'lowpass', f0: 1400 * o.p, f1: 300 * o.p, attack: 0.005 }); },
+  /** AH...: a breath drawn in through the nose, rising, with a little hum of voice riding up on it. */
+  mill_ah: (c, d, t, o) => { hiss(c, d, t, { v: o.v, p: o.p, dur: 0.34, f0: 700, f1: 1700, vol: 0.09, type: 'bandpass', attack: 0.22, q: 1.2 }); return osc(c, d, t + 0.06, { type: 'triangle', f0: 300 * o.p, f1: 420 * o.p, glide: 0.28, dur: 0.3, vol: 0.06 * o.v, attack: 0.1, lp: 1600 }); },
+  /** AH-AH...: two of those, the second higher and longer - this time it is going to go. */
+  mill_ahah: (c, d, t, o) => { hiss(c, d, t, { v: o.v, p: o.p, dur: 0.2, f0: 800, f1: 1600, vol: 0.09, type: 'bandpass', attack: 0.12, q: 1.2 }); osc(c, d, t + 0.03, { type: 'triangle', f0: 330 * o.p, f1: 440 * o.p, glide: 0.16, dur: 0.18, vol: 0.06 * o.v, attack: 0.05, lp: 1600 }); hiss(c, d, t + 0.24, { v: o.v, p: o.p * 1.15, dur: 0.38, f0: 800, f1: 2000, vol: 0.11, type: 'bandpass', attack: 0.26, q: 1.2 }); return osc(c, d, t + 0.27, { type: 'triangle', f0: 400 * o.p, f1: 560 * o.p, glide: 0.32, dur: 0.36, vol: 0.07 * o.v, attack: 0.1, lp: 1800 }); },
+  /** A clogged chute: an uneven run of dry wooden knocks down the spout and a cough of dust out of its lip. */
+  mill_rattle: (c, d, t, o) => { for (let i = 0; i < 4; i++) knock(c, d, t + i * 0.05 + (i & 1) * 0.015, { v: o.v, p: o.p, f: 380 + (i & 1) * 90, dur: 0.035, vol: 0.15 }); return noise(c, d, t + 0.22, { dur: 0.1, vol: 0.12 * o.v, type: 'lowpass', f0: 900 * o.p, f1: 350 * o.p, attack: 0.006 }); },
+  /** The clog going: the spout's timber groaning under it, the knocks running together into a shudder. */
+  mill_creak: (c, d, t, o) => { osc(c, d, t, { type: 'sawtooth', f0: 120 * o.p, f1: 82 * o.p, dur: 0.5, vol: 0.07 * o.v, attack: 0.05, lp: 650, vib: { rate: 16, depth: 18 } }); for (let i = 0; i < 7; i++) knock(c, d, t + 0.04 + i * 0.055, { v: o.v * 0.8, p: o.p, f: 420 + (i & 1) * 70, dur: 0.03, vol: 0.13 }); return t + 0.5; },
+  /** FWUMP: the whole clog landing at once - a big soft body of flour, more pillow than thump, and the dust going up off it. */
+  mill_fwump: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 85, lp: 520, dur: 0.24, vol: 0.4 }); osc(c, d, t, { type: 'sine', f0: 72 * o.p, f1: 38 * o.p, dur: 0.3, vol: 0.32 * o.v, attack: 0.004 }); return noise(c, d, t + 0.05, { dur: 0.42, vol: 0.13 * o.v, type: 'lowpass', f0: 1500 * o.p, f1: 280 * o.p, attack: 0.03 }); },
+  /** Out of the heap: a cork-soft pop and a puff. */
+  mill_pop: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 1.3, f: 380, vol: 0.2, splash: 0 }); return noise(c, d, t + 0.03, { dur: 0.22, vol: 0.11 * o.v, type: 'lowpass', f0: 1400 * o.p, f1: 450 * o.p, attack: 0.01 }); },
+  /** Shaking the flour off: a quick flutter of soft brushes, like a wet dog but dry. */
+  mill_shake: (c, d, t, o) => { for (let i = 0; i < 7; i++) noise(c, d, t + i * 0.065, { dur: 0.06, vol: (0.12 + (i & 1) * 0.04) * o.v, type: 'bandpass', f0: (1200 + (i & 1) * 500) * o.p, q: 0.9, attack: 0.008 }); return t + 0.5; },
   /** One bee, close: a sawtooth drone with a wobble, swelling in and fading, right at the nose. */
   buzz: (c, d, t, o) => osc(c, d, t, { type: 'sawtooth', f0: 210 * o.p, f1: 240 * o.p, glide: 0.5, dur: 0.6, vol: 0.07 * o.v, attack: 0.12, lp: 1400, vib: { rate: 18, depth: 12 } }),
   /** The curious bee coming round the head: the buzz louder, swooping, swelling and fading as it circles. */
