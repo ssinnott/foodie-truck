@@ -27,6 +27,8 @@ import { drawHeldPlate } from '../../art/kitchenProps.ts';
 import { drawTruck } from '../../art/truck.ts';
 import type { TruckStyle } from '../../art/truck.ts';
 import { truckStyleFor } from '../garage.ts';
+import { ridersFor, pushRiderHeads } from '../friends.ts';
+import type { Rider } from '../friends.ts';
 import { critterRig } from '../../content/critters/common.ts';
 import { getCritter } from '../../content/critters/index.ts';
 import { getCustomer } from '../../content/critters/customers.ts';
@@ -189,8 +191,10 @@ export class LineScreen extends Screen {
   declare fields: number[];
   /** The crew, in party order. */
   declare seats: LineSeat[];
-  /** The heads in the truck's windows: the driver first, then the rest. */
+  /** The heads in the truck's windows: the driver first, then the rest, then the friends riding along. */
   declare heads: LineHead[];
+  /** The friends riding along (game/friends.ts): heads at the hatch after the crew's, idling with them. */
+  declare riders: Rider[];
   /** The livery the truck is drawn in, read once in enter() (game/garage.ts: never from update()). */
   declare truckStyle: TruckStyle;
   /** The diners still waiting, front first: the whole line, every one of them ordering. */
@@ -205,7 +209,7 @@ export class LineScreen extends Screen {
   /** The hint line. */
   declare hint: string;
 
-  constructor(game: Game) { super(game, 'line'); this.fields = []; this.seats = []; this.heads = []; this.queue = []; this.chorus = []; }
+  constructor(game: Game) { super(game, 'line'); this.fields = []; this.seats = []; this.heads = []; this.riders = []; this.queue = []; this.chorus = []; }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -223,6 +227,9 @@ export class LineScreen extends Screen {
     const di = Math.max(0, run.party.findIndex((p) => p.critter === DRIVER));
     this.heads.push({ rig: this.seats[di].rig, pose: this.seats[di].player.pose });
     for (let i = 0; i < this.seats.length; i++) if (i !== di) this.heads.push({ rig: this.seats[i].rig, pose: this.seats[i].player.pose });
+    // and the friends riding along, at the hatch after the crew (game/friends.ts)
+    this.riders = ridersFor(run.party, this.seats.length);
+    pushRiderHeads(this.heads, this.riders);
     // the queue: everyone from the customer at the hatch to the back of the line, each on their own idle beat and
     // waving in turn - the whole line is ordering
     this.queue.length = 0;
@@ -283,6 +290,7 @@ export class LineScreen extends Screen {
     super.update();
     const game = this.game, f = this.frame;
     for (const s of this.seats) { s.player.tick(); if (s.player.done) s.player.play('idle', { restart: true }); }
+    for (const r of this.riders) r.player.tick();
     for (let i = 0; i < this.queue.length; i++) {
       const d = this.queue[i];
       if (!d.waved && f >= d.waveAt) { d.waved = true; d.player.play('wave', { restart: true }); game.audio.play('hello'); }
@@ -345,6 +353,8 @@ export class LineScreen extends Screen {
   override summary() {
     const run = this.game.run, f = this.frame;
     return { line: run.line, place: run.lines[run.line].place, waiting: this.queue.length, customer: run.order.customer, dish: run.order.dish, taken: this.taken,
+      // the truck's windows: every head in them, and which of them are the friends riding along
+      heads: this.heads.length, friends: this.riders.map((r) => r.critter),
       // the order as said so far: what the diner at the hatch is asking for, one bubble per dish, its band and its
       // words, and how many have joined in
       bubble: this.queue.length && f >= this.queue[0].joinAt ? this.chorus[this.queue[0].dish].text : '',
