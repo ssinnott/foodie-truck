@@ -184,6 +184,16 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   },
   /** An apple on the grass: a quiet wet thud. Missed, not punished. */
   splat: (c, d, t, o) => thump(c, d, t, { v: o.v * 0.6, p: o.p, f: 110, lp: 600, dur: 0.07, vol: 0.2 }),
+  /** The grub pops up out of its bite hole: a high bubble of a plop, no splash. */
+  orchard_pop: (c, d, t, o) => plop(c, d, t, { v: o.v, p: o.p * 1.5, f: 520, vol: 0.18, splash: 0 }),
+  /** The grub's raspberry: a puff of air on the P, then a wet buzz - a sawtooth flapped thirty times a second. */
+  orchard_pfft: (c, d, t, o) => { noise(c, d, t, { dur: 0.05, vol: 0.14 * o.v, type: 'bandpass', f0: 1600 * o.p, q: 0.8, attack: 0.003 }); return am(c, d, t + 0.04, { type: 'sawtooth', f0: 150 * o.p, f1: 120 * o.p, rate: 30, rate1: 24, depth: 1, dur: 0.45, vol: 0.22 * o.v, attack: 0.01, lp: 1300 }); },
+  /** The wormy apple flung over a shoulder: a quick whoosh up and away (its landing is the splat). */
+  orchard_fling: (c, d, t, o) => whoosh(c, d, t, { v: o.v, p: o.p, f0: 700, f1: 2600, dur: 0.18, vol: 0.2, q: 1.2 }),
+  /** A sooty cough: two dry barks of lowpassed noise, a little sine in each, the second lower. */
+  orchard_cough: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 210, lp: 1500, dur: 0.08, vol: 0.2 }); return thump(c, d, t + 0.15, { v: o.v, p: o.p * 0.85, f: 190, lp: 1300, dur: 0.1, vol: 0.18 }); },
+  /** The grub out of Barley's mouth: a tiny squeaky hi, two quick chirps going up. */
+  orchard_hi: (c, d, t, o) => { osc(c, d, t, { type: 'triangle', f0: 1300 * o.p, f1: 1500 * o.p, glide: 0.05, dur: 0.07, vol: 0.1 * o.v, attack: 0.004 }); return osc(c, d, t + 0.09, { type: 'triangle', f0: 1600 * o.p, f1: 2100 * o.p, glide: 0.06, dur: 0.1, vol: 0.1 * o.v, attack: 0.004, vib: { rate: 28, depth: 40 } }); },
   /** The float goes out: the line's whoosh and the float's plop. */
   cast: (c, d, t, o) => { whoosh(c, d, t, { v: o.v, p: o.p, f0: 400, f1: 2600, dur: 0.22, vol: 0.2 }); return plop(c, d, t + 0.24, { v: o.v, p: o.p, f: 500, vol: 0.2, splash: 0.12 }); },
   /** The float goes under: a low plop and a wobble. */
