@@ -306,6 +306,26 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   peck: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.035, vol: 0.26 }); return osc(c, d, t + 0.05, { type: 'square', f0: 900 * o.p, f1: 1300 * o.p, glide: 0.05, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2400 }); },
   /** The hen hops off the nest: two clucks, a wobble of pitch on each, and a flap of noise. */
   cluck: (c, d, t, o) => { osc(c, d, t, { type: 'square', f0: 700 * o.p, f1: 520 * o.p, glide: 0.06, dur: 0.08, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); osc(c, d, t + 0.11, { type: 'square', f0: 760 * o.p, f1: 560 * o.p, glide: 0.06, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); return noise(c, d, t + 0.02, { dur: 0.16, vol: 0.06 * o.v, type: 'bandpass', f0: 1800 * o.p, f1: 900 * o.p, q: 0.7, attack: 0.01 }); },
+  /** The surprise egg cracking in the paw: one dry tick of shell and a short crackle running after it. */
+  coop_crack: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 2400, dur: 0.018, vol: 0.2 }); return noise(c, d, t + 0.01, { dur: 0.07, vol: 0.1 * o.v, type: 'bandpass', f0: 4200 * o.p, f1: 2400 * o.p, q: 2, attack: 0.002 }); },
+  /** It hatches: a pop as the top flies off, a crackle of shell, then the chick's first cheep. */
+  coop_hatch: (c, d, t, o) => {
+    plop(c, d, t, { v: o.v, p: o.p * 1.5, f: 520, vol: 0.24, splash: 0 });
+    noise(c, d, t, { dur: 0.09, vol: 0.12 * o.v, type: 'bandpass', f0: 3800 * o.p, f1: 1800 * o.p, q: 1.5, attack: 0.001 });
+    osc(c, d, t + 0.16, { type: 'sine', f0: 2500 * o.p, f1: 3300 * o.p, glide: 0.05, dur: 0.07, vol: 0.09 * o.v, attack: 0.004 });
+    return osc(c, d, t + 0.26, { type: 'sine', f0: 2700 * o.p, f1: 3600 * o.p, glide: 0.05, dur: 0.09, vol: 0.09 * o.v, attack: 0.004 });
+  },
+  /** The chick on a head (or hopping off it): two tiny chirps sliding up. */
+  coop_cheep: (c, d, t, o) => { osc(c, d, t, { type: 'sine', f0: 2600 * o.p, f1: 3400 * o.p, glide: 0.04, dur: 0.06, vol: 0.08 * o.v, attack: 0.003 }); return osc(c, d, t + 0.09, { type: 'sine', f0: 2800 * o.p, f1: 3700 * o.p, glide: 0.04, dur: 0.07, vol: 0.08 * o.v, attack: 0.003 }); },
+  /** The broody hen puffs up: a ruffle of feathers swelling, and a low indignant growl under it. */
+  coop_puff: (c, d, t, o) => { noise(c, d, t, { dur: 0.26, vol: 0.12 * o.v, type: 'bandpass', f0: 900 * o.p, f1: 2600 * o.p, q: 0.7, attack: 0.16 }); return osc(c, d, t + 0.06, { type: 'square', f0: 250 * o.p, f1: 210 * o.p, glide: 0.25, dur: 0.32, vol: 0.05 * o.v, attack: 0.03, lp: 900, vib: { rate: 26, depth: 30 } }); },
+  /** The flurry: seven hard pecks, uneven, a squawk over them and a flap of feathers. */
+  coop_flurry: (c, d, t, o) => {
+    const at = [0, 0.04, 0.07, 0.11, 0.15, 0.18, 0.22];
+    for (let i = 0; i < at.length; i++) knock(c, d, t + at[i], { v: o.v, p: o.p, f: 1500 + (i % 3) * 180, dur: 0.025, vol: 0.2 });
+    osc(c, d, t + 0.03, { type: 'square', f0: 820 * o.p, f1: 1250 * o.p, glide: 0.08, dur: 0.2, vol: 0.06 * o.v, attack: 0.004, lp: 2400, vib: { rate: 34, depth: 60 } });
+    return noise(c, d, t, { dur: 0.3, vol: 0.08 * o.v, type: 'bandpass', f0: 1600 * o.p, f1: 800 * o.p, q: 0.7, attack: 0.02 });
+  },
   /** The old boot comes up on the line: a hollow rubber thunk with a slosh of water out of it, and no pip at all. */
   boot: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 90, lp: 500, dur: 0.12, vol: 0.26 }); return noise(c, d, t + 0.1, { dur: 0.28, vol: 0.1 * o.v, type: 'bandpass', f0: 1400 * o.p, f1: 500 * o.p, q: 0.8, attack: 0.03 }); },
   /** The boot turned over pours, and pours: a long gurgling rush with glugs in it, far longer than any boot. */
