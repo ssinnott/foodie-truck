@@ -224,4 +224,29 @@ export const ORDERS = Object.freeze([
     needs: [{ id: 'potato', amount: 3 }, { id: 'rosemary', amount: 1 }, { id: 'butter', amount: 1 }], steps: ['fridge', 'chop', 'oven', 'plate'] },
   { id: 'peaMintSoup', dish: 'PEA AND MINT SOUP', customer: 'goat', line: 'PEA AND MINT SOUP. THE SUMMER ONE.',
     needs: [{ id: 'pea', amount: 2 }, { id: 'mint', amount: 1 }, { id: 'milk', amount: 1 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
+  // The fifth menu: a second dish for every ingredient that still had only one - eleven of them, the peaches the
+  // third menu missed and ten that came after it - each of which a week seldom sent the truck for. Nine dishes for
+  // eleven, because PEACH MELBA is the second for both peaches and raspberries and PESTO PASTA for both wild garlic
+  // and hazelnuts; and nine takes the menu to seventy-two, which fills the recipe book's six pages to the last card.
+  // Each lists the ingredient it was written for first, since a served plate takes the colour of its first
+  // ingredient; ROAST TROUT is the exception, a trout before it is rosemary, and it sends the truck to the pond as
+  // well, which only three dishes did.
+  { id: 'peachMelba', dish: 'PEACH MELBA', customer: 'owl', line: 'A PEACH MELBA, PLEASE. RASPBERRY ON TOP.',
+    needs: [{ id: 'peach', amount: 2 }, { id: 'raspberry', amount: 2 }, { id: 'milk', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'plate'] },
+  { id: 'plumsAndCustard', dish: 'PLUMS AND CUSTARD', customer: 'owl', line: 'PLUMS AND CUSTARD. MORE CUSTARD THAN PLUMS.',
+    needs: [{ id: 'plum', amount: 3 }, { id: 'milk', amount: 2 }, { id: 'egg', amount: 1 }], steps: ['fridge', 'chop', 'mix', 'stove', 'plate'] },
+  { id: 'pizza', dish: 'PIZZA', customer: 'otter', line: 'PIZZA! A WHOLE ONE! ALL FOR ME!',
+    needs: [{ id: 'tomato', amount: 2 }, { id: 'cheese', amount: 2 }, { id: 'flour', amount: 2 }], steps: ['fridge', 'chop', 'oven', 'plate'] },
+  { id: 'paella', dish: 'PAELLA', customer: 'goat', line: 'PAELLA. THE CRISPY RICE FROM THE BOTTOM.',
+    needs: [{ id: 'cockle', amount: 2 }, { id: 'rice', amount: 2 }, { id: 'tomato', amount: 1 }], steps: ['fridge', 'chop', 'stove', 'plate'] },
+  { id: 'pestoPasta', dish: 'PESTO PASTA', customer: 'otter', line: 'PESTO PASTA! GREEN AS A FROG!',
+    needs: [{ id: 'wildGarlic', amount: 2 }, { id: 'hazelnut', amount: 1 }, { id: 'flour', amount: 2 }], steps: ['fridge', 'chop', 'mix', 'stove', 'plate'] },
+  { id: 'woodlandPie', dish: 'WOODLAND PIE', customer: 'goat', line: 'WOODLAND PIE. HOLD THE TOADSTOOLS.',
+    needs: [{ id: 'chestnut', amount: 2 }, { id: 'mushroom', amount: 2 }, { id: 'flour', amount: 1 }], steps: ['fridge', 'mix', 'stove', 'oven', 'plate'] },
+  { id: 'blackberryCheesecake', dish: 'BLACKBERRY CHEESECAKE', customer: 'goat', line: 'BLACKBERRY CHEESECAKE. JUST A SLIVER.',
+    needs: [{ id: 'blackberry', amount: 2 }, { id: 'cheese', amount: 2 }, { id: 'oats', amount: 1 }], steps: ['fridge', 'mix', 'oven', 'plate'] },
+  { id: 'cheeseScones', dish: 'CHEESY CHIVE SCONES', customer: 'owl', line: 'CHEESE SCONES, PLEASE. CHIVES CHOPPED FINE.',
+    needs: [{ id: 'chive', amount: 1 }, { id: 'cheese', amount: 2 }, { id: 'flour', amount: 2 }], steps: ['fridge', 'chop', 'mix', 'oven', 'plate'] },
+  { id: 'roastTrout', dish: 'ROAST TROUT', customer: 'otter', line: 'ROAST TROUT! THE WHOLE FISH! TAIL AND ALL!',
+    needs: [{ id: 'fish', amount: 2 }, { id: 'rosemary', amount: 1 }], steps: ['fridge', 'oven', 'plate'] },
 ]);

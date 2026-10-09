@@ -10,7 +10,7 @@ the line forms back in town: one long file of villagers on the pavement at one o
 animal in every place. They drive to it and cook for the whole line at once — one giant order: every order taken
 together, every dish cooked in one pass of the kitchen, everyone served in one go. Then the truck closes for the night.
 
-Sixty-three recipes, forty ingredients, twelve landmarks, and **twelve mini-games** — each with its own verb:
+Seventy-two recipes, forty ingredients, twelve landmarks, and **twelve mini-games** — each with its own verb:
 catch, fish, collect, pump, fill, creep, pull, pick, chase, shake, forage, snip. A landmark can supply several things, and every visit
 looks like what it is for: the orchard drops pears, peaches and avocados from their own trees; the farm's bed grows
 six vegetables besides the carrot, each its own plant; the dairy milks, and churns the milk into butter; the mill
@@ -42,7 +42,7 @@ now: an online match banks nothing, and everyone sees the stock truck.)
 
 The **recipe book** is what the week fills in. Every dish cooked is inked into it with its own picture, every
 diner fed and everything gathered is tallied, and everything not yet cooked sits there in pencil — so the
-sixty-three recipes stop being invisible. It records and it never unlocks: nothing in it can reach the game's
+seventy-two recipes stop being invisible. It records and it never unlocks: nothing in it can reach the game's
 simulation, which is what lets a saved file exist at all in a game that runs four browsers in lockstep.
 
 The cast are original anthropomorphic countryside animals — **Barley** the Suffolk sheep (the hungry one), **Sorrel**
