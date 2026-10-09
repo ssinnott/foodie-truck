@@ -21,6 +21,7 @@ import type { Palette } from '../../lib/art/palettes.ts';
 import type { Pose, PoseSpec } from '../../lib/art/poses.ts';
 import type { FaceOpts, Info, PartHook, Point } from '../../lib/art/rigParts.ts';
 import type { AnimSet, Frame } from '../../lib/art/animation.ts';
+import type { ChainOpts } from '../../lib/art/secondary.ts';
 import type { Proportions, Rig, RigAccessory, RigBuild, RigParts } from '../../lib/art/rig.ts';
 
 const R = Math.round;
@@ -81,6 +82,8 @@ export interface CritterSpec {
   earTip?: boolean;
   /** Round-ear radius as a fraction of headR (default 0.4). */
   earR?: number;
+  /** The standing ears (point, small, long) at this multiple of their usual size (default 1): a bat's are 1.4. */
+  earScale?: number;
   /** Ear placement in fractions of headR (default EAR_NEAR / EAR_FAR). */
   earPos?: EarPos;
   /** Which palette slot the ear is furred in (default 'skin'). */
@@ -183,14 +186,14 @@ export const DEFAULT_PALETTE: Readonly<Palette> = Object.freeze({
 const EAR_NEAR: Point = { x: 0.42, y: -0.8 }, EAR_FAR: Point = { x: -0.5, y: -0.72 };
 /** Plum for straps and hat bands: the world's shadow colour, so a strap never reads as a fifth player colour. */
 export const PLUM_STRAP = '#5A3A46';
-function drawEar(ctx: CanvasRenderingContext2D, rig: CritterRig, kind: EarKind, x: number, y: number, r: number, fur: string, light: string, tip: string | null, isFar: boolean, ang: number, earR: number): void {
+function drawEar(ctx: CanvasRenderingContext2D, rig: CritterRig, kind: EarKind, x: number, y: number, r: number, fur: string, light: string, tip: string | null, isFar: boolean, ang: number, earR: number, scale: number): void {
   ctx.save(); ctx.translate(x, y); if (ang) ctx.rotate(rad(ang));
   const er = R(r * earR);
   if (kind === 'round') {
     celBall(ctx, rig, 0, 0, er, fur, false);
     if (!rig.override) { ctx.fillStyle = rig.col(light); ctx.beginPath(); ctx.arc(0, 1, R(er * 0.5), 0, TAU); ctx.fill(); }
   } else if (kind === 'point' || kind === 'small') {
-    const w = kind === 'small' ? R(r * 0.34) : R(r * 0.42), h = kind === 'small' ? R(r * 0.6) : R(r * 0.95);
+    const w = kind === 'small' ? R(r * 0.34 * scale) : R(r * 0.42 * scale), h = kind === 'small' ? R(r * 0.6 * scale) : R(r * 0.95 * scale);
     celPoly(ctx, rig, [-w, R(r * 0.25), w, R(r * 0.25), 0, -h], fur, 0.3, 0);
     if (!rig.override) {
       ctx.save(); ctx.beginPath(); ctx.moveTo(-w, R(r * 0.25)); ctx.lineTo(w, R(r * 0.25)); ctx.lineTo(0, -h); ctx.closePath(); ctx.clip();
@@ -199,7 +202,7 @@ function drawEar(ctx: CanvasRenderingContext2D, rig: CritterRig, kind: EarKind, 
       ctx.restore();
     }
   } else if (kind === 'long') {
-    const w = R(r * 0.3), h = R(r * 1.5);
+    const w = R(r * 0.3 * scale), h = R(r * 1.5 * scale);
     celCapsule(ctx, rig, 0, 0, 0, -h, w, fur, 0);
     if (!rig.override) {
       ctx.save(); pathCap(ctx, 0, 0, 0, -h, w); ctx.clip();
@@ -222,7 +225,7 @@ function drawEars(ctx: CanvasRenderingContext2D, rig: CritterRig, r: number, kin
   if (kind === 'none' || kind === 'dome') return;   // domes are eyes: drawn over the skull by makeHead
   const pal = rig.palette, far = rig.paletteFar;
   const tip = rig.build.earTip ? rig.col(pal.hair) : null;
-  const slot = spec.earSlot || 'skin', earR = spec.earR || 0.4;
+  const slot = spec.earSlot || 'skin', earR = spec.earR || 0.4, scale = spec.earScale || 1;
   const pos = spec.earPos || null, pn = pos ? pos.near : EAR_NEAR, pf = pos ? pos.far : EAR_FAR;
   let a0 = 0, a1 = 0;
   if (kind === 'long') {
@@ -234,8 +237,8 @@ function drawEars(ctx: CanvasRenderingContext2D, rig: CritterRig, r: number, kin
   }
   const splayF = kind === 'long' ? -18 : kind === 'droop' ? 14 : 0;
   const splayN = kind === 'long' ? 12 : kind === 'droop' ? -10 : 0;
-  drawEar(ctx, rig, kind, R(r * pf.x), R(r * pf.y), r, far[slot], far.belly, tip, true, a1 + splayF, earR);
-  drawEar(ctx, rig, kind, R(r * pn.x), R(r * pn.y), r, pal[slot], pal.belly, tip, false, a0 + splayN, earR);
+  drawEar(ctx, rig, kind, R(r * pf.x), R(r * pf.y), r, far[slot], far.belly, tip, true, a1 + splayF, earR, scale);
+  drawEar(ctx, rig, kind, R(r * pn.x), R(r * pn.y), r, pal[slot], pal.belly, tip, false, a0 + splayN, earR, scale);
 }
 
 // ---------------------------------------------------------------- head (head space, faces +x)
@@ -453,11 +456,16 @@ export function makeBoot(hex: string): CritterHook {
 }
 
 // ---------------------------------------------------------------- tail (hip space, back layer, +x forward)
+/**
+ * The tail's sway: one module constant rather than a literal in the draw, so a tail allocates nothing per frame. The
+ * diners' own tails (villagerParts.ts: the horse's, the robin's) ride the same chain, so every tail swings alike.
+ */
+export const TAIL_CHAIN: Readonly<ChainOpts> = Object.freeze({ joint: 'torso', rest: [-1, 0.2] as [number, number], stiffness: 0.12, damping: 0.72, gain: 1.8, maxAng: 35 });
 export function makeTail(kind: TailKind, hex: string | null = null): RigAccessory {
   return { attach: 'hip', layer: 'back', draw(ctx, rig, pose) {
     if (kind === 'none') return;   // a frog
     const pal = rig.palette, fur = hex || pal.skin, hw = R(rig.p.hip / 2);
-    const ch = getChain(rig, 'tail', 2, { joint: 'torso', rest: [-1, 0.2], stiffness: 0.12, damping: 0.72, gain: 1.8, maxAng: 35 });
+    const ch = getChain(rig, 'tail', 2, TAIL_CHAIN);
     ctx.save(); ctx.translate(-hw + 2, -3); ctx.rotate(rad(ch.ang[0]));
     if (kind === 'stub') celBall(ctx, rig, -3, -1, 4, fur, false);
     else if (kind === 'puff') celBall(ctx, rig, -4, -1, 5, pal.belly, false);
@@ -563,7 +571,8 @@ export function cap(hex: string): RigAccessory {
 /**
  * Assemble a critter build from a species spec:
  * { palette, ears: 'round'|'point'|'long'|'small'|'droop'|'dome'|'none', earTip, earR (round ear radius / headR, 0.4),
- *   earPos { near: {x,y}, far: {x,y} } (fractions of headR), earSlot ('skin' | 'hair': what colours the ear),
+ *   earScale (standing-ear size, 1), earPos { near: {x,y}, far: {x,y} } (fractions of headR),
+ *   earSlot ('skin' | 'hair': what colours the ear),
  *   muzzle (size 0.8..1.2), nose (false = none), markings (fn), tail: 'stub'|'puff'|'bushy'|'ring'|'thin'|'none', tailHex,
  *   apron (false = none), boots (hex), sleeveHex, proportions, scale, accessories: [], parts: {} (overrides), face: {} }
  */

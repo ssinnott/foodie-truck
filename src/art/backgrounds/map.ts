@@ -1420,7 +1420,8 @@ const DINER_LOOK = Object.freeze({
 /**
  * A village diner of content/critters/villagers.ts on the pavement: the same 10 px head on an 8 px body as the three
  * above, drawn from the diner's own `map` look (its fur, dark, cream and cloth, its ears, and ONE cue - a comb, a
- * shell, antlers, a bill - in `cueHex`), so the figure in the queue is the animal that reaches the hatch.
+ * shell, antlers, a bill, a mane, a bonnet - in `cueHex`), so the figure in the queue is the animal that reaches the
+ * hatch.
  */
 function drawVillagerDiner(ctx, sx, sy, L, f, top, wave) {
   const X = (dx, w) => (f > 0 ? sx + dx : sx - dx - w);
@@ -1429,6 +1430,12 @@ function drawVillagerDiner(ctx, sx, sy, L, f, top, wave) {
   if (cue === 'shell') boxOutlined(ctx, X(-8, 6), top - 12, 6, 9, cx);
   if (cue === 'tail') { ctx.fillStyle = INK; ctx.fillRect(X(-8, 4), top - 8, 4, 6); ctx.fillStyle = L.fur; ctx.fillRect(X(-7, 2), top - 7, 2, 4); ctx.fillStyle = cx; ctx.fillRect(X(-7, 2), top - 7, 2, 1); }
   if (cue === 'quills') { ctx.fillStyle = INK; ctx.fillRect(X(-7, 4), top - 12, 4, 8); ctx.fillStyle = L.dark; ctx.fillRect(X(-6, 2), top - 11, 2, 6); }
+  // a bat's wing: a dark membrane swept up behind the shoulders to a point, its lower edge scalloped by the ink
+  if (cue === 'wings') {
+    ctx.fillStyle = INK; ctx.fillRect(X(-12, 3), top - 20, 3, 5); ctx.fillRect(X(-12, 8), top - 16, 8, 6);
+    ctx.fillStyle = cx; ctx.fillRect(X(-11, 1), top - 19, 1, 4); ctx.fillRect(X(-11, 6), top - 15, 6, 3);
+    ctx.fillRect(X(-11, 1), top - 12, 1, 1); ctx.fillRect(X(-8, 2), top - 12, 2, 1);
+  }
   boxOutlined(ctx, sx - 4, top - 11, 8, 8, L.fur);
   ctx.fillStyle = L.cloth; ctx.fillRect(sx - 4, top - 6, 8, 3);
   ctx.fillStyle = L.cream; ctx.fillRect(X(0, 3), top - 10, 3, 4);
@@ -1444,6 +1451,8 @@ function drawVillagerDiner(ctx, sx, sy, L, f, top, wave) {
   // the face: eye, muzzle, nose, and the one cue
   if (cue === 'mask') { ctx.fillStyle = cx; ctx.fillRect(sx - 5, hy + 2, 10, 3); }
   if (cue === 'blaze') { ctx.fillStyle = L.cream; ctx.fillRect(X(1, 2), hy, 2, 6); }
+  if (cue === 'puffinbill') { ctx.fillStyle = L.cream; ctx.fillRect(X(-1, 6), hy + 1, 6, 7); }   // the white face, under the eye
+  if (cue === 'mane') { ctx.fillStyle = INK; ctx.fillRect(X(-7, 3), hy - 1, 3, 11); ctx.fillStyle = cx; ctx.fillRect(X(-6, 2), hy, 2, 9); ctx.fillRect(X(-1, 3), hy, 3, 1); }
   ctx.fillStyle = L.cream; ctx.fillRect(X(1, 5), hy + 4, 5, 4);
   ctx.fillStyle = INK; ctx.fillRect(X(1, 1), hy + 2, 1, 2); ctx.fillRect(X(5, 1), hy + 4, 1, 1);
   if (cue === 'comb') { ctx.fillStyle = cx; ctx.fillRect(X(-1, 4), hy - 2, 4, 2); ctx.fillRect(X(6, 2), hy + 7, 2, 2); ctx.fillStyle = MAP.mustard; ctx.fillRect(X(6, 3), hy + 4, 3, 2); }
@@ -1453,6 +1462,19 @@ function drawVillagerDiner(ctx, sx, sy, L, f, top, wave) {
   if (cue === 'quills') { ctx.fillStyle = L.dark; ctx.fillRect(sx - 5, hy - 2, 8, 3); ctx.fillRect(X(-5, 3), hy + 1, 3, 5); }
   if (cue === 'beanie') { ctx.fillStyle = INK; ctx.fillRect(sx - 6, hy - 4, 12, 6); ctx.fillStyle = cx; ctx.fillRect(sx - 5, hy - 3, 10, 3); ctx.fillStyle = L.cream; ctx.fillRect(sx - 5, hy - 1, 10, 2); ctx.fillRect(sx - 1, hy - 6, 2, 2); }
   if (cue === 'cap') { ctx.fillStyle = INK; ctx.fillRect(sx - 6, hy - 3, 12, 4); ctx.fillStyle = cx; ctx.fillRect(sx - 5, hy - 2, 10, 2); ctx.fillRect(X(5, 3), hy - 1, 3, 1); }
+  // a bonnet over the crown and down the back of the head, and the bill under it
+  if (cue === 'bonnet') {
+    ctx.fillStyle = INK; ctx.fillRect(X(-7, 10), hy - 2, 10, 4); ctx.fillRect(X(-7, 4), hy - 2, 4, 11);
+    ctx.fillStyle = cx; ctx.fillRect(X(-6, 8), hy - 1, 8, 2); ctx.fillRect(X(-6, 2), hy - 1, 2, 9);
+    ctx.fillStyle = L.billHex || MAP.mustard; ctx.fillRect(X(5, 4), hy + 4, 4, 2);
+  }
+  if (cue === 'beak') { ctx.fillStyle = cx; ctx.fillRect(X(5, 3), hy + 4, 3, 2); }
+  if (cue === 'longbeak') { ctx.fillStyle = cx; ctx.fillRect(X(5, 6), hy + 4, 6, 1); ctx.fillRect(X(5, 3), hy + 5, 3, 1); }
+  // a boar: a dark crest of bristles over the crown and a tusk standing up off the jaw
+  if (cue === 'tusks') { ctx.fillStyle = L.dark; ctx.fillRect(X(-3, 5), hy - 2, 5, 2); ctx.fillStyle = cx; ctx.fillRect(X(6, 1), hy + 5, 1, 3); }
+  // a captain's cap: a white crown on a dark band, and the peak out over the brow
+  if (cue === 'captain') { ctx.fillStyle = INK; ctx.fillRect(sx - 6, hy - 5, 12, 6); ctx.fillRect(X(6, 2), hy, 2, 2); ctx.fillStyle = cx; ctx.fillRect(sx - 5, hy - 4, 10, 3); }
+  if (cue === 'puffinbill') { ctx.fillStyle = cx; ctx.fillRect(X(5, 3), hy + 3, 3, 4); ctx.fillRect(X(8, 1), hy + 4, 1, 2); }
 }
 
 export function drawDiner(ctx, sx, sy, kind, facing = 1, bob = 0, wave = 0) {

@@ -26,8 +26,11 @@ export type { Decoded } from '../lib/net/protocol.ts';
  * 4: the menu grew from sixty-three recipes to seventy-two (content/recipes.ts ORDERS). The day plan shuffles the
  * menu by index (game/run.ts planOneDay), so the same seed draws different dishes on the two builds - a different
  * shopping list from frame 0, exactly as a wrong day did.
+ * 5: the village grew to twenty-seven diners (content/critters/diners.ts). The plan deals each line by shuffling the
+ * whole roll on its seeded stream, so a peer with the shorter roll draws a different crowd and then a different
+ * everything after it - twists, crossings, weather and every later day's menu - from the same seed.
  */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 if (ACTIONS.length > 16) throw new Error('net/protocol: more than 16 actions no longer fit a uint16 mask');
 /**
  * START: the host's authoritative session parameters. Every peer seeds from this and begins at
