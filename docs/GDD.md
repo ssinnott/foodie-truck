@@ -29,7 +29,7 @@ differences, never gates: anyone can do any job.
 |---|---|---|
 | **The hungry one** | EAT / CARRY | Biggest basket; slowest; in the kitchen a random `bite` beat now and then that costs nothing but makes everyone laugh |
 | **The chef** | CHOP / MIX | Smallest basket; the one who plates with a flourish |
-| **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks |
+| **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks. The hare runs the grass: with Chicory seated, the truck moves 1.4 px/frame off the road instead of 1.0 (section 4; mud and the road are unchanged) |
 | **The forager** | GATHER / CAST | Fastest in the mini-games; longest fishing cast |
 | **The head chef** | TASTE / ORDER | Owns the truck and runs the crew; steady everywhere, best at the pass; tastes from the spoon |
 
@@ -242,7 +242,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
   `THE LINES ARE WAITING` at home).
 - **The truck** is one shared vehicle. Every seated player's stick is a vector; they are summed (the driver's ×1.5),
-  quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it,
+  quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it
+  (1.4 on the grass with a seated hare aboard, section 2; the mud patch slows it to 1.0 either way),
   turning at most 1 heading step per 4 frames. Roads are the fast path; fields are drivable but slow and dusty;
   water is not drivable — the river (its bridges are), the millpond and the cove's sea: the truck stops a
   half-token short of the edge with a splash. Arrival = within 40 px of a landmark's door point.

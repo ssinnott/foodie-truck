@@ -204,6 +204,21 @@ export const SCENARIOS = {
       assert(s1.top.truck.x > s0.top.truck.x + 80, `nothing slows in the fog (${s0.top.truck.x} -> ${s1.top.truck.x})`);
     });
   },
+  // the hare runs the grass only when she is seated: a party of three (0,1,3) brings her along as a friend, taking
+  // the orders, and the same drive with her riding that way stays at the plain field speed
+  async grass(server) {
+    for (const [critters, want, who] of [['0,1,2,3', 1.4, 'seated'], ['0,1,3', 1.0, 'a ride-along friend']]) {
+      await withPage(server, `skipTo=map&critters=${critters}`, async (api, page) => {
+        await api.step(5);
+        await noCrossings(page);
+        const s0 = await api.summary();
+        assert(s0.top.friends.includes('chicory') === (who !== 'seated'), `party ${critters}: the hare rides as ${who} (friends ${JSON.stringify(s0.top.friends)})`);
+        await api.hold(0, { right: true }); await api.step(120); await api.release(0);
+        const s1 = await api.summary();
+        assert(Math.abs(s1.top.speed - want) < 0.01, `party ${critters}: with the hare as ${who} the grass is driven at ${want} px/frame (speed ${s1.top.speed})`);
+      });
+    }
+  },
   async map(server) {
     await withPage(server, 'skipTo=map&critters=0,1,2,3', async (api, page) => {
       await api.step(5);
@@ -217,8 +232,9 @@ export const SCENARIOS = {
       const x0 = s0.top.truck.x;
       await api.hold(0, { right: true }); await api.step(120); await api.release(0);
       const s1 = await api.summary();
-      // the bay is off the lane, so this is field speed (1.0 px/frame) less the run-up
+      // the bay is off the lane, and this party carries the hare (critter 2): the grass speed (1.4 px/frame), less the run-up
       assert(s1.top.truck.x > x0 + 80, `holding right for 120 frames drives the truck east (${x0} -> ${s1.top.truck.x})`);
+      assert(Math.abs(s1.top.speed - 1.4) < 0.01, `a seated hare drives the grass at 1.4 px/frame (speed ${s1.top.speed})`);
       assert(s1.top.truck.heading === 0 && s1.run.truckAt === '', `heading east and no longer at home (heading ${s1.top.truck.heading}, at '${s1.run.truckAt}')`);
       await api.step(20);
       await api.shot('map-driving');
