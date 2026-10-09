@@ -23,8 +23,11 @@ export type { Decoded } from '../lib/net/protocol.ts';
  * 3: START carries the host's DAY of the week (game/run.ts DAY_SHAPES). A peer that ignores the byte plans day 0
  * while the host plans day 3 - a different menu, a different shopping list and a different number of queues, so
  * the two would disagree about the whole day from frame 0 rather than drift into it.
+ * 4: the menu grew from sixty-three recipes to seventy-two (content/recipes.ts ORDERS). The day plan shuffles the
+ * menu by index (game/run.ts planOneDay), so the same seed draws different dishes on the two builds - a different
+ * shopping list from frame 0, exactly as a wrong day did.
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 if (ACTIONS.length > 16) throw new Error('net/protocol: more than 16 actions no longer fit a uint16 mask');
 /**
  * START: the host's authoritative session parameters. Every peer seeds from this and begins at

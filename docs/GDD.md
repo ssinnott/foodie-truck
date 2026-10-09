@@ -113,22 +113,26 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **The day board** (`stage`) pins the plan up before the truck opens: the giant line, front first, and the **shopping list**
   — every ingredient of every order in the line, summed. Confirm opens the truck.
 - **A recipe** (`ORDERS`) names a dish, a phone line, 2–3 ingredients with amounts, and the kitchen steps in order.
-  Forty ship. The first seven — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup,
+  Seventy-two ship. The first seven — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup,
   griddle cakes — ask for the first seven ingredients (apples, trout, eggs, milk, flour, honey, carrots); the
   fifteen after them each carry one of the sixteen newer ones — pears, peaches, avocados, butter, rice, potatoes,
   onions, leeks, beetroot, pumpkins, cabbages, crabs, seaweed, sea salt, strawberries, blueberries — so every
   ingredient is somewhere a day can send the truck; and the eighteen after those (honey cakes, trout pie, fish and
   chips, carrot cake, strawberry milkshake, coleslaw, baked apples, pears in honey, crab chowder, pumpkin pie, leek
   and potato soup, egg fried rice, blueberry pancakes, avocado and crab salad, seaweed crisps, onion tart, beetroot
-  brownies, honey toffee) give every ingredient a second dish, so no landmark is a rare visit; and the eleven after
+  brownies, honey toffee) give all but the peaches a second dish, so no landmark is a rare visit; and the eleven after
   those (cherry pie, cherry clafoutis, plum crumble, cheese toastie, mac and cheese, porridge, flapjacks, tomato
   soup, pea soup, raspberry jam tarts, cockle stew) are what the third pass's eight ingredients - cherries, plums,
   cheese, oats, tomatoes, peas, raspberries, cockles - are for; and the twelve after those are what the three new
   landmarks send the truck for (hazelnut brownies, walnut loaf, roast chestnuts, nut roast; mushroom soup,
   mushrooms on toast, wild garlic butter, blackberry and apple pie, whose blackberries come off Bramble Bank; mint sauce, chive omelette, rosemary potatoes,
-  pea and mint soup). Sixty-three in all. Three of them never
-  touch the stove or the oven and baked apples is two steps long: the kitchen's variety is which stations a recipe
-  skips. Recipes are only ever appended, because `?order=N` and the scenarios name them by index.
+  pea and mint soup); and the last nine give a second dish to each of the eleven ingredients still on one - peaches,
+  plums, tomatoes, raspberries, cockles, hazelnuts, chestnuts, wild garlic, blackberries, chives, rosemary - in
+  peach melba, plums and custard, pizza, paella, pesto pasta, woodland pie, blackberry cheesecake, cheesy chive
+  scones and roast trout (the melba is the second for peaches and raspberries both, the pesto for wild garlic and
+  hazelnuts), which fills the recipe book's six pages to the last card. Six of the seventy-two never touch the stove
+  or the oven, and baked apples, roast chestnuts and roast trout are two steps long: the kitchen's variety is which
+  stations a recipe skips. Recipes are only ever appended, because `?order=N` and the scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
   orchard drops pears, peaches, avocados, cherries and plums as well as apples; the farm pulls six vegetables
   besides the carrot and grows tomatoes and peas up stakes; the dairy's pails go on through the churn to butter
@@ -612,9 +616,9 @@ row to the table; the audio playtest renders every track it finds and fails on a
 
 ## 12. The recipe book
 
-What this truck has cooked, who it has fed, what it has gathered and where it has been. Sixty-three recipes,
+What this truck has cooked, who it has fed, what it has gathered and where it has been. Seventy-two recipes,
 forty ingredients, twelve landmarks and three diners are in the game, and a player who finishes a whole week has
-met ten of the sixty-three recipes; the book is where the rest are, and it is the reason to open the game
+met ten of the seventy-two recipes; the book is where the rest are, and it is the reason to open the game
 tomorrow.
 
 **The invariant, which is the whole design:**
@@ -641,7 +645,7 @@ the closed day board):
 | **The diners** | Per `DINERS` id: times fed, and the dish they have ordered most | Pages of six deep rows on the slate (two columns of three; nineteen diners, four pages), each headed by the same head portrait the day board draws over its queues (`art/portraits.ts`), in the same plum window and idling on its own beat, with the tally and what they like beside it. A diner this truck has never served is that portrait **in pencil** - the village is all there from the first day, and who has eaten is not. |
 | **The larder** | Per `INGREDIENTS` id: how many gathered | The forty glyphs from `art/food.ts` in a grid, greyed until gathered once. |
 | **The road** | Per `PLACES` id: how many days the truck has been there | Twelve rows, the map's own names. |
-| **The strap** | Dishes cooked out of the whole menu | `23 OF 63 COOKED` - the number the closed board has never been able to print. |
+| **The strap** | Dishes cooked out of the whole menu | `23 OF 72 COOKED` - the number the closed board has never been able to print. |
 
 Counters saturate rather than overflow. An unknown id in a stored record is **dropped** on load rather than
 thrown on: a book written by a build with sixty-three recipes has to load on a build with seventy, and back

@@ -1,8 +1,8 @@
 // THE RECIPE BOOK (docs/GDD.md section 12): what this truck has cooked, who it has fed, what it has gathered and
 // where it has been - the gallery's sibling, and the only screen allowed to read game/book.ts.
 //
-// Sixty-three recipes, forty ingredients, twelve landmarks and three diners are in the game and a player who
-// finishes a week has met perhaps a sixth of them. The book is where the rest are: a dish already cooked is inked
+// Seventy-two recipes, forty ingredients, twelve landmarks and three diners are in the game and a player who
+// finishes a week has met perhaps a seventh of them. The book is where the rest are: a dish already cooked is inked
 // in with the picture art/dishes.ts already draws for it, one never cooked is the same card in PENCIL - the
 // silhouette faded back, its name blanked - so the shape of what is missing is visible without giving it away.
 //
@@ -36,7 +36,7 @@ const HEAD_TEXT = 'RECIPE BOOK';
  * across its bottom edge.
  */
 const STRAP_Y = 36;
-/** The dish grid: four across, three down, so sixty-three recipes are six pages of a book rather than a list. */
+/** The dish grid: four across, three down, so seventy-two recipes are six full pages of a book rather than a list. */
 const COLS = 4, ROWS = 3, CELL_W = 150, CELL_H = 76, CELL_GAP = 4, GRID_Y = 50;
 const PER_PAGE = COLS * ROWS;
 /**

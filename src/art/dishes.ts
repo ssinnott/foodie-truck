@@ -17,6 +17,8 @@ const CRUST = '#D9A25A', CRUST_DARK = '#B07A3A', TOAST = '#C98A4B', BATTER = '#E
 const BOWL = '#9DB5B2', BOWL_DARK = '#76908C', SEAWEED = '#3F7A4E', GREEN = '#5FA652', CHEESE = '#F5D66B';
 /** A leek soup's pale green and a brownie's dark chocolate: neither is any ingredient's own hex. */
 const PALE_LEEK = '#C9D9A0', BROWNIE = '#5A3A2E';
+/** A paella's steel pan, a shade under the enamel's own dark, and the pesto the wild garlic and the nuts make. */
+const PAN = '#5E7370', PESTO = '#6F9A3A';
 const hexOf = (id: string) => INGREDIENTS[id].hex;
 
 type DishDraw = (ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) => void;
@@ -479,6 +481,144 @@ export const DISHES: Record<string, DishDraw> = {
   },
   peaMintSoup(ctx, cx, cy, s) {
     soupBowl(ctx, cx, cy, s, hexOf('pea'), (c, x, y) => { c.fillStyle = CREAM; c.fillRect(R(x - s * 0.3), R(y - s * 0.55), R(s * 0.6), 2); flecks(c, x, y, s, hexOf('mint'), [-0.5, -0.4, 0.4, -0.45]); });
+  },
+  // ---- the fifth menu: a second dish for every ingredient that had only one ----
+  peachMelba(ctx, cx, cy, s) {
+    // a coupe on a stem: a scoop of ice cream and a peach half sat in it, the raspberry poured over, a berry on top
+    box(ctx, cx - s * 0.45, cy + s * 0.42, s * 0.9, s * 0.18, BOWL);                                       // the foot
+    ctx.fillStyle = INK; ctx.fillRect(R(cx) - 1, R(cy + s * 0.1), 3, R(s * 0.35));                        // the stem
+    const ic = foodTones(CREAM), p = foodTones(hexOf('peach')), rb = hexOf('raspberry');
+    oval(ctx, cx - s * 0.3, cy - s * 0.5, s * 0.5, s * 0.45, ic.base);                                     // the scoop
+    oval(ctx, cx + s * 0.42, cy - s * 0.42, s * 0.4, s * 0.36, p.base);                                    // the peach half
+    ctx.fillStyle = p.sh; ctx.fillRect(R(cx + s * 0.36), R(cy - s * 0.5), 3, 3);                            // where its stone was
+    // the coupe, in front of them both
+    ctx.beginPath(); ctx.moveTo(cx - s, cy - s * 0.3); ctx.lineTo(cx + s, cy - s * 0.3); ctx.quadraticCurveTo(cx + s * 0.85, cy + s * 0.15, cx, cy + s * 0.15); ctx.quadraticCurveTo(cx - s * 0.85, cy + s * 0.15, cx - s, cy - s * 0.3); ctx.closePath(); inkFill(ctx, BOWL);
+    ctx.save(); ctx.clip(); ctx.fillStyle = BOWL_DARK; ctx.fillRect(R(cx - s), R(cy - s * 0.05), R(s * 2), R(s * 0.25)); ctx.restore();
+    // the raspberry poured over the scoop - a cap of it with two drips running down - and one whole on the top
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx - s * 0.3, cy - s * 0.5, s * 0.5, s * 0.45, 0, 0, TAU); ctx.clip();
+    ctx.fillStyle = rb; ctx.fillRect(R(cx - s * 0.85), R(cy - s), R(s * 1.1), R(s * 0.3));
+    ctx.fillRect(R(cx - s * 0.62), R(cy - s * 0.72), 2, R(s * 0.32)); ctx.fillRect(R(cx - s * 0.18), R(cy - s * 0.72), 2, R(s * 0.2));
+    ctx.restore();
+    oval(ctx, cx - s * 0.3, cy - s * 1.02, s * 0.17, s * 0.17, rb);
+    shine(ctx, cx - s * 0.75, cy - s * 0.22);
+  },
+  plumsAndCustard(ctx, cx, cy, s) {
+    // stewed plum halves sitting in a bowl of custard (the custard tart's own yellow) - more custard than plums, as
+    // asked - with the shine on the custard and a fleck of nutmeg
+    soupBowl(ctx, cx, cy, s, CHEESE, (c, x, y) => {
+      const t = foodTones(hexOf('plum'));
+      for (let i = 0; i < 2; i++) {
+        const px = x - s * 0.45 + i * s * 0.7, py = y - s * 0.38 + i * s * 0.05;
+        c.beginPath(); c.arc(px, py, s * 0.22, 0, TAU); inkFill(c, t.base);
+        c.fillStyle = t.hi; c.fillRect(R(px - s * 0.1), R(py - s * 0.1), 2, 2);
+      }
+      c.fillStyle = CREAM; c.fillRect(R(x - s * 0.15), R(y - s * 0.62), R(s * 0.45), 2);
+      flecks(c, x, y, s, CRUST_DARK, [0.55, -0.55]);
+    });
+  },
+  pizza(ctx, cx, cy, s) {
+    // the whole pizza seen from the counter: crust round the rim, the tomato, the cheese melted over it in blobs, a
+    // leaf or two of green, and the cuts across it
+    const c = foodTones(CRUST);
+    oval(ctx, cx, cy, s * 1.15, s * 0.6, c.base);
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx, cy, s * 1.15, s * 0.6, 0, 0, TAU); ctx.clip(); ctx.fillStyle = c.sh; ctx.fillRect(R(cx - s * 1.15), R(cy + s * 0.3), R(s * 2.3), R(s * 0.3)); ctx.restore();
+    ctx.fillStyle = hexOf('tomato'); ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.05, s * 0.9, s * 0.42, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = hexOf('cheese');
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.ellipse(cx + (i - 1.5) * s * 0.42, cy - s * 0.12 + (i & 1) * s * 0.2, s * 0.22, s * 0.13, 0, 0, TAU); ctx.fill(); }
+    flecks(ctx, cx, cy, s, GREEN, [-0.3, -0.32, 0.4, 0.12]);
+    ctx.strokeStyle = c.sh; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.9, cy - s * 0.05); ctx.lineTo(cx + s * 0.9, cy - s * 0.05);
+    ctx.moveTo(cx - s * 0.45, cy - s * 0.42); ctx.lineTo(cx + s * 0.45, cy + s * 0.32); ctx.moveTo(cx + s * 0.45, cy - s * 0.42); ctx.lineTo(cx - s * 0.45, cy + s * 0.32); ctx.stroke();
+  },
+  paella(ctx, cx, cy, s) {
+    // the wide steel pan with a handle out of each side, the rice gone gold, cockles open in it, tomato and green
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - s * 1.2), R(cy - s * 0.02), R(s * 0.3), 3); ctx.fillRect(R(cx + s * 0.9), R(cy - s * 0.02), R(s * 0.3), 3);
+    oval(ctx, cx, cy + s * 0.1, s * 1.05, s * 0.5, PAN);
+    const r = foodTones(CHEESE), ck = foodTones(hexOf('cockle'));
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.02, s * 0.86, s * 0.36, 0, 0, TAU); ctx.clip();
+    ctx.fillStyle = r.base; ctx.fillRect(R(cx - s), R(cy - s * 0.4), R(s * 2), R(s * 0.8));
+    ctx.fillStyle = r.sh; ctx.fillRect(R(cx - s), R(cy + s * 0.2), R(s * 2), R(s * 0.2));
+    ctx.restore();
+    // the cockles: three shells standing open, a ribbed fan each on its hinge
+    for (let i = 0; i < 3; i++) {
+      const sx = cx - s * 0.5 + i * s * 0.5, sy = cy + s * 0.08 - (i & 1) * s * 0.2;
+      ctx.beginPath(); ctx.moveTo(sx, sy + s * 0.14); ctx.arc(sx, sy, s * 0.24, Math.PI * 0.95, Math.PI * 2.05); ctx.closePath(); inkFill(ctx, ck.base);
+      ctx.fillStyle = ck.sh; ctx.fillRect(R(sx), R(sy - s * 0.18), 1, R(s * 0.26));
+    }
+    flecks(ctx, cx, cy, s, hexOf('tomato'), [-0.75, 0.05, 0.25, 0.2, 0.7, -0.05]);
+    flecks(ctx, cx, cy, s, GREEN, [-0.3, 0.25, 0.5, -0.25]);
+  },
+  pestoPasta(ctx, cx, cy, s) {
+    // a bowl of pasta in the pesto: the pale strands twirled up out of the bowl under a dollop of the green, more of
+    // it streaked through the bowl, a fork stood in the twirl and the hazelnuts crumbled over
+    const p = foodTones(BATTER), g = foodTones(PESTO);
+    soupBowl(ctx, cx, cy, s, BATTER, (c, x, y) => { c.fillStyle = g.base; c.fillRect(R(x - s * 0.9), R(y - s * 0.5), R(s * 0.35), 2); c.fillRect(R(x + s * 0.5), R(y - s * 0.55), R(s * 0.4), 2); c.fillRect(R(x - s * 0.6), R(y - s * 0.3), R(s * 0.3), 2); });
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.7, cy - s * 0.4); ctx.quadraticCurveTo(cx - s * 0.1, cy - s * 1.4, cx + s * 0.6, cy - s * 0.4); ctx.quadraticCurveTo(cx - s * 0.05, cy - s * 0.2, cx - s * 0.7, cy - s * 0.4); inkFill(ctx, p.base);
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = p.sh; ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(cx - s * 0.05, cy - s * 0.2, s * (0.3 + i * 0.2), Math.PI * 1.08, Math.PI * 1.92); ctx.stroke(); }   // the strands, wound round
+    ctx.fillStyle = g.base; ctx.beginPath(); ctx.ellipse(cx - s * 0.12, cy - s * 0.88, s * 0.5, s * 0.28, 0, 0, TAU); ctx.fill();   // the pesto
+    ctx.fillRect(R(cx - s * 0.45), R(cy - s * 0.75), 2, R(s * 0.25)); ctx.fillRect(R(cx + s * 0.2), R(cy - s * 0.75), 2, R(s * 0.2));
+    ctx.restore();
+    flecks(ctx, cx, cy, s, hexOf('hazelnut'), [-0.35, -0.9, 0.0, -0.98, -0.2, -0.75]);
+    // the fork: an ink stroke with the steel inside it, standing up out of the twirl
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx + s * 0.2, cy - s * 0.75); ctx.lineTo(cx + s * 0.7, cy - s * 1.45); ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.stroke(); ctx.strokeStyle = BOWL; ctx.lineWidth = 2; ctx.stroke();
+    ctx.lineCap = 'butt';
+  },
+  woodlandPie(ctx, cx, cy, s) {
+    // a deep-baked pie with a mushroom stood on its lid for what is under it - a plain one, no spots: the customer
+    // said to hold the toadstools - and the chestnuts and the mushrooms showing at the crust's edge
+    pieDish(ctx, cx, cy, s, TOAST, noTop);
+    flecks(ctx, cx, cy, s, hexOf('chestnut'), [-0.85, -0.3, 0.7, -0.4, -0.3, -0.6]);
+    flecks(ctx, cx, cy, s, hexOf('mushroom'), [-0.6, -0.5, 0.45, -0.55]);
+    const m = foodTones(hexOf('mushroom'));
+    box(ctx, R(cx) - 1, cy - s * 0.98, 3, s * 0.26, CREAM);                                                 // the stalk
+    ctx.beginPath(); ctx.ellipse(cx, cy - s * 0.95, s * 0.36, s * 0.24, 0, Math.PI, 0); ctx.closePath(); inkFill(ctx, m.base);   // the cap
+    ctx.fillStyle = m.hi; ctx.fillRect(R(cx - s * 0.18), R(cy - s * 1.08), 2, 2);
+  },
+  blackberryCheesecake(ctx, cx, cy, s) {
+    // a slice lying with its point to the left: the oat base, the deep cream, the blackberry poured over the top and
+    // running down the cut face, two berries left whole on it
+    const bb = foodTones(hexOf('blackberry'));
+    ctx.beginPath(); ctx.moveTo(cx - s * 1.1, cy + s * 0.6); ctx.lineTo(cx + s * 0.95, cy + s * 0.6); ctx.lineTo(cx + s * 0.95, cy - s * 0.45); ctx.lineTo(cx - s * 1.1, cy + s * 0.15); ctx.closePath(); inkFill(ctx, CREAM);
+    ctx.save(); ctx.clip();
+    // the base baked golden like a flapjack, the oats showing in it
+    ctx.fillStyle = CRUST; ctx.fillRect(R(cx - s * 1.1), R(cy + s * 0.36), R(s * 2.1), R(s * 0.3));
+    flecks(ctx, cx, cy, s, hexOf('oats'), [-0.7, 0.42, -0.1, 0.45, 0.5, 0.42]);
+    ctx.fillStyle = bb.base; ctx.beginPath(); ctx.moveTo(cx - s * 1.1, cy + s * 0.15); ctx.lineTo(cx + s * 0.95, cy - s * 0.45); ctx.lineTo(cx + s * 0.95, cy - s * 0.22); ctx.lineTo(cx - s * 1.1, cy + s * 0.3); ctx.closePath(); ctx.fill();
+    ctx.fillRect(R(cx + s * 0.1), R(cy - s * 0.2), 2, R(s * 0.3)); ctx.fillRect(R(cx - s * 0.5), R(cy), 2, R(s * 0.2));   // the drips
+    ctx.restore();
+    for (let i = 0; i < 2; i++) { const x = cx + s * 0.42 + i * s * 0.33, y = cy - s * 0.48 - i * s * 0.1; oval(ctx, x, y, s * 0.19, s * 0.19, bb.base); ctx.fillStyle = bb.hi; ctx.fillRect(R(x - 1), R(y - 1), 1, 1); }
+  },
+  cheeseScones(ctx, cx, cy, s) {
+    // two squat scones side by side: pale crumb at the sides, golden tops with the cheese crisped onto them, the
+    // chives showing through the crumb
+    const top = foodTones(CRUST), side = foodTones(BATTER);
+    for (let i = 0; i < 2; i++) {
+      const x = cx - s * 0.52 + i * s * 1.04, y = cy + s * 0.05 - (i ? 0 : s * 0.08);
+      box(ctx, x - s * 0.46, y, s * 0.92, cy + s * 0.6 - y, side.base);
+      ctx.fillStyle = side.sh; ctx.fillRect(R(x - s * 0.46) + 1, R(cy + s * 0.42), R(s * 0.92) - 2, R(s * 0.16));
+      oval(ctx, x, y, s * 0.46, s * 0.2, top.base);
+      ctx.fillStyle = hexOf('cheese'); ctx.beginPath(); ctx.ellipse(x - s * 0.04, y - s * 0.02, s * 0.26, s * 0.1, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = CRUST_DARK; ctx.fillRect(R(x + s * 0.1), R(y - s * 0.06), 2, 2);                        // a crisp of it, toasted
+      flecks(ctx, x, cy, s, hexOf('chive'), [-0.28, 0.3, 0.14, 0.4]);
+    }
+  },
+  roastTrout(ctx, cx, cy, s) {
+    // the whole fish on its side, tail and all, its back browned by the oven and a sprig of rosemary laid along it
+    const t = foodTones(hexOf('fish')), rm = hexOf('rosemary');
+    ctx.beginPath(); ctx.moveTo(cx + s * 0.6, cy + s * 0.15); ctx.lineTo(cx + s * 1.15, cy - s * 0.25); ctx.lineTo(cx + s * 1.0, cy + s * 0.18); ctx.lineTo(cx + s * 1.15, cy + s * 0.58); ctx.closePath(); inkFill(ctx, t.base);   // the tail
+    oval(ctx, cx - s * 0.2, cy + s * 0.15, s * 0.9, s * 0.45, t.base);
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx - s * 0.2, cy + s * 0.15, s * 0.9, s * 0.45, 0, 0, TAU); ctx.clip();
+    ctx.fillStyle = TOAST; ctx.fillRect(R(cx - s * 1.1), R(cy - s * 0.35), R(s * 1.8), R(s * 0.3));         // the browned back
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 1.1), R(cy + s * 0.4), R(s * 1.8), R(s * 0.3));           // the belly
+    ctx.restore();
+    ctx.fillStyle = INK; ctx.fillRect(R(cx - s * 0.85), R(cy), 2, 2);                                       // the eye
+    ctx.fillStyle = t.sh; ctx.fillRect(R(cx - s * 0.68), R(cy - s * 0.12), 1, R(s * 0.45));                 // the gill
+    // the sprig, lying along the fish's side: a stalk with its needles either side
+    ctx.fillStyle = rm; ctx.fillRect(R(cx - s * 0.45), R(cy + s * 0.12), R(s * 0.85), 2);
+    flecks(ctx, cx, cy, s, rm, [-0.35, -0.04, -0.05, -0.04, 0.25, -0.04, -0.2, 0.28, 0.1, 0.28]);
   },
 };
 
