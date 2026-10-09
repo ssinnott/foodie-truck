@@ -36,7 +36,6 @@ import { ringAt, floatText, burstDrops, burstDust } from '../../art/fx.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import type { Point } from '../../lib/art/rigParts.ts';
 import { F } from '../../content/critters/common.ts';
-import type { CritterFaceOpts } from '../../content/critters/common.ts';
 import { ROWS } from '../../art/backgrounds/pond.ts';
 import {
   PARA_N, PARA_T, PARA_H, BUCKET_DX, BUCKET_MID, BUCKET_TOP, LAND_FRAMES, CATCH_LIFT, BOOT_MOUTH, drawLine, drawBoot, drawFloat,
@@ -437,7 +436,7 @@ export function drawBigSeat(ctx: CanvasRenderingContext2D, sc: PondScreen, s: Po
     return;
   }
   if (k < K_UP) return;
-  const climbing = k < K_STAND, coated = k < K_CLEAN && !domeEyed(s);
+  const climbing = k < K_STAND, coated = k < K_CLEAN;
   o.x = s.x; o.y = climbing ? climbFeet(s, k - K_UP, h) : s.y;
   if (climbing) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, VIEW_W, CLIP_Y); ctx.clip(); }
   if (coated) coat(rig, COAT.pond);
@@ -456,14 +455,6 @@ export function drawBigSeat(ctx: CanvasRenderingContext2D, sc: PondScreen, s: Po
     drawLilyHat(ctx, R(x0 + (x1 - x0) * PARA_T[i]), R(y0 + (y1 - y0) * PARA_T[i] - PARA_H[i] * PAD_LIFT), j * PAD_SPIN, false);
   }
 }
-
-/**
- * A coat would take the eyes of a critter whose eyes are DOMES (Cress: content/critters/common.ts makeHead stops
- * before it draws the domes under any override, and her whites are her own `belly` cream, not EYE_WHITE), so the
- * frog comes out of the pond uncoated, dripping, a frog on her head like everybody else. Which is also simply true:
- * pond weed does not stick to a frog.
- */
-function domeEyed(s: PondSeat): boolean { const fo = s.rig.faceOpts as CritterFaceOpts | null; return !!(fo && fo.domeEyes); }
 
 /** True while the big one's critter is under the water: the screen draws no name plate over the empty spot. */
 export function submerged(s: PondSeat): boolean { const k = BIG_FRAMES - s.t; return s.state === BIG && k >= K_SPLASH && k < K_UP; }
