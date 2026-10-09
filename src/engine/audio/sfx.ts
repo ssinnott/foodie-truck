@@ -220,6 +220,22 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   brush: (c, d, t, o) => noise(c, d, t, { dur: 0.16, vol: 0.12 * o.v, type: 'bandpass', f0: 1800 * o.p, f1: 900 * o.p, q: 0.8, attack: 0.02 }),
   /** The toadstool: a wrinkled-nose 'pooh', a sine sliding down with a wobble on it. */
   pooh: (c, d, t, o) => osc(c, d, t, { type: 'sine', f0: 520 * o.p, f1: 220 * o.p, glide: 0.25, dur: 0.3, vol: 0.1 * o.v, attack: 0.01, vib: { rate: 12, depth: 20 } }),
+  /** Two sniffs at the toadstool: short breaths in through the nose on the crouch's two sniffs, the second longer. */
+  wood_sniff: (c, d, t, o) => { noise(c, d, t + 0.05, { dur: 0.06, vol: 0.08 * o.v, type: 'highpass', f0: 1800 * o.p, f1: 3000 * o.p, attack: 0.03 }); return noise(c, d, t + 0.17, { dur: 0.1, vol: 0.09 * o.v, type: 'highpass', f0: 2000 * o.p, f1: 3400 * o.p, attack: 0.05 }); },
+  /** PEE-YOO: the stink cloud's soft puff, then a nasal 'pee' and a 'yoo' sliding down with a wobble on it. */
+  wood_peeyoo: (c, d, t, o) => {
+    noise(c, d, t, { dur: 0.3, vol: 0.14 * o.v, type: 'lowpass', f0: 900 * o.p, f1: 250 * o.p, attack: 0.02 });
+    osc(c, d, t + 0.08, { type: 'square', f0: 1050 * o.p, f1: 1150 * o.p, dur: 0.1, vol: 0.05 * o.v, attack: 0.01, lp: 2500 });
+    return osc(c, d, t + 0.2, { type: 'square', f0: 820 * o.p, f1: 300 * o.p, glide: 0.3, dur: 0.36, vol: 0.06 * o.v, attack: 0.02, lp: 1800, vib: { rate: 9, depth: 35 } });
+  },
+  /** The vine round an ankle: a slither of leaves and a creak of green wood under it. */
+  wood_creep: (c, d, t, o) => { noise(c, d, t, { dur: 0.35, vol: 0.08 * o.v, type: 'bandpass', f0: 900 * o.p, f1: 2200 * o.p, q: 1.2, attack: 0.15 }); return osc(c, d, t + 0.05, { type: 'sawtooth', f0: 180 * o.p, f1: 240 * o.p, dur: 0.3, vol: 0.05 * o.v, attack: 0.08, lp: 900, vib: { rate: 26, depth: 40 } }); },
+  /** WHOOP: hauled up the vine - a rising whoosh with a slide whistle going up inside it. */
+  wood_whoop: (c, d, t, o) => { whoosh(c, d, t, { v: o.v, p: o.p, f0: 300, f1: 3200, dur: 0.22, vol: 0.22 }); return osc(c, d, t, { type: 'sine', f0: 330 * o.p, f1: 1100 * o.p, glide: 0.2, dur: 0.26, vol: 0.12 * o.v, attack: 0.01 }); },
+  /** FLUMP: down into the leaves - a soft thump and a crunch of dry litter over it. */
+  wood_flump: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 100, lp: 700, dur: 0.12, vol: 0.32 }); return noise(c, d, t + 0.01, { dur: 0.28, vol: 0.16 * o.v, type: 'bandpass', f0: 2400 * o.p, f1: 700 * o.p, q: 0.7, attack: 0.005 }); },
+  /** The leaves shaken off: three quick rustles, each a little lower. */
+  wood_shake: (c, d, t, o) => { for (let i = 0; i < 3; i++) noise(c, d, t + i * 0.08, { dur: 0.07, vol: 0.09 * o.v, type: 'bandpass', f0: (2600 - i * 300) * o.p, q: 0.9, attack: 0.01 }); return t + 0.24; },
   /** The flock across the lane: a bleat, a wobbly square wave that dips and comes back up. */
   baa: (c, d, t, o) => osc(c, d, t, { type: 'square', f0: 330 * o.p, f1: 290 * o.p, glide: 0.2, dur: 0.32, vol: 0.08 * o.v, attack: 0.02, lp: 1500, vib: { rate: 14, depth: 25 } }),
   /** The duck parade: two quacks, a nasal sawtooth each, the second a step lower. */
