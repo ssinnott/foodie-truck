@@ -6,6 +6,7 @@ import { setTouchTyping, setTouchAlt, setTouchVirtual, TOUCH_STICK, TOUCH_BUTTON
 import { turnSideways } from './engine/sideways.ts';
 import { drawTouchPad } from './game/touchpad.ts';
 import { links } from './engine/links.ts';
+import { arcade } from './engine/arcade.ts';
 import { audio } from './engine/audio.ts';
 import { rng } from './lib/engine/rng.ts';
 import { createCanvas } from './lib/engine/canvas.ts';
@@ -107,6 +108,9 @@ function boot() {
   // The outward links' own listeners: a click on a drawn address is a real user gesture, which the fixed step's
   // call is not (engine/links.ts). Nothing else on the canvas listens for a click.
   links.init(view);
+  // Framed by the arcade, the title gets a way back to its shelf and an invite opens the arcade (engine/arcade.ts).
+  // Anywhere else this finds nothing and changes nothing. Before the first screen, which is the title that asks.
+  arcade.init();
   // Sound comes on with the first key or tap (the browser's autoplay rule); in autotest no context is ever made.
   audio.testMode = options.autotest;
   audio.init();
@@ -184,7 +188,7 @@ function boot() {
   }
 
   Object.assign(hooks, {
-    game, input, audio, rng, options, loop,
+    game, input, audio, rng, options, loop, arcade,
     scenes: SCENES,
     step(n = 1) { loop.step(n); },
     screen() { return game.screenId(); },

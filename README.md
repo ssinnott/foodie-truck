@@ -114,6 +114,10 @@ extra critters stand in for an online party; only the first is yours to drive). 
 whole menu, or `&day=5` to open on that day of the week. The title's CREW row opens the gallery, a contact sheet
 of every critter and animation, and its BOOK row opens the recipe book.
 
+The game also sits on the shelf of the [arcade](https://github.com/ssinnott/arcade), beside the other games. There
+the title has one more row, BACK TO ARCADE, and an invite link opens the arcade at this game; on its own site
+nothing changes (`docs/ARCHITECTURE.md`, `engine/arcade.ts`).
+
 ## Online co-op with a host key
 
 Two to four players over the internet with no server of our own. The host picks ONLINE, hosts a table and reads
