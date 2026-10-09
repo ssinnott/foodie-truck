@@ -370,8 +370,6 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   dairy_thwap: (c, d, t, o) => { whoosh(c, d, t, { v: o.v, p: o.p, f0: 2600, f1: 500, dur: 0.09, vol: 0.22, q: 1.2 }); noise(c, d, t + 0.08, { dur: 0.04, vol: 0.3 * o.v, type: 'highpass', f0: 1800 * o.p, attack: 0.001 }); return thump(c, d, t + 0.08, { v: o.v, p: o.p, f: 170, lp: 1600, dur: 0.08, vol: 0.28 }); },
   /** Down on its bottom in the straw: a soft thud and the straw's rustle. */
   dairy_flump: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 95, lp: 700, dur: 0.12, vol: 0.3 }); return noise(c, d, t + 0.02, { dur: 0.18, vol: 0.08 * o.v, type: 'highpass', f0: 2600 * o.p, f1: 3600 * o.p, attack: 0.01 }); },
-  /** The broody hen's peck: one hard high knock, dry, and a short squawk after it. */
-  peck: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.035, vol: 0.26 }); return osc(c, d, t + 0.05, { type: 'square', f0: 900 * o.p, f1: 1300 * o.p, glide: 0.05, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2400 }); },
   /** The hen hops off the nest: two clucks, a wobble of pitch on each, and a flap of noise. */
   cluck: (c, d, t, o) => { osc(c, d, t, { type: 'square', f0: 700 * o.p, f1: 520 * o.p, glide: 0.06, dur: 0.08, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); osc(c, d, t + 0.11, { type: 'square', f0: 760 * o.p, f1: 560 * o.p, glide: 0.06, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); return noise(c, d, t + 0.02, { dur: 0.16, vol: 0.06 * o.v, type: 'bandpass', f0: 1800 * o.p, f1: 900 * o.p, q: 0.7, attack: 0.01 }); },
   /** The surprise egg cracking in the paw: one dry tick of shell and a short crackle running after it. */
