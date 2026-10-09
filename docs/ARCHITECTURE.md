@@ -70,7 +70,8 @@ src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (
                logo, backgrounds/ (one pre-rendered scene each)
 src/game/      game (screen stack), run (the week's plan + the day + party + shopping list, the only cross-screen state),
                week (the week in progress, saved between sittings), book (the recipe book: written by the game,
-               read only by screens/book), animation, menuinput,
+               read only by screens/book), friends (who rides along with the party) + kitchenFriends (what they do
+               in the kitchen: cosmetic), animation, menuinput,
                ui (the paper/chalk/wood kit), minigame (shared mini-game furniture), maphud, touchpad (the
                on-screen controls, drawn), screens/ (one per screen)
 src/content/   critters/ (the cast: common rig hooks + one file per critter + items + customers), recipes, places
@@ -259,7 +260,8 @@ Accessories are part factories: `toque(bandHex)` (`chefHat` = `toque(null)`), `b
 `scarfTail(hex)`, `cap(hex)`; helpers `hatY(rig)`, `muzzleGeom(r, size)`, `DOME`, `PLUM_STRAP` place things on the
 skull; `eggPath` and `drawApron` are the shared body and player spot a `parts.torso` override draws with (the
 human head chef, `rowan.ts`, whose head, face, torso and hand are its own hooks on the same rig). `content/critters/items.js` `ITEMS.<name>` are held items — `basket` (`rig.basketFill`, `rig.basketIcon`),
-`rod`, `spoon`, `knife`, `food` (`rig.heldIcon`, `rig.heldHex`), `plate`, `horn` — set as `rig.weapon`. Every cast
+`rod`, `spoon`, `knife`, `food` (`rig.heldIcon`, `rig.heldHex`), `plate`, `horn`, `pad` (the order-taker's clipboard,
+`rig.padLines`) — set as `rig.weapon`. Every cast
 file exports `{ id, name, fullName, role, species, colour, bio, build, anims }` and is listed in
 `content/critters/index.js` `CRITTERS` (order = cast index: append, never reorder — the index crosses the wire in
 the START packet, which is why `PROTOCOL_VERSION` moved when the cast grew); `content/critters/customers.js`
@@ -362,6 +364,16 @@ bought and what is worn. `bankDay` pays each closed night's coins in once (keyed
 screen buys into its own copy and saves it in `exit()`; `truckStyleFor(game)` is what the truck-drawing screens
 read in `enter()` - the stock truck in a live match. Like the book it never reaches the simulation, and online it
 banks nothing.
+
+### `game/friends.ts` and `game/kitchenFriends.ts` — the friends who ride along
+`friendsOf(party)` → up to two `{ critter, job }` (docs/GDD.md section 2): a PURE function of the party, so every
+peer seats the same friends from START and a resumed week needs nothing saved for them. `ridersFor(party, after)`
+builds each a rig in the off-duty apron and an idling player (in `enter()`), and `pushRiderHeads` adds their heads to
+a truck's `heads` after the crew's: the map, the line, results and the night's garage all ride them at the hatch,
+never in the cab, and never past the four heads the windows hold. `KitchenFriends` is the kitchen's order-taker and
+runner (`enter(run)`, `update(custs, served)`, `draw(ctx, custs)`, `summary()`): cosmetic by construction — no
+input, no step, its own `makeRng` stream rather than the gameplay singleton, nothing in `checksumFields` — the same
+contract as the kitchen's flights. The `friends*` playtest scenarios hold all of that from outside.
 
 ### Flow
 ```

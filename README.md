@@ -47,7 +47,10 @@ simulation, which is what lets a saved file exist at all in a game that runs fou
 
 The cast are original anthropomorphic countryside animals — **Barley** the Suffolk sheep (the hungry one), **Sorrel**
 the field mouse (the chef), **Chicory** the brown hare (the driver) and **Cress** the pond frog (the forager) — and
-the one human who owns the truck and runs them: **Rowan**, the head chef. All five are playable.
+the one human who owns the truck and runs them: **Rowan**, the head chef. All five are playable, and whoever you
+pick brings **two friends** from the rest of the cast along for the day: they ride at the truck's hatch window, and in
+the kitchen one takes the line's orders at the hatch with a clipboard while the other runs about the floor (the
+select screen shows who is coming before you stamp READY).
 
 The whole game is vanilla JavaScript ES modules and one HTML5 canvas at 640×360, scaled up with nearest-neighbour
 filtering. There are no image, audio or font files: every sprite, backdrop, glyph and particle is drawn from code,

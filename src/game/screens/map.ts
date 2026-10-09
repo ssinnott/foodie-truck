@@ -49,6 +49,8 @@ import { INK } from '../../art/layers.ts';
 import { drawTruck } from '../../art/truck.ts';
 import type { TruckStyle } from '../../art/truck.ts';
 import { truckStyleFor } from '../garage.ts';
+import { ridersFor } from '../friends.ts';
+import type { Rider } from '../friends.ts';
 import {
   CHUNK_W, CHUNK_H, CHUNKS_X, CHUNKS_Y, DRIVE_MIN_X, DRIVE_MAX_X, DRIVE_MIN_Y, DRIVE_MAX_Y, LANE_HALF, RIVER_BLOCK, SPOTS, SIGN_AT, PARK_AT,
   ROADSIDE_TREES, GLINTS, STOP_LAMPS, BUILDINGS, BEACON, buildingSprite, chunkLayer, treeSprite, signSprite, cloudShadowSprite, destGlowSprite, laneDist, waterBlocked,
@@ -239,6 +241,8 @@ export class MapScreen extends Screen {
   declare seats: MapSeat[];
   /** The heads in the hatch: the driver, then the rest in the order that keeps two pale furs apart. */
   declare heads: MapHead[];
+  /** The friends riding along (game/friends.ts): heads at the hatch, never at the wheel, idling with the crew. */
+  declare riders: Rider[];
   /** The checksum scratch array `checksumFields()` fills and hands back; never reallocated. */
   declare sum: number[];
 
@@ -318,7 +322,7 @@ export class MapScreen extends Screen {
    */
   declare hint: string;
 
-  constructor(game: Game) { super(game, 'map'); this.touchAlt = true; this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.sum = [0, 0, 0, 0, 0, 0]; this.lineRows = []; this.diners = []; }
+  constructor(game: Game) { super(game, 'map'); this.touchAlt = true; this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.riders = []; this.sum = [0, 0, 0, 0, 0, 0]; this.lineRows = []; this.diners = []; }
   override enter(params: ScreenParams): void {
     super.enter(params);
     const run = this.game.run, truck = run.truck;
@@ -345,9 +349,12 @@ export class MapScreen extends Screen {
     this.heads.push({ rig: this.seats[di].rig, pose: this.seats[di].player.pose });
     // the hatch holds three 7 px heads shoulder to shoulder, so two pale furs must not end up neighbours
     // (ART_STYLE section 0.1). With three aboard the fur furthest from the other two takes the middle slot;
-    // with two or fewer there is nothing to collide. Deterministic: a fixed function of the party.
-    const rest = [];
+    // with two or fewer there is nothing to collide. Deterministic: a fixed function of the party - and so are the
+    // friends riding along with it (game/friends.ts), who take the hatch's seats after the crew's
+    this.riders = ridersFor(run.party, run.party.length);
+    const rest: { rig: Rig; player: AnimPlayer }[] = [];
     for (let i = 0; i < this.seats.length; i++) if (i !== di) rest.push(this.seats[i]);
+    for (const r of this.riders) rest.push(r);
     if (rest.length === 3) {
       let mid = 0, bd = -1;
       for (let m = 0; m < 3; m++) {
@@ -427,6 +434,7 @@ export class MapScreen extends Screen {
     if (inp.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
     for (const s of this.seats) s.player.tick();
+    for (const r of this.riders) r.player.tick();
     // steering: every seat's stick summed, the driver's weighted; the wheel widget lights the seats that push
     let vx = 0, vy = 0, mask = 0;
     for (const s of this.seats) {
@@ -824,6 +832,8 @@ export class MapScreen extends Screen {
     const t = this.truck;
     return {
       truck: { x: Math.round(t.x), y: Math.round(t.y), heading: t.heading, at: t.at }, speed: Math.round(this.speed * 100) / 100, dest: this.destId, destLine: this.destLine, serving: this.serving, sign: this.signTimer > 0 ? this.signText : '', honk: this.honk > 0, blocked: this.blocked, seats: this.seats.length,
+      // the friends riding along, and every head in the truck's windows (the driver's first)
+      friends: this.riders.map((r) => r.critter), heads: this.heads.length,
       queued: this.diners.filter((d) => d.x > -1000).length,
       queues: this.diners.filter((d) => d.x > -1000).map((d) => ({ line: d.ci, who: d.who, x: d.x, y: d.y })),
       crossings: this.game.run.crossings.map((c) => ({ x: c.x, y: c.y, kind: c.kind, herd: c.herd, state: c.state, t: c.t, waved: c.waved })),

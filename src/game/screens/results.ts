@@ -11,7 +11,8 @@
 // the board, which closes the truck for the night.
 //
 // The crew in the windows throw `cheer` when the stars land, each seat a few frames behind the last so four critters
-// never move as one body, and each diner cheers once their plate is empty. Params: { stars: number[] } (one per
+// never move as one body - and the friends riding along (game/friends.ts) after them, on the same stagger - and each
+// diner cheers once their plate is empty. Params: { stars: number[] } (one per
 // dish, front of the line first; a bare number is one dish); a bare ?skipTo=results gives every diner two stars.
 import { VIEW_W, UI } from '../../constants.ts';
 import { Screen } from '../game.ts';
@@ -37,6 +38,7 @@ import { ITEMS } from '../../content/critters/items.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { TIP_COINS, dishGroups } from '../run.ts';
 import { truckStyleFor } from '../garage.ts';
+import { ridersFor, pushRiderHeads } from '../friends.ts';
 import type { TruckStyle } from '../../art/truck.ts';
 import { TRUCK_X, QUEUE_SCALE, ROW_SLOTS, DRIVER, queueSpot, drawWaiters } from './line.ts';
 import type { LineHead, Waiter, HeldPlate } from './line.ts';
@@ -140,7 +142,9 @@ export class ResultsScreen extends Screen {
   declare fields: number[];
   /** The crew in the truck, in party order (not slot order). */
   declare crew: Watcher[];
-  /** The heads in the truck's windows: the driver first, then the rest. */
+  /** The friends riding along (game/friends.ts): at the hatch after the crew, cheering after them on the same stagger. */
+  declare friends: Watcher[];
+  /** The heads in the truck's windows: the driver first, then the rest, then the friends. */
   declare heads: LineHead[];
   /** The truck's draw options, reused every frame. */
   declare truckOpts: { scale: number; wheel: number; facing: number; heads: LineHead[]; style: TruckStyle };
@@ -177,7 +181,7 @@ export class ResultsScreen extends Screen {
   /** The blinking PRESS <key> line. */
   declare prompt: string;
 
-  constructor(game: Game) { super(game, 'results'); this.fields = []; this.crew = []; this.heads = []; this.diners = []; this.rowText = []; this.rowStars = []; }
+  constructor(game: Game) { super(game, 'results'); this.fields = []; this.crew = []; this.friends = []; this.heads = []; this.diners = []; this.rowText = []; this.rowStars = []; }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -196,6 +200,10 @@ export class ResultsScreen extends Screen {
       this.heads.push({ rig: this.crew[di].rig, pose: this.crew[di].player.pose as Pose });
       for (let i = 0; i < this.crew.length; i++) if (i !== di) this.heads.push({ rig: this.crew[i].rig, pose: this.crew[i].player.pose as Pose });
     }
+    // the friends riding along, at the hatch after the crew, each cheering CHEER_LAG after the one before
+    const riders = ridersFor(run.party, this.crew.length);
+    this.friends = riders.map((r, j): Watcher => ({ rig: r.rig, player: r.player, cheerAt: STARS_AT + (this.crew.length + j) * CHEER_LAG, cheered: false }));
+    pushRiderHeads(this.heads, riders);
     this.truckOpts = { scale: 2, wheel: 0, facing: -1, heads: this.heads, style: truckStyleFor(game) };
     // the line: everyone still waiting, front first, where they stood, each with the stars the kitchen earned on
     // their dish
@@ -258,6 +266,11 @@ export class ResultsScreen extends Screen {
     for (let i = 0; i < this.crew.length; i++) {
       const c = this.crew[i];
       if (!c.cheered && f >= c.cheerAt) { c.cheered = true; c.player.play('cheer', { restart: true }); if (i === 0) game.audio.play('cheer'); }
+      c.player.tick();
+      if (c.player.done) c.player.play('idle', { restart: true });
+    }
+    for (const c of this.friends) {
+      if (!c.cheered && f >= c.cheerAt) { c.cheered = true; c.player.play('cheer', { restart: true }); }
       c.player.tick();
       if (c.player.done) c.player.play('idle', { restart: true });
     }
@@ -351,6 +364,8 @@ export class ResultsScreen extends Screen {
       stars: this.stars.slice(), total, score: this.score, diners: this.diners.length,
       chews: this.diners.map((d) => d.chews), holding: this.diners.map((d) => d.holding), dishes: this.diners.map((d) => d.dishId),
       stamp: this.frame >= this.stampAt ? this.stampText : '', left: this.left, receipt: this.rowText.slice(), coins: this.tip,
+      // the truck's windows: every head in them, how many are friends riding along, and how many of those have cheered
+      heads: this.heads.length, friends: this.friends.length, friendsCheered: this.friends.filter((c) => c.cheered).length,
     };
   }
   /** Every field that could diverge between peers (net/checksum.js). */

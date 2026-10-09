@@ -32,6 +32,9 @@
 // three stars: stars = max(1, round(its steps' total / (2 * its steps) * 3)). Barley's gag: on every completed
 // step, a seeded one-in-six chance he eats an ingredient (crumbs, NOM, no score change) - and the first push of his
 // stick or press of his button ends it, so the joke never holds a player up.
+// THE FRIENDS WHO RIDE ALONG (game/kitchenFriends.ts): out on the floor in front of the counter, one takes the line's
+// orders under the hatch and the other runs about. They are cosmetic through and through - no input, no step, no
+// gameplay rng, nothing in checksumFields - so this screen only builds, steps and draws them.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): every sim field is an integer or a px/frame sum driven by seat input;
 // the only random call is the gag, through `rng`; the steam, glow, rings, float text and the flights are cosmetic
@@ -62,6 +65,7 @@ import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
 import { drawText, measureText } from '../../engine/text.ts';
 import { twistTag, dishGroups } from '../run.ts';
+import { KitchenFriends } from '../kitchenFriends.ts';
 import { kitchenLayer, ROWS, HATCH, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.ts';
 import {
   PROPS, paintStations, drawStationFocus, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
@@ -418,9 +422,11 @@ export class KitchenScreen extends Screen {
   declare stepFrame: number;
   /** The card's pictograms for the current step. */
   declare schemes: readonly CardScheme[];
+  /** The friends riding along: the order-taker under the hatch and the runner on the floor (cosmetic only). */
+  declare friends: KitchenFriends;
 
   constructor(game: Game) {
-    super(game, 'kitchen'); this.seats = []; this.fields = [];
+    super(game, 'kitchen'); this.seats = []; this.fields = []; this.friends = new KitchenFriends();
     this.flights = [];
     for (let i = 0; i < FLY_POOL; i++) this.flights.push({ active: false, unit: 0, x0: 0, y0: 0, x1: 0, y1: 0, t: 0, from: 0, dest: -1 });
     this.pt = { x: 0, y: 0 };
@@ -529,6 +535,7 @@ export class KitchenScreen extends Screen {
         opts: { x: 0, y: ROWS.feet, facing: 1 }, head: { x: 0, y: 0 },
       });
     }
+    this.friends.enter(run);
     this.fields.length = 0;
   }
 
@@ -560,6 +567,7 @@ export class KitchenScreen extends Screen {
       this.handOver();
       if (this.serveT >= this.serveEnd) { game.replace('results', { stars: this.dishStars.slice(), score: this.total }); return; }
     }
+    this.friends.update(this.custs, this.served);
     for (let i = 0; i < this.seats.length; i++) this.pickAnim(this.seats[i]);
   }
 
@@ -887,6 +895,7 @@ export class KitchenScreen extends Screen {
       drawRig(ctx, s.rig, s.player.pose, o);
       jointScreen(s.rig, 'head', s.head);
     }
+    this.friends.draw(ctx, this.custs);   // in front of the cooks on the floor, and the bead over the diner ordering
     this.drawFlights(ctx);   // over the cooks: a tossed apple crosses in front of whoever is at the counter
     this.drawServing(ctx);   // and the plates going out, over everything in the room
     particles.draw(ctx, null, 'front');
@@ -1066,6 +1075,8 @@ export class KitchenScreen extends Screen {
       chops: this.chops, lidT: this.lidT, lids: this.lids, poofs: this.poofs,
       at, flying: this.flights.reduce((n, fl) => n + (fl.active ? 1 : 0), 0),
       seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
+      // the friends riding along: who, where, doing what; whose order is being taken; orders taken, dashes run
+      ...this.friends.summary(),
     };
   }
 
