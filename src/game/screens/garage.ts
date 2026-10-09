@@ -29,6 +29,7 @@ import type { Pose } from '../../lib/art/poses.ts';
 import { SLOTS, partsFor } from '../../content/garage.ts';
 import type { TruckPart } from '../../content/garage.ts';
 import { readGarage, saveGarage, buy, wear, owns } from '../garage.ts';
+import { ridersFor, pushRiderHeads } from '../friends.ts';
 import type { GarageRecord } from '../garage.ts';
 import { drawSlate, drawSign, drawTicket, drawStamp, drawHint } from '../ui.ts';
 import { confirmPressed, cancelPressed, navX, navY } from '../menuinput.ts';
@@ -85,7 +86,9 @@ export class GarageScreen extends Screen {
   declare preview: TruckStyle;
   /** The crew in the windows (the night's party; nobody when the garage is opened from the title). */
   declare crew: GarageSeat[];
-  /** The heads handed to drawTruck: the driver first, then the rest. */
+  /** The friends who rode along with the night's party (game/friends.ts), at the hatch after the crew. */
+  declare friends: GarageSeat[];
+  /** The heads handed to drawTruck: the driver first, then the rest, then the friends. */
   declare heads: LineHead[];
   /** The drawTruck options, reused every frame. */
   declare truckOpts: { scale: number; facing: number; squash: number; heads: LineHead[]; style: TruckStyle };
@@ -120,7 +123,7 @@ export class GarageScreen extends Screen {
   constructor(game: Game) {
     super(game, 'garage');
     this.fields = []; this.options = SLOTS.map((s) => partsFor(s.id)); this.showing = [0, 0, 0];
-    this.crew = []; this.heads = []; this.names = []; this.statuses = [];
+    this.crew = []; this.friends = []; this.heads = []; this.names = []; this.statuses = [];
   }
 
   override enter(params: ScreenParams): void {
@@ -134,8 +137,9 @@ export class GarageScreen extends Screen {
       const k = this.options[i].findIndex((p) => p.id === this.rec.wearing[SLOTS[i].id]);
       this.showing[i] = k < 0 ? 0 : k;
     }
-    // the night's crew in the windows, as on the line; from the title the truck stands empty
-    this.crew.length = 0; this.heads.length = 0;
+    // the night's crew in the windows, as on the line - and the friends who rode along with them; from the title
+    // the truck stands empty
+    this.crew.length = 0; this.friends.length = 0; this.heads.length = 0;
     if (run && this.from === 'night') {
       for (let i = 0; i < run.party.length; i++) {
         const p = run.party[i], def = getCritter(p.critter), player = new AnimPlayer(def.anims);
@@ -148,6 +152,9 @@ export class GarageScreen extends Screen {
         this.heads.push({ rig: this.crew[di].rig, pose: this.crew[di].player.pose as Pose });
         for (let i = 0; i < this.crew.length; i++) if (i !== di) this.heads.push({ rig: this.crew[i].rig, pose: this.crew[i].player.pose as Pose });
       }
+      const riders = ridersFor(run.party, this.crew.length);
+      for (const r of riders) this.friends.push({ rig: r.rig, player: r.player });
+      pushRiderHeads(this.heads, riders);
     }
     this.preview = { ...this.rec.wearing };
     this.truckOpts = { scale: TRUCK_SCALE, facing: 1, squash: 1, heads: this.heads, style: this.preview };
@@ -189,8 +196,9 @@ export class GarageScreen extends Screen {
     super.update();
     const game = this.game, inp = game.input, f = this.frame;
     particles.update();
-    for (let i = 0; i < this.crew.length; i++) {
-      const c = this.crew[i];
+    for (let i = 0; i < this.crew.length + this.friends.length; i++) {
+      // the friends cheer a sale too, after the crew on the same stagger
+      const c = i < this.crew.length ? this.crew[i] : this.friends[i - this.crew.length];
       if (this.soldAt >= 0 && f === this.soldAt + i * CHEER_LAG) c.player.play('cheer', { restart: true });
       c.player.tick();
       if (c.player.done) c.player.play('idle', { restart: true });
@@ -313,7 +321,7 @@ export class GarageScreen extends Screen {
       from: this.from, sel: this.sel, row: this.sel === EXIT_ROW ? this.exitText : SLOTS[this.sel].label,
       coins: this.rec.coins, owned: this.rec.owned.slice(), wearing: { ...this.rec.wearing }, preview: { ...this.preview },
       showing: this.options.map((o, i) => o[this.showing[i]].id), statuses: this.statuses.slice(), asking: this.asking,
-      sold: this.soldAt >= 0, left: this.left, exit: this.exitText, tag: this.tagText, crew: this.crew.length,
+      sold: this.soldAt >= 0, left: this.left, exit: this.exitText, tag: this.tagText, crew: this.crew.length, friends: this.friends.length,
     };
   }
   /** What could differ between two machines, were a garage ever shared: the cursor, the options showing, the ask. */

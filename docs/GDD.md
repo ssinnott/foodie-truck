@@ -41,6 +41,28 @@ differences, never gates: anyone can do any job.
 | 3 | **Cress** | pond frog | the forager |
 | 4 | **Rowan** | human | the head chef |
 
+**Two friends ride along.** Whoever a player picks brings two more of the cast with them for the day
+(`game/friends.ts`): the next two along the cast after the pick (round the end of the roll, past anyone seated). They
+ride at the truck's hatch window (cheering with the crew at results and in the garage) and lend a hand in the kitchen
+(section 6) - of the two, whichever stands higher in `ORDER_TAKERS` (the head chef, the hungry one, the frog, the
+mouse, the hare) **takes the orders** and the other **runs about** - so the head chef takes the orders whenever they
+come, and the hare runs about unless they come alone:
+
+| Pick | Takes the orders | Runs about |
+|---|---|---|
+| Barley | Sorrel | Chicory |
+| Sorrel | Cress | Chicory |
+| Chicory | Rowan | Cress |
+| Cress | Rowan | Barley |
+| Rowan | Barley | Sorrel |
+
+They are nobody's seat: no input reaches them, they score nothing, never touch a station and draw nothing from the
+gameplay rng, and they wear the off-duty apron. Who comes is a pure function of the party, so an online room seats the
+same friends on every peer and CONTINUE brings the same ones back from the saved party alone. A friend never takes the
+wheel (the driver's stick is the weighted one, section 4), and never more come than the truck seats - its windows hold
+four heads - so a party of two still brings two, a party of three brings one (who takes the orders) and a party of four
+none.
+
 The cast index is what the START packet and `?critters=` carry, so new members are appended, never filed in
 between. Palettes, proportions and signature accessories are the art direction's (`docs/ART_STYLE.md` §1) and
 live in `src/content/critters/`. Customers are NPC critters built with the same rig: twenty-seven village diners - an owl, an otter and a goat
@@ -115,22 +137,26 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **The day board** (`stage`) pins the plan up before the truck opens: the giant line, front first, and the **shopping list**
   — every ingredient of every order in the line, summed. Confirm opens the truck.
 - **A recipe** (`ORDERS`) names a dish, a phone line, 2–3 ingredients with amounts, and the kitchen steps in order.
-  Forty ship. The first seven — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup,
+  Seventy-two ship. The first seven — apple pie, fish cakes, apple omelette, honey loaf, custard tart, carrot soup,
   griddle cakes — ask for the first seven ingredients (apples, trout, eggs, milk, flour, honey, carrots); the
   fifteen after them each carry one of the sixteen newer ones — pears, peaches, avocados, butter, rice, potatoes,
   onions, leeks, beetroot, pumpkins, cabbages, crabs, seaweed, sea salt, strawberries, blueberries — so every
   ingredient is somewhere a day can send the truck; and the eighteen after those (honey cakes, trout pie, fish and
   chips, carrot cake, strawberry milkshake, coleslaw, baked apples, pears in honey, crab chowder, pumpkin pie, leek
   and potato soup, egg fried rice, blueberry pancakes, avocado and crab salad, seaweed crisps, onion tart, beetroot
-  brownies, honey toffee) give every ingredient a second dish, so no landmark is a rare visit; and the eleven after
+  brownies, honey toffee) give all but the peaches a second dish, so no landmark is a rare visit; and the eleven after
   those (cherry pie, cherry clafoutis, plum crumble, cheese toastie, mac and cheese, porridge, flapjacks, tomato
   soup, pea soup, raspberry jam tarts, cockle stew) are what the third pass's eight ingredients - cherries, plums,
   cheese, oats, tomatoes, peas, raspberries, cockles - are for; and the twelve after those are what the three new
   landmarks send the truck for (hazelnut brownies, walnut loaf, roast chestnuts, nut roast; mushroom soup,
   mushrooms on toast, wild garlic butter, blackberry and apple pie, whose blackberries come off Bramble Bank; mint sauce, chive omelette, rosemary potatoes,
-  pea and mint soup). Sixty-three in all. Three of them never
-  touch the stove or the oven and baked apples is two steps long: the kitchen's variety is which stations a recipe
-  skips. Recipes are only ever appended, because `?order=N` and the scenarios name them by index.
+  pea and mint soup); and the last nine give a second dish to each of the eleven ingredients still on one - peaches,
+  plums, tomatoes, raspberries, cockles, hazelnuts, chestnuts, wild garlic, blackberries, chives, rosemary - in
+  peach melba, plums and custard, pizza, paella, pesto pasta, woodland pie, blackberry cheesecake, cheesy chive
+  scones and roast trout (the melba is the second for peaches and raspberries both, the pesto for wild garlic and
+  hazelnuts), which fills the recipe book's six pages to the last card. Six of the seventy-two never touch the stove
+  or the oven, and baked apples, roast chestnuts and roast trout are two steps long: the kitchen's variety is which
+  stations a recipe skips. Recipes are only ever appended, because `?order=N` and the scenarios name them by index.
 - **An ingredient** (`INGREDIENTS`) names the landmark that supplies it. A landmark can supply several: the
   orchard drops pears, peaches, avocados, cherries and plums as well as apples; the farm pulls six vegetables
   besides the carrot and grows tomatoes and peas up stakes; the dairy's pails go on through the churn to butter
@@ -243,7 +269,7 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **HUD**: the shopping list (one row per ingredient, `have/amount`, a tick when full, the gold arrow on the first
   short one) while gathering, then the lines (`sign  N IN LINE`, washed back once served, the arrow on the one the
   compass points at); the steering-wheel widget with one tick per seat that lights while that seat pushes; the
-  crew's heads in the truck's windows; an off-screen destination arrow (the first short line's landmark, then the
+  crew's heads in the truck's windows, the friends riding along at the hatch after them (section 2); an off-screen destination arrow (the first short line's landmark, then the
   nearest waiting queue in town, whose lamp post carries the lantern); one hint line. `alt` honks: a `HONK!`
   stamp and a truck squash. The telephone at home rings once as the truck opens.
 
@@ -445,6 +471,28 @@ are handed through it, and what they are seen eating on results, a bite out of i
 batch is in it (lumps in the bowl, the ingredient's colour over the pot's rim, the tray in the oven window). This is a graphic: no step waits
 for a landing, and nothing about it is simulated (`kitchen.ts` flights are cosmetic).
 
+**The friends lend a hand** (`game/kitchenFriends.ts`; who they are is section 2). Both stand on the floor IN FRONT
+of the walk lane, so neither ever reaches the counter - no station, prop, timing card or plate on the shelf is ever
+covered - and a cook is only ever passed in front of, as anyone nearer the front of the room would be:
+
+- **The order-taker** stands under the hatch (x 552, feet on row 337, facing the line) with an order pad on a
+  clipboard (`ITEMS.pad`), and takes the line's orders a diner at a time, front of the line first. Each order is 70
+  frames: the diner waves (24 frames) and a paper bead with their dish in it comes up over their head; the friend
+  looks up at them, writes it down from frame 16 (a line on the pad every 10 frames, three lines to a page) with
+  their head over the pad, and nods at frame 50; the bead goes at frame 60. After the back of the line, a 120-frame
+  breather, then the front again. Far enough forward that the head chef's toque stays under the shelf's counts.
+- **The runner** runs about the front of the floor (x 96..466, feet on rows 308..334): a dash to a spot at random at
+  least 70 px across from where they stand, 2 or 3 px a frame across and 1 up or down, then a rest there - a breath
+  of 18..50 frames (45 %), a hop (20 %), a 36-frame cheer (15 %) or a 40-frame look round, turning about every 13
+  frames (20 %) - and off again.
+- **The bell** stops both: the asking ends, the pad is tucked away (a cheer raises the near paw, and an item in it
+  would cross the face), and the order-taker cheers the plates out with the runner 6 frames after.
+
+None of it is simulation. The friends take no input and claim no step; the runner's chances come off a stream of
+their own (`makeRng`, salted from the run's seed and the day), never the gameplay rng, stepped on the fixed step so
+every peer draws the same runner; and nothing about either is in `checksumFields`. The order-taker's beats (listen,
+write, nod) are laid over the cast's own table (`AnimPlayer.setOverlay`), so no cast member's animations change.
+
 Nothing can burn or be missed: every completed step scores its full 2, so stars = round(total / max × 3) is always
 3 for a served dish (minimum 1 by the formula).
 The hungry one, when seated, gets a `bite` beat on a seeded 1-in-6 chance each time a step completes: a crumb burst
@@ -522,7 +570,9 @@ player has bound M to something, while a rebind is listening, and while a host k
 - **title**: logo, the parked truck (wearing what the garage put on it) with the cast idling, menu PLAY / ONLINE / GARAGE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Seven rows, so the A-frame is 14 px taller than it was at six, grown upward so its legs stay put. Along the bottom, on one paper strip, the two addresses this game has: the repository - the SOURCE row's other half, lit while that row is selected - and the Ko-fi address beside it, which is a click and nothing else, no row and no key. Both are underlined, and both stay readable to type where a browser refuses the tab (`engine/links.ts`).
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
 - **select**: five 116×200 cards (the kit's 140 fitted four across), the player's one cursor, a READY stamp;
-  `next` = stage (starts the run). A party picks in the online lobby instead, each player on their own machine.
+  `next` = stage (starts the run). The two cards riding along with the pick under the cursor (section 2) wear the
+  truck's mustard across their header, lettered `TAKES ORDERS` / `RUNS ABOUT`, and the bio strip names them under
+  the bio (`SORREL AND CHICORY RIDE ALONG`). A party picks in the online lobby instead, each player on their own machine.
 - **stage** (the day board): the day's giant line pinned up as ONE wide paper ticket across the top — headed
   `THE LINE: 9 DINERS`, the town stop it waits at, and one block per customer in line order (portrait, name, the
   dish they will order) in rows of two or three — with the SHOPPING LIST on one wide ticket under it (every
@@ -614,9 +664,9 @@ row to the table; the audio playtest renders every track it finds and fails on a
 
 ## 12. The recipe book
 
-What this truck has cooked, who it has fed, what it has gathered and where it has been. Sixty-three recipes,
+What this truck has cooked, who it has fed, what it has gathered and where it has been. Seventy-two recipes,
 forty ingredients, twelve landmarks and three diners are in the game, and a player who finishes a whole week has
-met ten of the sixty-three recipes; the book is where the rest are, and it is the reason to open the game
+met ten of the seventy-two recipes; the book is where the rest are, and it is the reason to open the game
 tomorrow.
 
 **The invariant, which is the whole design:**
@@ -643,7 +693,7 @@ the closed day board):
 | **The diners** | Per `DINERS` id: times fed, and the dish they have ordered most | Pages of six deep rows on the slate (two columns of three; twenty-seven diners, five pages), each headed by the same head portrait the day board draws over its queues (`art/portraits.ts`), in the same plum window and idling on its own beat, with the tally and what they like beside it. A diner this truck has never served is that portrait **in pencil** - the village is all there from the first day, and who has eaten is not. |
 | **The larder** | Per `INGREDIENTS` id: how many gathered | The forty glyphs from `art/food.ts` in a grid, greyed until gathered once. |
 | **The road** | Per `PLACES` id: how many days the truck has been there | Twelve rows, the map's own names. |
-| **The strap** | Dishes cooked out of the whole menu | `23 OF 63 COOKED` - the number the closed board has never been able to print. |
+| **The strap** | Dishes cooked out of the whole menu | `23 OF 72 COOKED` - the number the closed board has never been able to print. |
 
 Counters saturate rather than overflow. An unknown id in a stored record is **dropped** on load rather than
 thrown on: a book written by a build with sixty-three recipes has to load on a build with seventy, and back

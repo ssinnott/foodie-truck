@@ -1,5 +1,5 @@
 // THE RECIPE BOOK (docs/GDD.md section 12): what this truck has cooked, who it has fed, what it has gathered and
-// where it has been. Sixty-three recipes, forty ingredients, twelve landmarks and three diners are in the game
+// where it has been. Seventy-two recipes, forty ingredients, twelve landmarks and three diners are in the game
 // and a player has no way of knowing most of them are there; the book is where they are.
 //
 // THE INVARIANT, which is the whole design:

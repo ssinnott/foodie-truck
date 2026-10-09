@@ -21,6 +21,9 @@ const STEEL = '#9FB0B8';
 const WILLOW = '#6B4E3A';
 /** The horn's two point lists, module constants: a draw hook allocates nothing (ART_STYLE section 9). */
 const HORN_BELL = [9, -3, 15, -5, 15, 5, 9, 3], HORN_BULB = [-7, -4, 1, -4, 1, 4, -7, 4];
+/** The order pad's page, and the lines of an order written on it: each 2 px of pencil (the 2 px floor), on a 4 px
+ *  pitch so paper shows between them, ragged like handwriting. `[x, y, w]` in the pad's upright space. */
+const PAD_PAGE = '#F4F0E6', PAD_LINES = [-3, -14, 6, -3, -10, 4, -3, -6, 5];
 
 /**
  * Rotate the context so +y points down in root space (the item hangs from the paw), then draw. rig.light is the
@@ -83,5 +86,21 @@ export const ITEMS = {
   /** A tray / plate held flat in front. */
   plate: { attach: 'handR', length: 14, draw(ctx, rig) {
     upright(ctx, rig, () => { celRect(ctx, rig, -12, 2, 24, 4, 2, '#F4F0E6', 0.4, 0.2); });
+  } },
+  /**
+   * An order pad on a clipboard, held up in front of the chest (the kitchen's order-taker, game/kitchenFriends.ts):
+   * the board STANDS on the paw, which closes over its foot, with the page and a steel clip over its head, and
+   * `rig.padLines` (0..3) lines of the order written on the page so far.
+   */
+  pad: { attach: 'handR', length: 8, draw(ctx, rig) {
+    upright(ctx, rig, () => {
+      celRect(ctx, rig, -6, -19, 12, 17, 1, WOOD_DARK, 0.3, 0.2);
+      if (rig.override) return;
+      ctx.fillStyle = rig.col(PAD_PAGE); ctx.fillRect(-4, -16, 8, 12);
+      ctx.fillStyle = rig.col(rig.outline);
+      const n = Math.min(3, rig.padLines || 0);
+      for (let i = 0; i < n; i++) ctx.fillRect(PAD_LINES[i * 3], PAD_LINES[i * 3 + 1], PAD_LINES[i * 3 + 2], 2);
+      band(ctx, rig, -3, -21, 6, 4, STEEL);
+    });
   } },
 };

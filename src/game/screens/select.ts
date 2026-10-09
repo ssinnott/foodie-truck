@@ -8,6 +8,11 @@
 // engine/input.js like every other, and everything the screen simulates is two numbers (which card, ready or not),
 // which is what `checksumFields` reports. The rigs are built ONCE in enter() - one per card in the seat's apron and
 // one off duty - so a cursor moving to a card changes which pre-built rig is drawn rather than building one in draw().
+//
+// THE FRIENDS WHO RIDE ALONG (game/friends.ts): whoever the cursor stands on brings two more of the cast with them,
+// and the screen says who before the stamp goes down - those two cards wear the truck's own mustard (its awning's
+// stripe) across their header, lettered with the job each one does in the kitchen, and the bio strip names them
+// under the bio. Not the off-duty apron they wear all day: that tan IS the paper-dark band every other card has.
 import { VIEW_W, UI, PLAYER_COLORS } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { CritterDef, Game, ScreenParams } from '../game.ts';
@@ -20,6 +25,8 @@ import { AnimPlayer } from '../../lib/art/animation.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import type { PartialPose } from '../../lib/art/poses.ts';
 import { startRun } from '../run.ts';
+import { friendsOf } from '../friends.ts';
+import type { FriendJob } from '../friends.ts';
 import { clearWeek } from '../week.ts';
 import { freshSeed } from '../../lib/engine/rng.ts';
 import { CARD_H, drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.ts';
@@ -84,8 +91,15 @@ const STAMP_ROW = 142;
  */
 const STAMP_OPTS = { size: 3, color: TRUCK.body, light: TRUCK.bodyHi };
 const HEAD_TEXT = 'CHOOSE YOUR CHARACTER';
-/** The bio strip under the cards: a torn-off order pad with whoever the cursor is standing on written on it. */
-const BIO = { x: 150, y: 284, w: 340, h: 30 };
+/** The bio strip under the cards: a torn-off order pad with whoever the cursor is standing on written on it, and
+ *  under the bio who rides along with them. BIO_ROWS are the two rows' tops in strip space; a pick that brings
+ *  nobody (never, from this screen) keeps the bio on the strip's one middle row. */
+const BIO = { x: 150, y: 284, w: 340, h: 30 }, BIO_ROWS = [6, 17], BIO_MID = 11;
+/** A friend card's header band, by the job they do in the kitchen (game/friends.ts). */
+const JOB_TEXT: Record<FriendJob, string> = { order: 'TAKES ORDERS', run: 'RUNS ABOUT' };
+/** The text kits the header bands and the bio strip write in (ink; the friends' row in the role line's wood), built
+ *  once rather than per draw. */
+const INK_TEXT = { size: 1, color: UI.ink, align: 'center' as const, shadow: false }, FRIENDS_TEXT = { size: 1, color: UI.wood, align: 'center' as const, shadow: false };
 
 /**
  * The player's seat. The two numbers that can diverge between machines are `card` and `ready` - `checksumFields`
@@ -118,6 +132,11 @@ export interface SelectCard {
   anchor: PartialPose | null;
   /** The three pip counts in STAT_LABELS order (STATS, or STATS_DEFAULT for a card with no entry). */
   stats: number[];
+  /** Per card of the row: the job its cast member does riding along with THIS card's pick, or '' when they do not
+   *  come (game/friends.ts friendsOf). Indexed like `cards`. */
+  jobs: (FriendJob | '')[];
+  /** The bio strip's second row for this pick: who rides along ('SORREL AND CHICORY RIDE ALONG'). */
+  friendsText: string;
 }
 
 export class SelectScreen extends Screen {
@@ -152,8 +171,18 @@ export class SelectScreen extends Screen {
       const player = new AnimPlayer(def.anims);
       player.play('idle');
       for (let k = 0; k < i * 11; k++) player.tick();
-      return { def, rigs: [critterRig(def, -1), critterRig(def, SEAT)], player, anchor: idlePoseOf(def), stats: STATS[def.id] || STATS_DEFAULT };
+      return { def, rigs: [critterRig(def, -1), critterRig(def, SEAT)], player, anchor: idlePoseOf(def), stats: STATS[def.id] || STATS_DEFAULT, jobs: [], friendsText: '' };
     });
+    // who rides along with each pick, worked out once: the cards they stand on, the job each does, and the strip's row
+    for (const c of this.cards) {
+      const friends = friendsOf([{ critter: c.def.id }]), names: string[] = [];
+      c.jobs = this.cards.map(() => '');
+      for (const f of friends) {
+        const k = this.cards.findIndex((o) => o.def.id === f.critter);
+        if (k >= 0) { c.jobs[k] = f.job; names.push(this.cards[k].def.name); }
+      }
+      c.friendsText = names.length > 1 ? `${names.join(' AND ')} RIDE ALONG` : names.length ? `${names[0]} RIDES ALONG` : '';
+    }
     this.seats = [{ slot: SEAT, card: 0, ready: false, t: 0 }];
     this.starting = -1; this.started = false;
     // The hint line in the player's own buttons - a player on a pad is told A and B, not Z and C. BOTH are built
@@ -237,14 +266,18 @@ export class SelectScreen extends Screen {
   /** Which seat is standing on card `i`, or -1. */
   pickerOf(i) { for (const s of this.seats) if (s.card === i) return s.slot; return -1; }
 
+  /** The job card `i`'s cast member does riding along with the pick under the cursor, or '' when they stay home. */
+  jobOf(i: number): FriendJob | '' { const s = this.seats[0]; return s ? this.cards[s.card].jobs[i] : ''; }
+
   card(ctx, i) {
-    const c = this.cards[i], x = cardX(i, this.cards.length), y = CARD_Y, slot = this.pickerOf(i);
-    // paper, one ink line, a torn top edge, and a header band in the picking seat's colour
+    const c = this.cards[i], x = cardX(i, this.cards.length), y = CARD_Y, slot = this.pickerOf(i), job = slot >= 0 ? '' : this.jobOf(i);
+    // paper, one ink line, a torn top edge, and a header band in the picking seat's colour - or, on the two cards
+    // riding along with the pick, the truck's mustard
     ctx.fillStyle = 'rgba(47,35,56,0.35)'; pathRR(ctx, x + 3, y + 4, CARD_W, CARD_H, 3); ctx.fill();
     pathRR(ctx, x, y, CARD_W, CARD_H, 3);
     ctx.strokeStyle = UI.ink; ctx.lineWidth = 2; ctx.stroke();
     ctx.fillStyle = UI.paper; ctx.fill();
-    ctx.fillStyle = slot >= 0 ? PLAYER_COLORS[slot] : UI.paperDark;
+    ctx.fillStyle = slot >= 0 ? PLAYER_COLORS[slot] : job ? TRUCK.mustard : UI.paperDark;
     ctx.fillRect(x + 1, y + 1, CARD_W - 2, 14);
     ctx.fillStyle = UI.ink; ctx.fillRect(x + 1, y + 15, CARD_W - 2, 1);
     ctx.fillStyle = UI.ink;
@@ -256,7 +289,7 @@ export class SelectScreen extends Screen {
       ctx.fillRect(x + CARD_W - 3, y + 16, 2, CARD_H - 18);
       ctx.fillRect(x + 1, y + CARD_H - 3, CARD_W - 2, 2);
     }
-    drawText(ctx, slot >= 0 ? PICKS_TEXT[slot] : c.def.species, x + CARD_W / 2, y + 5, { size: 1, color: UI.ink, align: 'center', shadow: false });
+    drawText(ctx, slot >= 0 ? PICKS_TEXT[slot] : job ? JOB_TEXT[job] : c.def.species, x + CARD_W / 2, y + 5, INK_TEXT);
     // the plum doily porthole: the pale furs never sit on paper (docs/ART_STYLE.md section 1, the risk note).
     // The ring never changes, so it is one blit of a layer painted in art/logo.js; only the bust is live.
     const cx = x + CARD_W / 2, cy = y + PORT_CY;
@@ -295,15 +328,19 @@ export class SelectScreen extends Screen {
       const x = cardX(seat.card, this.cards.length) + CARD_W / 2;
       drawStamp(ctx, 'READY', x, CARD_Y + STAMP_ROW, Math.min(1, seat.t / STAMP_FRAMES), STAMP_OPTS);
     }
-    const lead = this.cards[this.seats[0].card];
+    const lead = this.cards[this.seats[0].card], two = !!lead.friendsText;
     drawTicket(ctx, BIO.x, BIO.y, BIO.w, BIO.h, { rules: false, header: false });
-    drawText(ctx, lead.def.bio || lead.def.fullName, BIO.x + BIO.w / 2, BIO.y + 11, { size: 1, color: UI.ink, align: 'center', shadow: false });
+    drawText(ctx, lead.def.bio || lead.def.fullName, BIO.x + BIO.w / 2, BIO.y + (two ? BIO_ROWS[0] : BIO_MID), INK_TEXT);
+    if (two) drawText(ctx, lead.friendsText, BIO.x + BIO.w / 2, BIO.y + BIO_ROWS[1], FRIENDS_TEXT);
     drawHint(ctx, this.game.input.device(0) === 'gamepad' ? this.hintPad : this.hint);
   }
 
   override summary() {
     return {
       seats: this.seats.map((s) => ({ slot: s.slot, critter: this.cards[s.card].def.id, ready: s.ready })),
+      // who rides along with the pick under the cursor, as the cards and the strip show it ('sorrel:order')
+      friends: this.seats.length ? this.cards[this.seats[0].card].jobs.map((j, k) => j ? `${this.cards[k].def.id}:${j}` : '').filter(Boolean) : [],
+      friendsText: this.seats.length ? this.cards[this.seats[0].card].friendsText : '',
       starting: this.starting >= 0, started: this.started,
     };
   }
