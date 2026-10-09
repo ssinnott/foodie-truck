@@ -462,6 +462,11 @@ only where a screen reads it), and **MENU** up top. A button stays held until th
 rolls, because half the mini-games are played by holding GO. The fixed d-pad this replaced had to be landed on and
 stayed on: a thumb drifting over its edge let go of the direction it was holding.
 
+**A phone is always landscape.** Held upright, the game is drawn on its side — a quarter turn clockwise, as wide as
+the phone — and the player turns the phone anticlockwise to play. There is no TURN YOUR DEVICE notice any more: a
+phone with its rotation lock on keeps the page upright however it is held, so for that player the notice was the
+whole game. A phone that does rotate turns the page landscape as it goes, and the game is drawn the right way up.
+
 **Everything in the keyboard and gamepad columns is a default.** The `controls` screen is those two columns as a
 form: eight action rows by two columns (the keys, and the one pad table every controller shares), ACTION on a cell listens for the
 next key or button, ALT puts that column back to stock, CANCEL leaves. A rebind sets the action to exactly one

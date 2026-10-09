@@ -3,6 +3,7 @@ import { VIEW_W, VIEW_H } from './constants.ts';
 import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.ts';
 import { setTouchTyping, setTouchAlt, setTouchVirtual, TOUCH_STICK, TOUCH_BUTTONS } from './engine/touch.ts';
+import { turnSideways } from './engine/sideways.ts';
 import { drawTouchPad } from './game/touchpad.ts';
 import { links } from './engine/links.ts';
 import { audio } from './engine/audio.ts';
@@ -92,6 +93,9 @@ function boot() {
   const options = parseOptions();
   rng.seed(options.seed);
   const view = createCanvas(document.getElementById('game') || document.body);
+  // A phone held upright gets the game on its side (index.html), so a touch on it has to be measured through the
+  // turn; this is the view every listener below maps its contacts through.
+  turnSideways(view);
   const ctx = view.ctx;
   // Saved key and button bindings come back BEFORE the first listener is attached, so the very first keypress is
   // read through the player's own bindings rather than the defaults (engine/bindings.js). `?defaults=1` boots on

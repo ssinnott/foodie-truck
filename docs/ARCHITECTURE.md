@@ -60,6 +60,7 @@ src/constants.js         every shared number and UI colour (never hardcode these
 src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, actions (the eight, frozen), bindings (which key/button each one is on), input
                (8-action masks), touch (the on-screen controls a phone presses, and the field it types into),
+               sideways (a phone held upright gets the game on its side, and touches measured through the turn),
                links (the only module that navigates anywhere), rng, math, trig, text (5x7 pixel font),
                audio (the WebAudio facade) +
                audio/ (this game's SFX library and its tracks; the primitives and the sequencer are lib/audio/)
@@ -145,14 +146,14 @@ is mapped through `toInternal` into the 640x360 the layout is written in.
 The listeners are on the DOCUMENT, not the canvas. A phone held sideways is wider than 16:9, so the canvas sits
 between two dark bands (about 100 px each on a common phone) and that is where thumbs rest; a contact there maps to
 an x below 0 or past 640 and lands on the stick or GO like any other. A contact on something laid over the game
-(the portrait notice) is not one. `index.html` gives the whole page `touch-action: none`, no text selection and no
+(the error box) is not one. `index.html` gives the whole page `touch-action: none`, no text selection and no
 long-press callout, and the listeners refuse a context menu while a finger is down and iOS's `gesturestart` — a
 long press is HOLD GO here, and two thumbs moving apart are not a pinch. A first finger down (`isPrimary`) retires
 any contact whose lift the browser never reported. Nothing preventDefaults a `touchstart`: a tap must still become
 a click, because the title's Ko-fi address is reached by a click and nothing else.
 
-The overlay is offered from the first frame on `(hover: none) and (pointer: coarse)` — the query `index.html`
-already asks before it tells a portrait phone to turn sideways — and anywhere else from the first real touch, so a
+The overlay is offered from the first frame on `(hover: none) and (pointer: coarse)` — a phone or a tablet — and
+anywhere else from the first real touch, so a
 laptop with a touchscreen is not handed thumb controls until a finger asks for them. ALT is offered more narrowly
 still: only on a screen that declares `touchAlt` (the road's horn, the crew gallery's turn, the CONTROLS column
 reset), because a thumb control that does nothing on the screen it is drawn over is worse than no control.
@@ -173,6 +174,17 @@ or a flick shorter than 16 ms is still played (`endTouchStep()` is what forgets 
 `main.js` drives off the top screen's `typing` flag — raises an off-screen field, and what a soft keyboard puts in
 it comes back out as the `KeyboardEvent.code` stream `screens/lobby.js` already reads. While that field is up the
 X button spells ESCAPE, which a soft keyboard has not got and a player backing out of a room code needs.
+
+### `engine/sideways.js`
+A phone is always landscape. Held upright — `(hover: none) and (orientation: portrait)` — `index.html` draws the
+canvas a quarter turn clockwise, sized so the game's long side runs down the screen (`!important` over the canvas
+library's inline size, `flex: none` so the body's flex row cannot squeeze it, `dvh` where it is understood), and the
+player turns the phone anticlockwise to play. It replaces a TURN YOUR DEVICE notice that a phone with its rotation
+lock on could never get past. `turnSideways(view)` (called by `main.js` straight after `createCanvas`) is the input
+half: it wraps `view.toInternal` so a contact on the turned canvas maps through the turn — x down the screen, y right
+to left — and every caller (`engine/touch.js`, `engine/links.js`) keeps asking the view. Whether the canvas is turned
+is read off its computed transform, cached with its rect until a resize, so the mapping follows what the stylesheet
+actually did. The bands above and below a turned canvas come back as x below 0 or past 640, as the side bands do.
 
 ### `engine/actions.js`, `engine/bindings.js`
 `actions.js` is `ACTIONS` (frozen — bit i of a mask, and `net/protocol.js` puts that byte on the wire), `BIT` and
@@ -453,7 +465,8 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
   The `touch` scenario plays the same walk `pads` does — title to day board — on nothing but thumbs, and then the
   stick's own rules (wherever the thumb lands, no edge to fall off, a ring's width to turn round) and the buttons'
   (held while the thumb rolls, GO's corner); `touchphone` does it through real DOM contacts on a phone-shaped page,
-  the dark bands beside the canvas included; `touchlinks` presses every control over the title's addresses and
+  the dark bands beside the canvas included; `touchupright` holds that phone upright, where the game is drawn on its
+  side, and plays it through the turn before turning the phone back; `touchlinks` presses every control over the title's addresses and
   checks no tab opens — a thumb that steered from on top of one included — while a plain tap on either address
   still does; and the
   `touchtyping` one feeds the off-screen field the way a soft keyboard feeds one (an input event and no keydown at

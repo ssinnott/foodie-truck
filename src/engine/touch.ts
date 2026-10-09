@@ -16,7 +16,8 @@
 //  * THE WHOLE GLASS. A phone held sideways is wider than 16:9, so the canvas sits between two dark bands - about a
 //    hundred pixels each on a common phone - and that is exactly where thumbs rest. The listeners are on the
 //    document rather than the canvas, so a contact in a band is mapped through the same toInternal (an x below 0,
-//    or past 640) and lands on the stick or on GO like any other.
+//    or past 640) and lands on the stick or on GO like any other. On a phone held upright, where the game is drawn
+//    on its side (engine/sideways.ts), they are the bands above and below it, and come out the same.
 //
 // The layout below IS the binding: a phone has no keys to bind, so there is nothing here for engine/bindings.js to
 // own. It is exported whole because game/touchpad.js draws exactly these circles, and a control the player sees in
@@ -25,12 +26,13 @@
 // Only seat 0 is reachable this way, which since local co-op went is the only seat this machine has: a second
 // player brings their own phone and joins online.
 //
-// WHO GETS THE OVERLAY. A device that matches `(hover: none) and (pointer: coarse)` - the query index.html asks
-// before it tells a portrait phone to turn sideways - has it from the first frame, so the title can say TAP GO
-// before anybody has. Anything else gets it the first time a finger actually touches the page (a laptop with a
-// touchscreen, a tablet with a trackpad case): until then a mouse is not handed thumb controls it did not ask for.
-// A pad or a keyboard stands it down again (engine/input.js suppresses on a keyboard or pad mask) and the next
-// touch brings it back: whichever the player reached for last is the one the screen talks about.
+// WHO GETS THE OVERLAY. A device that matches `(hover: none) and (pointer: coarse)` - a phone or a tablet, the
+// devices index.html turns the game on its side for when they are held upright - has it from the first frame, so
+// the title can say TAP GO before anybody has. Anything else gets it the first time a finger actually touches the
+// page (a laptop with a touchscreen, a tablet with a trackpad case): until then a mouse is not handed thumb
+// controls it did not ask for. A pad or a keyboard stands it down again (engine/input.js suppresses on a keyboard or
+// pad mask) and the next touch brings it back: whichever the player reached for last is the one the screen talks
+// about.
 //
 // The mask is computed from the live contacts once per step rather than on the DOM event, so a seat's input is
 // stable for the whole of a fixed step. A tap that goes down and comes back up between two steps would fall through
@@ -284,8 +286,8 @@ function toGame(e: PointerEvent): { x: number; y: number } {
 /** Touch and pen only: a mouse on a desktop has the keyboard next to it and must not press the overlay. */
 function isTouch(e: PointerEvent): boolean { return e.pointerType === 'touch' || e.pointerType === 'pen'; }
 /**
- * Is this event on the game - the canvas, or the bare page around it - rather than on something laid over it?
- * The portrait notice covers the whole screen, and a tap on it must not press GO in the game underneath.
+ * Is this event on the game - the canvas, or the bare page around it - rather than on something laid over it, like
+ * the error box: a tap on that must not press GO in the game underneath.
  */
 function onGame(e: Event): boolean {
   const t = e.target, el = view && view.canvas;

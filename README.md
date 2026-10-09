@@ -88,8 +88,10 @@ TO PLAY card that shows its controls as animated keys, so nobody has to read the
 
 A player on a pad reads its own buttons in the hint lines, and a player on a phone reads the buttons on the glass.
 
-**On a phone** (sideways), the left half of the screen is a floating stick: put a thumb down anywhere there —
-the dark band beside the picture included — and drag the way you want to go; the stick appears under your thumb.
+**On a phone** the game is always landscape. Held upright, it draws itself on its side — turn the phone
+anticlockwise, top to the left, to play; that works with the phone's rotation lock on, and there is no "turn your
+device" screen to get stuck behind. The left half of the game is a floating stick: put a thumb down anywhere
+there — the dark band beside the picture included — and drag the way you want to go; the stick appears under your thumb.
 GO is the big button in the bottom-right corner, and the whole corner is GO, out to the edge of the glass. A
 button stays pressed until the thumb lifts, so the mini-games you play by holding GO keep going if your thumb
 rolls. A gamepad or keyboard paired to the phone hides the thumb controls until you touch the screen again.

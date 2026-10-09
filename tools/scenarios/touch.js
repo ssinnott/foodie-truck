@@ -16,6 +16,13 @@
 //        in through the DOM listeners and through toInternal, including the two dark bands either side of the
 //        canvas, which is where a phone's thumbs rest and which the old controls could not hear at all.
 //
+//   touchupright - a phone held UPRIGHT. There used to be a notice telling it to turn sideways, which a phone with
+//        its rotation lock on could never get past; now the game itself is drawn on its side, filling the phone's
+//        width, and everything a thumb does is measured through the turn: GO where it is drawn, the stick steering
+//        RIGHT when dragged toward the player's right (down the upright screen), the bands above and below the
+//        turned canvas standing in for the ones beside it. Then the phone turns with its rotation unlocked, the page
+//        goes landscape, and the same game is the right way up under the same thumbs.
+//
 //   touchlaptop - a page with a fine pointer gets no controls until a finger actually touches it, and then does.
 //
 //   touchlinks - the two listeners that now share the page. engine/links.ts opens a tab when a drawn address is
@@ -58,12 +65,21 @@ async function maskNow(api) { return (await api.inputState()).mask; }
 
 /** A landscape phone: what makes the media query match, and what makes page.touchscreen work. */
 const PHONE = { viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 };
+/** The same phone held upright, the way most of them are picked up. */
+const UPRIGHT = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 };
 
 /** A game-space point in the page's own client coordinates, through the canvas as it is actually laid out. */
 function clientOf(page, gx, gy) {
   return page.evaluate(([x, y]) => {
     const r = document.getElementById('game').getBoundingClientRect();
     return { x: r.left + x * r.width / 640, y: r.top + y * r.height / 360 };
+  }, [gx, gy]);
+}
+/** clientOf, for the canvas drawn on its side: the game's x runs DOWN the screen and its y runs right to left. */
+function clientOfTurned(page, gx, gy) {
+  return page.evaluate(([x, y]) => {
+    const r = document.getElementById('game').getBoundingClientRect();
+    return { x: r.right - y * r.width / 360, y: r.top + x * r.height / 640 };
   }, [gx, gy]);
 }
 /**
@@ -363,6 +379,72 @@ export const SCENARIOS = {
     }, PHONE);
   },
 
+  async touchupright(server) {
+    await withPage(server, 'skipTo=title', async (api, page) => {
+      await api.step(5);
+
+      // ---- no notice: the game itself, on its side ----
+      assert(await page.evaluate(() => !document.getElementById('rotate')), 'there is no "turn your device" notice left in the page');
+      const look = await page.evaluate(() => {
+        const el = document.getElementById('game'), r = el.getBoundingClientRect();
+        return { t: getComputedStyle(el).transform, left: r.left, top: r.top, w: r.width, h: r.height, vw: innerWidth, vh: innerHeight };
+      });
+      const m = /^matrix\(([^)]*)\)$/.exec(look.t);
+      const [a, b, c, d] = m ? m[1].split(',').map(Number) : [1, 0, 0, 1];
+      assert(!!m && Math.abs(a) < 1e-6 && b === 1 && c === -1 && Math.abs(d) < 1e-6, `held upright, the game is drawn on its side: a quarter turn clockwise (${look.t})`);
+      assert(Math.abs(look.h / look.w - 16 / 9) < 0.01, `with its long side down the screen (${look.w.toFixed(0)} x ${look.h.toFixed(0)})`);
+      assert(Math.abs(look.w - look.vw) < 1 && look.top >= 0 && look.top + look.h <= look.vh + 0.5,
+        `as wide as the phone, and all of it on the screen (${look.w.toFixed(0)} x ${look.h.toFixed(0)} at ${look.top.toFixed(0)}, in ${look.vw} x ${look.vh})`);
+      assert((await api.inputState()).touchOn === true, 'with the thumb controls up');
+      await api.shot('upright-title');                      // the title on its side, TAP GO and all
+
+      // ---- a real tap where GO is drawn on the turned game ----
+      const layout = await api.touchLayout(), go = buttonAt(layout, 'action'), x = buttonAt(layout, 'cancel');
+      const goAt = await clientOfTurned(page, go.cx, go.cy);
+      await page.touchscreen.tap(goAt.x, goAt.y);
+      await api.step(2);
+      assert((await api.screen()) === 'select', `a tap on GO, where the turned game draws it, opens PLAY (now on ${await api.screen()})`);
+
+      // ---- the stick turns with the game ----
+      const push = layout.stick.dead * 3, home = await clientOfTurned(page, 150, 250);
+      await pointer(page, 'pointerdown', home);
+      await pointer(page, 'pointermove', { x: home.x, y: home.y + push });
+      await api.step(2);
+      assert((await maskNow(api)) === RIGHT, `dragged down the upright screen - the player's right - the stick holds RIGHT and only RIGHT (mask ${await maskNow(api)})`);
+      await pointer(page, 'pointerup', { x: home.x, y: home.y + push });
+      await api.step(4);
+      assert((await summaryOf(api)).critter === 'sorrel', 'and the cursor went right with it');
+
+      // ---- the bands above and below the turned canvas are its left and right ----
+      const band = await clientOfTurned(page, -30, 250);
+      assert(band.y > 0 && band.y < look.top, `a point left of the game lies in the band above the turned canvas (${band.y.toFixed(0)})`);
+      await pointer(page, 'pointerdown', band, { on: 'body' });
+      await pointer(page, 'pointermove', { x: band.x, y: band.y + push }, { on: 'body' });
+      await api.step(2);
+      assert(((await maskNow(api)) & RIGHT) !== 0, 'and a thumb there is the stick, and steers');
+      await pointer(page, 'pointerup', { x: band.x, y: band.y + push }, { on: 'body' });
+      await api.step(4);
+      const corner = await clientOfTurned(page, 690, 330);
+      assert(corner.y > look.top + look.h && corner.y < look.vh, `a point past the game's right edge lies in the band below it (${corner.y.toFixed(0)})`);
+      await page.touchscreen.tap(corner.x, corner.y);
+      await api.step(2);
+      assert((await summaryOf(api)).ready === true, 'and a tap there, in GO\'s corner, is GO: the card is stamped');
+
+      // ---- turned, with the phone's rotation unlocked: the page goes landscape and the game the right way up ----
+      await page.setViewportSize({ width: 844, height: 390 });
+      await page.waitForFunction(() => {
+        const el = document.getElementById('game');
+        return getComputedStyle(el).transform === 'none' && el.style.width === '640px';
+      }, null, { timeout: 5000 });
+      await api.step(1);
+      const xAt = await clientOf(page, x.cx, x.cy);
+      await page.touchscreen.tap(xAt.x, xAt.y);
+      await api.step(2);
+      const s = await api.summary();
+      assert(s.screen === 'select' && s.top.seats[0].ready === false, `landscape, nothing is turned and X is under the thumb again: the stamp comes off (${s.screen}, ready ${s.top.seats[0].ready})`);
+    }, UPRIGHT);
+  },
+
   async touchlaptop(server) {
     await withPage(server, 'skipTo=title', async (api, page) => {
       await api.step(5);
@@ -383,8 +465,8 @@ export const SCENARIOS = {
       await api.step(5);
       const boot = await api.inputState();
       assert(boot.touchOn === true, 'a phone-shaped page has the controls without being told to');
-      assert((await page.evaluate(() => getComputedStyle(document.getElementById('rotate')).display)) === 'none',
-        'and in landscape it is not being asked to turn sideways');
+      assert((await page.evaluate(() => getComputedStyle(document.getElementById('game')).transform)) === 'none',
+        'and in landscape the game is the right way up, not turned on its side');
       const scale = await page.evaluate(() => document.getElementById('game').getBoundingClientRect().width / 640);
       assert(scale === 1, `and a phone this size gets a whole CSS pixel per game pixel (${scale})`);
       const band = await page.evaluate(() => document.getElementById('game').getBoundingClientRect().left);
