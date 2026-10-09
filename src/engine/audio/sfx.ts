@@ -380,6 +380,16 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   heave: (c, d, t, o) => osc(c, d, t, { type: 'sawtooth', f0: 140 * o.p, f1: 200 * o.p, dur: 0.07, vol: 0.06 * o.v, attack: 0.005, lp: 900, vib: { rate: 40, depth: 30 } }),
   /** It comes out: a pop of earth and the pip. */
   root: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 0.9, f: 330, vol: 0.2, splash: 0 }); noise(c, d, t, { dur: 0.08, vol: 0.14 * o.v, type: 'lowpass', f0: 1500 * o.p, f1: 400 * o.p, attack: 0.002 }); return pip(c, d, t, { v: o.v, p: o.p, after: 0.1 }); },
+  /** The rocket root fires out of the ground: a cork's pop, a bubble of pitch flying up after it, and the rush of air. */
+  garden_pop: (c, d, t, o) => { noise(c, d, t, { dur: 0.015, vol: 0.3 * o.v, type: 'bandpass', f0: 2200 * o.p, q: 1.5, attack: 0.0005 }); osc(c, d, t, { type: 'sine', f0: 360 * o.p, f1: 1500 * o.p, glide: 0.09, dur: 0.12, vol: 0.24 * o.v, attack: 0.002 }); return whoosh(c, d, t + 0.03, { v: o.v, p: o.p, f0: 600, f1: 3200, dur: 0.3, vol: 0.14 }); },
+  /** ...and coming back down: a slide whistle falling the whole way to the head, with a wobble on it. */
+  garden_whistle: (c, d, t, o) => osc(c, d, t, { type: 'sine', f0: 2100 * o.p, f1: 480 * o.p, glide: 0.66, dur: 0.68, vol: 0.09 * o.v, attack: 0.05, hold: 0.5, vib: { rate: 7, depth: 18 } }),
+  /** It lands on a head: a hollow wooden bonk with a rubbery boing under it. */
+  garden_bonk: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 520, dur: 0.08, vol: 0.3 }); osc(c, d, t + 0.01, { type: 'triangle', f0: 440 * o.p, f1: 160 * o.p, glide: 0.22, dur: 0.26, vol: 0.14 * o.v, attack: 0.003, vib: { rate: 18, depth: 40 } }); return thump(c, d, t, { v: o.v * 0.6, p: o.p, f: 130, lp: 900, dur: 0.07, vol: 0.2 }); },
+  /** The whopper tears out of the bed: a deep pop of earth with the soil coming up after it. */
+  garden_uproot: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 0.55, f: 300, vol: 0.28, splash: 0 }); osc(c, d, t, { type: 'sine', f0: 120 * o.p, f1: 55 * o.p, dur: 0.25, vol: 0.3 * o.v, attack: 0.004 }); return noise(c, d, t + 0.02, { dur: 0.32, vol: 0.16 * o.v, type: 'lowpass', f0: 1400 * o.p, f1: 300 * o.p, attack: 0.01 }); },
+  /** Flat on its back with the whopper on top: one heavy, soft flump. */
+  garden_flump: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 90, lp: 600, dur: 0.18, vol: 0.4 }); return noise(c, d, t + 0.03, { dur: 0.22, vol: 0.12 * o.v, type: 'lowpass', f0: 900 * o.p, f1: 250 * o.p, attack: 0.01 }); },
 
   // ---- the kitchen ----
   /** The fridge: the door's seal, an item lifted out (a knock on the shelf) and a pip when it lands on the tray. */
