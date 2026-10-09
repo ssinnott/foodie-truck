@@ -242,6 +242,26 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   cluck: (c, d, t, o) => { osc(c, d, t, { type: 'square', f0: 700 * o.p, f1: 520 * o.p, glide: 0.06, dur: 0.08, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); osc(c, d, t + 0.11, { type: 'square', f0: 760 * o.p, f1: 560 * o.p, glide: 0.06, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2000, vib: { rate: 30, depth: 40 } }); return noise(c, d, t + 0.02, { dur: 0.16, vol: 0.06 * o.v, type: 'bandpass', f0: 1800 * o.p, f1: 900 * o.p, q: 0.7, attack: 0.01 }); },
   /** The old boot comes up on the line: a hollow rubber thunk with a slosh of water out of it, and no pip at all. */
   boot: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 90, lp: 500, dur: 0.12, vol: 0.26 }); return noise(c, d, t + 0.1, { dur: 0.28, vol: 0.1 * o.v, type: 'bandpass', f0: 1400 * o.p, f1: 500 * o.p, q: 0.8, attack: 0.03 }); },
+  /** The boot turned over pours, and pours: a long gurgling rush with glugs in it, far longer than any boot. */
+  pond_gush: (c, d, t, o) => { for (let i = 0; i < 5; i++) plop(c, d, t + 0.05 + i * 0.14, { v: o.v * 0.5, p: o.p * (0.6 + (i % 2) * 0.15), f: 260, vol: 0.14, splash: 0 }); return hiss(c, d, t, { v: o.v, p: o.p, dur: 0.75, f0: 1400, f1: 900, vol: 0.13, type: 'bandpass', attack: 0.04, q: 0.7 }); },
+  /** The tiny fish out of the boot: two small wet slaps on the planks and a plip back into the pond. */
+  pond_flop: (c, d, t, o) => { knock(c, d, t, { v: o.v * 0.6, p: o.p, f: 900, dur: 0.03, vol: 0.12 }); knock(c, d, t + 0.09, { v: o.v * 0.6, p: o.p, f: 1000, dur: 0.03, vol: 0.12 }); return plop(c, d, t + 0.22, { v: o.v * 0.6, p: o.p * 1.4, f: 500, vol: 0.14, splash: 0.08 }); },
+  /** The big one takes the float: the line zings out, a whistle wobbling up over a hiss of line off the reel. */
+  pond_zing: (c, d, t, o) => { osc(c, d, t, { type: 'sine', f0: 700 * o.p, f1: 1300 * o.p, glide: 0.3, dur: 0.42, vol: 0.07 * o.v, attack: 0.01, vib: { rate: 16, depth: 70 } }); return noise(c, d, t, { dur: 0.32, vol: 0.06 * o.v, type: 'bandpass', f0: 2800 * o.p, f1: 4200 * o.p, q: 3, attack: 0.02 }); },
+  /** Heels skidding on the planks as the big one drags its critter along: a short dry scrape and a knock of wood. */
+  pond_skid: (c, d, t, o) => { noise(c, d, t, { dur: 0.09, vol: 0.12 * o.v, type: 'bandpass', f0: 900 * o.p, f1: 600 * o.p, q: 1.5, attack: 0.005 }); return knock(c, d, t + 0.02, { v: o.v * 0.6, p: o.p, f: 380, dur: 0.04, vol: 0.14 }); },
+  /** YANKED: the line twangs taut and the critter goes up off the planks with a whoosh. */
+  pond_yank: (c, d, t, o) => { osc(c, d, t, { type: 'triangle', f0: 180 * o.p, f1: 90 * o.p, glide: 0.18, dur: 0.22, vol: 0.14 * o.v, attack: 0.002, vib: { rate: 28, depth: 90 } }); return whoosh(c, d, t + 0.04, { v: o.v, p: o.p, f0: 500, f1: 2600, dur: 0.26, vol: 0.22 }); },
+  /** SPLOOSH: a whole critter into the pond - a deep plop, a soft thump under it and a long fall of spray. */
+  pond_sploosh: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 0.5, f: 300, vol: 0.3, splash: 0.24 }); thump(c, d, t, { v: o.v, p: o.p, f: 80, lp: 700, dur: 0.16, vol: 0.32 }); return hiss(c, d, t + 0.05, { v: o.v, p: o.p, dur: 0.55, f0: 3200, f1: 900, vol: 0.16, type: 'bandpass', attack: 0.02 }); },
+  /** Under the water: three bubbles coming up, each a little plop higher than the last. */
+  pond_blub: (c, d, t, o) => { plop(c, d, t, { v: o.v * 0.7, p: o.p * 0.7, f: 300, vol: 0.18, splash: 0 }); plop(c, d, t + 0.13, { v: o.v * 0.7, p: o.p * 0.85, f: 300, vol: 0.16, splash: 0 }); return plop(c, d, t + 0.24, { v: o.v * 0.7, p: o.p, f: 300, vol: 0.14, splash: 0 }); },
+  /** The very small frog on the head: a two-note croak, a buzzy square going down and then up. */
+  pond_ribbit: (c, d, t, o) => { osc(c, d, t, { type: 'square', f0: 340 * o.p, f1: 260 * o.p, glide: 0.07, dur: 0.08, vol: 0.07 * o.v, attack: 0.004, lp: 1500, vib: { rate: 40, depth: 60 } }); return osc(c, d, t + 0.12, { type: 'square', f0: 280 * o.p, f1: 360 * o.p, glide: 0.08, dur: 0.1, vol: 0.07 * o.v, attack: 0.004, lp: 1500, vib: { rate: 40, depth: 60 } }); },
+  /** The big one into the bucket: a heavy wet thud in the tin and the pip, because it counts. */
+  pond_plonk: (c, d, t, o) => { ring(c, d, t, { type: 'triangle', f0: 240 * o.p, modF: 700 * o.p, dur: 0.14, vol: 0.14 * o.v, attack: 0.001 }); thump(c, d, t, { v: o.v, p: o.p, f: 110, lp: 900, dur: 0.12, vol: 0.32 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.08 }); },
+  /** Shaking the pond off: a quick run of wet flaps getting smaller, a wet dog's shake. */
+  pond_shake: (c, d, t, o) => { for (let i = 0; i < 5; i++) noise(c, d, t + i * 0.06, { dur: 0.05, vol: (0.1 - i * 0.012) * o.v, type: 'bandpass', f0: 1600 * o.p, f1: 1000 * o.p, q: 1, attack: 0.004 }); return t + 0.29; },
   /** The trout drops into the bucket: a tin thump. */
   bucket: (c, d, t, o) => { ring(c, d, t, { type: 'triangle', f0: 320 * o.p, modF: 900 * o.p, dur: 0.1, vol: 0.14 * o.v, attack: 0.001 }); return thump(c, d, t, { v: o.v, p: o.p, f: 150, lp: 1600, dur: 0.07, vol: 0.24 }); },
   /** An egg into the basket: a soft click of shell on straw and the pip. */

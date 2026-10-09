@@ -5,15 +5,18 @@
 //   -> hooked (the trout arcs into the bucket) -> idle after 40.
 // The bite is REELED IN by tapping `action` over and over: every press is one turn of the reel and REEL_PRESSES of
 // them land the fish. There is no window and no way to lose it - a press during the wait is ignored, and a fish that
-// has bitten waits as long as it takes. THE JOKE: one bite in BOOT_ODDS is an old boot (`boot` on the seat), reeled in
-// with the same taps; it comes up on the line to the far paw, is held out at arm's length and tipped (the water runs
-// off the toe), then lobbed back with a splash - no +1, nothing lost but the moment, and the bite after a boot is
-// always a fish. The seats, the tally ticket, the name plates and the end sign are game/minigame.js,
-// the same furniture every mini-game stands on, so the seven wear one HUD; only the rod, the float, the trout and the
-// bucket are the pond's own.
-// Everything in update() is deterministic: input by seat only, the wait from `rng`, positions from integer tables and
-// + - * /; the bob, the tug, the fish arc and the particles are visual and read the timers in draw(). Each seat's
-// state, timer, reel count, float position and count plus the round's elapsed count feed the desync canary.
+// has bitten waits as long as it takes. THE JOKES: as each float lands the cast is dealt (game/screens/pondGags.ts),
+// and one in six is THE BIG ONE - a shadow circles under the float, the twelve taps drag the critter to the edge of
+// the planks and the twelfth yanks it into the pond, and it climbs back out with a lily pad and a frog on its head
+// and the fish in its paw (which counts) - and one in eight is THE OLD BOOT, which reels in with the same taps,
+// pours out a torrent and a tiny fish, and is lobbed back: no +1. Two more states on the machine, `boot` and `big`,
+// whose every beat is in that module. The seats, the tally ticket, the name plates and the end sign are
+// game/minigame.js, the same furniture every mini-game stands on, so the seven wear one HUD; only the rod, the float,
+// the trout and the bucket are the pond's own.
+// Everything in update() is deterministic: input by seat only, the wait and the deal from `rng`, positions from
+// integer tables and + - * /; the bob, the tug, the zip, the drag, the fish arc and the particles are visual and read
+// the timers in draw(). Each seat's state, timer, reel count, float position, count and deal plus the round's
+// elapsed count and its two joke counts feed the desync canary.
 import { UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
@@ -32,49 +35,42 @@ import { gatherTarget } from '../run.ts';
 import { drawHint, drawBar } from '../ui.ts';
 import { drawFood } from '../../art/food.ts';
 import { POND, ROWS, SEAT_X, SEAT_PITCH, FLOAT_DX, FLOAT_Y, GLINTS, SUN_GLINTS, pondLayers } from '../../art/backgrounds/pond.ts';
-import { PARA_N, PARA_T, PARA_H, BOB, POND_ANIMS_CAST, CAST_LAUNCH, drawLine, drawFloat, drawTrout, drawBucket, drawBoot } from '../../art/fishing.ts';
+import {
+  PARA_N, PARA_T, PARA_H, BOB, POND_ANIMS_CAST, CAST_LAUNCH, BUCKET_DX, BUCKET_MID, BUCKET_TOP, LAND_FRAMES, LAND_K, CATCH_LIFT,
+  drawLine, drawFloat, drawTrout, drawBucket,
+} from '../../art/fishing.ts';
+import { bentTip } from '../../art/pondGags.ts';
+import {
+  BOOT, BIG, GAG_ANIMS, ZIP_SINK, dealCast, bigBite, bigTap, bigYank, stepBig, bootUp, stepBoot, dragX, dragY, offDeck, submerged, reelBend,
+  zipX, zipSpray, drawUnder, drawBigSeat, drawBootLine, drawBootFlight, drawSnaggedFloat,
+} from './pondGags.ts';
 import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
+import { clearGags, stepGags, drawGags, gagShakeY } from '../gags.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
 
 /** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
 const SCHEMES: readonly CardScheme[] = Object.freeze(['tap', 'mash']);
 const R = Math.round;
-const IDLE = 0, CAST = 1, WAIT = 2, BITE = 3, HOOKED = 4, BOOT = 5;
-const STATE_NAMES = Object.freeze(['idle', 'cast', 'wait', 'bite', 'hooked', 'boot']);
+/** The seat machine's own five states; the two jokes' (BOOT, BIG) are game/screens/pondGags.ts's. */
+const IDLE = 0, CAST = 1, WAIT = 2, BITE = 3, HOOKED = 4;
+const STATE_NAMES = Object.freeze(['idle', 'cast', 'wait', 'bite', 'hooked', 'boot', 'big']);
 /** The wait before the bite, and the reel: REEL_PRESSES taps of `action` land a fish that has bitten. */
 const WAIT_MIN = 60, WAIT_MAX = 150, REEL_PRESSES = 12, RESULT_FRAMES = 40;
 /** Frames the float and the rod tug for after each reel press (draw only, but kept in the sim as a plain counter). */
 const TUG_FRAMES = 6;
 const FISH_ARC = 20, FALLBACK_TARGET = 3;
-/**
- * The old boot: one bite in BOOT_ODDS (never two in a row). Its sequence is one countdown on the seat (`t`, from
- * BOOT_FRAMES): BOOT_ARC frames on the line up to the far paw, BOOT_HOLD frames held out and tipped with the water
- * running off it, BOOT_TOSS frames lobbed back to where the float was. 66 frames is a joke, not a penalty.
- */
-const BOOT_ODDS = 8, BOOT_ARC = 20, BOOT_HOLD = 30, BOOT_TOSS = 16, BOOT_FRAMES = BOOT_ARC + BOOT_HOLD + BOOT_TOSS;
-/** A drip off the tipped boot's toe every DRIP_EVERY frames (particles: visual, spawned at the paw the last draw read). */
-const DRIP_EVERY = 6;
-/** The lob's lift, as a fraction of the cast's arc. */
-const TOSS_LIFT = 0.6;
-const BOOT_TXT = 'A BOOT?!';
 /** Where the float leaves the rod tip (sim-side constants; the drawn tip is a hair off, the line hides it). */
 const LAUNCH_DX = 40, LAUNCH_Y = ROWS.feet - 40;
-/** The bucket's left edge sits this far in front of the feet; the fish arcs to its rim. */
-const BUCKET_DX = 20, BUCKET_TOP = 12;
 /**
  * Where a seat's float rests between casts: ON the water just clear of the deck's bottom edge, so the line is a
  * long visible stroke from the tip to it. `REST_STEP` drops the odd seats a little deeper so the four never line
  * up into a row.
  */
 const REST_Y = ROWS.surface + 2, REST_STEP = 4;
-/** The bucket's rim squashes for this many frames when a trout drops in, 3 % per frame left. */
-const LAND_FRAMES = 4, LAND_K = 0.03;
-/** The catch arc's lift, as a fraction of the cast's: a full 0.8 arc peaks well under the chins. */
-const CATCH_LIFT = 0.8;
 /** The contact ellipse: narrow, and 2 px below the feet, so it lands on the planks and never in the water. */
 const SHADOW_W = 24;
 /** The reel gauge over a biting float: a small paper bar that fills a step per press. */
@@ -88,7 +84,8 @@ const REEL_BAR = { color: SIGNAL.pond };
 /**
  * The reel stance, on top of the shared pond table: the bite key held as a loop with a 2-frame tug every press
  * restarts. `rodBite` is a one-shot and a seat now sits in BITE for as long as it takes to tap the fish in, so a
- * loop is what keeps the rod bent instead of falling back to the shared standing idle.
+ * loop is what keeps the rod bent instead of falling back to the shared standing idle. The two jokes' own stances
+ * (pondGags.ts GAG_ANIMS) ride the same overlay.
  */
 const IDLE_ARMS = { armL: [-12, 12] };
 const REEL_ANIMS = Object.freeze({
@@ -97,39 +94,29 @@ const REEL_ANIMS = Object.freeze({
     F(3, { ...IDLE_ARMS, armR: [42, 24], weapon: -26, torso: 7, head: 5, root: [0, 1], face: 'grit' }, { ease: 'out' }),
     F(9, { ...IDLE_ARMS, armR: [46, 28], weapon: -34, torso: 5, head: 3, root: [0, 1], face: 'grit' }),
   ] },
-  /**
-   * The boot held out at arm's length in the NEAR paw (the rod is set down for the moment: `rig.weapon` is null
-   * through the hold, as the orchard drops its basket for the bomb), leaning back from it, then tipped to pour;
-   * `hurt` throughout.
-   */
-  bootHold: { loop: false, frames: [
-    F(6, { armR: [100, -10], ...IDLE_ARMS, torso: -6, head: -8, root: [0, 0], face: 'hurt' }, { ease: 'out' }),
-    F(12, { armR: [104, -12], ...IDLE_ARMS, torso: -8, head: -10, root: [0, 0], face: 'hurt' }),
-    F(12, { armR: [118, -22], ...IDLE_ARMS, torso: -10, head: -12, root: [0, -1], face: 'hurt' }, { ease: 'inout' }),
-  ] },
-  /** The lob: the near arm swings back and throws, the face goes to `shout`; the rod is picked back up at rest. */
-  bootToss: { loop: false, frames: [
-    F(5, { armR: [40, -30], ...IDLE_ARMS, torso: 4, head: -4, root: [0, 0], face: 'shout' }, { ease: 'in' }),
-    F(11, { armR: [150, 0], ...IDLE_ARMS, torso: -6, head: -6, root: [0, 0], face: 'shout' }, { ease: 'overshoot' }),
-  ] },
+  ...GAG_ANIMS,
 });
 
 
 /**
  * One seat on the jetty: the shared mini-game seat plus this screen's own state, which is the little machine at the
- * top of this file. Every field is written in enter() and stepped by stepSeat() - none is optional, and the six
- * that checksumFields() hashes (`state`, `t`, `reel`, `fx`, `fy`, plus the shared `count`) are all plain integers.
+ * top of this file. Every field is written in enter() and stepped by stepSeat() - none is optional, and the eight
+ * that checksumFields() hashes (`state`, `t`, `reel`, `fx`, `fy`, `boot`, `big`, plus the shared `count`) are all
+ * plain integers.
  */
 export interface PondSeat extends Seat {
   /** Where this seat's cast lands: the head of its own float column, FLOAT_DX px right of its feet. */
   tx: number;
   /** The waterline that column sits on (FLOAT_Y), which is the row a landed float rests at. */
   sy: number;
-  /** IDLE | CAST | WAIT | BITE | HOOKED. */
+  /** IDLE | CAST | WAIT | BITE | HOOKED | BOOT | BIG. */
   state: number;
-  /** Frames left of the current state - or frames INTO it while casting, where `t` counts up to the parabola; in BITE, the tug beat. */
+  /**
+   * Frames left of the current state - or frames INTO it while casting, where `t` counts up to the parabola; in
+   * BITE, the tug beat; in BOOT and BIG, the joke's countdown.
+   */
   t: number;
-  /** Reel presses landed on the current bite, 0..REEL_PRESSES. */
+  /** Reel presses landed on the current bite, 0..REEL_PRESSES (and held at REEL_PRESSES through the big one, whose flight starts where the drag left off). */
   reel: number;
   /** Frames left of the bucket rim's squash after a trout drops in. */
   landT: number;
@@ -140,9 +127,14 @@ export interface PondSeat extends Seat {
   restY: number;
   /** The rod tip in screen space, read off the rig by each draw; one point per seat, written in place. */
   tip: Point;
-  /** 1 while the thing on the line is the old boot (rolled at the bite, kept until the next bite so a boot is never followed by a boot). */
+  /**
+   * 1 while this cast is the old boot (dealt as the float lands, kept until the next deal so a boot is never
+   * followed by a boot).
+   */
   boot: number;
-  /** The near paw in screen space, read off the rig by each draw (the held boot is drawn there). */
+  /** 1 while this cast is the big one (dealt and kept the same way, never on a boot and never twice running). */
+  big: number;
+  /** The near paw in screen space, read off the rig by each draw (the held boot and the big one's fish are drawn there). */
   paw: Point;
 }
 
@@ -150,7 +142,7 @@ export interface PondSeat extends Seat {
 const CATCH_P = { x: 0, y: 0 };
 function catchPoint(s: PondSeat, k: number): Point {
   const i = R(k * (PARA_N - 1) / (FISH_ARC - 1));
-  const bx = s.x + BUCKET_DX + 7, by = ROWS.feet - BUCKET_TOP;
+  const bx = s.x + BUCKET_DX + BUCKET_MID, by = ROWS.feet - BUCKET_TOP;
   CATCH_P.x = R(s.fx + (bx - s.fx) * PARA_T[i]);
   CATCH_P.y = R(s.fy + (by - s.fy) * PARA_T[i]) - R(PARA_H[i] * CATCH_LIFT);
   return CATCH_P;
@@ -171,11 +163,13 @@ export class PondScreen extends Screen {
   declare total: number;
   /** Old boots reeled in this round (the joke's count, for the tests and the desync canary). */
   declare boots: number;
+  /** Big ones that have pulled somebody in this round (counted on the SPLOOSH, as the orchard counts its bangs). */
+  declare bigOnes: number;
   /** The round's clock and its ending (game/minigame.ts). */
   declare clock: Clock;
   /** Trout the round is played to: what the order still needs, or FALLBACK_TARGET with no run. */
   declare target: number;
-  /** "0/3" for the clock ticket, rebuilt by hook() as the count changes. */
+  /** "0/3" for the clock ticket, rebuilt by setTotal() as the count changes. */
   declare countStr: string;
   /**
    * What this visit reels in (game/run.js gatherTarget): trout off the millpond. `icon`/`hex` are that
@@ -202,10 +196,11 @@ export class PondScreen extends Screen {
     super.enter(params);
     const game = this.game, run = game.run;
     particles.clear();
+    clearGags();
     const place = PLACES.find((p) => p.id === params.place && p.screen === 'pond');
     this.variant = place && place.id === 'shore' ? 'cove' : 'pond';
     pondLayers(this.variant);
-    this.total = 0; this.boots = 0;
+    this.total = 0; this.boots = 0; this.bigOnes = 0;
     this.clock = makeClock();
     this.ing = gatherTarget(run, place ? place.id : undefined, 'pond');
     const ing = INGREDIENTS[this.ing] || INGREDIENTS.fish;
@@ -237,13 +232,13 @@ export class PondScreen extends Screen {
       s.state = IDLE; s.t = 0; s.reel = 0; s.count = 0; s.landT = 0;
       s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y;
       s.restY = REST_Y + (i & 1) * REST_STEP;
-      s.tip = { x: 0, y: 0 }; s.paw = { x: 0, y: 0 }; s.boot = 0;
+      s.tip = { x: 0, y: 0 }; s.paw = { x: 0, y: 0 }; s.boot = 0; s.big = 0;
       seatAnim(s, 'rodIdle', true);
       // the crew is four people waiting, not one pose printed four times: each seat starts its breath a beat later
       // (deterministic, pose only — nothing in summary() or the checksum reads the anim clock)
       for (let k = i * 13; k > 0; k--) s.player.tick();
     }
-    this.sum.length = 4 + this.seats.length * 7;
+    this.sum.length = 5 + this.seats.length * 8;
   }
 
   override update(): void {
@@ -251,6 +246,7 @@ export class PondScreen extends Screen {
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
+    stepGags();
     const clock = this.clock;
     if (clock.phase === 0) {
       for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; this.stepSeat(s, input.pressed(s.slot, 'action')); s.player.tick(); }
@@ -285,7 +281,8 @@ export class PondScreen extends Screen {
           s.fx = s.tx; s.fy = s.sy;
           ringAt(s.fx, s.fy, 3, 9, UI.cream, 2, 12, true, true); burstDrops(s.fx, s.fy, 2, true);
           this.game.audio.play('cast');
-          s.state = WAIT; s.t = rng.int(WAIT_MIN, WAIT_MAX); seatAnim(s, 'rodWait', true);
+          // the wait, then the deal: what is down there is decided now, so the big one's shadow can circle the float
+          s.state = WAIT; s.t = rng.int(WAIT_MIN, WAIT_MAX); dealCast(s); seatAnim(s, 'rodWait', true);
         }
         break;
       }
@@ -295,79 +292,75 @@ export class PondScreen extends Screen {
         break;
       case BITE:
         if (s.t > 0) s.t--;
+        if (s.big) zipSpray(s, this.frame);
         if (pressed) this.reelOnce(s);
         break;
       case HOOKED:
         if (RESULT_FRAMES - s.t === FISH_ARC) { s.landT = LAND_FRAMES; this.game.audio.play('bucket'); }   // the trout drops in: the rim takes the hit
         if (--s.t <= 0) this.rest(s);
         break;
-      case BOOT: {
-        s.t--;
-        const k = BOOT_FRAMES - s.t;
-        if (k === BOOT_ARC) { s.rig.weapon = null; seatAnim(s, 'bootHold', true); this.game.audio.play('boot'); floatText(s.x, s.y - 66, BOOT_TXT, UI.cream, 1, true); }
-        else if (k > BOOT_ARC && k < BOOT_ARC + BOOT_HOLD && k % DRIP_EVERY === 0) burstDrops(s.paw.x + 8, s.paw.y + 8, 1, true);
-        else if (k === BOOT_ARC + BOOT_HOLD) seatAnim(s, 'bootToss', true);
-        if (s.t <= 0) {
-          ringAt(s.tx, s.sy, 3, 12, UI.cream, 2, 12, true, true); burstDrops(s.tx, s.sy, 4, true);
-          this.game.audio.play('splash');
-          this.rest(s);
-        }
-        break;
-      }
+      case BOOT: stepBoot(this, s); break;
+      case BIG: stepBig(this, s); break;
       default: break;
     }
   }
 
-  /** The trout is on: the float drops, the ring opens, and the seat is told to start tapping. */
+  /** The trout is on: the float drops, the ring opens, and the seat is told to start tapping. A big one braces it. */
   bite(s: PondSeat): void {
-    // the deal: one bite in BOOT_ODDS is the boot, and never the one after a boot (the roll is skipped, not hidden)
-    s.boot = s.boot === 0 && rng.int(1, BOOT_ODDS) === 1 ? 1 : 0;
     s.state = BITE; s.t = 0; s.reel = 0;
     this.game.audio.play('bite');
     seatAnim(s, 'rodReel', true);
     ringAt(s.fx, s.fy + 5, 4, 16, SIGNAL.pond, 2, 18, false, true);
     burstDrops(s.fx, s.fy, 3, true);
     floatText(s.fx, s.fy - 26, BITE_TXT, UI.cream, 1, true);
+    if (s.big) bigBite(this, s);
   }
 
-  /** One turn of the reel: a tug on the rod and the float, and the last one lands the fish. */
+  /** One turn of the reel: a tug on the rod and the float (on a big one, a step toward the edge), and the last one lands the fish. */
   reelOnce(s: PondSeat): void {
     s.reel++; s.t = TUG_FRAMES;
     this.game.audio.play('reel');
-    seatAnim(s, 'rodReel', true);
     burstDrops(s.fx, s.fy, 1, true);
+    if (s.big) bigTap(this, s); else seatAnim(s, 'rodReel', true);
     if (s.reel >= REEL_PRESSES) this.hook(s);
   }
 
   /** Back to the rod-low stance with the float dangling under the tip. */
   rest(s: PondSeat): void { s.state = IDLE; s.t = 0; s.reel = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; s.rig.weapon = ITEMS.rod as RigWeapon; seatAnim(s, 'rodIdle', true); }
 
+  /** The last turn of the reel: the trout, or one of the jokes (pondGags.ts) on a boot or a big one. */
   hook(s: PondSeat): void {
-    if (s.boot) { this.bootUp(s); return; }
+    if (s.boot) { bootUp(this, s); return; }
+    if (s.big) { bigYank(this, s); return; }
     s.state = HOOKED; s.t = RESULT_FRAMES; s.reel = 0; s.count++;
     this.game.audio.play('hook');
-    this.total++; this.countStr = this.total + '/' + this.target;
+    this.setTotal(this.total + 1);
     seatAnim(s, 'pull', true);
     burstDrops(s.fx, s.fy, 6, true); ringAt(s.fx, s.fy, 4, 14, UI.cream, 2, 14, true, true);
     floatText(s.fx, s.fy - 24, PLUS_ONE, UI.cream, 1, true);
   }
 
-  /** The joke: the last turn of the reel brings up the boot instead. No count, no pip; the seat plays it out and casts again. */
-  bootUp(s: PondSeat): void {
-    s.state = BOOT; s.t = BOOT_FRAMES; s.reel = 0; this.boots++;
-    seatAnim(s, 'pull', true);
-    burstDrops(s.fx, s.fy, 6, true); ringAt(s.fx, s.fy, 4, 14, UI.cream, 2, 14, true, true);
-  }
+  setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
   finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, this.signPrefix + this.total, this.game.audio);
-    // everyone holds one pose under the sign: rod up for a full bucket, rod low for an empty one
-    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; s.state = IDLE; s.t = 0; s.reel = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y; s.rig.weapon = ITEMS.rod as RigWeapon; seatAnim(s, s.count > 0 ? 'pull' : 'rodIdle', true); }
+    // everyone holds one pose under the sign: rod up for a full bucket, rod low for an empty one. A joke still
+    // playing is over (its fish not yet in the bucket stays in the pond): the deal is cleared with it.
+    for (let i = 0; i < this.seats.length; i++) {
+      const s = this.seats[i];
+      s.state = IDLE; s.t = 0; s.reel = 0; s.boot = 0; s.big = 0; s.fx = s.x + LAUNCH_DX; s.fy = LAUNCH_Y;
+      s.rig.weapon = ITEMS.rod as RigWeapon;
+      seatAnim(s, s.count > 0 ? 'pull' : 'rodIdle', true);
+    }
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
-    const L = pondLayers(this.variant), f = this.frame;
+    const L = pondLayers(this.variant), f = this.frame, shake = gagShakeY();
+    // the big one's splash thumps the pond (game/gags.ts): the world moves and the paper does not, and the strip the
+    // thump uncovers at the top or the bottom is painted first from the sky and the turf where they stand still
+    if (shake) { blitAt(ctx, L.far.L, 0, L.far.y); blitAt(ctx, L.near.L, 0, L.near.y); }
+    ctx.save(); ctx.translate(0, shake);
     blitAt(ctx, L.far.L, 0, L.far.y); blitAt(ctx, L.mid.L, 0, L.mid.y); blitAt(ctx, L.ground.L, 0, L.ground.y);
     // the water's twinkle: 2x1 cream glints, index-hashed so a quarter of them are lit on any frame
     ctx.globalAlpha = 0.6; ctx.fillStyle = POND.glint;
@@ -377,37 +370,52 @@ export class PondScreen extends Screen {
     ctx.globalAlpha = 0.9;
     for (let i = 0; i < SUN_GLINTS.length; i++) { const g = SUN_GLINTS[i]; if (((f + i * 5) >> 3) & 1) ctx.fillRect(g[0], g[1], g[2], 2); }
     ctx.globalAlpha = 1;
+    // under everyone: the big one's shadow under its float, the bubbles where it pulled somebody in, the boot's puddle
+    for (let i = 0; i < this.seats.length; i++) drawUnder(ctx, this.seats[i], this.seats[i].state === WAIT, f);
     particles.draw(ctx, null, 'back');
     // shadows first, on the planks (never in the water), then the sorted pass: every seat stands on the same deck,
     // so seat order is the y-sort tiebreak. Every float lies to the right of the whole crew, so a seat's line draws
     // right after its own rig and UNDER the seats in front of it: it ducks behind a neighbour, never across a face.
-    for (let i = 0; i < this.seats.length; i++) drawShadow(ctx, this.seats[i].x, ROWS.feet + 2, SHADOW_W, 0.35, 0);
+    for (let i = 0; i < this.seats.length; i++) {
+      const s = this.seats[i], big = s.state === BITE && s.big === 1;
+      if (!offDeck(s)) drawShadow(ctx, s.x + (big ? dragX(s.reel) : 0), ROWS.feet + 2 + (big ? dragY(s.reel) : 0), SHADOW_W, 0.35, 0);
+    }
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i], o = s.opts;
       // the fish is still in the air on the arc's frames, so the bucket holds one behind until it lands
       const flying = s.state === HOOKED && RESULT_FRAMES - s.t < FISH_ARC;
       drawBucket(ctx, s.x + BUCKET_DX, ROWS.feet, s.slot, flying ? s.count - 1 : s.count, s.landT > 0 ? 1 + s.landT * LAND_K : 1, this.ing === 'fish' ? undefined : this.hex);
-      o.x = s.x; o.y = ROWS.feet; o.facing = 1;
+      if (s.state === BIG) { drawBigSeat(ctx, this, s, f); continue; }
+      // a big one being reeled drags its critter along the planks (a draw offset off the reel count) and bends its rod
+      const big = s.state === BITE && s.big === 1;
+      o.x = s.x + (big ? dragX(s.reel) : 0); o.y = ROWS.feet + (big ? dragY(s.reel) : 0); o.facing = 1;
+      if (big) s.rig.rodBend = reelBend(s, f);
       drawRig(ctx, s.rig, s.player.pose, o);
-      jointScreen(s.rig, 'weaponTip', s.tip); jointScreen(s.rig, 'handN', s.paw);
+      if (big) bentTip(s.rig, s.tip); else jointScreen(s.rig, 'weaponTip', s.tip);
+      jointScreen(s.rig, 'handN', s.paw);
       this.drawTackle(ctx, s, f);
     }
     blitAt(ctx, L.near.L, 0, L.near.y);
     particles.draw(ctx, null, 'front');
+    ctx.restore();
+    // no plate over a spot whose critter is under the water: it would hang where it was last drawn, out on the pond
     resetPlates();
-    for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
-    // the caught trout flies over the crew AFTER the plates: the payoff is never hidden by a name card
+    for (let i = 0; i < this.seats.length; i++) if (!submerged(this.seats[i])) drawSeatPlate(ctx, this.seats[i], PLATES);
+    // the caught trout and the boot fly over the crew AFTER the plates: the payoff is never hidden by a name card
+    ctx.save(); ctx.translate(0, shake);
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === HOOKED) this.drawCatch(ctx, this.seats[i]);
-    for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === BOOT) this.drawBootFlight(ctx, this.seats[i]);
+    for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === BOOT) drawBootFlight(ctx, this.seats[i], f);
+    ctx.restore();
     // the reel gauges over the biting floats, after everything: the one thing a tapping player is watching
     for (let i = 0; i < this.seats.length; i++) if (this.seats[i].state === BITE) this.drawReel(ctx, this.seats[i]);
+    drawGags(ctx);
     drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
   }
 
-  /** The line and the float (with its bob / drop / tug by state). */
+  /** The line and the float (with its bob / drop / tug by state, the boot's snag, and the big one's zip). */
   drawTackle(ctx: CanvasRenderingContext2D, s: PondSeat, f: number): void {
     const tx = R(s.tip.x), ty = R(s.tip.y), st = s.state;
     const k = RESULT_FRAMES - s.t;
@@ -421,21 +429,23 @@ export class PondScreen extends Screen {
       drawLine(ctx, tx, ty, p.x - 9, p.y);   // the line ends at the mouth, which leads the travel
       return;
     }
-    if (st === BOOT) {
-      // on the line up to the paw; from there the rod is set down and the boot is in the paw, so there is no line
-      if (BOOT_FRAMES - s.t < BOOT_ARC) { const b = this.bootPoint(s); if (b) drawLine(ctx, tx, ty, b.x - 4, b.y - 8); }
-      return;
-    }
+    // on the line up to the paw; from there the rod is set down and the boot is in the paw, so there is no line
+    if (st === BOOT) { drawBootLine(ctx, s, tx, ty); return; }
     if (s.player.name === 'pull') { drawLine(ctx, tx, ty, tx, ty + 8); return; }
     // The dangle. Through the whip it reels IN to the tip, and the line tightens to nothing by CAST_LAUNCH, so
     // nothing hangs anywhere near another critter at any frame of the cast.
     if (st === IDLE) { this.drawDangle(ctx, s, tx, ty, 1, f); return; }
     if (st === CAST && s.t < CAST_LAUNCH) { this.drawDangle(ctx, s, tx, ty, 1 - s.t / CAST_LAUNCH, f); return; }
-    let dy = 0;
+    // the boot's tell: no bob, the float lies over
+    if (st === WAIT && s.boot) { drawSnaggedFloat(ctx, s, tx, ty); return; }
+    let dy = 0, fx = s.fx;
     if (st === WAIT) dy = BOB[(f >> 1) & 31];
-    else if (st === BITE) dy = 5 + (s.t > 0 ? 2 : 0);   // down on the hook, and a further tug on every reel press
-    drawLine(ctx, tx, ty, s.fx, s.fy + dy - 5);
-    drawFloat(ctx, s.fx, s.fy + dy, s.slot, true, st === BITE);
+    else if (st === BITE) {
+      dy = 5 + (s.t > 0 ? 2 : 0);   // down on the hook, and a further tug on every reel press
+      if (s.big) { fx += zipX(f); dy += ZIP_SINK; }   // the big one's tell: the float zips from side to side
+    }
+    drawLine(ctx, tx, ty, fx, s.fy + dy - 5);
+    drawFloat(ctx, fx, s.fy + dy, s.slot, true, st === BITE);
   }
 
   /**
@@ -462,44 +472,25 @@ export class PondScreen extends Screen {
     if (this.ing === 'fish') drawTrout(ctx, p.x, p.y, 1); else drawFood(ctx, this.icon, p.x, p.y, CATCH_S, this.hex);
   }
 
-  /** Where the boot is on this frame of its sequence, or null once it is lobbed (it is then drawn on the toss arc, off the line). */
-  bootPoint(s: PondSeat): Point | null {
-    const k = BOOT_FRAMES - s.t;
-    if (k < BOOT_ARC) {
-      const i = R(k * (PARA_N - 1) / (BOOT_ARC - 1));
-      CATCH_P.x = R(s.fx + (s.paw.x - s.fx) * PARA_T[i]);
-      CATCH_P.y = R(s.fy + (s.paw.y - s.fy) * PARA_T[i]) - R(PARA_H[i] * CATCH_LIFT);
-      return CATCH_P;
-    }
-    if (k < BOOT_ARC + BOOT_HOLD) { CATCH_P.x = R(s.paw.x); CATCH_P.y = R(s.paw.y); return CATCH_P; }
-    return null;
-  }
-
-  /** The boot: up the line to the paw, held and tipped there (drips while it pours), then lobbed back on a lower arc to the water. */
-  drawBootFlight(ctx: CanvasRenderingContext2D, s: PondSeat): void {
-    const k = BOOT_FRAMES - s.t, p = this.bootPoint(s);
-    if (p) {
-      const held = k >= BOOT_ARC, tip = held ? Math.min(1, (k - BOOT_ARC) / 14) : 0;
-      drawBoot(ctx, p.x, p.y, tip * 0.9, held && tip >= 1);
-      return;
-    }
-    const j = k - BOOT_ARC - BOOT_HOLD, i = R(j * (PARA_N - 1) / (BOOT_TOSS - 1));
-    const x = R(s.paw.x + (s.tx - s.paw.x) * PARA_T[i]), y = R(s.paw.y + (s.sy - s.paw.y) * PARA_T[i]) - R(PARA_H[i] * TOSS_LIFT);
-    drawBoot(ctx, x, y, j * 0.35);   // tumbling as it goes
-  }
-
   override summary() {
     return {
-      elapsed: this.clock.elapsed, total: this.total, target: this.target, ending: this.clock.phase !== 0, sign: this.clock.signText, boots: this.boots,
-      seats: this.seats.map((s) => ({ slot: s.slot, state: STATE_NAMES[s.state], t: s.t, reel: s.reel, count: s.count, fx: s.fx, fy: s.fy, boot: s.boot })),
+      elapsed: this.clock.elapsed, total: this.total, target: this.target, ending: this.clock.phase !== 0, sign: this.clock.signText,
+      boots: this.boots, bigOnes: this.bigOnes,
+      seats: this.seats.map((s) => ({
+        slot: s.slot, state: STATE_NAMES[s.state], t: s.t, reel: s.reel, count: s.count, fx: s.fx, fy: s.fy, boot: s.boot, big: s.big,
+        x: s.x, drag: s.state === BITE && s.big ? dragX(s.reel) : 0, anim: s.anim, weapon: s.rig.weapon === ITEMS.rod ? 'rod' : s.rig.weapon ? 'bent' : 'none',
+      })),
     };
   }
 
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const o = this.sum;
-    o[0] = this.clock.elapsed; o[1] = this.clock.phase; o[2] = this.total; o[3] = this.boots;
-    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i], k = 4 + i * 7; o[k] = s.state; o[k + 1] = s.t; o[k + 2] = s.reel; o[k + 3] = s.fx; o[k + 4] = s.fy; o[k + 5] = s.count; o[k + 6] = s.boot; }
+    o[0] = this.clock.elapsed; o[1] = this.clock.phase; o[2] = this.total; o[3] = this.boots; o[4] = this.bigOnes;
+    for (let i = 0; i < this.seats.length; i++) {
+      const s = this.seats[i], k = 5 + i * 8;
+      o[k] = s.state; o[k + 1] = s.t; o[k + 2] = s.reel; o[k + 3] = s.fx; o[k + 4] = s.fy; o[k + 5] = s.count; o[k + 6] = s.boot; o[k + 7] = s.big;
+    }
     return o;
   }
 }
