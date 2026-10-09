@@ -234,6 +234,16 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   snip: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 2200, dur: 0.02, vol: 0.18 }); return knock(c, d, t + 0.04, { v: o.v, p: o.p, f: 2600, dur: 0.02, vol: 0.18 }); },
   /** The hedgehog woken: three snuffles of lowpassed noise, and a tiny sneeze on the end. */
   snuffle: (c, d, t, o) => { for (let i = 0; i < 3; i++) noise(c, d, t + i * 0.09, { dur: 0.06, vol: 0.09 * o.v, type: 'lowpass', f0: 900 * o.p, f1: 500 * o.p, attack: 0.01 }); return osc(c, d, t + 0.3, { type: 'square', f0: 1200 * o.p, f1: 600 * o.p, glide: 0.06, dur: 0.07, vol: 0.05 * o.v, attack: 0.002, lp: 3000 }); },
+  /** The shears running away with a critter: a volley of four snips, snip-snap, in a rustle of leaves; replayed through the frenzy. */
+  terrace_frenzy: (c, d, t, o) => { for (let i = 0; i < 4; i++) knock(c, d, t + i * 0.04, { v: o.v, p: o.p * (1 + (i & 1) * 0.15), f: 2300, dur: 0.018, vol: 0.15 }); return noise(c, d, t, { dur: 0.17, vol: 0.1 * o.v, type: 'bandpass', f0: 2600 * o.p, f1: 1500 * o.p, q: 0.8, attack: 0.02 }); },
+  /** TA-DA: the leaves settle on a hedge statue - two notes up, the second held, with a little sparkle on it. */
+  terrace_tada: (c, d, t, o) => { arp(c, d, t, { v: o.v, p: o.p, notes: [72, 79], gap: 0.12, dur: 0.12, last: 0.5, vol: 0.15, type: 'triangle' }); return glass(c, d, t + 0.14, { freqs: [2093 * o.p, 3136 * o.p], detune: 6, dur: 0.45, vol: 0.05 * o.v, trem: 7, attack: 0.01 }); },
+  /** The hedgehog, curled into a ball, bouncing off a shin: a rubbery boing up, and a soft bump under it. */
+  terrace_boing: (c, d, t, o) => { osc(c, d, t, { type: 'square', f0: 220 * o.p, f1: 520 * o.p, glide: 0.06, dur: 0.24, vol: 0.09 * o.v, attack: 0.004, lp: 1800, vib: { rate: 26, depth: 70 } }); return thump(c, d, t, { v: o.v * 0.6, p: o.p, f: 160, lp: 900, dur: 0.05, vol: 0.2 }); },
+  /** EEK: a squeak shooting up as the critter leaps with its fur on end. */
+  terrace_eek: (c, d, t, o) => osc(c, d, t, { type: 'sine', f0: 900 * o.p, f1: 2200 * o.p, glide: 0.08, dur: 0.2, vol: 0.11 * o.v, attack: 0.004, vib: { rate: 30, depth: 60 } }),
+  /** HMPH: the hedgehog's grunt as it glares - a short nasal puff, falling. */
+  terrace_hmph: (c, d, t, o) => { noise(c, d, t, { dur: 0.08, vol: 0.08 * o.v, type: 'lowpass', f0: 700 * o.p, f1: 300 * o.p, attack: 0.01 }); return osc(c, d, t + 0.02, { type: 'sawtooth', f0: 210 * o.p, f1: 150 * o.p, glide: 0.1, dur: 0.16, vol: 0.07 * o.v, attack: 0.01, lp: 900 }); },
   /** Leaves brushed aside: a short, low rustle. */
   brush: (c, d, t, o) => noise(c, d, t, { dur: 0.16, vol: 0.12 * o.v, type: 'bandpass', f0: 1800 * o.p, f1: 900 * o.p, q: 0.8, attack: 0.02 }),
   /** The toadstool: a wrinkled-nose 'pooh', a sine sliding down with a wobble on it. */
