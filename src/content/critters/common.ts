@@ -280,7 +280,15 @@ export function makeHead(spec: CritterSpec): CritterHook {
     ctx.arc(0, 0, r, 0, TAU);
     ctx.moveTo(g.mx + g.rx, g.my); ctx.ellipse(g.mx, g.my, g.rx, g.ry, 0, 0, TAU);
     celPath(ctx, rig, pal.skin, 0, 0, r, 0.32, 0.3);
-    if (rig.override) return;
+    if (rig.override) {
+      // a COAT keeps the eyes (critterRig, game/gags.ts), and a frog's whites ARE its domes: drawn in the face's own
+      // white so the coat passes them through, and critterFace puts the pupils on them as it always does
+      if (rig.coatEyes && ears === 'dome') {
+        celBall(ctx, rig, R(r * DOME.farX), R(r * DOME.y), R(r * DOME.r), EYE_WHITE, false);
+        celBall(ctx, rig, R(r * DOME.nearX), R(r * DOME.y), R(r * DOME.r), EYE_WHITE, false);
+      }
+      return;
+    }
     // muzzle: a colour change inside the head's own ink, so no line of its own (ART_STYLE 0.2)
     ctx.save(); ctx.beginPath(); ctx.ellipse(g.mx, g.my, g.rx, g.ry, 0, 0, TAU); ctx.clip();
     const lt = tones(rig, muzzleHex || pal.belly);
