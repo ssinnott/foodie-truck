@@ -246,6 +246,24 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   wave: (c, d, t, o) => { noise(c, d, t, { dur: 0.7, vol: 0.2 * o.v, type: 'lowpass', f0: 500 * o.p, f1: 2200 * o.p, attack: 0.35 }); return noise(c, d, t + 0.5, { dur: 0.6, vol: 0.12 * o.v, type: 'highpass', f0: 1800 * o.p, f1: 3500 * o.p, attack: 0.05 }); },
   /** A thorn in the paw: one tiny high tick, and a squeak sliding up after it. */
   prick: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 2600, dur: 0.02, vol: 0.18 }); return osc(c, d, t + 0.04, { type: 'sine', f0: 700 * o.p, f1: 1300 * o.p, glide: 0.1, dur: 0.14, vol: 0.09 * o.v, attack: 0.004 }); },
+  /** OW! as the leap goes up: a yelp, a soft square sliding up an octave and tumbling back down. */
+  bramble_ow: (c, d, t, o) => { osc(c, d, t, { type: 'square', f0: 480 * o.p, f1: 980 * o.p, glide: 0.07, dur: 0.1, vol: 0.08 * o.v, attack: 0.004, lp: 2400 }); return osc(c, d, t + 0.09, { type: 'square', f0: 980 * o.p, f1: 420 * o.p, glide: 0.2, dur: 0.24, vol: 0.08 * o.v, attack: 0.004, lp: 2000, vib: { rate: 16, depth: 40 } }); },
+  /** The pricked bush shaking its leaves out: two swells of highpassed rustle, the second smaller. */
+  bramble_rustle: (c, d, t, o) => { noise(c, d, t, { dur: 0.22, vol: 0.12 * o.v, type: 'highpass', f0: 2400 * o.p, f1: 3600 * o.p, attack: 0.03 }); return noise(c, d, t + 0.18, { dur: 0.2, vol: 0.07 * o.v, type: 'highpass', f0: 3000 * o.p, f1: 2400 * o.p, attack: 0.04 }); },
+  /** Blowing on the paw: a soft 'fff' of bandpassed breath, swelling in and out. */
+  bramble_blow: (c, d, t, o) => noise(c, d, t, { dur: 0.26, vol: 0.09 * o.v, type: 'bandpass', f0: 1300 * o.p, f1: 1000 * o.p, q: 0.7, attack: 0.1 }),
+  /** The swollen berry wobbling in the paw: a rubbery tone whose wobble speeds up as it swells. */
+  bramble_wobble: (c, d, t, o) => am(c, d, t, { type: 'triangle', f0: 240 * o.p, f1: 330 * o.p, glide: 0.45, curve: 'lin', rate: 7, rate1: 18, depth: 0.85, dur: 0.5, vol: 0.12 * o.v, attack: 0.02, lp: 1600 }),
+  /** SPLUT: a soft wet burst - a low squelching plop, a slap of lowpassed noise and a spray falling away. */
+  bramble_splut: (c, d, t, o) => {
+    plop(c, d, t, { v: o.v, p: o.p * 0.6, f: 300, vol: 0.26, splash: 0 });
+    thump(c, d, t, { v: o.v, p: o.p, f: 110, lp: 1500, dur: 0.1, vol: 0.3 });
+    return hiss(c, d, t + 0.02, { v: o.v, p: o.p, dur: 0.3, f0: 2600, f1: 700, vol: 0.14, type: 'bandpass', attack: 0.006, q: 0.9 });
+  },
+  /** MMM: a lick - a wet flick of noise rising - and a contented hum under it. */
+  bramble_slurp: (c, d, t, o) => { noise(c, d, t, { dur: 0.1, vol: 0.12 * o.v, type: 'bandpass', f0: 700 * o.p, f1: 2400 * o.p, q: 1.2, attack: 0.01 }); return osc(c, d, t + 0.08, { type: 'triangle', f0: 210 * o.p, f1: 250 * o.p, dur: 0.32, vol: 0.09 * o.v, attack: 0.04, lp: 1200, vib: { rate: 6, depth: 25 } }); },
+  /** The juice shaken off like a wet dog: six quick flaps of noise, alternating in pitch. */
+  bramble_shake: (c, d, t, o) => { for (let i = 0; i < 6; i++) noise(c, d, t + i * 0.045, { dur: 0.04, vol: (0.1 - i * 0.008) * o.v, type: 'bandpass', f0: (i & 1 ? 2400 : 1500) * o.p, q: 1.2, attack: 0.004 }); return t + 0.3; },
   /** ACHOO: a rising breath of noise, a bark of square wave, and a puff of lowpassed dust after it. */
   sneeze: (c, d, t, o) => { noise(c, d, t, { dur: 0.1, vol: 0.08 * o.v, type: 'highpass', f0: 1200 * o.p, f1: 2400 * o.p, attack: 0.08 }); osc(c, d, t + 0.1, { type: 'square', f0: 520 * o.p, f1: 180 * o.p, glide: 0.1, dur: 0.14, vol: 0.09 * o.v, attack: 0.003, lp: 1800 }); return noise(c, d, t + 0.12, { dur: 0.22, vol: 0.14 * o.v, type: 'lowpass', f0: 1400 * o.p, f1: 300 * o.p, attack: 0.005 }); },
   /** One bee, close: a sawtooth drone with a wobble, swelling in and fading, right at the nose. */
