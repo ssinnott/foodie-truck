@@ -1,5 +1,5 @@
-// THE REST OF THE VILLAGE (docs/GDD.md section 2): sixteen more diners to stand in the line with the owl, the otter
-// and the goat of customers.ts, so a day's queue is a crowd of different animals and not the same three on repeat.
+// THE REST OF THE VILLAGE (docs/GDD.md section 2): twenty-four more diners to stand in the line with the owl, the
+// otter and the goat of customers.ts, so a day's queue is a crowd of different animals and not the same three on repeat.
 // Every one is the same chibi rig as the cast, built by critterBuild from a compact spec: a species is a silhouette
 // (ears, tail, head and body proportions), a fur palette, one marking on the face and at most one piece of
 // headgear or back-piece (villagerParts.ts), so each reads on its own at a squint (docs/ART_STYLE.md section 0).
@@ -16,11 +16,14 @@ import { critterBuild, makeCritterAnims, scarf, cap, bandana, maskMarking, cheek
 import type { CritterSpec } from './common.ts';
 import {
   blazeMarking, patchMarking, tabbyMarking, snoutMarking, bigNose, billMarking, beakAndWattle, buckTeeth,
+  pugNoseAndFang, whiskerSpots, horseBlaze, robinFace, kingfisherFace, puffinFace,
   sideHorns, antlers, beanie, acornCap, comb, quillCrown, quillBack, shell, paddleTail, bellCollar,
+  tusk, bristleCrest, mane, bonnet, captainsCap, hairTail, batWings, featherTail,
 } from './villagerParts.ts';
 
 /** The cues a map sprite can carry on top of its colours (art/backgrounds/map.ts drawDiner reads them). */
-export type MapCue = 'none' | 'comb' | 'antlers' | 'quills' | 'bill' | 'shell' | 'snout' | 'horns' | 'mask' | 'tail' | 'beanie' | 'cap' | 'blaze' | 'teeth';
+export type MapCue = 'none' | 'comb' | 'antlers' | 'quills' | 'bill' | 'shell' | 'snout' | 'horns' | 'mask' | 'tail' | 'beanie' | 'cap' | 'blaze' | 'teeth'
+  | 'mane' | 'bonnet' | 'beak' | 'wings' | 'tusks' | 'longbeak' | 'captain' | 'puffinbill';
 /** The ear a map sprite wears. */
 export type MapEars = 'round' | 'point' | 'long' | 'droop' | 'none';
 
@@ -33,6 +36,8 @@ export interface MapLook {
   ears: MapEars;
   cue: MapCue;
   cueHex: string;
+  /** The bill a headgear cue draws under its hat (the goose's, under the bonnet), when the animal has one. */
+  billHex?: string;
 }
 
 const ANIMS = makeCritterAnims();
@@ -184,5 +189,75 @@ export const beaver = villager('beaver', 'TIMBER', 'Timber Dammerton', 'THE BUIL
   accessories: [paddleTail('#5A4030', '#2E2016')],
 }, { cloth: '#6E8F4F', ears: 'round', cue: 'teeth', cueHex: '#F6F0E2' });
 
+// ---------------------------------------------------------------- the horse: a long face with a white blaze, a flaxen mane
+export const horse = villager('horse', 'CLOVER', 'Clover Fetlock', 'THE SHOW PONY', 'horse', {
+  palette: { skin: '#9A4E3E', hair: '#4A2418', belly: '#F2E6D2', secondary: '#9A4E3E', shorts: '#4F5F8A', accent: '#EAD39C', dark: DARK },
+  proportions: { headR: 13, torsoW: 24, torsoH: 18, hip: 20, handR: 4.6, footL: 9, upperLeg: 7, lowerLeg: 7 },
+  ears: 'point', earPos: { near: { x: 0.34, y: -0.86 }, far: { x: -0.2, y: -0.86 } },
+  muzzle: 1.2, muzzleHex: '#B06A58', nose: false, markings: horseBlaze('#F2E6D2'), tail: 'none', boots: '#4A3428',
+  face: { eyeY: 1 },
+  accessories: [hairTail('#EAD39C'), mane('#EAD39C')],
+}, { cloth: '#4F5F8A', dark: '#6E3426', ears: 'point', cue: 'mane', cueHex: '#EAD39C' });
+
+// ---------------------------------------------------------------- the goose: white, an orange bill and feet, a bonnet
+export const goose = villager('goose', 'GUSSIE', 'Gussie Gander', 'THE BOSSY ONE', 'goose', {
+  palette: { skin: '#E7E9F6', hair: '#5E6672', belly: '#C4C8D4', secondary: '#E7E9F6', shorts: '#B4574A', accent: '#7C9BD0', dark: DARK },
+  proportions: { headR: 12, torsoW: 25, torsoH: 17, hip: 21, handR: 4.4, footL: 10 },
+  ears: 'none', muzzle: 0.95, muzzleHex: '#E7E9F6', nose: false, markings: billMarking('#E58A3A'), tail: 'stub', boots: '#E58A3A',
+  face: { eyeY: 1 },
+  accessories: [bonnet('#7C9BD0', '#7C9BD0')],
+}, { cloth: '#B4574A', cream: '#E7E9F6', ears: 'none', cue: 'bonnet', cueHex: '#7C9BD0', billHex: '#E58A3A' });
+
+// ---------------------------------------------------------------- the robin: a red face and breast, a cocked tail
+export const robin = villager('robin', 'RUBY', 'Ruby Redbreast', 'THE EARLY BIRD', 'robin', {
+  palette: { skin: '#837A69', hair: '#4A3E2E', belly: '#EE7240', secondary: '#837A69', shorts: '#4F7A6A', accent: '#EE7240', dark: DARK },
+  proportions: { headR: 12, torsoW: 23, torsoH: 16, hip: 18, handR: 4.2, footL: 8 },
+  ears: 'none', muzzle: 0.85, nose: false, markings: robinFace('#EE7240', '#3A2E26'), tail: 'none',
+  accessories: [featherTail('#837A69')],
+}, { cloth: '#4F7A6A', ears: 'none', cue: 'beak', cueHex: '#3A2E26' });
+
+// ---------------------------------------------------------------- the bat: great ears, a fang, wings folded on its back
+export const bat = villager('bat', 'FLITTER', 'Flitter Duskwing', 'THE NIGHT SHIFT', 'bat', {
+  palette: { skin: '#8E5E78', hair: '#3E2834', belly: '#E8CFC8', secondary: '#8E5E78', shorts: '#5E7A5A', accent: '#5E4258', dark: DARK },
+  proportions: { headR: 12, torsoW: 22, torsoH: 16, hip: 18, handR: 4.2, footL: 8 },
+  ears: 'point', earScale: 1.4, earPos: { near: { x: 0.52, y: -0.8 }, far: { x: -0.48, y: -0.76 } },
+  muzzle: 0.8, nose: false, markings: pugNoseAndFang('#3E2834', '#F6F0E2'), tail: 'none',
+  accessories: [batWings('#5E4258', '#3E2834')],
+}, { cloth: '#5E7A5A', ears: 'long', cue: 'wings', cueHex: '#5E4258' });
+
+// ---------------------------------------------------------------- the boar: a grizzled snout with a tusk, a crest of bristles
+export const boar = villager('boar', 'TUSKER', 'Tusker Rootwood', 'THE TOUGH NUT', 'boar', {
+  palette: { skin: '#5B5952', hair: '#2A2622', belly: '#B8AE9C', secondary: '#5B5952', shorts: '#A8763A', accent: '#2A2622', dark: DARK },
+  proportions: { headR: 13, torsoW: 28, torsoH: 17, hip: 24, handR: 4.8, footL: 9 },
+  ears: 'small', earPos: { near: { x: 0.42, y: -0.84 }, far: { x: -0.36, y: -0.82 } },
+  muzzle: 1.15, nose: false, markings: snoutMarking('#A0968A'), tail: 'stub',
+  accessories: [bristleCrest('#2A2622'), tusk('#F2EBDC')],
+}, { cloth: '#A8763A', ears: 'point', cue: 'tusks', cueHex: '#F2EBDC' });
+
+// ---------------------------------------------------------------- the kingfisher: electric blue, an orange cheek, a dagger beak
+export const kingfisher = villager('kingfisher', 'SAPPHIRE', 'Sapphire Reedwater', 'THE QUICK ONE', 'kingfisher', {
+  palette: { skin: '#4E7FB8', hair: '#1E4466', belly: '#E8944A', secondary: '#4E7FB8', shorts: '#8A5A3A', accent: '#E8944A', dark: DARK },
+  proportions: { headR: 12, torsoW: 22, torsoH: 16, hip: 18, handR: 4.2, footL: 8 },
+  ears: 'none', muzzle: 0.85, nose: false, markings: kingfisherFace('#E8944A', '#2A2422'), tail: 'stub',
+}, { cloth: '#8A5A3A', ears: 'none', cue: 'longbeak', cueHex: '#2A2422' });
+
+// ---------------------------------------------------------------- the seal: whisker spots under a captain's cap
+export const seal = villager('seal', 'BARNACLE', 'Bosun Barnacle', 'THE OLD SALT', 'seal', {
+  palette: { skin: '#526C6E', hair: '#2E3C3E', belly: '#C9D2CC', secondary: '#526C6E', shorts: '#A0503C', accent: '#F2EEE4', dark: DARK },
+  proportions: { headR: 13, torsoW: 26, torsoH: 17, hip: 22, handR: 4.8, footL: 10 },
+  ears: 'none', muzzle: 1.12, markings: whiskerSpots('#2E3C3E'), tail: 'none',
+  accessories: [captainsCap('#F2EEE4', '#2E3A5A', '#2A2622', '#E2B44A')],
+}, { cloth: '#A0503C', ears: 'none', cue: 'captain', cueHex: '#F2EEE4' });
+
+// ---------------------------------------------------------------- the puffin: a white face, a striped bill, orange feet
+export const puffin = villager('puffin', 'SPRAT', 'Sprat Clifftop', 'THE CHATTERBOX', 'puffin', {
+  palette: { skin: '#454D73', hair: '#22263A', belly: '#F2EFE8', secondary: '#454D73', shorts: '#9A4A3A', accent: '#E8743A', dark: DARK },
+  proportions: { headR: 12, torsoW: 24, torsoH: 17, hip: 20, handR: 4.4, footL: 10 },
+  ears: 'none', muzzle: 0.95, nose: false, markings: puffinFace('#F2EFE8', '#4C5470', '#F0C24A', '#E8743A'), tail: 'stub', boots: '#E8803A',
+}, { cloth: '#9A4A3A', ears: 'none', cue: 'puffinbill', cueHex: '#E8743A' });
+
 /** Every village diner this file defines, by id (customers.ts merges them with the original three). */
-export const VILLAGERS = Object.freeze({ fox, badger, hedgehog, pig, cow, squirrel, deer, bear, raccoon, cat, dog, hen, duck, mole, tortoise, beaver });
+export const VILLAGERS = Object.freeze({
+  fox, badger, hedgehog, pig, cow, squirrel, deer, bear, raccoon, cat, dog, hen, duck, mole, tortoise, beaver,
+  horse, goose, robin, bat, boar, kingfisher, seal, puffin,
+});

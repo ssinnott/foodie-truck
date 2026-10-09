@@ -43,12 +43,14 @@ differences, never gates: anyone can do any job.
 
 The cast index is what the START packet and `?critters=` carry, so new members are appended, never filed in
 between. Palettes, proportions and signature accessories are the art direction's (`docs/ART_STYLE.md` §1) and
-live in `src/content/critters/`. Customers are NPC critters built with the same rig: nineteen village diners - an owl, an otter and a goat
+live in `src/content/critters/`. Customers are NPC critters built with the same rig: twenty-seven village diners - an owl, an otter and a goat
 (`content/critters/customers.ts`), then a fox, a badger, a hedgehog, a pig, a cow, a squirrel, a deer, a bear, a
-raccoon, a cat, a dog, a hen, a duck, a mole, a tortoise and a beaver (`content/critters/villagers.ts`, their markings
-and headgear in `villagerParts.ts`). Each is its own silhouette (ears, tail, build), fur palette, face marking and at
-most one piece of headgear, so a line reads as a crowd. `content/critters/diners.ts` is the roll of ids, in the order
-the day plan deals them: append, never reorder. Every cast member wears an apron in their seat's player colour.
+raccoon, a cat, a dog, a hen, a duck, a mole, a tortoise, a beaver, a horse, a goose, a robin, a bat, a boar, a
+kingfisher, a seal and a puffin (`content/critters/villagers.ts`, their markings and headgear in `villagerParts.ts`).
+Each is its own silhouette (ears, tail, build), fur palette, face marking and at most one piece of headgear, so a line
+reads as a crowd. `content/critters/diners.ts` is the roll of ids, in the order the day plan deals them: append, never
+reorder, and growing it moves `PROTOCOL_VERSION`, because the plan deals from the whole roll and a longer one lays a
+different week out from the same seed. Every cast member wears an apron in their seat's player colour.
 
 ## 3. The loop
 
@@ -638,7 +640,7 @@ the closed day board):
 | Page | Records | Drawn as |
 |---|---|---|
 | **The dishes** | Per `ORDERS` id: times cooked, best stars, which day of trading it was first served on | Four cards across, three down, six pages. A dish cooked is its own `art/dishes.ts` picture **inked in**, named, with its tally and best rating under it. One never cooked is the same card **in pencil**: the picture faded back to a shape, the name blanked to `- - -`. No new art - every dish drawing already exists. |
-| **The diners** | Per `DINERS` id: times fed, and the dish they have ordered most | Pages of six deep rows on the slate (two columns of three; nineteen diners, four pages), each headed by the same head portrait the day board draws over its queues (`art/portraits.ts`), in the same plum window and idling on its own beat, with the tally and what they like beside it. A diner this truck has never served is that portrait **in pencil** - the village is all there from the first day, and who has eaten is not. |
+| **The diners** | Per `DINERS` id: times fed, and the dish they have ordered most | Pages of six deep rows on the slate (two columns of three; twenty-seven diners, five pages), each headed by the same head portrait the day board draws over its queues (`art/portraits.ts`), in the same plum window and idling on its own beat, with the tally and what they like beside it. A diner this truck has never served is that portrait **in pencil** - the village is all there from the first day, and who has eaten is not. |
 | **The larder** | Per `INGREDIENTS` id: how many gathered | The forty glyphs from `art/food.ts` in a grid, greyed until gathered once. |
 | **The road** | Per `PLACES` id: how many days the truck has been there | Twelve rows, the map's own names. |
 | **The strap** | Dishes cooked out of the whole menu | `23 OF 63 COOKED` - the number the closed board has never been able to print. |

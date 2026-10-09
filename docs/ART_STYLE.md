@@ -97,20 +97,28 @@ head / white hat and coat / mid apron / dark trousers, a silhouette none of the 
 both wear a toque: Sorrel's is the low puffed one with two balls, Rowan's the tall straight pleated one, so the
 two chefs never read as one silhouette on the cast sheet.
 
-**The village diners** are the line's crowd: nineteen NPC critters on the same rig, the owl, otter and goat of
-`customers.ts` and sixteen more in `villagers.ts` (fox, badger, hedgehog, pig, cow, squirrel, deer, bear, raccoon,
-cat, dog, hen, duck, mole, tortoise, beaver). They are not seated, so they wear the off-duty apron and there is no
-player spot to protect; what they have to clear instead is the hatch's plum wall (fur at least .25 relative
-luminance away from `#4A3038`) and, softly, the cream apron. A diner is built from `critterBuild` with the same
-rules as the cast: a silhouette cue in the ears, tail and proportions (the bear is the biggest body at headR 14, the
-hedgehog and the squirrel the smallest), ONE face marking drawn inside the skull's own ink (a badger's blaze, a
-cow's patch, a raccoon's mask, a pig's snout, a duck's bill, a mole's pink nose, a beaver's teeth), and at most one
-piece of headgear or back-piece as its own inked object (antlers, horns, comb, beanie, acorn cap, hard hat, quill
-crown, shell, paddle tail), all in `villagerParts.ts`, whose hooks refill scratch polygons rather than allocate.
+**The village diners** are the line's crowd: twenty-seven NPC critters on the same rig, the owl, otter and goat of
+`customers.ts` and twenty-four more in `villagers.ts` (fox, badger, hedgehog, pig, cow, squirrel, deer, bear, raccoon,
+cat, dog, hen, duck, mole, tortoise, beaver, horse, goose, robin, bat, boar, kingfisher, seal, puffin). They are not
+seated, so they wear the off-duty apron and there is no player spot to protect; what they have to clear instead is
+the hatch's plum wall (fur at least .25 relative luminance away from `#4A3038`) and, softly, the cream apron. A diner
+is built from `critterBuild` with the same rules as the cast: a silhouette cue in the ears, tail and proportions (the
+bear is the biggest body at headR 14, the hedgehog and the squirrel the smallest, the bat's ears are the stock point
+ears at `earScale` 1.4), ONE face marking drawn inside the skull's own ink (a badger's blaze, a cow's patch, a
+raccoon's mask, a pig's snout, a duck's bill, a mole's pink nose, a beaver's teeth, a horse's blaze, a robin's red
+face, a kingfisher's cheek stripe and dagger beak, a puffin's white face and striped bill, a seal's whisker spots, a
+bat's pug nose and fang), and at most one piece of headgear or back-piece as its own inked object (antlers, horns,
+comb, beanie, acorn cap, hard hat, quill crown, shell, paddle tail, mane, bonnet, captain's cap, bristle crest, bat
+wings, a robin's cocked tail), all in `villagerParts.ts`, whose hooks refill scratch polygons rather than allocate.
+A piece that has to sit in front of the mouth - the boar's tusk - is a head accessory rather than a marking, so it is
+drawn after the face and the smile never cuts across it.
 Fur is varied across the roll so no two diners look alike at a squint (`diners/fur` in `tools/art-check.js`: a hue
 gap under 25 degrees AND a value gap under .05 is an error), and the roll is deliberately not all brown: a slate
-hen, a teal duck, a mauve hedgehog and a black bear sit among the tans. Each carries a `map` look (colours, ears and
-one cue) that the town map's 10 px queue sprites are drawn from (`art/backgrounds/map.ts drawVillagerDiner`).
+hen, a teal duck, a mauve hedgehog, a black bear, a blue kingfisher, a navy puffin, a rose bat and a white goose sit
+among the tans. The squint test covers the hat as well as the fur: a dark earless head under a yellow hat is the
+mole, so the seal, the same value and also earless, wears a white captain's cap instead of a yellow sou'wester.
+Each carries a `map` look (colours, ears and one cue) that the town map's 10 px queue sprites are drawn from
+(`art/backgrounds/map.ts drawVillagerDiner`).
 `node tools/sheet-capture.js <dir> "" none "who=diners&mode=cast&anims=idle,wave>diners.png"` is the contact sheet.
 
 ### The truck
