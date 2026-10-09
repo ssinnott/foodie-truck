@@ -315,9 +315,13 @@ export const SCENARIOS = {
       // the kitchen cooks every dish of it at the same time: one run of the counter, one bell
       assert(s.top.counts.reduce((t, n) => t + n, 0) === total && s.top.dishes.slice().sort().join() === 'applePie,omelette',
         `the ticket reads the order by dish (${s.top.ticket.join(' / ')})`);
-      assert(s.top.custs === Math.min(3, total), `the front of the line crowds the hatch (${s.top.custs})`);
+      assert(s.top.custs === total, `the whole line crowds the hatch (${s.top.custs})`);
       s = await cook(api);
       assert(s.top.served === true && s.top.dishStars.length === total && s.top.dishStars.every((v) => v >= 1), `the bell serves every dish of the order at once (${s.top.dishStars.join()})`);
+      // every plate goes out through the hatch to the diner who ordered it before results opens
+      for (let i = 0; i < 40 && (await api.screen()) === 'kitchen' && (await api.summary()).top.holding < total; i++) await api.step(6);
+      s = await api.summary();
+      assert(s.screen === 'kitchen' && s.top.holding === total && s.top.passed === total, `every diner at the hatch is handed their plate (${s.top.holding} of ${total})`);
       const stars = s.top.dishStars.slice();
       let servedStars = 0; for (const st of stars) servedStars += st;
       for (let i = 0; i < 40 && (await api.screen()) !== 'results'; i++) await api.step(6);

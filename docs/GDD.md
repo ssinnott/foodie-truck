@@ -152,14 +152,18 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   the whole order into the kitchen (`run.startLine(i)` on arrival).
   A landmark with no line, or one already served, shows a sign.
 - **The kitchen** cooks the WHOLE LINE AT THE SAME TIME: every order in it (`run.lineOrders()`) is on the ticket,
-  read by dish (`3 X MUSHROOM SOUP`, with a row of the twists on it under it), and the front three crowd the hatch.
-  Their steps are merged into one run of the counter - the fridge once for every ingredient, each station once for
-  every dish that uses it (each order's own steps stay in its own order), and one bell. The food splits as it goes,
-  each ingredient flying to the next station ITS dish needs, onto its dish's plate on the hatch shelf (one plate per
-  dish, how many it is for painted on the shelf under it). The bell stamps `ORDER UP!` and opens results with every
-  dish's stars.
-- **Results** serves the whole line at once, out on the lane, everyone where they stood: each diner is handed their
-  plate, they all eat, and each gets a 1–3 star rating over their head; `run.serveAll(stars)` banks each customer's
+  read by dish (`3 X MUSHROOM SOUP`, with a row of the twists on it under it), and **the whole line is at the
+  hatch**: the front three lean in at the opening and everyone else stands in rows behind them, smaller and higher
+  the further back, so every diner waiting on the order is in sight. Their steps are merged into one run of the
+  counter - the fridge once for every ingredient, each station once for every dish that uses it (each order's own
+  steps stay in its own order), and one bell. The food splits as it goes, each ingredient flying to the next station
+  ITS dish needs, onto its dish's plate on the hatch shelf (one plate per dish, how many it is for painted on the
+  shelf under it). The bell stamps `ORDER UP!` and **serves the line**: one plate per order leaves its dish's plate,
+  front of the line first, and arcs out through the hatch into the paws of the diner who asked for it - each one
+  reaching out for theirs as it comes - while the counts on the shelf go down to bare plates. When the last plate has
+  been taken, results, with every dish's stars.
+- **Results** is the whole line eating at once, out on the lane, everyone where they stood with the plate the
+  kitchen handed them: they all eat, and each gets a 1–3 star rating over their head; `run.serveAll(stars)` banks each customer's
   stars and takes every dish's ingredients back out of the pantry. Then the day board, which opens **closed** — the
   day's stars and coins totted up, and the **week strip** under them. Every dish tips `TIP_COINS[stars]` — 4, 8 or 12 coins —
   and those coins are the day's takings: the game has one money, and the garage (section 13) spends it.
@@ -411,7 +415,20 @@ cooked out of thin air - and the recipe card shows them with checks. Interaction
 | MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it |
 | STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way |
 | OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way |
-| PLATE | tap | `action` plates the dish and rings the bell; the customer eats |
+| PLATE | tap | `action` rings the bell: every plate goes out through the hatch to the diner who ordered it, front of the line first |
+
+**The whole line is at the hatch.** The opening on the right of the room is where the line waits on its order, all
+of it: the first three diners lean in at the shelf's right half as they always have (the cook plating at its left
+half is never drawn through them), and the rest of the line stands behind them in rows across the opening, four,
+then five, then six, each row smaller and higher, which is room for the longest line there is (eighteen). Each row
+is staggered a little so it reads as a crowd and not a shelf of heads.
+
+**The bell serves it.** Ringing the bell stamps `ORDER UP!` and hands the order out: one plate per order leaves its
+dish's plate on the shelf, the front of the line first and one every seven frames, and arcs up through the hatch,
+shrinking to its diner's size as it goes, into the paws of the diner who asked for it - who reaches out as it
+comes and holds it out in front of them from then on. The count under each dish's plate goes down as its plates
+leave, and the last one leaves it bare; when the last plate has been taken, results. The plates are a graphic
+driven by the frames since the bell, like the food's flights: every peer draws the same serving.
 
 **The food moves down the line.** The order's items are one batch that is always at exactly one station. The
 fridge sends them to the first cooking step, and the frame a step completes, everything at its station - the pile
@@ -421,8 +438,8 @@ the tenth chop clears the board and the dice fly into the bowl, the finished sti
 the oven, and the bake drops each dish onto its own plate at the hatch,
 where it is stacked before the bell is rung - and the moment the last item lands, the stack becomes **the finished
 dish**: every recipe has a picture of its own (`art/dishes.ts`: the pie under its lattice, the soup in its bowl, the
-stack of griddle cakes with the butter on top), so what sits at the hatch is what the customer asked for, and it is
-that picture they are seen eating on results, a bite out of it per chew. A prop only draws itself loaded while the
+stack of griddle cakes with the butter on top), so what sits at the hatch is what the customer asked for, what they
+are handed through it, and what they are seen eating on results, a bite out of it per chew. A prop only draws itself loaded while the
 batch is in it (lumps in the bowl, the ingredient's colour over the pot's rim, the tray in the oven window). This is a graphic: no step waits
 for a landing, and nothing about it is simulated (`kitchen.ts` flights are cosmetic).
 
@@ -436,9 +453,10 @@ made either way so every peer draws the same day.
 
 ## 7. Results
 
-The whole line served at once on the lane the line screen stood on, everyone where they stood: a plate arcs out of
-the truck's hatch into every diner's paws on a stagger, out along the front row and up the lane to the row behind it,
-everyone chews three times, each diner's 1–3 stars pop up over their head (smaller, and a little higher, for the
+The whole line eating at once on the lane the line screen stood on, everyone where they stood, holding out the plate
+the kitchen handed them through the hatch, out along the front row and up the lane to the row behind it: on a
+stagger, each lifts it for a bite three times, the dish on it going a bite at a time until the plate is empty and put
+down for a cheer, each diner's 1–3 stars pop up over their head (smaller, and a little higher, for the
 rows further up the lane), and one receipt reads the order by dish - how many of each went out, with its stars -
 then the tip in coins and a stamp for the line as a whole (`DELICIOUS` / `TASTY` / `EDIBLE`, from the average),
 with the tip's coins in stacks of ten beside it, then `PRESS Z` (auto-return after 600 frames) →
@@ -567,7 +585,7 @@ comes on with the first key or tap, because browsers will not start audio before
 - **The kitchen** — the stations. `fridge` per ingredient out, the knife's `chop`, and the three holds each with a noise
   that replays while the button is down (`stir`, `sizzle`, `bake`); `done` for a step, `perfect` with a sparkle on
   it; `nom` for the hungry one; and the `bell`, the one long ring in the game, because ringing it is the one thing a
-  whole order builds toward. At the results: `chew` per bite, `stamp`, `coin` as the tip lands, `cheer` from the
+  whole order builds toward, then `done` as each plate is taken at the hatch. At the results: `chew` per bite, `stamp`, `coin` as the tip lands, `cheer` from the
   crew; `hello` as each diner in the line waves; `day_done` over the closed board.
 
 Sounds played on the same frame duck each other (four seats catching at once is one catch's loudness), and the

@@ -423,6 +423,22 @@ export function drawPlate(ctx, x, y, icons, hexes, n, squash, dish = null, bites
   }
 }
 
+/** The empty component table a held plate is drawn with: the dish is the picture, not a stack. */
+const NO_ICONS: string[] = [];
+/** A held plate sits this far over the paw holding it (the paw is under its rim), at the plate's own scale. */
+const HELD_LIFT = 5;
+/**
+ * A plate held out in a diner's paw at (x, y): the finished dish on it with `bites` eaten (art/dishes.ts), drawn at
+ * scale `s` about the paw - 1 is the kitchen's own plate, the cast's 1x. The kitchen draws one in each paw its plate
+ * has reached, and results the same plates on the lane while they are eaten. Allocation-free.
+ */
+export function drawHeldPlate(ctx, x, y, dish, bites, s) {
+  const px = R(x), py = R(y - HELD_LIFT * s);
+  if (s !== 1) { ctx.save(); ctx.translate(px, py); ctx.scale(s, s); ctx.translate(-px, -py); }
+  drawPlate(ctx, px, py, NO_ICONS, NO_ICONS, 0, 1, dish, bites);
+  if (s !== 1) ctx.restore();
+}
+
 /** The bell: a squash on the dome while `ringT` (frames since the ring) is small; the body lives in the layer. */
 export function drawBellRing(ctx, ringT) {
   if (ringT < 0 || ringT > 8) return;

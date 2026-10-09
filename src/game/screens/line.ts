@@ -17,11 +17,13 @@ import { VIEW_W, UI } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
 import { drawText, measureText } from '../../engine/text.ts';
-import { drawRig } from '../../lib/art/rig.ts';
+import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import type { Rig } from '../../lib/art/rig.ts';
+import type { Point } from '../../lib/art/rigParts.ts';
 import type { Pose } from '../../lib/art/poses.ts';
 import { drawShadow } from '../../art/fx.ts';
 import { drawDish } from '../../art/dishes.ts';
+import { drawHeldPlate } from '../../art/kitchenProps.ts';
 import { drawTruck } from '../../art/truck.ts';
 import type { TruckStyle } from '../../art/truck.ts';
 import { truckStyleFor } from '../garage.ts';
@@ -62,6 +64,12 @@ export function queueSpot(i: number, out: QueueSpot = { x: 0, y: 0, s: 0 }): Que
   out.x = row.x0 + j * row.dx; out.y = row.y; out.s = row.s;
   return out;
 }
+/**
+ * A plate a diner holds out in front of them (results: the dish the kitchen handed them through the hatch, `bites`
+ * of it eaten): it moves with their near paw while `follow` is set, and stays where it was held while the paw goes
+ * to their mouth for a bite. `x` and `y` are where it was last drawn.
+ */
+export interface HeldPlate { dish: string; bites: number; x: number; y: number; follow: boolean }
 /** A diner of the line the lane is showing, drawn by drawWaiters: a rig on its own idle beat at a spot of the line. */
 export interface Waiter {
   rig: Rig;
@@ -70,8 +78,14 @@ export interface Waiter {
   x: number;
   y: number;
   s: number;
+  /** The plate in their paws, if they are holding one. */
+  plate?: HeldPlate | null;
 }
-/** Draw the diners of a line back to front: the smaller rows further up the lane first, the front row over them. */
+/** Scratch for a diner's near paw, refilled by drawWaiters for each plate it draws; and a held plate's size against
+ *  the diner holding it (the kitchen's plate at 1x is a little big in the paws of a whole critter out on the lane). */
+const PAW: Point = { x: 0, y: 0 }, HELD_SCALE = 0.85;
+/** Draw the diners of a line back to front: the smaller rows further up the lane first, the front row over them -
+ *  each with the plate in their paws, if they hold one, drawn with them so the rows in front stand in front of it. */
 export function drawWaiters(ctx: CanvasRenderingContext2D, list: readonly Waiter[]): void {
   // three passes by which row of the line a diner stands in, the furthest up the lane first; within a pass the back
   // of the line is drawn first
@@ -83,6 +97,11 @@ export function drawWaiters(ctx: CanvasRenderingContext2D, list: readonly Waiter
       if (d.y < lo || d.y >= hi) continue;
       drawShadow(ctx, d.x, d.y, 34 * d.s / QUEUE_SCALE, 0.4);
       drawRig(ctx, d.rig, d.player.pose, { x: d.x, y: d.y, facing: -1, scale: d.s });
+      const p = d.plate;
+      if (p) {
+        if (p.follow) { jointScreen(d.rig, 'handN', PAW); p.x = PAW.x; p.y = PAW.y; }
+        drawHeldPlate(ctx, p.x, p.y, p.dish, p.bites, d.s * HELD_SCALE);
+      }
     }
   }
 }

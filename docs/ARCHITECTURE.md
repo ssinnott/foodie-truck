@@ -384,9 +384,11 @@ title -> lobby (host key; the party picks critters there) -> stage ...  (online:
 - `screens/kitchen.js`: one critter per seat, stations from `content/places.js STATIONS` (fridge, chop, mix, stove, oven,
   plate), steps from `run.order.steps` (every recipe's first is the fridge). It cooks the whole line as one giant
   order (`run.lineOrders()`) at the same time, their steps merged into one run of the counter (`mergeSteps`), the
-  order read by dish (`dishGroups`) on its ticket and hatch shelf, and finishes with
-  `game.replace('results', { stars: [...] })`. `screens/results.js` serves the whole line at once with
-  `run.serveAll(stars)` then replaces itself with `stage` (`run.dayComplete()`), or `map` on a day of several lines.
+  order read by dish (`dishGroups`) on its ticket and hatch shelf, the whole line at the hatch window; the bell hands
+  a plate per order out through the hatch to its diner (timed off `serveT`, so a peer draws the same serving), and
+  once the last is taken it finishes with `game.replace('results', { stars: [...] })`. `screens/results.js` has the
+  whole line eating the plates they were handed, banks it with `run.serveAll(stars)` then replaces itself with
+  `stage` (`run.dayComplete()`), or `map` on a day of several lines.
 - Screens read input by SEAT: `run.party[i].slot` is the input slot to poll for party member i. Online, every
   seat's mask arrives through `input.setVirtual` from the lockstep buffers, so a screen that only uses `input.*`
   is net-safe by construction. Screens must not read the clock, `Math.random`, or anything outside `run`, `rng` and
