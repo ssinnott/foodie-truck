@@ -22,6 +22,7 @@ import { CRITTERS } from '../../content/critters/index.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawSlate, drawMenuRows, drawHint, drawHintSpans, hintSpans } from '../ui.ts';
 import { links } from '../../engine/links.ts';
+import { arcade } from '../../engine/arcade.ts';
 import { confirmPressed, navY } from '../menuinput.ts';
 import { readWeek } from '../week.ts';
 import type { WeekRecord } from '../week.ts';
@@ -65,6 +66,13 @@ const LINK_LIT = UI.wood;
  * GARAGE made seven, and the board grew one more pitch UPWARD so its legs still stand on the same patch of lane.
  */
 const SLATE = { x: 482, y: 152, w: 140, h: 136 };
+/**
+ * The arcade's row (engine/arcade.ts), and only while the arcade frames this page: not one of the game's own rows
+ * but the frame's way out, so it goes at the bottom, under SOURCE. Standalone the menu is ROWS and nothing else.
+ */
+const ARCADE_TEXT = 'BACK TO ARCADE';
+/** An eighth row grows the board one more pitch UPWARD, as GARAGE did, so its legs stand where they always have. */
+const ARCADE_SLATE = { ...SLATE, y: SLATE.y - 14, h: SLATE.h + 14 };
 /**
  * Where the truck parks, the crate it was loaded from, and where the crew lines up.
  *
@@ -208,6 +216,7 @@ export class TitleScreen extends Screen {
     this.week = readWeek();
     this.rows = ROWS.slice();
     this.rows[PLAY_ROW] = this.week ? CONTINUE_TEXT : PLAY_TEXT;
+    if (arcade.active) this.rows.push(ARCADE_TEXT);
     // the parked truck wears what the garage has put on it
     TRUCK_OPTS.style = truckStyleFor(this.game);
     this.crew = CRITTERS.map((def, i) => {
@@ -272,6 +281,8 @@ export class TitleScreen extends Screen {
     // rather than an event handler, so a browser that wants a real gesture blocks the tab. Say so and leave the
     // address on screen instead of looking broken.
     else if (row === 'SOURCE') this.linkNotice(links.open(REPO_URL));
+    // No screen change: the arcade takes the whole frame away, the title with it.
+    else if (row === ARCADE_TEXT) arcade.exit();
   }
 
   /**
@@ -316,8 +327,10 @@ export class TitleScreen extends Screen {
     ctx.fillStyle = UI.ink; ctx.fillRect(SLATE.x + 25, SLATE.y + SLATE.h - 1, 10, 26); ctx.fillRect(SLATE.x + SLATE.w - 35, SLATE.y + SLATE.h - 1, 10, 26);
     ctx.fillStyle = UI.wood; ctx.fillRect(SLATE.x + 26, SLATE.y + SLATE.h, 8, 24); ctx.fillRect(SLATE.x + SLATE.w - 34, SLATE.y + SLATE.h, 8, 24);
     ctx.fillStyle = UI.woodDark; ctx.fillRect(SLATE.x + 32, SLATE.y + SLATE.h, 2, 24); ctx.fillRect(SLATE.x + SLATE.w - 28, SLATE.y + SLATE.h, 2, 24);
-    drawSlate(ctx, SLATE.x, SLATE.y, SLATE.w, SLATE.h, { title: 'TODAY' });
-    drawMenuRows(ctx, this.rows, SLATE.x, SLATE.y + 38, SLATE.w, this.sel, this.frame);
+    // the legs above stand at SLATE.y + SLATE.h either way: the arcade's taller board grew upward from them
+    const slate = this.rows.length > ROWS.length ? ARCADE_SLATE : SLATE;
+    drawSlate(ctx, slate.x, slate.y, slate.w, slate.h, { title: 'TODAY' });
+    drawMenuRows(ctx, this.rows, slate.x, slate.y + 38, slate.w, this.sel, this.frame);
     // the sign hangs over everything, swinging about its top centre
     drawLogoSign(ctx, VIEW_W / 2, 0, SWING * Math.sin(this.frame * SWING_RATE));
     if (this.frame % BLINK_PERIOD < BLINK_ON) {

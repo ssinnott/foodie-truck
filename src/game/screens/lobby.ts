@@ -29,6 +29,7 @@ import { AnimPlayer } from '../../lib/art/animation.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import type { PartialPose } from '../../lib/art/poses.ts';
 import { createNetSession } from '../../net/session.ts';
+import { arcade } from '../../engine/arcade.ts';
 import { drawTicket, drawSlate, drawMenuRows, drawStamp, drawNamePlate, drawHint, drawDim, ROW } from '../ui.ts';
 import { confirmPressed, cancelPressed, navY } from '../menuinput.ts';
 import { drawLane, drawGhostSeat, TRUCK_Y } from '../../art/logo.ts';
@@ -299,15 +300,18 @@ export class LobbyScreen extends Screen {
     this.codeChars = net.room.split('');
     this.codeAt = this.frame;
     let url = '';
-    try { url = (window.location.origin + window.location.pathname + '?room=' + net.room).toUpperCase(); } catch { url = '?ROOM=' + net.room; }
+    // In the arcade the link opens the arcade at this game, not the bare page it frames (engine/arcade.ts).
+    try { url = (arcade.inviteUrl(net.room) || window.location.origin + window.location.pathname + '?room=' + net.room).toUpperCase(); } catch { url = '?ROOM=' + net.room; }
     this.link = url.length > LINK_MAX ? url.slice(0, LINK_MAX - 3) + '...' : url;
     // The address bar becomes the link the host reads out; the dev flags on it are kept so a reload still works.
+    // In the arcade that is the arcade's address bar, which this frame can only ask for.
     if (net.isHost) {
       try {
         const q = new URLSearchParams(window.location.search);
         q.set('room', net.room); q.delete('host');
         window.history.replaceState(null, '', window.location.pathname + '?' + q.toString());
       } catch { /* no history API: the ticket is still the invite */ }
+      arcade.showRoom(net.room);
     }
   }
 

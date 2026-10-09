@@ -258,6 +258,19 @@ rests on, which is what lights that one address up. Either way both stay drawn, 
 refuses the tab can read one off the screen. Nothing here is simulation: no screen's `checksumFields` sees a
 link, and a peer never hears about one (docs/MULTIPLAYER.md).
 
+### `engine/arcade.ts`
+The [arcade](https://github.com/ssinnott/arcade) frames this page on a shelf beside other games. `arcade.init()`
+(main.ts, before the first screen) recognises it by two things only it arranges together: a frame named
+`arcade:<its link to this game, host key left off>` and a parent on this page's own origin (reading another
+origin's location throws, so a page elsewhere that frames the game is not the arcade, whatever it names the frame).
+Found, `arcade.active` is true and three things change: the title's menu gains a last row, BACK TO ARCADE, and the
+slate grows one pitch upward to hold it; a table's invite link is `arcade.inviteUrl(room)`, which opens the arcade
+at this game; and a host's key goes up to the arcade (`arcade.showRoom`) so its address bar carries that link.
+Talking back is `postMessage` to the parent on this origin only: `arcade:hello` at boot, `arcade:exit` from the
+row, `arcade:room` with the key. Not found - this game's own site, a file, a test, any other page that frames it -
+every member is a no-op and the game is exactly the game. `tools/scenarios/arcade.js` covers both halves, with
+`tools/arcade-host.html` standing in for the arcade. Nothing here is simulation either.
+
 ### `engine/particles.js`, `art/fx.js` (ported)
 One 600-slot pool, visual only (its own rng stream): `particles.spawn(kind, x, y, opts)`, `burst(kind, x, y, n, opts)`,
 `update()`, `draw(ctx, cam, layer)` with kinds `sparkle dust smoke steam ember crumb leaf drop text ring`; world coords
