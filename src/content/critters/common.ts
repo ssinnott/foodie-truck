@@ -28,6 +28,22 @@ const R = Math.round;
 const TAU = Math.PI * 2;
 /** Every critter's outline: warm near-black (docs/ART_STYLE.md section 3). */
 export const INK = '#2A1F1A';
+/** The face's whites and pupils (critterFace, rowan.ts humanFace): what a coat leaves showing (critterRig). */
+export const EYE_WHITE = '#FFF8EC', EYE_PUPIL = '#1E1512';
+
+/**
+ * The coat flag a seat's rig carries, merged into the library's `Rig` the way game/minigame.ts merges the basket
+ * state. OPTIONAL, because lib/art/rig.ts buildRig builds a complete `Rig` literal without it.
+ */
+declare module '../../lib/art/rig.ts' {
+  interface Rig {
+    /**
+     * While `override` is set: true makes it a COAT rather than a flash - every fill is the override colour, but
+     * the outline stays ink and the face keeps its whites and pupils (game/gags.ts `coat`). A flash leaves it unset.
+     */
+    coatEyes?: boolean;
+  }
+}
 
 // ---------------------------------------------------------------- the authoring surface
 /** The ear a species wears. 'dome' is the frog's pair of eye balls on the crown; 'none' draws no ear at all. */
@@ -315,7 +331,7 @@ export function cheekMarking(ctx: CanvasRenderingContext2D, rig: CritterRig, pos
  */
 export function critterFace(ctx: CanvasRenderingContext2D, rig: CritterRig, pose: Pose, inf: Info): void {
   const r = inf.r, pal = rig.palette, face = pose.face | 0, fo = rig.faceOpts || {};
-  const ink = rig.col(rig.outline), white = rig.col('#FFF8EC'), pupil = rig.col('#1E1512');
+  const ink = rig.col(rig.outline), white = rig.col(EYE_WHITE), pupil = rig.col(EYE_PUPIL);
   // dome eyes (ears: 'dome'): the whites are the domes on the crown, so the eye row moves up onto them
   const dome = !!fo.domeEyes;
   // dome eyes: the 3 px pupil (drawn at ex + 2, ey + 1) lands on each dome's centre
@@ -663,6 +679,15 @@ export function critterRig(def: CritterSource, slot = -1): Rig {
     const v = rig.paletteFar[k];
     if (typeof v === 'string' && v[0] === '#') { const [r, g, b] = hexToRgb(v); rig.paletteFar[k] = rgbToHex(r, g, b - 6); }
   }
+  // A COAT (game/gags.ts): with `coatEyes` set, an override paints every fill but leaves the ink and the eyes, so a
+  // critter covered in soot, flour or honey is still outlined and still blinks out of it. Without the flag this is
+  // the library's own `override || hex` exactly - the hit flash and the golden fingerprint never see a difference.
+  rig.col = (hex: string): string => {
+    const o = rig.override;
+    if (!o) return hex;
+    if (rig.coatEyes && (hex === rig.outline || hex === EYE_WHITE || hex === EYE_PUPIL)) return hex;
+    return o;
+  };
   return rig;
 }
 
