@@ -47,7 +47,7 @@ playtest can assert it fired.
 | **Cockle Cove** | **The seventh wave.** Every so often one wave rolls up over the strand line. | Every 600–900 frames | Everyone on the sand jumps, drips for 40 frames, seaweed lands on somebody's head. | Nothing. |
 
 The whole party shares a joke when two happen at once (the mill's sneeze knocks a neighbour's ears, the wave soaks
-everyone), so a four-seat round has more of them than a solo one, which is the right way round for a couch game.
+everyone), so a four-seat round has more of them than a solo one, which is the right way round for a party game.
 
 **The kitchen** already has the hungry one's bite. Two more, both on the same seeded 1-in-6 as the bite, for the
 crew who are not Barley: the pot lid that rattles and lifts on its own when a stove step completes, and the flour

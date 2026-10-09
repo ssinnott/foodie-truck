@@ -2,7 +2,7 @@
 
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-support-F2C14E?logo=kofi&logoColor=white&labelColor=2A1F1A)](https://ko-fi.com/seansinnott)
 
-A cozy co-op cooking adventure for one to four players, drawn entirely in code. The crew of a countryside food
+A cozy cooking adventure for one player, or for two to four in online co-op, drawn entirely in code. The crew of a countryside food
 truck opens for the day with a menu and a shopping list that adds up everything the day's
 customers will order. The truck starts the day parked in its depot in the middle of the town; the crew drive out
 round the countryside gathering it all — a short mini-game at every landmark — until the pantry is full, and then
@@ -37,7 +37,7 @@ needs only the seed, the day and who was sitting down. Finish the fête and the 
 Every dish tips **coins** — 4, 8 or 12 by its stars — and each night they go into the **garage's** tin. The garage
 sells six things for the truck: a new paint (seafoam mint, or ketchup and mustard), a new awning (cherry gingham,
 or a salad) and something for the roof (a big apple, or a giant hot dog). Flip through them and the truck tries each
-one on; a good week buys about one. The tin and the truck's look carry on from week to week. (Local play only for
+one on; a good week buys about one. The tin and the truck's look carry on from week to week. (Offline play only for
 now: an online match banks nothing, and everyone sees the stock truck.)
 
 The **recipe book** is what the week fills in. Every dish cooked is inked into it with its own picture, every
@@ -73,25 +73,30 @@ npm install
 npm run dev        # http://localhost:8080
 ```
 
-**Four players on one couch.** The keyboard seats two, and a gamepad takes the lowest seat nobody is already on
-the keys for the moment it is pressed — so four pads fill the truck, or two pads either side of the keyboard pair.
-Pick up a controller on the title screen and press A. Every round opens on a HOW TO PLAY card that shows its
-controls as animated keys, so nobody has to read the hint line to know what to do.
+**One player per screen; friends join online.** PLAY is a game for one, on whatever you have to hand — the keyboard,
+any gamepad (whichever you pick up drives your critter), or a phone's touchscreen. Playing together is ONLINE
+(below): each player on their own machine, two to four of them. There is no couch co-op. Every round opens on a HOW
+TO PLAY card that shows its controls as animated keys, so nobody has to read the hint line to know what to do.
 
-| Action | P1 keys | P2 keys | Any seat, on a gamepad |
+| Action | Keyboard | Gamepad | Phone |
 |---|---|---|---|
-| Move | Arrows / W A S D | T F G H | D-pad / left stick |
-| ACTION (confirm, catch, cast, chop) | Z or Space | V | A |
-| ALT (honk, bite, flip) | X | B | X |
-| CANCEL (back) | C or Esc | N | B |
-| START (pause, ready) | Enter | 5 | Start |
+| Move | Arrows / W A S D | D-pad / left stick | the stick: touch anywhere on the left and drag |
+| ACTION (confirm, catch, cast, chop) | Z or Space | A | GO |
+| ALT (honk, bite, flip) | X | X | ALT (only where a screen uses it) |
+| CANCEL (back) | C or Esc | B | X |
+| START (pause, ready) | Enter | Start | MENU |
 
-P3 and P4 are gamepad seats — there is no third nine-key block left on a keyboard worth playing on — and a seat on
-a pad reads its own buttons in the hint lines.
+A player on a pad reads its own buttons in the hint lines, and a player on a phone reads the buttons on the glass.
 
-**Every one of those is a default, not a rule.** `CONTROLS` on the title menu opens the table above as a form you
-can write on: pick a cell, press ACTION, then press the key or button you want it to be. Each column (P1's keys,
-P2's keys, and the pad table every controller shares) goes back to stock on its own with ALT. Bindings are saved in
+**On a phone** (sideways), the left half of the screen is a floating stick: put a thumb down anywhere there —
+the dark band beside the picture included — and drag the way you want to go; the stick appears under your thumb.
+GO is the big button in the bottom-right corner, and the whole corner is GO, out to the edge of the glass. A
+button stays pressed until the thumb lifts, so the mini-games you play by holding GO keep going if your thumb
+rolls. A gamepad or keyboard paired to the phone hides the thumb controls until you touch the screen again.
+
+**Every one of those is a default, not a rule.** `CONTROLS` on the title menu opens the keyboard and gamepad
+columns of that table as a form you can write on: pick a cell, press ACTION, then press the key or button you want
+it to be. Each column (the keys, and the pad table every controller shares) goes back to stock on its own with ALT. Bindings are saved in
 the browser and come back next time; `index.html?defaults=1` boots on the stock ones without throwing yours away,
 which is the way back in if you ever bind yourself into a corner.
 
@@ -101,7 +106,8 @@ dairy's two-handed milking on two hands. The left stick is always the four direc
 **Sound** comes on with the first key or tap (the browser's rule, not ours). `M` mutes and unmutes for the session;
 it stands down if you have bound M to an action, or while you are typing a host key.
 
-Any screen can be opened directly for a look: `index.html?debug=1&skipTo=orchard&critters=0,1,2,3&seed=7`. Add
+Any screen can be opened directly for a look: `index.html?debug=1&skipTo=orchard&critters=0,1,2,3&seed=7` (the
+extra critters stand in for an online party; only the first is yours to drive). Add
 `&order=4` to force a recipe onto the day's menu (and into the first customer's paws), `&recipes=0,2` to fix the
 whole menu, or `&day=5` to open on that day of the week. The title's CREW row opens the gallery, a contact sheet
 of every critter and animation, and its BOOK row opens the recipe book.

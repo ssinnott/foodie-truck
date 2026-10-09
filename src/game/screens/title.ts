@@ -194,10 +194,9 @@ export class TitleScreen extends Screen {
 
   override enter(params: ScreenParams): void {
     super.enter(params);
-    // Back at the front door: forget which pad claimed which couch seat, and let the couch fill again from
-    // scratch - four seats, pads welcome (an online lobby we have just walked out of had claiming switched off).
-    this.game.input.setPadClaims(true);
-    this.game.input.resetClaims();
+    // Back at the front door: whatever seats an online match left in the room are out of it, and this machine's
+    // own is the only one left to drive the menus.
+    this.game.input.resetJoins();
     this.sel = 0;
     this.notice = ''; this.noticeTimer = 0;
     // Both addresses are clickable for as long as this screen is on the stack. A click is a real user gesture, so
@@ -276,13 +275,17 @@ export class TitleScreen extends Screen {
 
   /**
    * CONTINUE: pick the week up where it was left. The record (read in enter(), never here) holds the seed, the
-   * day and who was sitting down, and `planWeek` rebuilds the rest - so this reseats the party and opens that
-   * day's board directly, with no character select in between: the crew was chosen on Monday.
+   * day and who was sitting down, and `planWeek` rebuilds the rest - so this reseats the player and opens that
+   * day's board directly, with no character select in between: the critter was chosen on Monday.
+   *
+   * One critter, the first seat's, however many the record holds: a week saved while couch co-op still existed
+   * can name a whole party, and there is one player at this screen now. Nothing in the week's plan depends on the
+   * party (game/run.ts planWeek takes the seed alone), so the days come back exactly as they were laid out.
    */
   resume(): void {
     const w = this.week;
     if (!w) { this.game.replace('select'); return; }
-    startRun(this.game, { seed: w.seed, critters: w.critters, day: w.day });
+    startRun(this.game, { seed: w.seed, critters: w.critters.slice(0, 1), day: w.day });
     const run = this.game.run;
     // the days already closed come back with the run, so the board's week strip is whole on a resumed Thursday
     run.weekStars = w.stars.slice();

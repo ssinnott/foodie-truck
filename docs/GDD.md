@@ -171,8 +171,9 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   — of the week, anyway: the tin and whatever the truck is wearing carry on into the next one.
 - **A week is resumable at day boundaries** (`game/week.ts`), because at one a run holds nothing that is not
   derivable: the record is the seed, the day, the party and what the closed days were worth — about sixty bytes.
-  The title's first row is `CONTINUE` instead of `PLAY` while one is in progress, and it reseats the saved party
-  and opens that day's board with no character select in between: the crew was chosen on Monday. `PLAY` forgets
+  The title's first row is `CONTINUE` instead of `PLAY` while one is in progress, and it reseats the saved critter
+  and opens that day's board with no character select in between: the crew was chosen on Monday. (A week saved by a
+  couch party, before local co-op went, comes back with its first seat's critter alone.) `PLAY` forgets
   the week in progress, so a fresh start can never be offered last week's Thursday. Written and read from screen
   `enter()` / `exit()` only, and **online peers do not save**: a guest plays the host's week, which arrives in the
   START packet, and one player owns a week the way one player owns the host key.
@@ -430,30 +431,39 @@ board (that was the last round).
 
 ## 8. Multiplayer
 
-One to four players. Couch: **all four seats are local**. The keyboard reaches two of them (P2 joins by pressing
-any key of the T F G H / V B N block) and a gamepad claims the lowest seat no keyboard is already driving, on its
-first button press — so four pads fill the truck, as do two pads either side of the keyboard pair. Seats fill from
-the bottom and stay dense, because a run's party is indexed by input slot. Online: two to four through a **host
-key** (a six-character room code) in the lobby, lockstep, one
-truck, simultaneous mini-games, one critter per station. Everything a screen simulates is driven only by seat input
-and the seeded rng, so all peers agree; see `docs/MULTIPLAYER.md`. Pause is local-only and refused online.
+One to four players, and **one player per machine**. PLAY is a game for one, on whatever that player has in their
+hands: the keyboard, any gamepad (every pad plugged in drives the one seat — whichever is picked up), or the touch
+controls a phone draws. Playing together is **online only**: two to four, each on their own machine, through a
+**host key** (a six-character room code) in the lobby, lockstep, one truck, simultaneous mini-games, one critter
+per station. There is no couch co-op — no second keyboard block, no pad taking a seat of its own. Seats stay dense,
+because a run's party is indexed by input slot. Everything a screen simulates is driven only by seat input and the seeded rng, so all
+peers agree; see `docs/MULTIPLAYER.md`. Pause is local-only and refused online.
 
 ## 9. Controls
 
-| Action | P1 keys | P2 keys | Any seat, on a gamepad |
+| Action | Keyboard | Gamepad | Phone |
 |---|---|---|---|
-| Move | Arrows / W A S D | T F G H | D-pad / left stick |
-| ACTION (confirm, catch, cast, chop) | Z or Space | V | A |
-| ALT (honk, bite, flip) | X | B | X |
-| CANCEL (back) | C or Esc | N | B |
-| START (pause, ready) | Enter | 5 | Start |
+| Move | Arrows / W A S D | D-pad / left stick | the floating stick (left half of the glass) |
+| ACTION (confirm, catch, cast, chop) | Z or Space | A | GO |
+| ALT (honk, bite, flip) | X | X | ALT, on the screens that read it |
+| CANCEL (back) | C or Esc | B | X |
+| START (pause, ready) | Enter | Start | MENU |
 
-P3 and P4 are gamepad seats: there is no third nine-key block left on a keyboard worth playing on. A seat on a pad
-is told its own buttons in the hint lines (`A: READY`, not `Z: READY`). The press that sits a player down never
-also stamps their card — they arrive on a cursor, not on a pick.
+A player on a pad is told its own buttons in the hint lines (`A: READY`, not `Z: READY`), and a player on a phone
+the buttons on the glass (`GO: READY`, `HONK: ALT`).
 
-**Everything in that table is a default.** The `controls` screen is the table as a form: eight action rows by three
-columns (P1's keys, P2's keys, and the one pad table every controller shares), ACTION on a cell listens for the
+**On a phone** the controls are the sibling game *Aether & Brass*'s layout, because that one plays well on glass. A
+thumb that lands anywhere left of the middle — the dark band beside the picture included, where thumbs rest on a
+phone wider than 16:9 — is the **stick**: where it lands is the centre, dragging away is a direction (one of eight),
+and the ring is drawn under the thumb, its four arrow tabs going dark for the way it is pushed. A thumb dragged past
+the ring pulls the centre after it, so turning round is one ring's width of travel. On the right, **GO** is the big
+button and owns its whole corner out to the edge of the glass, **X** sits off its shoulder, **ALT** over it (drawn
+only where a screen reads it), and **MENU** up top. A button stays held until the thumb on it lifts, wherever it
+rolls, because half the mini-games are played by holding GO. The fixed d-pad this replaced had to be landed on and
+stayed on: a thumb drifting over its edge let go of the direction it was holding.
+
+**Everything in the keyboard and gamepad columns is a default.** The `controls` screen is those two columns as a
+form: eight action rows by two columns (the keys, and the one pad table every controller shares), ACTION on a cell listens for the
 next key or button, ALT puts that column back to stock, CANCEL leaves. A rebind sets the action to exactly one
 input — the alternates above are what ships, not what survives a rebind — and is refused, out loud, when it would
 leave another action with nothing on it at all. Bindings persist in `localStorage`; `?defaults=1` boots on the
@@ -471,8 +481,8 @@ player has bound M to something, while a rebind is listening, and while a host k
 
 - **title**: logo, the parked truck (wearing what the garage put on it) with the cast idling, menu PLAY / ONLINE / GARAGE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Seven rows, so the A-frame is 14 px taller than it was at six, grown upward so its legs stay put. Along the bottom, on one paper strip, the two addresses this game has: the repository - the SOURCE row's other half, lit while that row is selected - and the Ko-fi address beside it, which is a click and nothing else, no row and no key. Both are underlined, and both stay readable to type where a browser refuses the tab (`engine/links.ts`).
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
-- **select**: five 116×200 cards (the kit's 140 fitted four across), one cursor per joined seat, READY stamps;
-  `next` = stage (starts the run).
+- **select**: five 116×200 cards (the kit's 140 fitted four across), the player's one cursor, a READY stamp;
+  `next` = stage (starts the run). A party picks in the online lobby instead, each player on their own machine.
 - **stage** (the day board): the day's giant line pinned up as ONE wide paper ticket across the top — headed
   `THE LINE: 9 DINERS`, the town stop it waits at, and one block per customer in line order (portrait, name, the
   dish they will order) in rows of two or three — with the SHOPPING LIST on one wide ticket under it (every

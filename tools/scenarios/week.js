@@ -8,7 +8,8 @@
 //        list, an empty pantry and the truck back in the yard, with yesterday still on the week strip. Nothing
 //        carries but the record, the takings and the party.
 //   weekResume - a closed day writes the week to storage; the title turns PLAY into CONTINUE; CONTINUE reseats
-//        the saved party and opens the saved day, with the days already closed back on the strip.
+//        the saved critter and opens the saved day, with the days already closed back on the strip. The week it
+//        saves names two critters, as one saved by a couch party did, and CONTINUE takes the first seat's alone.
 //   weekFresh - PLAY over a week in progress forgets it, so CONTINUE cannot resurrect last week's Thursday.
 import { withPage, assert } from '../playtest.js';
 import { DAY_SHAPES, DAYS_PER_WEEK, dishesIn, planWeek } from '../../src/game/run.ts';
@@ -123,7 +124,9 @@ export const SCENARIOS = {
       s = await api.summary();
       assert(s.screen === 'stage', `CONTINUE opens the board directly, with no character select (on ${s.screen})`);
       assert(s.run.day === 1 && s.run.seed === 481920, `on the saved day of the saved week (day ${s.run.day + 1}, seed ${s.run.seed})`);
-      assert(s.run.party.join() === 'barley,cress', `with the saved party reseated (${s.run.party.join()})`);
+      // The record names two critters - the shape a week saved by a couch party had, before local co-op went - and
+      // there is one player at this screen now: the first seat's critter carries on, and the plan is the same.
+      assert(s.run.party.join() === 'barley', `with the first seat's critter reseated, and nobody else (${s.run.party.join()})`);
       assert(s.run.weekStars[0] === banked, `and day 1 back on the strip (${JSON.stringify(s.run.weekStars)})`);
       await api.shot('week-continue');
     });

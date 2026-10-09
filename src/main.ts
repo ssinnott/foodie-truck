@@ -2,7 +2,7 @@
 import { VIEW_W, VIEW_H } from './constants.ts';
 import { createLoop } from './lib/engine/loop.ts';
 import { input } from './engine/input.ts';
-import { setTouchTyping, setTouchAlt, setTouchVirtual, TOUCH_PAD, TOUCH_BUTTONS } from './engine/touch.ts';
+import { setTouchTyping, setTouchAlt, setTouchVirtual, TOUCH_STICK, TOUCH_BUTTONS } from './engine/touch.ts';
 import { drawTouchPad } from './game/touchpad.ts';
 import { links } from './engine/links.ts';
 import { audio } from './engine/audio.ts';
@@ -53,7 +53,8 @@ export function parseOptions(search = window.location.search) {
     seedFixed: q.has('seed') || autotest,
     // ?skipTo=<screen id> jumps straight to a screen with a run already started (dev / capture / test only)
     skipTo: devOnly ? (q.get('skipTo') || '') : '',
-    // ?critters=0,1,2,3 seats that many local players on those cast indices for a skipTo run
+    // ?critters=0,1,2,3 seats a party of that many on those cast indices for a skipTo run: seat 0 is this machine's
+    // player, and the rest are the seats an online room would fill, driven by tests through setInput
     critters: critters.length ? critters : [0],
     // ?place=orchard picks the landmark for a skipTo mini-game; ?order=N picks the order
     place: devOnly ? (q.get('place') || '') : '',
@@ -208,15 +209,15 @@ function boot() {
         axes: g.axes || [0, 0],
       } : null)));
     },
-    padOf(p) { return input.padOf(p); },
     /**
-     * Test hook: stand a list of contact points in for real thumbs. Each is `{ x, y }` in GAME space (640x360,
-     * the coordinates engine/touch.js lays the controls out in), and null lets go of the glass again. A list also
-     * makes the overlay available, so a desktop test browser can press it.
+     * Test hook: pretend fingers. Each is `{ x, y }` in GAME space (640x360, the coordinates engine/touch.js lays
+     * the controls out in), and entry i is finger i from one call to the next: a new entry lands, an entry that was
+     * there moves (which is how a test drags the stick), a missing one lifts, and null lets go of the glass again.
+     * A list also makes the overlay available, so a desktop test browser can press it.
      */
     touch(points) { setTouchVirtual(points || null); },
     /** Where the on-screen controls are, so a test can press one without copying its coordinates. */
-    touchLayout() { return { pad: TOUCH_PAD, buttons: TOUCH_BUTTONS.map((b) => ({ action: b.action, cx: b.cx, cy: b.cy, r: b.r })) }; },
+    touchLayout() { return { stick: TOUCH_STICK, buttons: TOUCH_BUTTONS.map((b) => ({ action: b.action, cx: b.cx, cy: b.cy, r: b.r, hit: b.hit })) }; },
     /** A seat's mask, its live device and the codes typed for the step in progress: what a device test asserts on. */
     inputState(p = 0) { return { mask: input.mask(p), device: input.device(p), touchOn: input.touchOn(), typed: input.typedCodes().slice() }; },
     /** Bindings, for the tests that drive the CONTROLS screen: read them, set them, put them back to stock. */
