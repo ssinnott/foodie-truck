@@ -286,6 +286,20 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   sneeze: (c, d, t, o) => { noise(c, d, t, { dur: 0.1, vol: 0.08 * o.v, type: 'highpass', f0: 1200 * o.p, f1: 2400 * o.p, attack: 0.08 }); osc(c, d, t + 0.1, { type: 'square', f0: 520 * o.p, f1: 180 * o.p, glide: 0.1, dur: 0.14, vol: 0.09 * o.v, attack: 0.003, lp: 1800 }); return noise(c, d, t + 0.12, { dur: 0.22, vol: 0.14 * o.v, type: 'lowpass', f0: 1400 * o.p, f1: 300 * o.p, attack: 0.005 }); },
   /** One bee, close: a sawtooth drone with a wobble, swelling in and fading, right at the nose. */
   buzz: (c, d, t, o) => osc(c, d, t, { type: 'sawtooth', f0: 210 * o.p, f1: 240 * o.p, glide: 0.5, dur: 0.6, vol: 0.07 * o.v, attack: 0.12, lp: 1400, vib: { rate: 18, depth: 12 } }),
+  /** The curious bee coming round the head: the buzz louder, swooping, swelling and fading as it circles. */
+  hive_zoom: (c, d, t, o) => { am(c, d, t, { type: 'sawtooth', f0: 190 * o.p, f1: 250 * o.p, glide: 0.3, curve: 'lin', rate: 6, rate1: 9, depth: 0.7, dur: 0.42, vol: 0.13 * o.v, attack: 0.08, lp: 1700 }); return osc(c, d, t, { type: 'sawtooth', f0: 205 * o.p, f1: 245 * o.p, glide: 0.42, dur: 0.42, vol: 0.05 * o.v, attack: 0.1, lp: 2400, vib: { rate: 22, depth: 18 } }); },
+  /** Stiff as a board onto its back: a soft heavy thump with a dull wooden knock in it. */
+  hive_flump: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 95, lp: 650, dur: 0.16, vol: 0.4 }); return knock(c, d, t + 0.01, { v: o.v * 0.8, p: o.p, f: 300, dur: 0.08, vol: 0.2 }); },
+  /** Springing back up off the grass: a quick rising boing. */
+  hive_boing: (c, d, t, o) => osc(c, d, t, { type: 'triangle', f0: 240 * o.p, f1: 780 * o.p, glide: 0.14, dur: 0.24, vol: 0.12 * o.v, attack: 0.005, vib: { rate: 24, depth: 60 } }),
+  /** An overfull skep swelling: a low creaking groan of straw, rising, with a creak on top. */
+  hive_groan: (c, d, t, o) => { osc(c, d, t, { type: 'sawtooth', f0: 68 * o.p, f1: 92 * o.p, glide: 0.4, dur: 0.42, vol: 0.13 * o.v, attack: 0.16, lp: 520, vib: { rate: 8, depth: 45 } }); return osc(c, d, t + 0.1, { type: 'sawtooth', f0: 230 * o.p, f1: 200 * o.p, dur: 0.18, vol: 0.04 * o.v, attack: 0.03, lp: 1300, vib: { rate: 30, depth: 50 } }); },
+  /** GLOOP: the skep burps its honey - a slow, thick plop with a wet slosh round it. */
+  hive_gloop: (c, d, t, o) => { osc(c, d, t, { type: 'sine', f0: 150 * o.p, f1: 70 * o.p, glide: 0.12, dur: 0.16, vol: 0.3 * o.v, attack: 0.004 }); plop(c, d, t + 0.1, { v: o.v, p: o.p * 0.55, f: 300, vol: 0.28, splash: 0.06 }); return noise(c, d, t + 0.02, { dur: 0.34, vol: 0.14 * o.v, type: 'lowpass', f0: 800 * o.p, f1: 180 * o.p, attack: 0.02 }); },
+  /** A stuck foot hauling at the honey: a short creak of stretching toffee, replayed while the stick strains. */
+  hive_stretch: (c, d, t, o) => osc(c, d, t, { type: 'sawtooth', f0: 150 * o.p, f1: 230 * o.p, glide: 0.16, dur: 0.18, vol: 0.06 * o.v, attack: 0.03, lp: 1100, vib: { rate: 36, depth: 35 } }),
+  /** SHLUP: the feet come out of the honey - a sucking pull and a pop. */
+  hive_shlup: (c, d, t, o) => { noise(c, d, t, { dur: 0.12, vol: 0.16 * o.v, type: 'bandpass', f0: 500 * o.p, f1: 2200 * o.p, q: 2, attack: 0.05 }); return osc(c, d, t + 0.1, { type: 'sine', f0: 320 * o.p, f1: 980 * o.p, glide: 0.05, dur: 0.09, vol: 0.2 * o.v, attack: 0.002 }); },
   /** The cow's tail across the face: one quick whoosh of air, falling. */
   swish: (c, d, t, o) => whoosh(c, d, t, { v: o.v, p: o.p, f0: 1800, f1: 400, dur: 0.16, vol: 0.2 }),
   /** The broody hen's peck: one hard high knock, dry, and a short squawk after it. */
