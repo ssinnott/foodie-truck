@@ -208,6 +208,24 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   nut: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 700, dur: 0.04, vol: 0.2 }); return pip(c, d, t, { v: o.v, p: o.p, m: 86, after: 0.05 }); },
   /** The squirrel, indignant on a head: a run of quick square chitters going up. */
   chitter: (c, d, t, o) => { for (let i = 0; i < 5; i++) osc(c, d, t + i * 0.05, { type: 'square', f0: (1400 + i * 120) * o.p, dur: 0.025, vol: 0.05 * o.v, attack: 0.002, lp: 4000 }); return t + 0.3; },
+  /** An overloaded nut tree creaking under its crop: two slow sawtooth wobbles through a lowpass, a woody complaint. */
+  holt_creak: (c, d, t, o) => { osc(c, d, t, { type: 'sawtooth', f0: 210 * o.p, f1: 165 * o.p, dur: 0.2, vol: 0.06 * o.v, attack: 0.03, lp: 1000, vib: { rate: 22, depth: 30 } }); return osc(c, d, t + 0.14, { type: 'sawtooth', f0: 250 * o.p, f1: 205 * o.p, dur: 0.12, vol: 0.05 * o.v, attack: 0.02, lp: 1100, vib: { rate: 28, depth: 35 } }); },
+  /** Its branches groaning as the bar nears the top: a long low creak bending down, a second one under it. */
+  holt_groan: (c, d, t, o) => { osc(c, d, t, { type: 'sawtooth', f0: 150 * o.p, f1: 100 * o.p, glide: 0.3, dur: 0.36, vol: 0.08 * o.v, attack: 0.05, lp: 800, vib: { rate: 14, depth: 18 } }); return osc(c, d, t + 0.04, { type: 'sawtooth', f0: 112 * o.p, f1: 82 * o.p, glide: 0.3, dur: 0.32, vol: 0.05 * o.v, attack: 0.05, lp: 600, detune: 7 }); },
+  /** The whole crop landing on a head: a soft heavy thump, a rumble, and a long rattle of nuts tumbling off nuts. */
+  holt_avalanche: (c, d, t, o) => {
+    thump(c, d, t, { v: o.v, p: o.p, f: 90, lp: 700, dur: 0.16, vol: 0.4 });
+    noise(c, d, t, { dur: 0.5, vol: 0.14 * o.v, type: 'lowpass', f0: 900 * o.p, f1: 200 * o.p, attack: 0.01 });
+    const at = [0, 0.05, 0.08, 0.14, 0.19, 0.23, 0.3, 0.36, 0.45, 0.55];
+    for (let i = 0; i < at.length; i++) knock(c, d, t + 0.03 + at[i], { v: o.v * (1 - i * 0.07), p: o.p, f: 760 + ((i * 7) % 5) * 90, dur: 0.03, vol: 0.16 });
+    return t + 0.7;
+  },
+  /** Out of the heap: a cork pop rising, and the nuts skittering off it. */
+  holt_pop: (c, d, t, o) => { osc(c, d, t, { type: 'sine', f0: 260 * o.p, f1: 760 * o.p, glide: 0.06, dur: 0.1, vol: 0.2 * o.v, attack: 0.002 }); for (let i = 0; i < 4; i++) knock(c, d, t + 0.06 + i * 0.05, { v: o.v * 0.8, p: o.p, f: 1000 + (i & 1) * 160, dur: 0.025, vol: 0.13 }); return t + 0.3; },
+  /** The squirrel scolding from a head: a fast, uneven run of square chitters that climbs and drops back. */
+  holt_chatter: (c, d, t, o) => { for (let i = 0; i < 9; i++) osc(c, d, t + i * 0.04 + (i > 4 ? 0.05 : 0), { type: 'square', f0: (1500 + ((i * 3) % 5) * 180) * o.p, dur: 0.022, vol: 0.055 * o.v, attack: 0.002, lp: 4200 }); return t + 0.45; },
+  /** A nut brought down on a head: a hollow wooden bonk and a little boing falling away after it. */
+  holt_bonk: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 520, dur: 0.06, vol: 0.3 }); return osc(c, d, t + 0.02, { type: 'triangle', f0: 720 * o.p, f1: 260 * o.p, glide: 0.14, dur: 0.22, vol: 0.1 * o.v, attack: 0.004, vib: { rate: 18, depth: 40 } }); },
   /** The pot lid rattling: a run of tinny knocks on an enamel lid, uneven. */
   rattle: (c, d, t, o) => { const at = [0, 0.07, 0.12, 0.2, 0.25, 0.34, 0.42]; for (const a of at) knock(c, d, t + a, { v: o.v, p: o.p, f: 1300, dur: 0.03, vol: 0.14 }); return t + 0.5; },
   /** The oven's flour cloud: a soft puff of lowpassed noise. */
