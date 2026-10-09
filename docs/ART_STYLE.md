@@ -127,6 +127,11 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
 - **Map**: 3/4 storybook plane, meadow `#8FA05A` / shade `#728A4C`, wheat `#D9B15E`, lanes `#C9AE78` (L .62, no
   scatter) with a `#B99A6A` edge, river `#6F9FB0` over `#4E7A8C`, hedges `#4F6B3A`, cottage walls `#F1E4C8`, roofs
   `#A65A48`, plum tree-line `#4A3038`, a dusk-peach horizon strip `#F4C9A0`; signal: lantern gold on the next sign.
+  **The town is drawn to one scale**: every storey 16 px (the ground floor 19, a shop's 26 so its awning clears the
+  door), every window 8×9 of glass and every door 10×15, laid out one to a 14 px bay, so the tower's windows are the
+  cottage's and nothing on a front lands on anything else. Its walls add brick `#B26E55`, a rose wash `#DDB4A2`, a
+  blue wash `#B4C1C0`, butter `#E5CF95`, sage `#A9B38B` and stone `#D3CAB3` to the cottage cream, all a step under
+  the meadow's chroma, and its roofs a lead `#56606A` and a brown tile `#8C5E3E` to the red tile and the slate.
 - **Orchard**: daytime warm sky `#FBE3C4`→`#F4C9A0`, canopy `#4F6B3A` with `#6E8A48` caps, grass `#5E7A3E` (L .42),
   four depth lanes 8 px apart; signal: ripe apple red `#D9463B`; HOT on a bomb apple's fuse spark. The trees are
   the fruit's own (`backgrounds/orchard.js TREES`, the mid and eaves layers repainted per fruit on the same seeds
@@ -275,7 +280,8 @@ offsets; parallax
 `far 0.2 / mid 0.5 / ground 1 / near 1.2` for side views, none in the kitchen, chunks for the map. 16 rows of bleed.
 Nothing solid in the near layer at critter height; walk lanes carry no scatter; the plane behind the critters'
 torsos is ≥ 25 % darker than the lightest fur or a hue family away; interiors invert (dark room, cast and food the
-lightest and warmest things). Every sprite draws `drawShadow` before the y-sorted pass. Props share the rig's ink
+lightest and warmest things). Every sprite draws `drawShadow` before the y-sorted pass (the map's town buildings bake
+theirs into the ground under them, which comes to the same thing). Props share the rig's ink
 and three tones (`boxShaded`, `discShaded`, `polyOutlined`) in the scene's own palette object. Only cheap things
 animate: pools (`particles`), glow sprites, `pulse`, index-hashed twinkles, a capped 6-strip shimmer.
 

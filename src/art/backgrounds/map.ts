@@ -198,44 +198,197 @@ export const SIGN_CLEAR = LANE_HALF + 8;
 export const PARK_AT = Object.freeze({ x: HOME.x, y: HOME.y - 4 });
 
 /**
- * THE TOWN round the depot: the paved stretch of the plane, as a world rect. Every queue of the day forms in it
- * (content/places.ts STOPS), no tree or wildflower grows in it, and no herd crosses or cart tips over in it - the
- * countryside's road events stay in the countryside.
+ * THE TOWN round the depot: the paved stretch of the plane. It has grown out of its old square core along its
+ * streets - the business district up the mill road, the station end, the chapel end, the terraces over the high
+ * street - so it is laid as a handful of overlapping world rects whose union is the paving, and its kerb wanders
+ * instead of running round one rectangle. Every queue of the day forms in it (content/places.ts STOPS), no tree or
+ * wildflower grows in it, and no herd crosses or cart tips over in it: the countryside's road events stay in the
+ * countryside. Each quarter is [x0, y0, x1, y1].
  */
-export const CITY = Object.freeze({ x0: 1080, y0: 646, x1: 1490, y1: 946 });
-/** True inside the town, grown by `m` px. */
-export function inCity(x, y, m = 0) { return x >= CITY.x0 - m && x <= CITY.x1 + m && y >= CITY.y0 - m && y <= CITY.y1 + m; }
+export const TOWN_QUARTERS: readonly (readonly number[])[] = Object.freeze([
+  [1080, 646, 1490, 946],   // the old core: the crossroads, the depot, the market square
+  [1100, 560, 1456, 668],   // the business district, up the mill road
+  [1470, 632, 1604, 812],   // the station end, out along Station Road
+  [984, 708, 1104, 892],    // the chapel end, out along the west road
+  [1150, 920, 1460, 1014],  // the terraces and the green over the high street
+  [1466, 806, 1580, 984],   // across the bramble lane
+].map((q) => Object.freeze(q)));
+/** The town's bounding rect: the union of its quarters. */
+export const CITY = Object.freeze({
+  x0: Math.min(...TOWN_QUARTERS.map((q) => q[0])), y0: Math.min(...TOWN_QUARTERS.map((q) => q[1])),
+  x1: Math.max(...TOWN_QUARTERS.map((q) => q[2])), y1: Math.max(...TOWN_QUARTERS.map((q) => q[3])),
+});
+/** True inside the town (in any of its quarters), grown by `m` px. */
+export function inCity(x, y, m = 0) {
+  for (let i = 0; i < TOWN_QUARTERS.length; i++) { const q = TOWN_QUARTERS[i]; if (x >= q[0] - m && x <= q[2] + m && y >= q[1] - m && y <= q[3] + m) return true; }
+  return false;
+}
+
 /**
- * The town's buildings, painted back to front: [x, front y, w, h, wall, wall shade, roof, roof shade, kind] with kind
- * 0 a plain house, 1 a shop under a striped awning, 2 the chapel (round window, bell cote), 3 the station (clock).
- * Every one is in WALLS too; none of them stands on a street, a pavement queue or the depot's forecourt.
+ * The town is drawn to ONE scale, so a window on the tower is a window on a cottage. A storey is STOREY px tall and
+ * the ground floor GROUND (a shop's SHOP_GROUND, which leaves its awning room above the door); a window is WIN_W x
+ * WIN_H of glass inside its ink line and a door DOOR_W x DOOR_H; and every front is laid out in BAY px bays, one
+ * window or the door to each, so nothing on a front can land on anything else. (The first town drew its awnings
+ * across its doors and its second windows into them, and its skyscraper's windows a third the size of a cottage's.)
  */
-const TOWN: [number, number, number, number, string, string, string, string, number][] = [
-  [1366, 688, 52, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
-  [1426, 688, 56, 34, MAP.sand, '#B8A57A', MAP.roof, MAP.roofShade, 3],
-  [1098, 768, 56, 34, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 2],
-  [1374, 808, 56, 30, MAP.wall, MAP.wallShade, MAP.slate, '#243A2E', 0],
-  [1438, 808, 46, 30, MAP.board, MAP.boardShade, MAP.roof, MAP.roofShade, 0],
-  [1126, 852, 56, 34, MAP.sand, '#B8A57A', MAP.slate, '#243A2E', 1],
-  [1304, 868, 56, 34, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, 1],
-  [1420, 868, 64, 38, MAP.sand, '#B8A57A', MAP.roof, MAP.roofShade, 1],
-  [1192, 874, 58, 34, MAP.board, MAP.boardShade, MAP.slate, '#243A2E', 0],
-  [1106, 928, 56, 30, MAP.wall, MAP.wallShade, MAP.roof, MAP.roofShade, 0],
-  [1172, 932, 36, 28, MAP.sand, '#B8A57A', MAP.slate, '#243A2E', 0],
-];
+const STOREY = 16, GROUND = 19, SHOP_GROUND = 26, BAY = 14, WIN_W = 8, WIN_H = 9, DOOR_W = 10, DOOR_H = 15;
+/** A terrace house's width: a door and a window across the ground floor, two windows over them. */
+const UNIT = 30;
 /**
- * The town's one skyscraper, on the north edge of town behind the chapel: base centre (x, y), a shaft `w` wide and
- * `h` tall. It is far too tall to bake into the ground (a truck in the meadow behind it would drive over its top
- * floors), so it is a y-sorted sprite (`towerSprite`) and only its footprint is a wall.
+ * The town's walls, roofs and doors, each [colour, its shade]: the cottage cream and the red tile, and a few more in
+ * the same paper-warm key a step under the meadow's chroma - brick, a rose wash, a blue wash, butter, sage, stone -
+ * so a street is a row of different houses rather than one house over and over.
  */
-export const TOWER = Object.freeze({ x: 1154, y: 716, w: 40, h: 104 });
+const PAL: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  cream: [MAP.wall, MAP.wallShade], sand: [MAP.sand, '#B8A57A'], board: [MAP.board, MAP.boardShade], brick: ['#B26E55', '#8C5442'],
+  rose: ['#DDB4A2', '#B9907E'], blue: ['#B4C1C0', '#8E9C9C'], butter: ['#E5CF95', '#C0A970'], sage: ['#A9B38B', '#868F6A'],
+  stone: ['#D3CAB3', '#ABA28C'], grey: [MAP.churn, MAP.rock],
+  tile: [MAP.roof, MAP.roofShade], slate: [MAP.slate, '#243A2E'], plum: ['#7E3A56', '#5A2A40'], lead: ['#56606A', '#424A52'],
+  brown: ['#8C5E3E', '#6A452C'],
+  wood: [MAP.wood, MAP.woodDark], green: ['#4E6B4A', '#3C5238'], navy: ['#4A5BA8', '#36437E'], red: [MAP.roof, MAP.roofShade],
+});
+
+/**
+ * One building of the town. (x, y) is the foot of its front wall at the left - the wall's bottom-left corner, on the
+ * pavement - `w` the front's width and `n` its storeys, the ground floor counted. `kind` picks the painter
+ * (PAINT); everything else is optional and defaults to what that kind usually wears.
+ */
+interface TownBuilding {
+  kind: string;
+  x: number;
+  y: number;
+  w: number;
+  n?: number;
+  /** [colour, shade] pairs: the walls (a pair of semis may give the second house its own), the roof, the door(s). */
+  wall?: readonly string[];
+  wall2?: readonly string[];
+  roof?: readonly string[];
+  door?: readonly string[];
+  door2?: readonly string[];
+  /** The bay the door is in (default: the middle one; a shop's is at the end). */
+  bay?: number;
+  /** Chimneys: -1 at the left end of the ridge, 1 at the right, 2 both. */
+  chim?: number;
+  /** Flower boxes under the first-floor windows, blooming in this colour. */
+  bloom?: string;
+  /** A shop's awning stripe, and what is in its window ('bread', 'cafe', 'veg', 'books'). */
+  awn?: string;
+  goods?: string;
+  /** A terrace's houses, west to east: [walls, door] each. */
+  units?: readonly (readonly (readonly string[])[])[];
+}
+
+/**
+ * The low buildings: the houses, the shops, the pub, the chapel, the station and the bank. None of them - and none of
+ * the tall ones - stands on a street, on a stop's pavement queue (nine deep, the fete's line), over a stop's lamp or
+ * on the depot's forecourt: the `town` scenario (scenarios/map.js) walks every lane and every queue to hold that.
+ */
+const TOWN: readonly TownBuilding[] = Object.freeze([
+  // the business district's low side: the bank on the corner of the mill road, behind the depot
+  { kind: 'bank', x: 1192, y: 678, w: 70 },
+  // the station end: the station on its road, a terrace over the way, and two houses behind the station queue
+  { kind: 'station', x: 1426, y: 688, w: 60 },
+  { kind: 'terrace', x: 1496, y: 668, w: 3 * UNIT, roof: PAL.slate, units: [[PAL.cream, PAL.green], [PAL.rose, PAL.wood], [PAL.butter, PAL.navy]] },
+  { kind: 'house', x: 1500, y: 788, w: 48, wall: PAL.blue, roof: PAL.tile, chim: 1, door: PAL.red },
+  { kind: 'townhouse', x: 1556, y: 784, w: 34, wall: PAL.brick, roof: PAL.slate },
+  // the chapel end
+  { kind: 'chapel', x: 1098, y: 768, w: 56 },
+  { kind: 'cottage', x: 1004, y: 764, w: 56, chim: -1 },
+  { kind: 'cottage', x: 996, y: 868, w: 56, chim: 1, wall: PAL.rose },
+  { kind: 'house', x: 1060, y: 878, w: 48, wall: PAL.sage, roof: PAL.brown, chim: -1, door: PAL.plum },
+  // the market square: two houses on its north side, a row of shops along the high street
+  { kind: 'house', x: 1366, y: 806, w: 50, roof: PAL.slate, chim: -1, bloom: MAP.rose },
+  { kind: 'semi', x: 1426, y: 806, w: 64, wall: PAL.rose, wall2: PAL.cream, roof: PAL.tile, door: PAL.green, door2: PAL.navy },
+  { kind: 'shop', x: 1300, y: 866, w: 50, awn: MAP.mustard, goods: 'bread', bay: 0 },
+  { kind: 'shop', x: 1360, y: 866, w: 56, wall: PAL.sand, roof: PAL.slate, awn: MAP.rose, goods: 'cafe' },
+  { kind: 'shop', x: 1424, y: 866, w: 60, wall: PAL.butter, awn: '#6E8C5A', goods: 'veg' },
+  // the pub on the corner of the bramble lane, its sign hung out over the pavement
+  { kind: 'pub', x: 1500, y: 866, w: 62, wall: PAL.butter, door: PAL.green, roof: PAL.slate, chim: 1 },
+  // west of the crossroads
+  { kind: 'shop', x: 1132, y: 852, w: 56, wall: PAL.blue, roof: PAL.slate, awn: '#5E7FA8', goods: 'books', bay: 0 },
+  { kind: 'house', x: 1198, y: 874, w: 58, wall: PAL.board, roof: PAL.slate, chim: 1, door: PAL.red },
+  { kind: 'terrace', x: 1120, y: 928, w: 2 * UNIT, roof: PAL.tile, units: [[PAL.brick, PAL.wood], [PAL.cream, PAL.plum]] },
+  // over the high street: a long terrace, a pair of semis, a house over the bramble lane
+  { kind: 'terrace', x: 1290, y: 962, w: 3 * UNIT, roof: PAL.slate, units: [[PAL.sand, PAL.navy], [PAL.blue, PAL.wood], [PAL.rose, PAL.green]] },
+  { kind: 'semi', x: 1390, y: 994, w: 64, wall: PAL.cream, wall2: PAL.butter, roof: PAL.brown, door: PAL.red, door2: PAL.wood },
+  { kind: 'house', x: 1500, y: 972, w: 48, wall: PAL.blue, roof: PAL.tile, chim: -1, door: PAL.green },
+]);
+/**
+ * The tall buildings. They stand at the back of the town, the business district up the mill road, so their height
+ * reads as a skyline over the houses rather than a wall in front of them.
+ */
+export const TALL: readonly TownBuilding[] = Object.freeze([
+  // the office tower: six storeys of the town's own windows, a plant room and a mast on the roof
+  { kind: 'tower', x: 1118, y: 650, w: 60, n: 6 },
+  { kind: 'office', x: 1198, y: 596, w: 56, n: 3, wall: PAL.stone },
+  // the town hall on Station Road, its clock tower over the square; the hotel and an office block behind it
+  { kind: 'hall', x: 1318, y: 686, w: 100 },
+  { kind: 'hotel', x: 1318, y: 584, w: 74, n: 4 },
+  { kind: 'office', x: 1400, y: 588, w: 52, n: 4, wall: PAL.brick },
+]);
+/**
+ * Every building in town, low and tall. Each stands up out of the ground as a y-sorted sprite of its own
+ * (`buildingSprite(i)` is BUILDINGS[i]'s), so the truck is drawn behind a house it has driven round behind and in
+ * front of one it is passing - baked into the ground, a house would be drawn under the truck wherever the truck
+ * stood, and a truck pulled up beside one would sit on its roof - and only its footprint, TOWN_FOOT deep, is a wall.
+ */
+export const BUILDINGS: readonly TownBuilding[] = Object.freeze([...TOWN, ...TALL]);
+/** How deep a building's footprint is behind its front: the truck stops against it, and passes behind it beyond. */
+const TOWN_FOOT = 22;
+/** Where the office tower's aircraft beacon blinks: its building (an index into BUILDINGS), and the offset from that sprite's anchor (bottom centre). */
+export const BEACON = Object.freeze({ i: BUILDINGS.findIndex((b) => b.kind === 'tower'), dx: 0, dy: -(GROUND + 5 * STOREY + 23) });
 /** The market square's fountain: a stone basin the truck drives round. */
 const FOUNTAIN = Object.freeze({ x: 1328, y: 788, r: 14 });
+/**
+ * Trees planted in the town's paving: [x, y, radius] lollipops on the squares and the green. A planted tree is a
+ * wall over its crown, like a building, so the truck goes round it rather than over it.
+ */
+const TOWN_TREES = Object.freeze([[1074, 760, 9], [1104, 694, 9], [1242, 994, 9], [1316, 996, 8], [1364, 1000, 8]]);
+/** Benches on the town's pavements and the green: [x, y] of each seat's west end, on its front edge. */
+const BENCHES = Object.freeze([[1342, 806], [1330, 1004]]);
+/** The green behind the terrace over the high street: a patch of turf in a hedge, a path across it, two trees and a bench on it. */
+const GREEN = Object.freeze({ x: 1298, y: 976, w: 80, h: 32 });
 /**
  * The lamp post that stands at the front of every stop's queue, one pace ahead of the front diner: the map hangs
  * its gold lantern on the one the compass points at, as it does on a landmark's signpost.
  */
 export const STOP_LAMPS = Object.freeze(Object.fromEntries(STOPS.map((s) => [s.id, Object.freeze({ x: s.qx - Math.sign(s.qdx) * 14, y: s.qy - Math.sign(s.qdy) * 14 })])));
+
+/** The height of a building's walls, its ground floor counted. */
+function wallH(b) {
+  if (b.kind === 'shop' || b.kind === 'pub') return SHOP_GROUND + ((b.n || 2) - 1) * STOREY;
+  if (b.kind === 'cottage') return GROUND + 3;
+  if (b.kind === 'chapel') return 36;
+  if (b.kind === 'station') return 30;
+  if (b.kind === 'bank' || b.kind === 'hall') return 40;
+  return GROUND + ((b.n || STOREYS[b.kind] || 2) - 1) * STOREY;
+}
+/** The storeys a kind has when a building does not say. */
+const STOREYS = Object.freeze({ townhouse: 3, tower: 6, hotel: 4, office: 3 });
+/** The roof's height over the wall top, ink included: what each painter puts up there. */
+function roofH(b) {
+  switch (b.kind) {
+    case 'townhouse': return 17;
+    case 'cottage': return 21;
+    case 'shop': case 'pub': return 14;
+    case 'terrace': return 15;
+    case 'chapel': return 22 + 14;
+    case 'station': return 22;
+    case 'bank': return 22;
+    default: return 16;
+  }
+}
+/** How far up a building's paint reaches from its foot: its roof, and a chimney (7 px over the ridge, inked) or whatever else stands on the roof. */
+function reach(b) {
+  const H = wallH(b);
+  switch (b.kind) {
+    case 'tower': return H + 24;
+    case 'hotel': return H + 29;
+    case 'hall': return H + 57;
+    case 'office': return H + 12;
+    default: return H + roofH(b) + (b.chim || b.kind === 'semi' || (b.kind === 'terrace' && b.units.length > 1) ? 7 : 0);
+  }
+}
 
 /**
  * The five tall landmarks are painted into the ground chunks, so nothing y-sorts them against the truck: without a
@@ -250,27 +403,69 @@ const WALLS = [
   FARM.x - 70, FARM.y - 68, FARM.x - 6, FARM.y - 30,        // the farm's barn (the plot beside it stays drivable, like a field)
   FOUNTAIN.x - FOUNTAIN.r - 4, FOUNTAIN.y - FOUNTAIN.r - 2, FOUNTAIN.x + FOUNTAIN.r + 4, FOUNTAIN.y + FOUNTAIN.r,
 ];
-// ...the skyscraper's footprint...
-WALLS.push(TOWER.x - TOWER.w / 2 - 4, TOWER.y - 26, TOWER.x + TOWER.w / 2 + 4, TOWER.y - 6);
-// ...and every building in the town, its roof included, a few px wider than the walls
-for (const b of TOWN) WALLS.push(b[0] - 4, b[1] - b[3] - Math.round(b[3] * 0.5), b[0] + b[2] + 4, b[1] - 6);
+// ...every building in the town over its footprint alone: in front of one the truck is drawn over it, behind one
+// under it (they are all y-sorted sprites)...
+for (const b of BUILDINGS) WALLS.push(b.x - 4, b.y - TOWN_FOOT, b.x + b.w + 4, b.y + 1);
+// ...and the planted trees, over their crowns
+for (const t of TOWN_TREES) WALLS.push(t[0] - t[2] - 3, t[1] - 12 - 2 * t[2] + 2, t[0] + t[2] + 3, t[1] - 4);
 /** True where a wall stands: the truck stops against it (comparisons only, so the sim stays deterministic). */
 export function wallBlocked(px, py) {
   for (let i = 0; i < WALLS.length; i += 4) if (px > WALLS[i] && px < WALLS[i + 2] && py > WALLS[i + 1] && py < WALLS[i + 3]) return true;
   return false;
 }
+/**
+ * The rects a building's paint covers, [x0, y0, x1, y1] down to its foot: one for its body and roof, and for one with
+ * something narrower standing up out of its roof (the town hall's clock tower, the hotel's sign) one more for that.
+ */
+function paintRects(b) {
+  const H = wallH(b), cx = b.x + R(b.w / 2);
+  if (b.kind === 'hall') return [[b.x - 3, b.y - H - 16, b.x + b.w + 3, b.y], [cx - 10, b.y - reach(b), cx + 10, b.y - H - 16]];
+  if (b.kind === 'hotel') return [[b.x - 4, b.y - H - 17, b.x + b.w + 4, b.y], [cx - 20, b.y - reach(b), cx + 20, b.y - H - 17]];
+  return [[b.x - (b.kind === 'pub' ? 10 : 4), b.y - reach(b), b.x + b.w + 4, b.y]];
+}
+/**
+ * Every building of the town as the rects its paint covers: no tree may grow nor flower bloom across one, and (the
+ * `town` scenario) none may be painted over a queue or a lamp.
+ */
+export const TOWN_RECTS = Object.freeze(BUILDINGS.flatMap((b) => paintRects(b)).map((r) => Object.freeze(r)));
+/**
+ * The town's props, which are painted into the ground rather than stood up as sprites - the depot, the telephone
+ * box, the fountain, the planted trees, the benches, the stops' lamps - as rects [x0, y0, x1, y1] down to their feet.
+ * A building's sprite is drawn over every one of them, so none may stand in front of a building where the two meet
+ * (the `town` scenario holds that).
+ */
+export const TOWN_PROPS = Object.freeze([
+  [HOME.x - 36, HOME.y - 69, HOME.x + 36, HOME.y - 1],
+  [SPOTS.phone.x - 7, SPOTS.phone.y - 1, SPOTS.phone.x + 7, SPOTS.phone.y + 25],
+  [FOUNTAIN.x - FOUNTAIN.r - 2, FOUNTAIN.y - 16, FOUNTAIN.x + FOUNTAIN.r + 2, FOUNTAIN.y + R(FOUNTAIN.r * 0.6) + 2],
+  ...TOWN_TREES.map((t) => [t[0] - t[2] - 1, t[1] - 12 - 2 * t[2] + 2, t[0] + t[2] + 1, t[1]]),
+  ...BENCHES.map((s) => [s[0] - 1, s[1] - 11, s[0] + 19, s[1] + 1]),
+  ...STOPS.map((s) => { const L = STOP_LAMPS[s.id]; return [L.x - 4, L.y - 33, L.x + 4, L.y]; }),
+].map((r) => Object.freeze(r)));
+/**
+ * The world rect the town paints into the ground - its paving, its buildings and their contact shades - with a
+ * margin: a chunk outside it skips the town's paint altogether, since a chunk repaints the whole authored world and
+ * the town is the busiest part of it.
+ */
+const TOWN_PAINT_X0 = Math.min(CITY.x0, ...TOWN_RECTS.map((r) => r[0])) - 24, TOWN_PAINT_X1 = Math.max(CITY.x1, ...TOWN_RECTS.map((r) => r[2])) + 24;
+const TOWN_PAINT_Y0 = Math.min(CITY.y0, ...TOWN_RECTS.map((r) => r[1])) - 24, TOWN_PAINT_Y1 = Math.max(CITY.y1, ...TOWN_RECTS.map((r) => r[3])) + 24;
 
 /** Meadow shade blobs and the tree scatter come from module seeds, so every chunk agrees on where they fall. */
 const SHADE = (() => { const r = makeRng(SEED0 + 18), out = []; for (let i = 0; i < 78; i++) out.push([r.int(0, WORLD_W), r.int(HORIZON_H + 40, WORLD_H), r.int(40, 120), r.int(18, 48)]); return out; })();
 /** True on the cove's sand or sea (SPOTS.cove), with `m` px of margin: no tree or flower grows there. */
 function inCove(x, y, m) { const c = SPOTS.cove; return x > c.x - 36 - m && y > c.top - m && y < c.bottom + m; }
 function inWheat(x, y, m) { for (const f of WHEAT) if (x >= f[0] - m && x <= f[0] + f[2] + m && y >= f[1] - m && y <= f[1] + f[3] + m) return true; return false; }
+/**
+ * True where the rect x0,y0..x1,y1 meets the paint of one of the town's buildings, which rises past the paving's
+ * edge (a roof is height, not ground): no tree may stand where its crown would cross one, nor a flower bloom on a roof.
+ */
+function onTownPaint(x0, y0, x1, y1) { for (const r of TOWN_RECTS) if (x0 < r[2] && r[0] < x1 && y0 < r[3] && r[1] < y1) return true; return false; }
 function nearLandmark(x, y, d) { for (let i = 0; i < PLACES.length; i++) { const dx = PLACES[i].x - x, dy = PLACES[i].y - 40 - y; if (dx * dx + dy * dy < d * d) return true; } return false; }
 const TREES = (() => {
   const r = makeRng(SEED0 + 19), baked = [], roadside = [];
   for (let i = 0; i < 1600 && (baked.length < 85 || roadside.length < 40); i++) {
     const x = r.int(30, WORLD_W - 30), y = r.int(HORIZON_H + 44, WORLD_H - 30), k = r.int(0, 2);
-    if (riverDist(x, y) < 40 || nearLandmark(x, y, 130) || inWheat(x, y, 16) || inCove(x, y, 24) || inCity(x, y, 30)) continue;
+    if (riverDist(x, y) < 40 || nearLandmark(x, y, 130) || inWheat(x, y, 16) || inCove(x, y, 24) || inCity(x, y, 30) || onTownPaint(x - 18, y - 42, x + 18, y + 4)) continue;
     const ld = laneDist(x, y);
     if (ld < 20) continue;
     let crowded = false;
@@ -493,15 +688,30 @@ function paintLandmarks(g) {
 }
 
 // ---------------------------------------------------------------- the town
+/** The town's paving as one path: every quarter's rounded rect, wound the same way so the fill is their union. */
+function townPath(g) {
+  g.beginPath();
+  for (const q of TOWN_QUARTERS) {
+    const x = q[0], y = q[1], w = q[2] - q[0], h = q[3] - q[1], r = 20;
+    g.moveTo(x + r, y);
+    g.lineTo(x + w - r, y); g.arcTo(x + w, y, x + w, y + r, r);
+    g.lineTo(x + w, y + h - r); g.arcTo(x + w, y + h, x + w - r, y + h, r);
+    g.lineTo(x + r, y + h); g.arcTo(x, y + h, x, y + h - r, r);
+    g.lineTo(x, y + r); g.arcTo(x, y, x + r, y, r);
+    g.closePath();
+  }
+}
 /**
  * The town's ground, under the streets: warm stone flags inside a darker kerb, and a darker kerb again along every
- * street through it, so the lanes read as roads between pavements. Painted before the lanes, which go over it.
+ * street through it, so the lanes read as roads between pavements. Painted before the lanes, which go over it. The
+ * kerb is stroked round every quarter and the flags then laid over all of them, so only the union's own edge keeps
+ * its line and the quarters run into each other without a seam.
  */
 function paintTownGround(g) {
-  const C = CITY, w = C.x1 - C.x0, h = C.y1 - C.y0;
-  g.save();
-  pathRR(g, C.x0, C.y0, w, h, 20); g.fillStyle = MAP.hillNear; g.fill();
-  g.clip();
+  const C = CITY, w = C.x1 - C.x0;
+  townPath(g); g.strokeStyle = MAP.hillFar; g.lineWidth = 6; g.stroke();
+  g.fillStyle = MAP.hillNear; g.fill();
+  g.save(); g.clip();
   // the flags: a row seam every 12 px, the joints staggered row by row
   g.fillStyle = '#A6967E';
   for (let y = C.y0 + 6; y < C.y1; y += 12) {
@@ -509,17 +719,32 @@ function paintTownGround(g) {
     for (let x = C.x0 + (((y - C.y0) / 12) & 1) * 10; x < C.x1; x += 20) g.fillRect(x, y - 11, 1, 11);
   }
   for (const L of LANES) strokePoly(g, L, MAP.hillFar, LANE_HALF * 2 + 8);
+  // the green behind the terrace over the high street: turf in a hedge, a path across it
+  pathRR(g, GREEN.x, GREEN.y, GREEN.w, GREEN.h, 8); g.fillStyle = MAP.meadow; g.fill();
+  g.strokeStyle = INK; g.lineWidth = 4; g.stroke(); g.strokeStyle = MAP.hedge; g.lineWidth = 2; g.stroke();
+  g.fillStyle = MAP.lane; g.fillRect(GREEN.x + 4, GREEN.y + R(GREEN.h / 2) - 3, GREEN.w - 8, 6);
   g.restore();
-  pathRR(g, C.x0, C.y0, w, h, 20); g.strokeStyle = MAP.hillFar; g.lineWidth = 3; g.stroke();
 }
-/** Cobbles on the streets inside the town: rows of small setts across every lane, laid on a world grid. */
-function paintCobbles(g) {
-  g.save();
-  pathRR(g, CITY.x0, CITY.y0, CITY.x1 - CITY.x0, CITY.y1 - CITY.y0, 20); g.clip();
-  g.fillStyle = MAP.laneEdge;
-  for (let y = CITY.y0; y < CITY.y1; y += 6) for (let x = CITY.x0 + ((y / 6) & 1) * 4; x < CITY.x1; x += 8) {
-    if (laneDist(x, y) < LANE_HALF - 2) g.fillRect(x, y, 3, 1);
+/**
+ * The setts on the town's streets, as flat x, y pairs: rows of small setts across every lane inside the town, laid on
+ * a world grid. A pure function of the plan, so it is worked out once, the first time a chunk wants it, rather than
+ * by every chunk that paints some of the town (each would walk every lane for every point of the whole town).
+ */
+let cobbles: Int16Array | null = null;
+function townCobbles() {
+  if (!cobbles) {
+    const out = [];
+    for (let y = CITY.y0; y < CITY.y1; y += 6) for (let x = CITY.x0 + ((y / 6) & 1) * 4; x < CITY.x1; x += 8) if (inCity(x, y) && laneDist(x, y) < LANE_HALF - 2) out.push(x, y);
+    cobbles = Int16Array.from(out);
   }
+  return cobbles;
+}
+/** Cobbles on the streets inside the town: the setts of `townCobbles` that fall in the chunk at (cx, cy). */
+function paintCobbles(g, cx, cy) {
+  const c = townCobbles();
+  g.save(); townPath(g); g.clip();
+  g.fillStyle = MAP.laneEdge;
+  for (let i = 0; i < c.length; i += 2) if (c[i] > cx - 4 && c[i] < cx + CHUNK_W && c[i + 1] >= cy && c[i + 1] < cy + CHUNK_H) g.fillRect(c[i], c[i + 1], 3, 1);
   g.restore();
 }
 /** A street lamp on the pavement, foot at (x, y): an ink post, a brass lamp head 30 px up (the lantern's height). */
@@ -529,37 +754,405 @@ function lampPost(g, x, y) {
   boxOutlined(g, x - 3, y - 32, 6, 5, MAP.brass);
   g.fillStyle = INK; g.fillRect(x - 4, y - 33, 8, 1);
 }
+/** A park bench on the pavement, its seat's front edge on y: a plank seat on ink legs, a backrest behind it. */
+function bench(g, x, y) {
+  groundShade(g, x + 9, y + 1, 22, 0.2, 1);
+  g.fillStyle = INK; g.fillRect(x + 1, y - 3, 2, 4); g.fillRect(x + 15, y - 3, 2, 4);
+  boxOutlined(g, x, y - 10, 18, 3, MAP.wood); boxOutlined(g, x, y - 5, 18, 2, MAP.wood);
+}
+
+// ---------------------------------------------------------------- the town's buildings
+/** The bays across a front `w` px wide from `x`: as many as fit inside a 2 px margin either side, centred. */
+function bays(x, w) { const n = Math.max(1, Math.floor((w - 4) / BAY)); return { n, x0: x + Math.floor((w - n * BAY) / 2) }; }
+/** The top of the glass of storey `k`'s windows (1 is the first floor) on a front standing on `y` over a ground floor `gh` tall. */
+function upper(y, gh, k) { return y - gh - STOREY * k + 5; }
+/** A front wall `h` tall standing on `y`: inked, with a plinth of its shade along the foot (its one shadow band). */
+function front(g, x, y, w, h, c) { boxOutlined(g, x, y - h, w, h, c[0]); g.fillStyle = c[1]; g.fillRect(x, y - 4, w, 4); }
+/** A window's glass, top-left at (x, y): its ink line round it, and the sky's glint down its west side - or a lamp lit inside. */
+function win(g, x, y, lit = false, w = WIN_W, h = WIN_H) {
+  boxOutlined(g, x, y, w, h, lit ? MAP.mustard : MAP.window);
+  g.fillStyle = MAP.skyTop; g.fillRect(x, y, 2, h);
+}
+/** A door at x standing on y: painted planks over a darker kick band, its top panel glazed. */
+function door(g, x, y, c = PAL.wood) {
+  boxShaded(g, x, y - DOOR_H, DOOR_W, DOOR_H, c[0], c[1], INK, 1, 0.3);
+  g.fillStyle = MAP.window; g.fillRect(x + 2, y - DOOR_H + 2, DOOR_W - 4, 3);
+}
+/** A window box along the foot of a window whose glass starts at (x, y): a plank, the leaves over its lip, three blooms. */
+function flowerBox(g, x, y, bloom) {
+  const by = y + WIN_H;
+  boxOutlined(g, x - 1, by + 1, WIN_W + 2, 2, MAP.wood);
+  g.fillStyle = MAP.hedge; g.fillRect(x - 1, by - 1, WIN_W + 2, 2);
+  g.fillStyle = bloom; g.fillRect(x, by - 2, 2, 2); g.fillRect(x + 3, by - 3, 2, 2); g.fillRect(x + 6, by - 2, 2, 2);
+}
+/** An arch-headed opening, its foot at (x, y): a box with a half-round top, inked 1 px (it is a curve: 2 px of stroke). */
+function arch(g, x, y, w, h, fill) {
+  const r = w / 2;
+  g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - h + r); g.arc(x + r, y - h + r, r, Math.PI, 0); g.lineTo(x + w, y); g.closePath();
+  g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = fill; g.fill();
+}
 /**
- * The town: the depot with the truck's bay open onto the west road, the telephone box beside it, the houses and
- * shops, the chapel and the station, the fountain in the square, and a lamp post at the front of every stop.
+ * The bays of a house front: the door in bay `d` (the middle one by default), a window in every other bay of the
+ * ground floor at the door's height, and a window up every bay of every storey above - with a flower box under the
+ * first floor's when the house has one.
+ */
+function facade(g, x, y, w, n, d, doorC, bloom) {
+  const B = bays(x, w);
+  if (d == null) d = B.n >> 1;
+  for (let i = 0; i < B.n; i++) {
+    const bx = B.x0 + i * BAY;
+    if (i === d) door(g, bx + 2, y, doorC); else win(g, bx + 3, y - DOOR_H);
+    for (let k = 1; k < n; k++) { win(g, bx + 3, upper(y, GROUND, k)); if (bloom && k === 1) flowerBox(g, bx + 3, upper(y, GROUND, k), bloom); }
+  }
+}
+/** A hipped roof on a wall whose top is `top`: the trapezoid, its eave band in the shade, 2 px of ink (the rakes are diagonals). */
+function hipRoof(g, x, top, w, rh, c) {
+  const pts = [x - 3, top, x + w + 3, top, x + w - 6, top - rh, x + 6, top - rh];
+  polyOutlined(g, pts, c[0], INK, 2);
+  g.save(); g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.closePath(); g.clip();
+  g.fillStyle = c[1]; g.fillRect(x - 3, top - R(rh * 0.35), w + 6, R(rh * 0.35)); g.restore();
+}
+/**
+ * A gable end to the street on a wall whose top is `top`: the wall's own colour carried up into the triangle under
+ * two rakes of the roof colour 3 px thick (the inner triangle is the outer one shrunk about its base, so the rakes
+ * run parallel).
+ */
+function gable(g, x, top, w, rh, wall, roof) {
+  const cx = x + w / 2, hw = w / 2 + 3, d = 3 * Math.sqrt(hw * hw + rh * rh) / hw, iw = hw * (rh - d) / rh;
+  polyOutlined(g, [cx - hw, top, cx + hw, top, cx, top - rh], roof[0], INK, 1);
+  g.fillStyle = wall; g.beginPath(); g.moveTo(cx - iw, top); g.lineTo(cx + iw, top); g.lineTo(cx, top - rh + d); g.closePath(); g.fill();
+}
+/** A chimney stack on a ridge at `ridge`: 6 px of brick from 6 px down in the roof to 7 above the ridge, a darker cap. */
+function chimney(g, x, ridge, c = PAL.brick) { boxOutlined(g, x, ridge - 7, 6, 13, c[0]); g.fillStyle = c[1]; g.fillRect(x, ridge - 7, 6, 2); }
+/** The stacks a building asks for (`chim`: -1 the left end of the ridge, 1 the right, 2 both). */
+function chimneys(g, b, ridge) {
+  if (b.chim === -1 || b.chim === 2) chimney(g, b.x + 9, ridge);
+  if (b.chim === 1 || b.chim === 2) chimney(g, b.x + b.w - 15, ridge);
+}
+/** The round window in a gable, centred on (cx, cy). */
+function oculus(g, cx, cy, r) {
+  g.fillStyle = INK; g.beginPath(); g.arc(cx, cy, r + 1, 0, TAU); g.fill();
+  g.fillStyle = MAP.window; g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
+}
+
+/** A detached house: the front, a window or the door to each bay, the windows of the storeys above, the hipped roof and its stacks. */
+function paintHouse(g, b) {
+  const n = b.n || 2, H = wallH(b), top = b.y - H, rh = roofH(b) - 2;
+  front(g, b.x, b.y, b.w, H, b.wall || PAL.cream);
+  facade(g, b.x, b.y, b.w, n, b.bay, b.door, b.bloom);
+  hipRoof(g, b.x, top, b.w, rh, b.roof || PAL.tile);
+  chimneys(g, b, top - rh);
+}
+/** A pair of semis: two houses mirrored about their party wall, each its own colour and door, under one roof with the shared stack on the ridge. */
+function paintSemi(g, b) {
+  const H = wallH(b), top = b.y - H, rh = roofH(b) - 2, hw = b.w >> 1;
+  front(g, b.x, b.y, hw, H, b.wall || PAL.cream);
+  front(g, b.x + hw, b.y, b.w - hw, H, b.wall2 || b.wall || PAL.cream);
+  facade(g, b.x, b.y, hw, 2, 0, b.door, b.bloom);
+  facade(g, b.x + hw, b.y, b.w - hw, 2, bays(b.x + hw, b.w - hw).n - 1, b.door2 || b.door, b.bloom);
+  hipRoof(g, b.x, top, b.w, rh, b.roof || PAL.tile);
+  chimney(g, b.x + hw - 3, top - rh);
+}
+/**
+ * A terrace: houses UNIT px wide shoulder to shoulder, each its own colour and door. They are mirrored in pairs, so
+ * the doors meet at every other party wall, and share one long roof with a stack on every other party wall.
+ */
+function paintTerrace(g, b) {
+  const H = wallH(b), top = b.y - H, rh = roofH(b) - 2, u = b.units;
+  for (let i = 0; i < u.length; i++) {
+    const ux = b.x + i * UNIT, doorRight = !(i & 1);
+    front(g, ux, b.y, UNIT, H, u[i][0]);
+    door(g, doorRight ? ux + UNIT - 13 : ux + 3, b.y, u[i][1]);
+    win(g, doorRight ? ux + 4 : ux + UNIT - 12, b.y - DOOR_H);
+    win(g, ux + 4, upper(b.y, GROUND, 1)); win(g, ux + UNIT - 12, upper(b.y, GROUND, 1));
+  }
+  hipRoof(g, b.x, top, u.length * UNIT, rh, b.roof || PAL.slate);
+  for (let i = 1; i < u.length; i += 2) chimney(g, b.x + i * UNIT - 3, top - rh);
+}
+/** A town house: tall and narrow, three storeys under a gable to the street with a round window in it. */
+function paintTownhouse(g, b) {
+  const n = b.n || 3, H = wallH(b), top = b.y - H, rh = roofH(b) - 1, wall = b.wall || PAL.brick;
+  front(g, b.x, b.y, b.w, H, wall);
+  facade(g, b.x, b.y, b.w, n, b.bay != null ? b.bay : bays(b.x, b.w).n - 1, b.door, b.bloom);
+  gable(g, b.x, top, b.w, rh, wall[0], b.roof || PAL.slate);
+  oculus(g, b.x + R(b.w / 2), top - R(rh * 0.38), 3);
+}
+/**
+ * A cottage: one low storey under a deep roof of thatch, and a window peeping out of the thatch over the door, its
+ * eyebrow a curve of the straw.
+ */
+function paintCottage(g, b) {
+  const H = wallH(b), top = b.y - H, rh = roofH(b) - 1, wall = b.wall || PAL.cream, B = bays(b.x, b.w), d = b.bay != null ? b.bay : B.n >> 1;
+  front(g, b.x, b.y, b.w, H, wall);
+  for (let i = 0; i < B.n; i++) { const bx = B.x0 + i * BAY; if (i === d) door(g, bx + 2, b.y, b.door); else win(g, bx + 3, b.y - DOOR_H); }
+  chimneys(g, b, top - rh);
+  // the thatch: a rounded bank of straw over the wall's top, combed down its face, a darker eave
+  pathRR(g, b.x - 5, top - rh, b.w + 10, rh + 5, 7); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = MAP.wheat; g.fill();
+  g.save(); g.clip();
+  g.fillStyle = MAP.furrow; g.fillRect(b.x - 5, top, b.w + 10, 5);
+  for (let x = b.x - 1; x < b.x + b.w + 4; x += 6) g.fillRect(x, top - rh + 5, 1, rh - 6);
+  g.restore();
+  const dx = B.x0 + d * BAY + 3, dy = top - rh + 7;
+  win(g, dx, dy, false, WIN_W, 7);
+  g.strokeStyle = INK; g.lineWidth = 2; g.beginPath(); g.arc(dx + WIN_W / 2, dy + 2, WIN_W / 2 + 3, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
+}
+/**
+ * A shop: its window and door across the ground floor under a striped awning - clear of the door's top by a row of
+ * the awning's shadow, and under the flat's windows by two rows of wall - a flat above, a hipped roof. What it sells
+ * is in the window.
+ */
+function paintShop(g, b) {
+  const n = b.n || 2, H = wallH(b), top = b.y - H, rh = roofH(b) - 2, B = bays(b.x, b.w), d = b.bay != null ? b.bay : B.n - 1;
+  front(g, b.x, b.y, b.w, H, b.wall || PAL.cream);
+  // the shop window: every ground-floor bay but the door's, paned every 10 or so px, the goods along its sill
+  const gx0 = d === 0 ? B.x0 + BAY + 1 : B.x0 + 2, gx1 = d === 0 ? B.x0 + B.n * BAY - 2 : B.x0 + d * BAY - 1, gw = gx1 - gx0;
+  boxOutlined(g, gx0, b.y - 15, gw, 10, MAP.window);
+  g.fillStyle = MAP.skyTop; g.fillRect(gx0, b.y - 15, 2, 10);
+  shopGoods(g, b.goods, gx0, b.y - 6, gw);
+  const panes = Math.max(1, R(gw / 12));
+  g.fillStyle = INK; for (let k = 1; k < panes; k++) g.fillRect(gx0 + R((gw * k) / panes), b.y - 15, 1, 10);
+  // the door: glazed, as a shop door is
+  const dx = B.x0 + d * BAY + 2;
+  boxShaded(g, dx, b.y - DOOR_H, DOOR_W, DOOR_H, MAP.wood, MAP.woodDark, INK, 1, 0.2);
+  g.fillStyle = MAP.window; g.fillRect(dx + 2, b.y - 13, DOOR_W - 4, 7);
+  // the awning over the whole front: its ink box rows y-25..y-18, the stripes inside, its shadow on the wall under it
+  const ay = b.y - 25;
+  g.fillStyle = INK; g.fillRect(b.x - 2, ay, b.w + 4, 8);
+  for (let k = 0; k < b.w + 2; k += 6) { g.fillStyle = (k / 6) & 1 ? MAP.wall : b.awn || MAP.rose; g.fillRect(b.x - 1 + k, ay + 1, Math.min(6, b.w + 2 - k), 6); }
+  g.fillStyle = 'rgba(47,35,56,0.35)'; g.fillRect(b.x, ay + 8, b.w, 1);
+  for (let k = 1; k < n; k++) for (let i = 0; i < B.n; i++) win(g, B.x0 + i * BAY + 3, upper(b.y, SHOP_GROUND, k));
+  hipRoof(g, b.x, top, b.w, rh, b.roof || PAL.tile);
+  chimneys(g, b, top - rh);
+}
+/** What a shop window shows along its sill, which runs from x to x + w on row y: loaves, cakes, crates of greens, book spines. */
+function shopGoods(g, kind, x, y, w) {
+  for (let k = x + 3, i = 0; k < x + w - 4; k += 7, i++) {
+    if (kind === 'bread') { g.fillStyle = MAP.furrow; g.fillRect(k, y - 3, 5, 3); g.fillStyle = MAP.wheat; g.fillRect(k + 1, y - 3, 3, 1); }
+    else if (kind === 'cafe') { g.fillStyle = MAP.wood; g.fillRect(k - 1, y, 7, 1); g.fillStyle = i & 1 ? MAP.rose : MAP.wheat; g.fillRect(k, y - 3, 5, 3); g.fillStyle = MAP.wall; g.fillRect(k, y - 4, 5, 1); }
+    else if (kind === 'veg') { g.fillStyle = MAP.wood; g.fillRect(k - 1, y - 2, 6, 2); g.fillStyle = i % 3 === 0 ? MAP.roof : i % 3 === 1 ? MAP.canopy : MAP.mustard; g.fillRect(k, y - 4, 4, 2); }
+    else if (kind === 'books') { const c = [MAP.roof, PAL.navy[0], MAP.canopy, MAP.mustard]; for (let s = 0; s < 3; s++) { g.fillStyle = c[(i + s) % 4]; g.fillRect(k + s * 2, y - 5 + (s & 1), 2, 5 - (s & 1)); } }
+  }
+}
+/**
+ * The chapel: its gable end to the west road, a rose window in the gable, two lancets either side of an arched
+ * door, and the bell in its cote on the apex.
+ */
+function paintChapel(g, b) {
+  const H = wallH(b), top = b.y - H, rh = 22, wall = b.wall || PAL.cream, roof = b.roof || PAL.slate, cx = b.x + R(b.w / 2);
+  front(g, b.x, b.y, b.w, H, wall);
+  gable(g, b.x, top, b.w, rh, wall[0], roof);
+  oculus(g, cx, top - 8, 5);
+  g.fillStyle = INK; g.fillRect(cx - 5, top - 8, 11, 1); g.fillRect(cx, top - 13, 1, 11);
+  arch(g, cx - 6, b.y, 12, 20, MAP.wood);
+  g.fillStyle = MAP.woodDark; g.fillRect(cx - 6, b.y - 5, 12, 5); g.fillRect(cx, b.y - 16, 1, 16);
+  for (const lx of [b.x + 9, b.x + b.w - 15]) { arch(g, lx, b.y - 9, 6, 19, MAP.window); g.fillStyle = MAP.skyTop; g.fillRect(lx, b.y - 22, 2, 13); }
+  // the bell cote on the apex: a little open box, the brass bell in it, a pointed cap
+  const ct = top - rh - 8;
+  boxOutlined(g, cx - 4, ct, 8, 9, wall[0]);
+  g.fillStyle = '#3F3A48'; g.fillRect(cx - 2, ct + 2, 4, 5); g.fillStyle = MAP.brass; g.fillRect(cx - 2, ct + 3, 4, 3);
+  polyOutlined(g, [cx - 6, ct, cx + 6, ct, cx, ct - 5], roof[0], INK, 1);
+}
+/**
+ * The station: one tall storey with arched windows and a pair of glazed doors under an arch, its clock in a pediment
+ * over the doors (the hands at ten to two), under a hipped roof.
+ */
+function paintStation(g, b) {
+  const H = wallH(b), top = b.y - H, wall = b.wall || PAL.sand, roof = b.roof || PAL.tile, cx = b.x + R(b.w / 2), B = bays(b.x, b.w);
+  front(g, b.x, b.y, b.w, H, wall);
+  hipRoof(g, b.x, top, b.w, 13, roof);
+  for (const i of [0, B.n - 1]) { arch(g, B.x0 + i * BAY + 3, b.y - 7, WIN_W, 17, MAP.window); g.fillStyle = MAP.skyTop; g.fillRect(B.x0 + i * BAY + 3, b.y - 20, 2, 13); }
+  arch(g, cx - 9, b.y, 18, 22, '#3F3A48');
+  g.fillStyle = MAP.window; g.fillRect(cx - 7, b.y - 16, 6, 10); g.fillRect(cx + 1, b.y - 16, 6, 10);
+  // the pediment, standing on the eave over the doors, the clock in it
+  polyOutlined(g, [cx - 15, top + 1, cx + 15, top + 1, cx, top - 20], wall[0], INK, 1);
+  g.fillStyle = INK; g.fillRect(cx - 15, top, 31, 2);
+  g.fillStyle = INK; g.beginPath(); g.arc(cx, top - 6, 6, 0, TAU); g.fill();
+  g.fillStyle = MAP.wall; g.beginPath(); g.arc(cx, top - 6, 5, 0, TAU); g.fill();
+  g.fillStyle = INK; g.fillRect(cx - 3, top - 8, 3, 1); g.fillRect(cx, top - 9, 1, 3); g.fillRect(cx + 1, top - 8, 2, 1);
+}
+/**
+ * The bank: a stone front on two steps, four columns carrying a frieze with BANK cut into it and a pediment over
+ * that, tall windows between the outer columns and a dark doorway between the inner ones.
+ */
+function paintBank(g, b) {
+  const H = wallH(b), top = b.y - H, stone = b.wall || PAL.stone, cx = b.x + R(b.w / 2), ft = top - 9;
+  hipRoof(g, b.x, ft, b.w, 10, PAL.lead);
+  front(g, b.x, b.y - 4, b.w, H - 4, stone);
+  boxOutlined(g, b.x - 2, b.y - 4, b.w + 4, 2, stone[1]); boxOutlined(g, b.x - 4, b.y - 1, b.w + 8, 1, stone[1]);
+  // the windows and the door, then the columns over their edges
+  for (const wx of [b.x + 14, b.x + b.w - 22]) { win(g, wx, b.y - 30, false, WIN_W, 12); g.fillStyle = stone[1]; g.fillRect(wx - 1, b.y - 17, WIN_W + 2, 2); }
+  arch(g, cx - 7, b.y - 4, 14, 22, '#3F3A48');
+  g.fillStyle = MAP.woodDark; g.fillRect(cx - 5, b.y - 16, 10, 12);
+  for (const px of [b.x + 6, b.x + 26, b.x + b.w - 30, b.x + b.w - 10]) {
+    boxOutlined(g, px, top + 3, 4, H - 8, stone[0]); g.fillStyle = stone[1]; g.fillRect(px + 3, top + 3, 1, H - 8);
+    boxOutlined(g, px - 1, top + 1, 6, 2, stone[0]); boxOutlined(g, px - 1, b.y - 7, 6, 2, stone[0]);
+  }
+  // the frieze and the pediment
+  boxOutlined(g, b.x - 2, ft, b.w + 4, 9, stone[0]);
+  drawText(g, 'BANK', cx + 1, ft + 1, { size: 1, color: MAP.woodDark, align: 'center', shadow: false });
+  polyOutlined(g, [b.x - 2, ft, b.x + b.w + 2, ft, cx, ft - 12], stone[0], INK, 1);
+  g.fillStyle = INK; g.fillRect(b.x - 2, ft - 1, b.w + 4, 2);
+  oculus(g, cx, ft - 5, 2);
+}
+/**
+ * The pub: a frontage of painted boards across its ground floor - two leaded windows, the door between them, a
+ * fascia over them with a brass rule - the rooms over it, a hipped roof, and its sign hanging out over the pavement
+ * on a bracket at the west corner (a gold sheaf on a plum board).
+ */
+function paintPub(g, b) {
+  const H = wallH(b), top = b.y - H, rh = roofH(b) - 2, B = bays(b.x, b.w), d = B.n >> 1, fr = b.door || PAL.green;
+  front(g, b.x, b.y, b.w, H, b.wall || PAL.cream);
+  boxOutlined(g, b.x, b.y - 22, b.w, 22, fr[0]);
+  g.fillStyle = fr[1]; g.fillRect(b.x, b.y - 22, b.w, 5); g.fillStyle = MAP.brass; g.fillRect(b.x + 2, b.y - 20, b.w - 4, 1);
+  for (let i = 0; i < B.n; i++) {
+    const bx = B.x0 + i * BAY;
+    if (i === d) door(g, bx + 2, b.y, PAL.wood);
+    else { win(g, bx + 2, b.y - 14, false, WIN_W + 2, 9); g.fillStyle = INK; g.fillRect(bx + 2, b.y - 10, WIN_W + 2, 1); g.fillRect(bx + 6, b.y - 14, 1, 9); }
+    win(g, bx + 3, upper(b.y, SHOP_GROUND, 1));
+  }
+  hipRoof(g, b.x, top, b.w, rh, b.roof || PAL.slate);
+  chimneys(g, b, top - rh);
+  g.fillStyle = INK; g.fillRect(b.x - 9, b.y - 33, 10, 2);
+  boxOutlined(g, b.x - 9, b.y - 31, 8, 10, PAL.plum[0]);
+  g.fillStyle = MAP.mustard; g.fillRect(b.x - 7, b.y - 28, 4, 5); g.fillStyle = PAL.plum[1]; g.fillRect(b.x - 6, b.y - 26, 2, 1);
+}
+
+// ---------------------------------------------------------------- the tall buildings
+/**
+ * The office tower: six storeys of the town's own windows (a few lit at dusk, by a fixed hash of storey and bay), its
+ * east edge in shade, a parapet, a plant room and a mast on the flat roof - the beacon on the mast's tip is the map
+ * screen's per-frame mark (BEACON) - and at its foot a stone lobby storey with glass doors under a plum canopy.
+ */
+function paintTower(g, b) {
+  const n = b.n || 6, H = wallH(b), top = b.y - H, wall = b.wall || PAL.grey, B = bays(b.x, b.w), cx = b.x + R(b.w / 2);
+  boxOutlined(g, b.x + 1, top - 4, b.w - 2, 4, '#9A948A');
+  boxOutlined(g, cx - 1, top - 23, 2, 12, MAP.rock);
+  boxShaded(g, cx - 14, top - 12, 28, 9, wall[0], wall[1], INK, 1, 0.3);
+  boxOutlined(g, b.x, top, b.w, H, wall[0]);
+  g.fillStyle = wall[1]; g.fillRect(b.x + b.w - 7, top, 7, H);
+  g.fillStyle = MAP.hillFar; g.fillRect(b.x, top, b.w, 3);
+  for (let k = 1; k < n; k++) {
+    g.fillStyle = wall[1]; g.fillRect(b.x, b.y - GROUND - STOREY * k + STOREY - 1, b.w, 1);   // the floor line
+    for (let i = 0; i < B.n; i++) win(g, B.x0 + i * BAY + 3, upper(b.y, GROUND, k), ((k * 7 + i * 13) % 5) === 0);
+  }
+  // the lobby
+  g.fillStyle = PAL.stone[0]; g.fillRect(b.x, b.y - GROUND + 1, b.w, GROUND - 1);
+  g.fillStyle = PAL.stone[1]; g.fillRect(b.x, b.y - 4, b.w, 4); g.fillRect(b.x + b.w - 7, b.y - GROUND + 1, 7, GROUND - 1);
+  g.fillStyle = INK; g.fillRect(b.x, b.y - GROUND, b.w, 1);
+  for (const i of [0, B.n - 1]) win(g, B.x0 + i * BAY + 3, b.y - DOOR_H);
+  boxOutlined(g, cx - 9, b.y - DOOR_H, 18, DOOR_H, '#3F3A48');
+  g.fillStyle = MAP.window; g.fillRect(cx - 7, b.y - 13, 6, 12); g.fillRect(cx + 1, b.y - 13, 6, 12);
+  g.fillStyle = INK; g.fillRect(cx - 12, b.y - 20, 24, 4); g.fillStyle = PAL.plum[0]; g.fillRect(cx - 11, b.y - 19, 22, 2);
+}
+/**
+ * An office block: three or four storeys of brick or stone under a flat roof behind its parapet, a plant room on the
+ * roof, a stone band along every floor, a window to every bay of every storey, and the door in a stone surround.
+ */
+function paintOffice(g, b) {
+  const n = b.n || 3, H = wallH(b), top = b.y - H, wall = b.wall || PAL.brick, B = bays(b.x, b.w), d = B.n >> 1;
+  boxOutlined(g, b.x + 1, top - 4, b.w - 2, 4, '#9A948A');
+  boxShaded(g, b.x + b.w - 22, top - 10, 14, 7, PAL.grey[0], PAL.grey[1], INK, 1, 0.3);
+  front(g, b.x, b.y, b.w, H, wall);
+  g.fillStyle = PAL.stone[0];
+  for (let k = 1; k < n; k++) g.fillRect(b.x, b.y - GROUND - STOREY * (k - 1) - 1, b.w, 2);
+  boxOutlined(g, b.x - 1, top, b.w + 2, 2, PAL.stone[0]);
+  for (let i = 0; i < B.n; i++) {
+    const bx = B.x0 + i * BAY;
+    if (i === d) { boxOutlined(g, bx + 1, b.y - DOOR_H - 3, DOOR_W + 2, DOOR_H + 3, PAL.stone[0]); door(g, bx + 2, b.y, PAL.navy); }
+    else win(g, bx + 3, b.y - DOOR_H);
+    for (let k = 1; k < n; k++) win(g, bx + 3, upper(b.y, GROUND, k), ((k * 5 + i * 3 + b.x) % 7) === 0);
+  }
+}
+/**
+ * The hotel: four storeys of butter render, a balcony rail along the first floor, a lead mansard with a dormer over
+ * every bay, HOTEL on a board on the roof, and glass doors under a plum canopy.
+ */
+function paintHotel(g, b) {
+  const n = b.n || 4, H = wallH(b), top = b.y - H, wall = b.wall || PAL.butter, roof = b.roof || PAL.lead, B = bays(b.x, b.w), cx = b.x + R(b.w / 2), d = B.n >> 1;
+  // the board on the roof, on two posts
+  const bw = measureText('HOTEL', 1) + 8, bt = top - 15 - 13;
+  boxOutlined(g, cx - 10, bt + 10, 2, 6, INK); boxOutlined(g, cx + 8, bt + 10, 2, 6, INK);
+  pathRR(g, cx - R(bw / 2), bt, bw, 11, 2); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); g.fillStyle = PAL.plum[0]; g.fill();
+  drawText(g, 'HOTEL', cx + 1, bt + 2, { size: 1, color: '#FFF6E0', align: 'center', shadow: false });
+  // the mansard and its dormers
+  polyOutlined(g, [b.x - 3, top, b.x + b.w + 3, top, b.x + b.w - 3, top - 15, b.x + 3, top - 15], roof[0], INK, 1);
+  g.fillStyle = roof[1]; g.fillRect(b.x - 2, top - 4, b.w + 4, 4);
+  for (let i = 0; i < B.n; i++) {
+    const bx = B.x0 + i * BAY + 3;
+    boxOutlined(g, bx - 1, top - 12, WIN_W + 2, 9, wall[0]); win(g, bx + 1, top - 10, false, WIN_W - 2, 6);
+    polyOutlined(g, [bx - 2, top - 12, bx + WIN_W + 2, top - 12, bx + WIN_W / 2, top - 16], roof[0], INK, 1);
+  }
+  // the front
+  front(g, b.x, b.y, b.w, H, wall);
+  for (let i = 0; i < B.n; i++) {
+    const bx = B.x0 + i * BAY;
+    if (i !== d) win(g, bx + 3, b.y - DOOR_H);
+    for (let k = 1; k < n; k++) win(g, bx + 3, upper(b.y, GROUND, k), ((k * 3 + i * 5) % 6) === 1);
+  }
+  // the balcony rail, in the four rows of wall between the first floor's windows and the ground floor's
+  g.fillStyle = INK; g.fillRect(b.x + 2, b.y - 20, b.w - 4, 1); g.fillRect(b.x + 2, b.y - 17, b.w - 4, 1);
+  for (let x = b.x + 3; x < b.x + b.w - 2; x += 3) g.fillRect(x, b.y - 20, 1, 4);
+  // the doors and the canopy
+  const dx = B.x0 + d * BAY;
+  boxOutlined(g, dx, b.y - DOOR_H, BAY, DOOR_H, '#3F3A48');
+  g.fillStyle = MAP.window; g.fillRect(dx + 2, b.y - 13, 4, 12); g.fillRect(dx + 8, b.y - 13, 4, 12);
+  g.fillStyle = INK; g.fillRect(dx - 4, b.y - 21, BAY + 8, 5); g.fillStyle = PAL.plum[0]; g.fillRect(dx - 3, b.y - 20, BAY + 6, 3);
+}
+/**
+ * The town hall: two tall storeys of stone, a portico of four columns and a pediment in the middle with the doors
+ * between the inner columns, a hipped lead roof, and out of the roof the clock tower - the clock face, an open
+ * belfry and a little dome.
+ */
+function paintHall(g, b) {
+  const H = wallH(b), top = b.y - H, stone = b.wall || PAL.stone, roof = b.roof || PAL.lead, cx = b.x + R(b.w / 2);
+  // the clock tower, behind the roof's ridge
+  const tt = top - 12 - 22;
+  boxShaded(g, cx - 9, tt, 18, 30, stone[0], stone[1], INK, 1, 0.25);
+  g.fillStyle = INK; g.beginPath(); g.arc(cx, tt + 9, 7, 0, TAU); g.fill();
+  g.fillStyle = MAP.wall; g.beginPath(); g.arc(cx, tt + 9, 6, 0, TAU); g.fill();
+  g.fillStyle = INK; g.fillRect(cx - 4, tt + 7, 4, 1); g.fillRect(cx, tt + 5, 1, 4); g.fillRect(cx + 1, tt + 7, 3, 1);
+  boxOutlined(g, cx - 7, tt - 9, 14, 9, stone[0]);
+  g.fillStyle = '#3F3A48'; g.fillRect(cx - 5, tt - 7, 3, 6); g.fillRect(cx + 2, tt - 7, 3, 6);
+  g.fillStyle = INK; g.beginPath(); g.arc(cx, tt - 9, 8, Math.PI, 0); g.fill();
+  g.fillStyle = roof[0]; g.beginPath(); g.arc(cx, tt - 9, 7, Math.PI, 0); g.fill();
+  g.fillStyle = INK; g.fillRect(cx - 8, tt - 10, 17, 2); boxOutlined(g, cx - 1, tt - 21, 2, 5, MAP.brass);
+  hipRoof(g, b.x, top, b.w, 12, roof);
+  front(g, b.x, b.y, b.w, H, stone);
+  g.fillStyle = stone[1]; g.fillRect(b.x, b.y - 21, b.w, 2);
+  // the wings' windows, two storeys of them, two to a wing either side of the portico
+  for (const x of [b.x + 4, b.x + 17, b.x + b.w - 25, b.x + b.w - 12]) { win(g, x, b.y - 17, false, WIN_W, 11); win(g, x, b.y - 36, false, WIN_W, 11); }
+  // the portico: steps, the doors, four columns, the pediment
+  boxOutlined(g, cx - 22, b.y - 2, 44, 2, stone[1]);
+  boxOutlined(g, cx - 7, b.y - 18, 14, 16, '#3F3A48'); g.fillStyle = MAP.wood; g.fillRect(cx - 6, b.y - 14, 5, 12); g.fillRect(cx + 1, b.y - 14, 5, 12);
+  for (const px of [cx - 20, cx - 12, cx + 8, cx + 16]) {
+    boxOutlined(g, px, top + 4, 4, H - 7, stone[0]); g.fillStyle = stone[1]; g.fillRect(px + 3, top + 4, 1, H - 7);
+    boxOutlined(g, px - 1, top + 2, 6, 2, stone[0]);
+  }
+  boxOutlined(g, cx - 23, top - 3, 46, 5, stone[0]);
+  polyOutlined(g, [cx - 24, top - 3, cx + 24, top - 3, cx, top - 15], stone[0], INK, 1);
+  g.fillStyle = INK; g.fillRect(cx - 24, top - 4, 48, 2);
+}
+/** The town's buildings' painters, by kind. */
+const PAINT = {
+  house: paintHouse, semi: paintSemi, terrace: paintTerrace, townhouse: paintTownhouse, cottage: paintCottage, shop: paintShop, pub: paintPub,
+  chapel: paintChapel, station: paintStation, bank: paintBank, tower: paintTower, office: paintOffice, hotel: paintHotel, hall: paintHall,
+};
+
+/**
+ * The town's ground paint, over its paving: a plum contact shade under every building (they lie on the ground, under
+ * the buildings' sprites), then its props back to front by their feet - the depot, the telephone box, the fountain,
+ * the planted trees, the benches and a lamp post at every stop.
  */
 function paintTown(g) {
-  // the town's buildings, back to front
-  for (const b of TOWN) {
-    const [x, y, w, h, wall, wallShade, roof, roofShade, kind] = b;
-    groundShade(g, x + w / 2, y, w + 16, 0.1, 4);
-    building(g, x, y, w, h, wall, wallShade, roof, roofShade, { round: kind >= 2, chimney: kind === 0 });
-    // a second window on the far side of the door, so a street front is a row of windows and not one each
-    boxOutlined(g, x + w - 15, y - h + 8, 8, 9, MAP.window); g.fillStyle = MAP.skyTop; g.fillRect(x + w - 15, y - h + 8, 3, 9);
-    if (kind === 1) {
-      // the shop's striped awning over the whole front, rose and cream
-      const ay = y - h + 20;
-      g.fillStyle = INK; g.fillRect(x - 3, ay - 1, w + 6, 8);
-      for (let k = 0; k < w + 4; k += 6) { g.fillStyle = (k / 6) & 1 ? MAP.wall : MAP.rose; g.fillRect(x - 2 + k, ay, Math.min(6, w + 4 - k), 6); }
-    } else if (kind === 2) {
-      // the chapel's bell cote on the ridge
-      const cx = x + R(w / 2);
-      boxOutlined(g, cx - 4, y - h - R(h * 0.5) - 10, 8, 10, MAP.wall);
-      g.fillStyle = MAP.brass; g.fillRect(cx - 2, y - h - R(h * 0.5) - 7, 4, 4);
-      polyOutlined(g, [cx - 6, y - h - R(h * 0.5) - 10, cx + 6, y - h - R(h * 0.5) - 10, cx, y - h - R(h * 0.5) - 17], roof, INK, 1);
-    } else if (kind === 3) {
-      // the station's clock face in the gable, its hands at ten to two
-      const cx = x + R(w / 2), cy = y - h - R(h * 0.25);
-      g.fillStyle = INK; g.fillRect(cx, cy - 4, 1, 4); g.fillRect(cx, cy, 3, 1);
-    }
-  }
-  // the depot: a plum-roofed garage whose whole front is one open bay, the shutter rolled up under the eaves and the
-  // DEPOT board on the roof. The truck starts the day parked in the bay (PARK_AT) and rolls straight out onto the road.
+  for (const b of TOWN) groundShade(g, b.x + b.w / 2, b.y, b.w + 16, 0.1, 4);
+  for (const b of TALL) groundShade(g, b.x + b.w / 2, b.y, b.w + 16, 0.12, 4);
+  for (const p of TOWN_PAINT) p[1](g);
+}
+/**
+ * The depot: a plum-roofed garage whose whole front is one open bay, the shutter rolled up under the eaves and the
+ * DEPOT board on the roof. The truck starts the day parked in the bay (PARK_AT) and rolls straight out onto the road.
+ */
+function paintDepot(g) {
   const gx = HOME.x - 32, gy = HOME.y - 2, gw = 64, gh = 40, rh = 20;
   groundShade(g, HOME.x, gy, gw + 20, 0.12, 4);
   boxShaded(g, gx, gy - gh, gw, gh, MAP.wall, MAP.wallShade, INK, 1, 0.3);
@@ -578,21 +1171,31 @@ function paintTown(g) {
   // the forecourt's chalked bay line, dashed, out to the kerb
   g.strokeStyle = MAP.wall; g.lineWidth = 2; g.setLineDash([5, 4]);
   g.beginPath(); g.moveTo(gx + 6, gy + 1); g.lineTo(gx + gw - 6, gy + 1); g.stroke(); g.setLineDash([]);
-  // the telephone box on the pavement by the depot's west wall: the phone that rings with the day's orders
+}
+/** The telephone box on the pavement by the depot's west wall: the phone that rings with the day's orders. */
+function paintPhone(g) {
   const px = SPOTS.phone.x - 6, py = SPOTS.phone.y;
   boxOutlined(g, px, py, 12, 24, MAP.roof); g.fillStyle = MAP.plum; g.fillRect(px, py, 12, 4);
   g.fillStyle = MAP.window; g.fillRect(px + 2, py + 6, 8, 10);
-  // the fountain in the square, and a planted tree on the square's corner
+}
+/** The fountain in the square. */
+function paintFountain(g) {
   const F = FOUNTAIN;
   groundShade(g, F.x, F.y + 6, F.r * 2 + 6, 0.3, 2);
   ellipse(g, F.x, F.y, F.r + 2, R(F.r * 0.6) + 2, INK); ellipse(g, F.x, F.y, F.r, R(F.r * 0.6), MAP.wallShade);
   ellipse(g, F.x, F.y, F.r - 3, R(F.r * 0.6) - 3, MAP.river);
   boxOutlined(g, F.x - 1, F.y - 12, 3, 10, MAP.wallShade);
   g.fillStyle = MAP.skyTop; g.fillRect(F.x - 4, F.y - 14, 2, 2); g.fillRect(F.x + 4, F.y - 13, 2, 2); g.fillRect(F.x, F.y - 16, 2, 2);
-  groundShade(g, 1340, 668, 24); lollipop(g, 1340, 668, 10);
-  // a lamp post at the head of every queue
-  for (const s of STOPS) { const L = STOP_LAMPS[s.id]; lampPost(g, L.x, L.y); }
 }
+/** The props paintTown bakes, as [foot y, painter], in painting order (a stable sort: ties keep the order they are listed in). */
+const TOWN_PAINT = (() => {
+  const out = [];
+  out.push([HOME.y - 2, paintDepot], [SPOTS.phone.y + 24, paintPhone], [FOUNTAIN.y + FOUNTAIN.r, paintFountain]);
+  for (const t of TOWN_TREES) out.push([t[1], (g) => { groundShade(g, t[0], t[1], 2 * t[2] + 4); lollipop(g, t[0], t[1], t[2]); }]);
+  for (const s of BENCHES) out.push([s[1], (g) => bench(g, s[0], s[1])]);
+  for (const s of STOPS) { const L = STOP_LAMPS[s.id]; out.push([L.y, (g) => lampPost(g, L.x, L.y)]); }
+  return Object.freeze(out.sort((a, b) => a[0] - b[0]));
+})();
 
 function paintHorizon(g, rnd) {
   vGradient(g, 0, 0, WORLD_W, HORIZON_H, [[0, MAP.skyTop], [1, MAP.skyLow]]);
@@ -624,17 +1227,18 @@ function paintChunk(g, i, rnd) {
   // the border hedge (the horizon's tree-line closes the top)
   pathRR(g, 6, HORIZON_H + 2, WORLD_W - 12, WORLD_H - HORIZON_H - 8, 8); g.strokeStyle = INK; g.lineWidth = 8; g.stroke(); g.strokeStyle = MAP.hedge; g.lineWidth = 6; g.stroke();
   strokePoly(g, RIVER, INK, RIVER_HALF * 2 + 6); strokePoly(g, RIVER, MAP.river, RIVER_HALF * 2); strokePoly(g, RIVER, MAP.deep, 20);
-  paintTownGround(g);
+  const town = cx < TOWN_PAINT_X1 && cx + CHUNK_W > TOWN_PAINT_X0 && cy < TOWN_PAINT_Y1 && cy + CHUNK_H > TOWN_PAINT_Y0;
+  if (town) paintTownGround(g);
   for (const L of LANES) strokePoly(g, L, MAP.laneEdge, LANE_HALF * 2 + 2);
   for (const L of LANES) strokePoly(g, L, MAP.lane, LANE_HALF * 2);
-  paintCobbles(g);
+  if (town) paintCobbles(g, cx, cy);
   for (const b of BRIDGES) {
     boxOutlined(g, b.x - BRIDGE_HALF_W, b.y - BRIDGE_HALF_H, BRIDGE_HALF_W * 2, BRIDGE_HALF_H * 2, MAP.wood);
     g.fillStyle = MAP.woodDark; for (let x = b.x - BRIDGE_HALF_W + 6; x < b.x + BRIDGE_HALF_W - 2; x += 8) g.fillRect(x, b.y - BRIDGE_HALF_H, 2, BRIDGE_HALF_H * 2);
     g.fillRect(b.x - BRIDGE_HALF_W, b.y - BRIDGE_HALF_H - 2, BRIDGE_HALF_W * 2, 2); g.fillRect(b.x - BRIDGE_HALF_W, b.y + BRIDGE_HALF_H, BRIDGE_HALF_W * 2, 2);
   }
   paintLandmarks(g);
-  paintTown(g);
+  if (town) paintTown(g);
   // baked trees: all the plum contact shadows first, then all the canopies, so no shadow lands on a neighbour's
   // crown. Widths match the roadside sprites' `shadow` (18 + size*4) so the two kinds of tree sit on the same ground.
   for (const t of TREES.baked) if (t[0] > cx - 40 && t[0] < cx + CHUNK_W + 40 && t[1] > cy - 10 && t[1] < cy + CHUNK_H + 60) groundShade(g, t[0], t[1], 18 + t[2] * 4);
@@ -643,7 +1247,7 @@ function paintChunk(g, i, rnd) {
   for (let n = 0; n < 220; n++) {
     const x = cx + Math.floor(rnd() * (CHUNK_W - 2)), y = cy + Math.floor(rnd() * (CHUNK_H - 3)), kind = Math.floor(rnd() * 4);
     if (y < HORIZON_H + 12 || laneDist(x, y) < LANE_HALF + 6 || riverDist(x, y) < RIVER_HALF + 8 || nearLandmark(x, y, 70)) continue;
-    if (inWheat(x, y, 4) || inCove(x, y, 4) || inCity(x, y, 4)) continue;
+    if (inWheat(x, y, 4) || inCove(x, y, 4) || inCity(x, y, 4) || onTownPaint(x - 2, y - 2, x + 4, y + 5)) continue;
     if (kind === 0) { g.fillStyle = MAP.rose; g.fillRect(x, y, 2, 2); }
     else if (kind === 1) { g.fillStyle = MAP.wall; g.fillRect(x, y, 2, 2); }
     else { g.fillStyle = MAP.shade; g.fillRect(x, y, 2, 3); }
@@ -691,38 +1295,18 @@ export function signSprite(text) {
   }
   return L;
 }
-let towerLayer = null;
+const buildingLayers = [];
 /**
- * The skyscraper: a stone-grey shaft with its shaded east face, a grid of windows (a few lit gold, it being dusk),
- * a glazed lobby with an awning at the foot, and two setbacks up to a spire. Anchor = bottom centre. The beacon on
- * the spire's tip is the map screen's per-frame mark (TOWER_TIP is where it goes, from the anchor).
+ * Building `i` of BUILDINGS as a sprite: its paint in a layer of its own, `m` px of margin either side for the eaves,
+ * the canopies and the pub's sign. Anchor = bottom centre: the y-sort stands it at (b.x + (b.w >> 1), b.y + 1), so
+ * the layer's last row is the foot of its front wall.
  */
-export const TOWER_TIP = Object.freeze({ dx: 0, dy: -(TOWER.h + 30) });
-export function towerSprite() {
-  if (towerLayer) return towerLayer;
-  const W = TOWER.w, H = TOWER.h, lw = W + 8, lh = H + 34, cx = lw / 2, base = lh - 1, x0 = cx - W / 2, top = base - H;
-  towerLayer = makeLayer(lw, lh, (g) => {
-    // the spire and the two setbacks, top down
-    boxOutlined(g, cx - 1, top - 30, 2, 12, MAP.rock);
-    boxShaded(g, cx - 7, top - 18, 14, 10, MAP.churn, MAP.rock, INK, 1, 0.3);
-    boxShaded(g, cx - 13, top - 9, 26, 10, MAP.churn, MAP.rock, INK, 1, 0.3);
-    g.fillStyle = MAP.window; g.fillRect(cx - 9, top - 6, 18, 2);
-    // the shaft: lit west face, shaded east face, a parapet band
-    boxOutlined(g, x0, top, W, H, MAP.churn);
-    g.fillStyle = MAP.rock; g.fillRect(x0 + W - 12, top, 12, H);
-    g.fillStyle = MAP.hillFar; g.fillRect(x0, top, W, 3);
-    // the windows: four columns, a row every 8 px, lit by a fixed hash of row and column
-    for (let r = 0, y = top + 7; y < base - 20; r++, y += 8) for (let c = 0; c < 4; c++) {
-      const lit = ((r * 7 + c * 13) % 5) === 0;
-      g.fillStyle = INK; g.fillRect(x0 + 4 + c * 9, y, 6, 5);
-      g.fillStyle = lit ? MAP.mustard : c === 3 ? '#8E8A78' : MAP.window; g.fillRect(x0 + 5 + c * 9, y + 1, 4, 3);
-    }
-    // the lobby: glass doors under a plum awning
-    boxOutlined(g, cx - 9, base - 15, 18, 14, '#3F3A48');
-    g.fillStyle = MAP.window; g.fillRect(cx - 7, base - 13, 6, 12); g.fillRect(cx + 1, base - 13, 6, 12);
-    g.fillStyle = INK; g.fillRect(cx - 12, base - 19, 24, 5); g.fillStyle = '#7E3A56'; g.fillRect(cx - 11, base - 18, 22, 3);
-  }, SEED0 + 13);
-  return towerLayer;
+export function buildingSprite(i) {
+  if (!buildingLayers[i]) {
+    const b = BUILDINGS[i], m = 12, lw = b.w + 2 * m, lh = reach(b) + 2;
+    buildingLayers[i] = makeLayer(lw, lh, (g) => { g.translate(m - b.x, lh - 1 - b.y); PAINT[b.kind](g, b); }, SEED0 + 13);
+  }
+  return buildingLayers[i];
 }
 let cloudSprite = null;
 /** One soft plum ellipse for the drifting cloud shadows (the map's only soft mark besides steam). */

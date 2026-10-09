@@ -1,6 +1,9 @@
 // Playtest scenarios for the map work (registered in tools/scenarios/index.js). Each export is
 // `async (server) => void` using withPage / withPeers / assert from ../playtest.js.
 //
+//   town - the town's plan as data: no building on a street, over a queue or a lamp, or over a prop in front of
+//          it; every stop's kerb and approach clear; no road event laid in town.
+//
 //   map - four seats on the map: holding right on seat 0 drives the truck east off home, a honk stamps, the river
 //         stops it short of a bridge, the mill's wall stops it outside the tower, a landmark the order does NOT
 //         need drops a NOTHING NEEDED HERE sign, the millpond and the cove's sea stop it on their banks, and
@@ -20,9 +23,9 @@
 //              there opens the kitchen. The one test that proves the loop's two halves hand over.
 import { withPage, assert } from '../playtest.js';
 import { PLACES, STOPS } from '../../src/content/places.ts';
-import { planWeek, WEATHER_DRIZZLE, WEATHER_FOG } from '../../src/game/run.ts';
+import { planWeek, WEATHER_DRIZZLE, WEATHER_FOG, DAY_SHAPES } from '../../src/game/run.ts';
 import { INGREDIENTS, ORDERS } from '../../src/content/recipes.ts';
-import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, SPOTS, CROSSING_SPOTS, riverDist, laneDist, wallBlocked, waterBlocked, pondBlocked, seaBlocked, shoreX } from '../../src/art/backgrounds/map.ts';
+import { BRIDGES, RIVER_BLOCK, SIGN_AT, SIGN_CLEAR, SPOTS, CROSSING_SPOTS, LANES, LANE_HALF, STOP_LAMPS, TOWN_RECTS, TOWN_PROPS, inCity, riverDist, laneDist, wallBlocked, waterBlocked, pondBlocked, seaBlocked, shoreX } from '../../src/art/backgrounds/map.ts';
 
 const placeOf = (id) => PLACES.find((p) => p.id === id) || STOPS.find((p) => p.id === id);
 /** The road's crossings (screens/map.ts): take every herd off the road, for the scenarios that drive the lanes for other reasons. */
@@ -31,6 +34,50 @@ const BLOCK_R = 40, CLEAR_FRAMES = 60, AUTO_DUCKS = 90;
 const teleport = (page, x, y, heading) => page.evaluate(([px, py, h]) => { const t = window.__game.game.run.truck; t.x = px; t.y = py; t.at = ''; if (h != null) t.heading = h; }, [x, y, heading == null ? null : heading]);
 
 export const SCENARIOS = {
+  /**
+   * town - the town's plan, held as data (no page): every street through it is clear of every wall from kerb to
+   *        kerb, so no building stands on a road; the longest line any day forms (the fete's) stands on its stop's
+   *        pavement with no building in front of a diner to hide them, and no building meets a stop's lamp; no
+   *        building's sprite stands over a prop painted into the ground in front of it (it would be drawn over
+   *        the prop); every stop's kerb, and the drives the scenarios below take up to a stop, are clear; and no
+   *        crossing, cart or mud patch can be laid in town.
+   */
+  async town() {
+    const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+    let blocked = '';
+    for (let li = 0; li < LANES.length && !blocked; li++) {
+      const L = LANES[li];
+      for (let i = 0; i + 3 < L.length && !blocked; i += 2) {
+        const ax = L[i], ay = L[i + 1], bx = L[i + 2], by = L[i + 3], len = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / len, ny = (bx - ax) / len;
+        for (let t = 0; t <= len && !blocked; t += 2) for (const o of [0, 2 - LANE_HALF, LANE_HALF - 2]) {
+          const x = ax + ((bx - ax) * t) / len + nx * o, y = ay + ((by - ay) * t) / len + ny * o;
+          if (inCity(x, y, 40) && wallBlocked(x, y)) blocked = `lane ${li} at (${x.toFixed(0)}, ${y.toFixed(0)})`;
+        }
+      }
+    }
+    assert(!blocked, `every street through town is clear of walls from kerb to kerb${blocked ? ` (blocked: ${blocked})` : ''}`);
+    const longest = Math.max(...DAY_SHAPES.flatMap((d) => d.lines));
+    for (const s of STOPS) {
+      const hidden = [];
+      for (let k = 0; k < longest; k++) {
+        const x = s.qx + s.qdx * k, y = s.qy + s.qdy * k, d = [x - 7, y - 24, x + 7, y];
+        if (TOWN_RECTS.some((r) => r[3] > y && meets(d, r))) hidden.push(k);
+      }
+      assert(!hidden.length, `${s.id}: a line of ${longest} stands clear of every building in front of it${hidden.length ? ` (diners ${hidden.join()})` : ''}`);
+      const L = STOP_LAMPS[s.id], lr = [L.x - 4, L.y - 33, L.x + 4, L.y];
+      assert(!TOWN_RECTS.some((r) => meets(lr, r)), `${s.id}: its lamp post stands clear of the buildings`);
+      let shut = '';
+      for (let t = 0; t <= 70 && !shut; t++) {
+        if (wallBlocked(s.x - 70 + t, s.y)) shut = `from the west at x ${s.x - 70 + t}`;
+        else if (laneDist(s.x - 70, s.y) >= 4 && wallBlocked(s.x, s.y + 70 - t)) shut = `from the south at y ${s.y + 70 - t}`;
+      }
+      assert(!wallBlocked(s.x, s.y) && !shut, `${s.id}: its kerb and the drive up to it are clear${shut ? ` (blocked ${shut})` : ''}`);
+    }
+    const over = [];
+    for (const r of TOWN_RECTS) for (const p of TOWN_PROPS) if (p[3] > r[3] && meets(r, p)) over.push(`${r.join()} over ${p.join()}`);
+    assert(!over.length, `no building's sprite stands over a prop in front of it${over.length ? ` (${over.join('; ')})` : ''}`);
+    assert(CROSSING_SPOTS.length >= 5 && CROSSING_SPOTS.every((c) => !inCity(c.x, c.y)), `the road's events have ${CROSSING_SPOTS.length} lane spots to choose from, none of them in town`);
+  },
   /**
    * crossing - the road: the day's first crossing is out on its lane. The truck is set on the lane short of it
    *            and driven at it: held a half-token short with a SHEEP! (or DUCKS!) sign and its own clock started;
