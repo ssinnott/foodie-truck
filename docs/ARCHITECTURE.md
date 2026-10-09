@@ -333,7 +333,8 @@ the day `day` names (`?day=`, 1-based) and to no other.
 `order { id, dish, customer, line, steps, needs }` (that customer's, rebuilt by `startLine` and `serve`),
 `truck { x, y, heading, at }`, `served`, `lastServed` (the line finished last), `score`.
 Mutators: `need(id)`, `have(id)`, `stock(id)`, `gather(id, n)`, `complete()`, `missing()`, `placeFor(id)`,
-`lineAt(placeId)`, `screenForPlace(placeId)`, `startLine(i)`, `serve(stars)`, `lineDone()`, `linesServed()`,
+`lineAt(placeId)`, `screenForPlace(placeId)`, `startLine(i)`, `lineOrders()` (the whole line as one giant order),
+`serve(stars)`, `serveAll(stars)` (the whole line at once), `lineDone()`, `linesServed()`,
 `stars()`, `dayComplete()`, `shape()`, `closeDay()`, `weekStarsTotal()`, `weekComplete()`, `nextDay()`, `summary()`.
 `SCENES = ['map','orchard','pond','coop','kitchen','dairy','mill','hive','garden','stage','line','bramble','beach','holt','wood','terrace']` are the
 START-packet scene indices; scenes finished after the first pass are **appended**, never filed next to their
@@ -365,7 +366,7 @@ banks nothing.
 ### Flow
 ```
 title -> select -> stage -> map -> <orchard|pond|coop|dairy|mill|hive|garden> -> map -> ... (run.complete())
-      -> map -> line -> kitchen -> results -> map -> line -> kitchen -> results ... -> results -> stage (closed)
+      -> map -> line -> kitchen -> results -> stage (closed)          (one giant order: one trip to the hatch a day)
       -> garage -> stage (tomorrow) ...  (online: stage (closed) -> stage (tomorrow), no garage)
 title -> lobby (host key; the party picks critters there) -> stage ...  (online: the host's START opens the same scene everywhere)
 ```
@@ -378,13 +379,16 @@ title -> lobby (host key; the party picks critters there) -> stage ...  (online:
 - `screens/stage.js` (the day board): `run.lines` as paper tickets over the shopping list; no cursor, any joined
   seat's confirm (`game/menuinput.js`) fades to the map. Entered with `run.dayComplete()` it draws the closing
   card instead and its confirm leaves the room (if any) for the title.
-- `screens/line.js`: the queue at `run.lines[run.line]` from `run.customer` on; confirm (or 600 frames) fades to
-  the kitchen.
+- `screens/line.js`: the queue at `run.lines[run.line]` from `run.customer` on, every diner ordering at once (one
+  bubble per dish, `run.ts dishGroups`); confirm (or 600 frames) fades to the kitchen.
 - `screens/kitchen.js`: one critter per seat, stations from `content/places.js STATIONS` (fridge, chop, mix, stove, oven,
-  plate), steps from `run.order.steps` (every recipe's first is the fridge). It cooks every order still in the line
-  (`run.orderFor(k)`) at the same time, their steps merged into one run of the counter (`mergeSteps`), and finishes with
-  `game.replace('results', { stars: [...] })`. `screens/results.js` serves the whole line at once with
-  `run.serveAll(stars)` then replaces itself with `stage` (`run.dayComplete()`) or `map`.
+  plate), steps from `run.order.steps` (every recipe's first is the fridge). It cooks the whole line as one giant
+  order (`run.lineOrders()`) at the same time, their steps merged into one run of the counter (`mergeSteps`), the
+  order read by dish (`dishGroups`) on its ticket and hatch shelf, the whole line at the hatch window; the bell hands
+  a plate per order out through the hatch to its diner (timed off `serveT`, so a peer draws the same serving), and
+  once the last is taken it finishes with `game.replace('results', { stars: [...] })`. `screens/results.js` has the
+  whole line eating the plates they were handed, banks it with `run.serveAll(stars)` then replaces itself with
+  `stage` (`run.dayComplete()`), or `map` on a day of several lines.
 - Screens read input by SEAT: `run.party[i].slot` is the input slot to poll for party member i. Online, every
   seat's mask arrives through `input.setVirtual` from the lockstep buffers, so a screen that only uses `input.*`
   is net-safe by construction. Screens must not read the clock, `Math.random`, or anything outside `run`, `rng` and
@@ -470,7 +474,8 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
 - `npm run lint` — `node --check` every module + `tsc`. `npm run nettest` — pure-node protocol/lockstep/trig tests.
 - `npm run playtest` — headless Playwright: boots every screen, walks the flow, holds a netplay room. The
   `playthrough` scenario is the one that never jumps: title → select → day board → drive → mini-games until the list
-  is full → the queue → kitchen (both dishes at once) → results (both served at once) → map, on input alone (the menu
+  is full → the line → kitchen (the whole order at once) → results (the whole line served at once) → the closed
+  board, on input alone (the menu
   fixed with `?recipes=` to the two landmarks it can play), so it fails when two screens that each pass on their
   own cannot hand over. The `audio` scenario renders every SFX and every track through an OfflineAudioContext and
   fails on a silent or a throwing one, then walks the screens and reads which track each asked for, presses M for

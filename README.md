@@ -6,9 +6,9 @@ A cozy cooking adventure for one player, or for two to four in online co-op, dra
 truck opens for the day with a menu and a shopping list that adds up everything the day's
 customers will order. The truck starts the day parked in its depot in the middle of the town; the crew drive out
 round the countryside gathering it all — a short mini-game at every landmark — until the pantry is full, and then
-the queues form back in town: little files of villagers on the pavements at three of its street corners. They drive
-to each queue and cook for the whole line at once — every order taken together, every dish cooked, everyone served in one go — until the
-third line has been served. Then the truck closes for the night.
+the line forms back in town: one long file of villagers on the pavement at one of its street corners, a different
+animal in every place. They drive to it and cook for the whole line at once — one giant order: every order taken
+together, every dish cooked in one pass of the kitchen, everyone served in one go. Then the truck closes for the night.
 
 Sixty-three recipes, forty ingredients, twelve landmarks, and **twelve mini-games** — each with its own verb:
 catch, fish, collect, pump, fill, creep, pull, pick, chase, shake, forage, snip. A landmark can supply several things, and every visit
@@ -25,7 +25,7 @@ the wave that soaks everyone - and none of them costs more than a moment.
 
 A run is a **week**: five days, each with a shape of its own rather than just a seed of its own. Day one is short
 and plain; **market day** keeps its queues but cuts the menu, so the village wants the same things; day four is
-always fog or drizzle; and **the fête** is four queues, one of them three deep, on a menu drawn from what this
+always fog or drizzle; and **the fête** is one enormous line of nine, on a menu drawn from what this
 week has already served — the last customer of the week orders Monday's dish. Thirty-one dishes a week.
 
 The whole week is laid out from the seed before the first day opens, so nothing about it is stored: the **day
@@ -61,10 +61,10 @@ and forty-odd effects, all data in `src/engine/audio/`), so the repository stays
 | **Day board** | `stage` | The day's plan on paper: the lines (where each waits, who is in it, what they order) and the shopping list they add up to. Confirm opens the truck. After the last line it comes back closed, every customer's stars on it, the week strip under them, and the garage on the way out — or, on the fête, the end of the week. |
 | **Garage** | `garage` | Where each night ends: the coin tin, and the truck's paint, awning and roof to change or buy, tried on the truck as you flip through them. OPEN TOMORROW on the way out. Also on the title menu. |
 | **Recipe book** | `book` | What this truck has cooked, who it has fed, what it has gathered and where it has been. Six pages of dishes and three of tallies. Reached from the title. |
-| **Overland map** | `map` | The truck drives a 2560×1440 countryside with a town in the middle, starting the day inside its depot there. A flock of sheep or a duck parade may be across a country lane: honk (ALT) and they scatter. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, the queues form on the town's pavements — little files of diners — and pulling up at one opens its line. |
+| **Overland map** | `map` | The truck drives a 2560×1440 countryside with a town in the middle, starting the day inside its depot there. A flock of sheep or a duck parade may be across a country lane: honk (ALT) and they scatter. While the pantry is short, arriving where a missing ingredient comes from opens its mini-game. Once it is full, the line forms on a town pavement — a long file of diners — and pulling up at it opens the line. |
 | **Mini-games** | `orchard`, `pond`, `coop`, `dairy`, `mill`, `hive`, `garden`, `bramble`, `beach`, `holt`, `wood`, `terrace` | Catch apples under the trees (mind the wormy ones, and the ones with a fuse), tap to reel in a fish from the millpond, collect eggs from the hens, tap to milk the cows (and crank the churn for butter), hold to fill flour sacks under the mill's chutes, hold to dip honey from the hives, tap to pull carrots out of the farm's bed, pick berries off the bank's bushes, and chase crabs along the cove's beach. Everyone seated plays at once and the party's total counts. |
-| **The line** | `line` | The truck pulled up at a queue: everyone in it says what they want at once. Take every order into the kitchen. |
-| **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to pull each ingredient out of the fridge; tap to chop; hold to mix, cook and bake; ring the bell to plate), for every dish in the line at the same time - one fridge run, one pass of each station, one bell. Then serve the whole line at once and watch them all eat, and the truck drives to the next one. |
+| **The line** | `line` | The truck pulled up at the giant line: everyone in it says what they want at once, one bubble per dish with a tail to every diner who wants it. Take the whole order into the kitchen. |
+| **Cooking** | `kitchen`, `results` | Walk the order's steps across the truck's stations (tap to pull each ingredient out of the fridge; tap to chop; hold to mix, cook and bake; ring the bell to plate), for every dish in the line at the same time - one giant order: one fridge run, one pass of each station, one bell - with the whole line crowding the hatch. The bell hands every plate out through the hatch to the diner who ordered it; then watch them all eat, and the day is done. |
 
 ## Play
 
@@ -144,7 +144,7 @@ npm run lint         # node --check on every module, then tsc over the JSDoc typ
 npm run art-check    # data-tier art invariants (palettes, player-colour contrast, cast table)
 npm run nettest      # pure-node protocol, lockstep and trig tests
 npm run playtest     # headless Playwright: boots every screen, walks the flow, holds a netplay room
-npm run playtest playthrough   # one scenario: the whole day from the title screen to the first line served
+npm run playtest playthrough   # one scenario: the whole day from the title screen to the line served and the day closed
 npm run playtest audio         # every sound and track rendered offline and measured, and the screens' tracks
 npm run capture -- tools/screens map "kitchen:critters=0,1,2,3"   # screenshots of any screen at 2x
 node tools/sheet-capture.js tools/screens critter=barley          # critter contact sheets

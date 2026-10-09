@@ -1,13 +1,14 @@
-// RESULTS (docs/GDD.md section 7): THE ROUND SERVED AT ONCE. The kitchen has cooked every order of the round at the
-// hatch (run.batch(): the front of the giant line), so this is the lane the line screen stood on - the truck parked
-// with its hatch on the queue, the crew's heads in its windows, the rest of the line waiting behind - and every diner
-// of the round is handed their plate together: one plate after another arcs out
-// of the hatch into the paws that ordered it (the recipe's own picture, art/dishes.ts), everyone chews three times
-// on a stagger of their own, and each diner's stars pop up over their head. Then ONE paper receipt carrying every
-// dish and the stars it earned, the tip in coins and - slammed across its foot - the red DELICIOUS / TASTY / EDIBLE
-// stamp for the round as a whole, and PRESS Z blinking. Confirm (or 600 frames) banks the round with
-// run.serveAll(stars) and steps the line up to the hatch again (the `line` screen) for the next round - or, when that
-// was the last of the line, to the board, which closes the truck for the night.
+// RESULTS (docs/GDD.md section 7): THE WHOLE LINE EATING AT ONCE. The kitchen has cooked the giant order - every
+// dish for everyone in the line - and handed each plate out through its hatch, so this is the lane the line screen
+// stood on, the truck parked with its hatch on the queue and the crew's heads in its windows, and every diner is
+// where they stood with the plate they were handed in their paws (the recipe's own picture, art/dishes.ts), out
+// along the front row and up the lane to the rows behind it: everyone lifts it for a bite three times on a stagger of
+// their own, the dish going a bite at a time (art/dishes.ts), and each diner's stars pop up over their head. Then ONE
+// paper receipt for the whole order -
+// a row per dish with how many of it and the stars it earned, the tip in coins and - slammed across its foot - the
+// red DELICIOUS / TASTY / EDIBLE stamp for the line as a whole, with the tip's coins stacked beside it - and PRESS Z
+// blinking. Confirm (or 600 frames) banks the line with run.serveAll(stars) and, the line served, hands the day to
+// the board, which closes the truck for the night.
 //
 // The crew in the windows throw `cheer` when the stars land, each seat a few frames behind the last so four critters
 // never move as one body, and each diner cheers once their plate is empty. Params: { stars: number[] } (one per
@@ -17,7 +18,6 @@ import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
 import { particles } from '../../engine/particles.ts';
 import { drawShadow, burstCrumbs, burstSparkle } from '../../art/fx.ts';
-import { drawRig } from '../../lib/art/rig.ts';
 import type { RigWeapon } from '../../lib/art/rig.ts';
 import type { Pose } from '../../lib/art/poses.ts';
 import { drawTruck } from '../../art/truck.ts';
@@ -27,48 +27,56 @@ import { getCustomer } from '../../content/critters/customers.ts';
 import { placeName } from '../../content/places.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
 import { drawTicket, drawStamp, drawStars, drawHint, drawSign, ROW } from '../ui.ts';
-import type { TicketOpts } from '../ui.ts';
+import type { TicketOpts, StampOpts } from '../ui.ts';
 import { confirmPressed } from '../menuinput.ts';
 import { drawText, measureText } from '../../engine/text.ts';
 import type { DrawTextOptions } from '../../engine/text.ts';
-import { drawLane, TRUCK_Y, CREW_Y } from '../../art/logo.ts';
-import { drawPlate, PROPS } from '../../art/kitchenProps.ts';
+import { drawLane, TRUCK_Y } from '../../art/logo.ts';
+import { PROPS } from '../../art/kitchenProps.ts';
 import { ITEMS } from '../../content/critters/items.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
-import { TIP_COINS } from '../run.ts';
+import { TIP_COINS, dishGroups } from '../run.ts';
 import { truckStyleFor } from '../garage.ts';
 import type { TruckStyle } from '../../art/truck.ts';
-import { TRUCK_X, QUEUE_SCALE, DRIVER, queueSpot, buildWaiters, drawWaiters } from './line.ts';
-import type { LineHead, Waiter } from './line.ts';
+import { TRUCK_X, QUEUE_SCALE, ROW_SLOTS, DRIVER, queueSpot, drawWaiters } from './line.ts';
+import type { LineHead, Waiter, HeldPlate } from './line.ts';
 // The diners hold their dishes, so their rigs are the kitchen's own rig-plus-held-food type rather than a bare Rig.
 // Imported, not redeclared: `import type` erases, so this adds no runtime edge between the two screens.
 import type { CritterRig } from './kitchen.ts';
 
 const R = Math.round;
-/** The plates: the first leaves the hatch on PASS_AT, each after it PASS_LAG frames later, PASS_FRAMES in the air. */
-const PASS_AT = 8, PASS_LAG = 10, PASS_FRAMES = 16;
-/** Where the plates leave from: the sill of the truck's hatch. They land in the diner's paw, PASS_DY over the feet. */
-const HATCH_X = 212, HATCH_Y = 236, PASS_DY = 64, PASS_ARC = 34;
-/** A diner starts chewing EAT_DELAY frames after their plate lands, and chews CHEWS times EAT_LEN apart. */
-const EAT_DELAY = 6, EAT_LEN = 42, CHEWS = 3;
-/** The paper prints, then the stars pop over each head a diner at a time, then the stamp, then the prompt. */
-const RECEIPT_AT = 40, STARS_AT = 56, STAR_LAG = 8, STAMP_AT = 84, PROMPT_AT = 104, AUTO_AT = 600;
+/** Everyone comes out onto the lane holding the plate the kitchen handed them through the hatch: the first diner
+ *  takes a bite on EAT_AT and each after them EAT_LAG frames later, three bites (CHEWS) EAT_LEN apart. */
+const EAT_AT = 14, EAT_LAG = 6, EAT_LEN = 42, CHEWS = 3;
+/** The paper prints, then the stars pop over each head a diner at a time, then the stamp - no sooner than STAMP_AT,
+ *  and STAMP_LAG after the last diner's stars on a long line - then the prompt PROMPT_LAG after it. */
+const RECEIPT_AT = 40, STARS_AT = 56, STAR_LAG = 6, STAMP_AT = 84, STAMP_LAG = 16, PROMPT_LAG = 20, AUTO_AT = 600;
 /** The crew's cheer: seat 0 goes on the frame the first stars land, each seat after it CHEER_LAG frames later. */
 const CHEER_LAG = 5;
 /** Confirm is ignored for the first frames so the bell press that served the dish cannot skip the whole screen. */
 const CONFIRM_AT = 20;
 /** Index by stars (1..3); index 0 is unreachable (stars are clamped to 1) but keeps the lookup flat. */
 const STAMPS = ['EDIBLE', 'EDIBLE', 'TASTY', 'DELICIOUS'];
-/** Each diner's stars over their head. */
-const HEAD_STARS_Y = 176, HEAD_STAR_R = 6;
-/** The tip's coins lie in rows under the receipt: the picture counts what the paper printed. */
-const COIN_COLS = 16, COIN_PITCH = 10, COIN_R = 4;
+/** Each diner's stars over their head, by the row of the line they stand in: the front row's at HEAD_STARS_Y, and
+ *  each row further up the lane STARS_LIFT higher and smaller (HEAD_STAR_R), so they sit clear above the front
+ *  row's rather than tangled among them. */
+const HEAD_STARS_Y = 176, STARS_LIFT = 11, HEAD_STAR_R = [6, 3, 3];
+/** The tip's coins stand in stacks of COIN_STACK beside the receipt, level with its foot: the first stack COIN_GAP
+ *  left of the paper and each after it COIN_PITCH further left, every coin COIN_STEP above the one under it. The
+ *  picture counts what the paper printed (a full stack is ten), and a whole line's tip is a short row of stacks
+ *  that stays clear of the stars over the line. */
+const COIN_STACK = 10, COIN_PITCH = 12, COIN_STEP = 3, COIN_HALF = 5, COIN_GAP = 8;
 /**
- * The score is ONE piece of paper for the whole line, up in the sky right of the queue: one row per dish with the
- * stars it earned, a rule, the tip and the total, then the verdict stamped across a blank foot.
+ * The score is ONE piece of paper for the whole line, up in the sky right of the queue: one row per dish with how
+ * many of it went out and the stars they earned, a rule, the tip and the total, then the verdict stamped across a
+ * blank foot.
  */
-const RECEIPT_W = 212, RECEIPT_X = VIEW_W - 8 - RECEIPT_W, RECEIPT_Y = 34, ROW_STAR_R = 4;
+const RECEIPT_W = 212, RECEIPT_X = VIEW_W - 8 - RECEIPT_W, RECEIPT_Y = 34, RECEIPT_FOOT = 40, ROW_STAR_R = 4;
 const SIGN_Y = 2;
+/** The stamp across the receipt's foot leans a little less than the kit's stamps do, so the widest word on it
+ *  (DELICIOUS) clears the total above it at its raised end on a foot short enough to leave the stars over the line
+ *  clear underneath. */
+const STAMP_OPTS: StampOpts = { angle: -0.08 };
 const RECEIPT_OPTS: TicketOpts = { title: 'RECEIPT', rules: false }, ROW_TEXT: DrawTextOptions = { size: 1, color: UI.ink, shadow: false }, ROW_RIGHT: DrawTextOptions = { size: 1, color: UI.ink, shadow: false, align: 'right' };
 const TIP_LABEL = 'TIP', TOTAL_LABEL = 'THIS WEEK';
 
@@ -82,23 +90,25 @@ export interface Watcher {
   cheered: boolean;
 }
 
-/** One diner in the line, front first: their plate, their chews, their stars. */
-export interface Served {
+/** One diner in the line, front first, where they stood in it: their plate, their chews, their stars. */
+export interface Served extends Waiter {
   /** Built once in enter(): the off-duty apron, the dish in its paw once the plate has landed. */
   rig: CritterRig;
-  player: AnimPlayer;
-  /** Feet centre. */
-  x: number;
+  /** The plate in their paws (null once it is empty and put down), and where their stars pop up, by the row of the
+   *  line they stand in. */
+  plate: HeldPlate | null;
+  starY: number;
+  starR: number;
   /** The ORDERS id of what they ordered: the dish on the plate and in the paw. */
   dishId: string;
-  /** The dish's name, for the receipt row. */
+  /** The dish's name, for its receipt row. */
   dishText: string;
   /** Its first ingredient's hex: the crumbs. */
   hex: string;
   /** 1..3, what the kitchen earned on their dish. */
   stars: number;
-  /** The frame their plate leaves the hatch; it lands PASS_FRAMES later. */
-  passAt: number;
+  /** The frame they take their first bite. */
+  eatAt: number;
   /** The frame their stars pop up over their head. */
   starsAt: number;
   /** Chews taken so far, 0..CHEWS. */
@@ -134,10 +144,8 @@ export class ResultsScreen extends Screen {
   declare heads: LineHead[];
   /** The truck's draw options, reused every frame. */
   declare truckOpts: { scale: number; wheel: number; facing: number; heads: LineHead[]; style: TruckStyle };
-  /** The diners being served this round, front of the line first. */
+  /** The diners being served: the whole line, front first, where the line screen left them. */
   declare diners: Served[];
-  /** The rest of the line, still waiting behind them where the line screen left them. */
-  declare behind: Waiter[];
   /** The stars per dish, in line order, clamped to 1..3: what `serveAll` banks. */
   declare stars: number[];
   /** What the kitchen banked for the batch: `params.score`, or twice each dish's stars for a bare ?skipTo=results. */
@@ -148,8 +156,13 @@ export class ResultsScreen extends Screen {
   /** The sign over the scene: which line this is and where. */
   declare signText: string;
   declare signW: number;
-  /** The red stamp's word: STAMPS for the line's average stars. */
+  /** The red stamp's word: STAMPS for the line's average stars; the frame it slams, and the frame PRESS Z blinks from. */
   declare stampText: string;
+  declare stampAt: number;
+  declare promptAt: number;
+  /** The receipt's rows: one per dish of the order ('3 X MUSHROOM SOUP'), and the stars that dish earned. */
+  declare rowText: string[];
+  declare rowStars: number[];
   /** The tip in coins, TIP_COINS summed over every dish: the receipt's row and the discs under it count the same number. */
   declare tip: number;
   /** Its TIP row. */
@@ -158,10 +171,13 @@ export class ResultsScreen extends Screen {
   declare totalText: string;
   /** The receipt's height: one row per dish, then the tip and the total and the stamp's blank foot. */
   declare receiptH: number;
+  /** The first stack of coins: its centre, and its bottom coin's centre line (level with the receipt's foot). */
+  declare coinX: number;
+  declare coinY: number;
   /** The blinking PRESS <key> line. */
   declare prompt: string;
 
-  constructor(game: Game) { super(game, 'results'); this.fields = []; this.crew = []; this.heads = []; this.diners = []; this.behind = []; }
+  constructor(game: Game) { super(game, 'results'); this.fields = []; this.crew = []; this.heads = []; this.diners = []; this.rowText = []; this.rowStars = []; }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -181,41 +197,55 @@ export class ResultsScreen extends Screen {
       for (let i = 0; i < this.crew.length; i++) if (i !== di) this.heads.push({ rig: this.crew[i].rig, pose: this.crew[i].player.pose as Pose });
     }
     this.truckOpts = { scale: 2, wheel: 0, facing: -1, heads: this.heads, style: truckStyleFor(game) };
-    // the line: everyone still waiting, front first, each with the stars the kitchen earned on their dish
+    // the line: everyone still waiting, front first, where they stood, each with the stars the kitchen earned on
+    // their dish
     const ln = run.lines[run.line];
     const given = Array.isArray(params.stars) ? params.stars : params.stars != null ? [params.stars] : null;
     this.diners.length = 0; this.stars = [];
     const first = ln ? Math.min(run.customer, ln.customers.length - 1) : 0;
-    const count = ln ? run.batch() : 1;
-    this.behind = buildWaiters(run, count);
+    const count = ln ? Math.max(1, ln.customers.length - first) : 1;
+    const ids: string[] = [];
     for (let i = 0; i < count; i++) {
       const c = ln ? ln.customers[first + i] : null;
       const order = c ? run.orderFor(first + i) : run.order;
-      const def = getCustomer(c ? c.customer : order.customer), player = new AnimPlayer(def.anims);
-      player.play('idle');
+      const def = getCustomer(c ? c.customer : order.customer), player = new AnimPlayer(def.anims), sp = queueSpot(i), row = Math.floor(i / ROW_SLOTS);
+      player.play('carry');
       for (let t = 0; t < i * 11; t++) player.tick();
       const stars = Math.max(1, Math.min(3, R(given && given[i] != null ? given[i] : 2)));
       this.stars.push(stars);
+      ids.push(order.id);
       const ing = order.needs.length ? INGREDIENTS[order.needs[0].id] : null;
       this.diners.push({
-        rig: critterRig(def, -1), player, x: queueSpot(i).x, dishId: order.id, dishText: order.dish,
-        hex: ing ? ing.hex : UI.cream, stars,
-        passAt: PASS_AT + i * PASS_LAG, starsAt: STARS_AT + i * STAR_LAG, chews: 0, holding: false, cheered: false,
+        rig: this.served(critterRig(def, -1), order.id, ing ? ing.hex : UI.cream), player, x: sp.x, y: sp.y, s: sp.s,
+        plate: { dish: order.id, bites: 0, x: 0, y: 0, follow: true },
+        starY: HEAD_STARS_Y - STARS_LIFT * row, starR: HEAD_STAR_R[Math.min(HEAD_STAR_R.length - 1, row)],
+        dishId: order.id, dishText: order.dish, hex: ing ? ing.hex : UI.cream, stars,
+        eatAt: EAT_AT + i * EAT_LAG, starsAt: STARS_AT + i * STAR_LAG, chews: 0, holding: true, cheered: false,
       });
     }
     let sum = 0; for (const s of this.stars) sum += s;
     this.score = params.score != null ? params.score : sum * 2;
     this.left = false;
+    // the stamp waits for the last diner's stars, however long the line
+    this.stampAt = Math.max(STAMP_AT, this.diners[this.diners.length - 1].starsAt + STAMP_LAG);
+    this.promptAt = this.stampAt + PROMPT_LAG;
     // every string the screen draws is built here: draw() allocates nothing (docs/ARCHITECTURE.md section 8)
-    const left = ln ? ln.customers.length - run.customer - count : 0, where = ln ? placeName(ln.place) : '';
-    this.signText = run.lines.length > 1 ? `LINE ${run.line + 1} OF ${run.lines.length} SERVED  -  ${where}`
-      : left > 0 ? `${run.customer + count} OF ${run.customer + count + left} SERVED  -  ${where}` : `THE WHOLE LINE SERVED  -  ${where}`;
+    const where = ln ? placeName(ln.place) : '';
+    this.signText = run.lines.length > 1 ? `LINE ${run.line + 1} OF ${run.lines.length} SERVED  -  ${where}` : `THE WHOLE LINE SERVED  -  ${where}`;
     this.signW = measureText(this.signText, 1) + 24;
     this.stampText = STAMPS[Math.max(1, Math.min(3, R(sum / this.stars.length)))];
     this.tip = 0; for (const s of this.stars) this.tip += TIP_COINS[s];
     this.tipText = `${this.tip} COINS`;
     this.totalText = `${run.score + this.tip} COINS`;
-    this.receiptH = 16 + 6 + ROW * this.diners.length + 8 + ROW * 2 + 46;
+    // the receipt reads the order by dish, as the ticket in the kitchen did: how many of each went out, and its stars
+    this.rowText.length = 0; this.rowStars.length = 0;
+    for (const g of dishGroups(ids)) {
+      let t = 0; for (const i of g.members) t += this.stars[i];
+      this.rowText.push(`${g.members.length} X ${this.diners[g.members[0]].dishText}`);
+      this.rowStars.push(Math.max(1, Math.min(3, R(t / g.members.length))));
+    }
+    this.receiptH = 16 + 6 + ROW * this.rowText.length + 8 + ROW * 2 + RECEIPT_FOOT;
+    this.coinX = RECEIPT_X - COIN_GAP - COIN_HALF; this.coinY = RECEIPT_Y + this.receiptH - 3;
     this.prompt = `PRESS ${game.input.keyText(0, 'action')}`;
     this.fields.length = 0;
   }
@@ -231,96 +261,87 @@ export class ResultsScreen extends Screen {
       c.player.tick();
       if (c.player.done) c.player.play('idle', { restart: true });
     }
-    for (const w of this.behind) { w.player.tick(); if (w.player.done) w.player.play('idle', { restart: true }); }
     for (let i = 0; i < this.diners.length; i++) {
       const d = this.diners[i];
       d.player.tick();
-      // the plate lands in their paw
-      if (f === d.passAt + PASS_FRAMES) {
-        d.holding = true;
-        d.rig.weapon = ITEMS.dish as RigWeapon; d.rig.heldIcon = d.dishId; d.rig.heldHex = d.hex;
-        burstSparkle(d.x - 10, CREW_Y - PASS_DY, 4, UI.cream, true);
-        game.audio.play('done');
-      }
-      // the chews: three eats, one after the other
-      const eatAt = d.passAt + PASS_FRAMES + EAT_DELAY;
-      if (d.holding && d.chews < CHEWS && f >= eatAt && (f - eatAt) % EAT_LEN === 0) {
+      // the chews: three bites, one after the other, out of the plate the kitchen handed them - the plate stays held
+      // out where it was while the paw goes up to the mouth, and the dish on it goes a bite at a time
+      const eatAt = d.eatAt;
+      if (d.holding && d.plate && d.chews < CHEWS && f >= eatAt && (f - eatAt) % EAT_LEN === 0) {
         d.chews++;
+        d.plate.bites = d.chews; d.plate.follow = false;
         d.player.play('eat', { restart: true });
         if (i === 0) game.audio.play('chew');
-        burstCrumbs(d.x - 10, CREW_Y - PASS_DY - 6, CREW_Y - 30, d.hex, 5, true);
+        burstCrumbs(R(d.plate.x), R(d.plate.y - 8 * d.s), R(d.y - 30 * d.s / QUEUE_SCALE), d.hex, 5, true);
       }
       // `cheer` raises the near arm: the paw must be empty before it, or the plate crosses the face
       if (d.chews >= CHEWS && !d.cheered && d.player.done) { d.cheered = true; this.dropFood(d); d.player.play('cheer', { restart: true }); }
-      else if (d.player.done) d.player.play('idle', { restart: true });
-      if (f === d.starsAt) { burstSparkle(d.x, HEAD_STARS_Y, 5, UI.cream, true); game.audio.play('coin'); }
+      else if (d.player.done) { d.player.play(d.holding ? 'carry' : 'idle', { restart: true }); if (d.plate) d.plate.follow = true; }
+      if (f === d.starsAt) { burstSparkle(d.x, d.starY, 5, UI.cream, true); game.audio.play('coin'); }
     }
-    if (f === STAMP_AT) { burstSparkle(RECEIPT_X + RECEIPT_W / 2, RECEIPT_Y + this.receiptH - 22, 6, UI.cream, true); game.audio.play('stamp'); }
+    if (f === this.stampAt) { burstSparkle(RECEIPT_X + RECEIPT_W / 2, RECEIPT_Y + this.receiptH - 22, 6, UI.cream, true); game.audio.play('stamp'); }
     if (this.left) return;
     if ((f >= CONFIRM_AT && confirmPressed(game.input) >= 0) || f >= AUTO_AT) {
       this.left = true;
       game.audio.play('menu_confirm');
       const run = game.run;
       run.serveAll(this.stars);
-      // the whole line is served: the truck drives on to the next one, and the last line closes the day
+      // the whole line is served: the last line closes the day (a day of several lines drives on to the next)
       game.replace(!run.lineDone() ? 'line' : run.dayComplete() ? 'stage' : 'map');
     }
   }
 
-  /** The dish is gone: empty the diner's paw so the raised arm carries nothing across their face. */
-  dropFood(d: Served): void { d.holding = false; d.rig.weapon = null; d.rig.heldIcon = null; d.rig.heldHex = null; }
+  /** A diner's rig with the plate they were handed through the hatch already in their paw. */
+  served(rig: CritterRig, dishId: string, hex: string): CritterRig {
+    rig.weapon = ITEMS.dish as RigWeapon; rig.heldIcon = dishId; rig.heldHex = hex;
+    return rig;
+  }
+
+  /** The dish is gone: put the plate down and empty the diner's paw, so the raised arm carries nothing across their face. */
+  dropFood(d: Served): void { d.holding = false; d.plate = null; d.rig.weapon = null; d.rig.heldIcon = null; d.rig.heldHex = null; }
 
   override draw(ctx: CanvasRenderingContext2D): void {
     const f = this.frame;
     drawLane(ctx);
     drawShadow(ctx, TRUCK_X, TRUCK_Y, 112, 0.28);
     drawTruck(ctx, TRUCK_X, TRUCK_Y, this.truckOpts);
-    // the rest of the line, winding back up the lane behind the ones being served
-    drawWaiters(ctx, this.behind);
-    // the round at the hatch, back to front so the diner at the hatch is drawn last and in front
-    for (let i = this.diners.length - 1; i >= 0; i--) {
-      const d = this.diners[i];
-      drawShadow(ctx, d.x, CREW_Y, 34, 0.4);
-      drawRig(ctx, d.rig, d.player.pose, { x: d.x, y: CREW_Y, facing: -1, scale: QUEUE_SCALE });
-    }
-    // the plates in the air, out of the hatch and into the paws that ordered them
-    for (let i = 0; i < this.diners.length; i++) {
-      const d = this.diners[i], t = f - d.passAt;
-      if (t < 0 || t >= PASS_FRAMES) continue;
-      const k = t / PASS_FRAMES, x1 = d.x - 10, y1 = CREW_Y - PASS_DY;
-      const x = R(HATCH_X + (x1 - HATCH_X) * k), y = R(HATCH_Y + (y1 - HATCH_Y) * k - PASS_ARC * 4 * k * (1 - k));
-      drawPlate(ctx, x, y, NO_ICONS, NO_ICONS, 0, 1, d.dishId);
-    }
+    // the whole line where it stood, back to front, plates in paw: the rows up the lane first, the diner at the hatch
+    // last and in front
+    drawWaiters(ctx, this.diners);
     (particles as ParticlesDraw).draw(ctx, null);   // every kind in one pass: see ParticlesDraw
-    for (let i = 0; i < this.diners.length; i++) { const d = this.diners[i]; if (f >= d.starsAt) drawStars(ctx, d.x, HEAD_STARS_Y, d.stars, 3, HEAD_STAR_R); }
+    for (let i = 0; i < this.diners.length; i++) { const d = this.diners[i]; if (f >= d.starsAt) drawStars(ctx, d.x, d.starY, d.stars, 3, d.starR); }
     drawSign(ctx, VIEW_W / 2, SIGN_Y, this.signW, 22, this.signText, { size: 1 });
     if (f >= RECEIPT_AT) this.drawReceipt(ctx, f);
-    if (f >= PROMPT_AT && ((f >> 4) & 1)) drawHint(ctx, this.prompt);
+    if (f >= this.promptAt && ((f >> 4) & 1)) drawHint(ctx, this.prompt);
   }
 
-  /** The whole line's score on one piece of paper: a row per dish with its stars, the tip and the total under a
-   *  rule, and the verdict stamped across the blank foot, with the tip's coins in rows underneath. */
+  /** The whole line's score on one piece of paper: a row per dish with how many of it and its stars, the tip and
+   *  the total under a rule, and the verdict stamped across the blank foot; the tip's coins stacked beside it. */
   drawReceipt(ctx: CanvasRenderingContext2D, f: number): void {
-    const x = RECEIPT_X, y = RECEIPT_Y, right = x + RECEIPT_W - 6, n = this.diners.length;
+    const x = RECEIPT_X, y = RECEIPT_Y, right = x + RECEIPT_W - 6, n = this.rowText.length;
     drawTicket(ctx, x, y, RECEIPT_W, this.receiptH, RECEIPT_OPTS);
     const rows = y + 20;
     for (let i = 0; i < n; i++) {
-      const d = this.diners[i], ry = rows + ROW * i;
-      drawText(ctx, d.dishText, x + 6, ry, ROW_TEXT);
-      drawStars(ctx, right - 16, ry + 4, d.stars, 3, ROW_STAR_R);
+      const ry = rows + ROW * i;
+      drawText(ctx, this.rowText[i], x + 6, ry, ROW_TEXT);
+      drawStars(ctx, right - 16, ry + 4, this.rowStars[i], 3, ROW_STAR_R);
     }
     const rule = rows + ROW * n + 2;
     ctx.fillStyle = UI.paperLine; ctx.fillRect(x + 4, rule, RECEIPT_W - 8, 1);
     drawText(ctx, TIP_LABEL, x + 6, rule + 4, ROW_TEXT); drawText(ctx, this.tipText, right, rule + 4, ROW_RIGHT);
     drawText(ctx, TOTAL_LABEL, x + 6, rule + 4 + ROW, ROW_TEXT); drawText(ctx, this.totalText, right, rule + 4 + ROW, ROW_RIGHT);
-    if (f >= STAMP_AT) drawStamp(ctx, this.stampText, x + RECEIPT_W / 2, y + this.receiptH - 22, (f - STAMP_AT) / 24);
-    // the tip's coins: one brass disc per coin the receipt promised, in rows at the paper's foot
-    const cy0 = y + this.receiptH + 8;
-    for (let i = 0; i < this.tip; i++) {
-      const cx = x + 14 + (i % COIN_COLS) * COIN_PITCH + ((((i / COIN_COLS) | 0) & 1) ? COIN_PITCH / 2 : 0), cy = cy0 + ((i / COIN_COLS) | 0) * (COIN_PITCH - 2);
-      ctx.beginPath(); ctx.arc(cx, cy, COIN_R, 0, Math.PI * 2);
-      ctx.strokeStyle = UI.ink; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = PROPS.brass; ctx.fill();
-      ctx.fillStyle = PROPS.brassSh; ctx.fillRect(cx - 1, cy, 3, 3);
+    if (f >= this.stampAt) drawStamp(ctx, this.stampText, x + RECEIPT_W / 2, y + this.receiptH - 22, (f - this.stampAt) / 24, STAMP_OPTS);
+    // the tip's coins: one brass coin per coin the receipt promised, in stacks of ten standing level with the paper's
+    // foot - each stack inked round once, and inside it every coin's edge, brass over a darker rim, from the bottom up
+    for (let k = 0; k * COIN_STACK < this.tip; k++) {
+      const n = Math.min(COIN_STACK, this.tip - k * COIN_STACK), cx = this.coinX - k * COIN_PITCH, top = this.coinY - (n - 1) * COIN_STEP;
+      ctx.fillStyle = UI.ink; ctx.fillRect(cx - COIN_HALF, top - 2, COIN_HALF * 2, this.coinY - top + 4);
+      for (let j = 0; j < n; j++) {
+        const cy = this.coinY - j * COIN_STEP;
+        ctx.fillStyle = PROPS.brass; ctx.fillRect(cx - COIN_HALF + 1, cy - 1, COIN_HALF * 2 - 2, 2);
+        ctx.fillStyle = PROPS.brassSh; ctx.fillRect(cx - COIN_HALF + 1, cy + 1, COIN_HALF * 2 - 2, 1);
+      }
+      ctx.fillStyle = UI.cream; ctx.fillRect(cx - 3, top - 1, 2, 1);   // the top coin catches the light
     }
   }
 
@@ -329,7 +350,7 @@ export class ResultsScreen extends Screen {
     return {
       stars: this.stars.slice(), total, score: this.score, diners: this.diners.length,
       chews: this.diners.map((d) => d.chews), holding: this.diners.map((d) => d.holding), dishes: this.diners.map((d) => d.dishId),
-      stamp: this.frame >= STAMP_AT ? this.stampText : '', left: this.left,
+      stamp: this.frame >= this.stampAt ? this.stampText : '', left: this.left, receipt: this.rowText.slice(), coins: this.tip,
     };
   }
   /** Every field that could diverge between peers (net/checksum.js). */
@@ -340,5 +361,3 @@ export class ResultsScreen extends Screen {
   }
 }
 
-/** The empty ingredient table a finished dish's plate is drawn with: the dish is the picture, not a stack. */
-const NO_ICONS: string[] = [];

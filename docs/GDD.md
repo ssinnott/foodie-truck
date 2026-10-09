@@ -9,9 +9,10 @@
 
 A cozy co-op cooking adventure for one to four players. The crew of a countryside food truck opens for the day
 with a menu and a shopping list, drive out to where every ingredient comes from and gather it in a short mini-game
-at each landmark, and then, with the pantry full, drive back into the town round the depot, where the queues of
-villagers have formed on the pavements - one giant line of them, a crowd of different animals - and cook for it round
-by round. When the last diner in the line has been served the truck closes.
+at each landmark, and then, with the pantry full, drive back into the town round the depot, where the villagers
+have queued on the pavement - one giant line of them, a crowd of different animals - and cook for all of it at once:
+one giant order, taken together, cooked together and served together. When the line has been served the truck
+closes.
 
 The *structure* is borrowed from the Sesame Street "Foodie Truck" segments (an order → its ingredient → go to the
 source → cook). Everything else is original: the cast are anthropomorphic countryside animals with their own names,
@@ -52,9 +53,9 @@ the day plan deals them: append, never reorder. Every cast member wears an apron
 ## 3. The loop
 
 ```
-title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> map -> line -> kitchen -> results -> line -> kitchen -> results -> ...
-                                                                                                                                            |
-   the day: a menu, ONE giant line, one shopping list; when the last round is served -> stage (CLOSED) -> garage --OPEN TOMORROW--> stage (OPEN, tomorrow) -> map -> ...
+title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> map -> line -> kitchen -> results
+                                                                                                                  |
+   the day: a menu, ONE giant line, one shopping list, ONE giant order; when it is served -> stage (CLOSED) -> garage --OPEN TOMORROW--> stage (OPEN, tomorrow) -> map -> ...
                                                                                                                      |
                                                                                     ... and on the LAST day of the week -> garage -> title. That is the end of the game.
 ```
@@ -88,11 +89,13 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 - **One giant line.** Every day's customers stand in a single queue (the day used to be three small queues at three
   stops; the dish counts are unchanged, so a day's shopping list is no bigger). The line is dealt from the village
   like a deck (`run.ts planOneDay`, on the plan's own seeded stream): nobody repeats until every diner on the roll
-  has queued, so a line is a crowd of different animals, never the same few. It is far too long to cook at once, so
-  it is **served in rounds** (`run.batchSize`): the front few at the hatch order together (as many as the kitchen's
-  ticket carries, `BATCH_MAX` 3, split as evenly as the line allows — 4 is 2 + 2, 6 is 3 + 3, 9 is 3 + 3 + 3),
-  `run.batch()` says how many are in this round, and after results the line steps up for the next round until
-  the last diner is fed.
+  has queued, so a line is a crowd of different animals, never the same few. **The whole line is one giant order**
+  (`run.lineOrders()`): it orders at once, the kitchen cooks every dish of it in one run of the counter, and results
+  serves everyone together — one trip to the hatch a day, however long the line. (It used to go up three at a time,
+  in rounds, and the day was the same three screens over and over.) Wherever the order is shown it is read **by
+  dish** (`run.ts dishGroups`): a day's menu is two or three recipes, so a line of nine is three dishes, three of
+  each — one bubble per dish over the line, one row per dish on the kitchen's ticket, one plate per dish on its
+  hatch shelf, one row per dish on the receipt.
 - The truck opens each day parked inside the depot in the middle of the town (`home`). Each day's line waits at a
   stop in that town (`content/places.ts` STOPS: the market square, Station Road, the High Street and
   Chapel Corner — never a landmark: the countryside is for gathering) and each customer orders one of that day's
@@ -144,20 +147,25 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   full.
 - **Serving.** The moment the pantry is full the line opens: the HUD swaps the list for the line, the queue comes
   out onto the town's pavement one diner at a time (every diner drawn small from their own `map` look, in a file
-  by a lamp post, the front one waving the truck in), and pulling up at it opens the **line** screen — the diners
-  at the front say what they want at once, a bubble over each head, with the rest of the line waiting behind them.
-  Confirm takes the round's orders into the kitchen (`run.startLine(i)` on arrival).
+  by a lamp post, the front one waving the truck in), and pulling up at it opens the **line** screen — the whole
+  line says what it wants at once, one bubble per dish with a tail to every diner who asked for it. Confirm takes
+  the whole order into the kitchen (`run.startLine(i)` on arrival).
   A landmark with no line, or one already served, shows a sign.
-- **The kitchen** cooks the WHOLE ROUND AT THE SAME TIME: every order of the round at the hatch
-  (`run.orderFor(k)` for the `run.batch()` diners at the front) is on the ticket and every one of them crowds the hatch. Their steps are merged into one run of the counter - the fridge once
-  for every item, each station once for every dish that uses it (each order's own steps stay in its own order), and
-  one bell. The food splits as it goes, each ingredient flying to the next station ITS dish needs, onto its own
-  plate on the hatch shelf. The bell stamps `ORDER UP!` and opens results with every dish's stars.
-- **Results** serves the round at once, out on the lane: each diner is handed their plate, they all eat, and each
-  gets a 1–3 star rating over their head; `run.serveAll(stars)` banks each customer's stars and takes every dish's
-  ingredients back out of the pantry. Then the line steps up to the hatch for the next round (the `line` screen
-  again); when that was the last round, to the day board, which opens **closed** — the day's stars
-  and coins totted up, and the **week strip** under them. Every dish tips `TIP_COINS[stars]` — 4, 8 or 12 coins —
+- **The kitchen** cooks the WHOLE LINE AT THE SAME TIME: every order in it (`run.lineOrders()`) is on the ticket,
+  read by dish (`3 X MUSHROOM SOUP`, with a row of the twists on it under it), and **the whole line is at the
+  hatch**: the front three lean in at the opening and everyone else stands in rows behind them, smaller and higher
+  the further back, so every diner waiting on the order is in sight. Their steps are merged into one run of the
+  counter - the fridge once for every ingredient, each station once for every dish that uses it (each order's own
+  steps stay in its own order), and one bell. The food splits as it goes, each ingredient flying to the next station
+  ITS dish needs, onto its dish's plate on the hatch shelf (one plate per dish, how many it is for painted on the
+  shelf under it). The bell stamps `ORDER UP!` and **serves the line**: one plate per order leaves its dish's plate,
+  front of the line first, and arcs out through the hatch into the paws of the diner who asked for it - each one
+  reaching out for theirs as it comes - while the counts on the shelf go down to bare plates. When the last plate has
+  been taken, results, with every dish's stars.
+- **Results** is the whole line eating at once, out on the lane, everyone where they stood with the plate the
+  kitchen handed them: they all eat, and each gets a 1–3 star rating over their head; `run.serveAll(stars)` banks each customer's
+  stars and takes every dish's ingredients back out of the pantry. Then the day board, which opens **closed** — the
+  day's stars and coins totted up, and the **week strip** under them. Every dish tips `TIP_COINS[stars]` — 4, 8 or 12 coins —
   and those coins are the day's takings: the game has one money, and the garage (section 13) spends it.
 - **The closed board is the hinge, not the exit.** It pays the night's coins into the garage's tin, and its one
   press drives the truck into **the garage** (section 13); the garage's way out, `OPEN TOMORROW`, is what used to
@@ -402,22 +410,36 @@ cooked out of thin air - and the recipe card shows them with checks. Interaction
 
 | Station | Verb | Rule |
 |---|---|---|
-| FRIDGE | tap | one `action` press per item the order wants (four apples and two eggs is six taps), any rhythm; each tap swings the door open and the next ingredient, in the order's own order, flies along the counter into the station that uses it next (onto the board for a recipe that chops, else into the bowl). Nothing to choose: the fridge holds exactly the order |
+| FRIDGE | tap | one `action` press per INGREDIENT the order wants (the line's apples, then its eggs: two taps however many pies), any rhythm; each tap swings the door open and every one of that ingredient the whole order wants comes out at once, each flying along the counter into the station ITS dish uses next (onto the board for a recipe that chops, else into the bowl). Nothing to choose: the fridge holds exactly the order. A whole line's fridge is two to eleven taps, about as many as a chop |
 | CHOP | tap | ten `action` presses, any rhythm (fifteen on an EXTRA CRUNCHY order, `order.chops`); the pips on the card light one per chop |
 | MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it |
 | STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way |
 | OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way |
-| PLATE | tap | `action` plates the dish and rings the bell; the customer eats |
+| PLATE | tap | `action` rings the bell: every plate goes out through the hatch to the diner who ordered it, front of the line first |
+
+**The whole line is at the hatch.** The opening on the right of the room is where the line waits on its order, all
+of it: the first three diners lean in at the shelf's right half as they always have (the cook plating at its left
+half is never drawn through them), and the rest of the line stands behind them in rows across the opening, four,
+then five, then six, each row smaller and higher, which is room for the longest line there is (eighteen). Each row
+is staggered a little so it reads as a crowd and not a shelf of heads.
+
+**The bell serves it.** Ringing the bell stamps `ORDER UP!` and hands the order out: one plate per order leaves its
+dish's plate on the shelf, the front of the line first and one every seven frames, and arcs up through the hatch,
+shrinking to its diner's size as it goes, into the paws of the diner who asked for it - who reaches out as it
+comes and holds it out in front of them from then on. The count under each dish's plate goes down as its plates
+leave, and the last one leaves it bare; when the last plate has been taken, results. The plates are a graphic
+driven by the frames since the bell, like the food's flights: every peer draws the same serving.
 
 **The food moves down the line.** The order's items are one batch that is always at exactly one station. The
 fridge sends them to the first cooking step, and the frame a step completes, everything at its station - the pile
-and the item on the board, what is in the bowl, in the pot, on the oven's tray - takes off one item every four
-frames and arcs into the next step's prop: the tenth chop clears the board and the dice fly into the bowl, the
-finished stir empties the bowl into the pot or the oven, and the bake drops the dish onto the plate at the hatch,
+and the item on the board, what is in the bowl, in the pot, on the oven's tray - takes off one item every three
+frames (closer together for a whole line's worth, which leaves inside a second) and arcs into the next step's prop:
+the tenth chop clears the board and the dice fly into the bowl, the finished stir empties the bowl into the pot or
+the oven, and the bake drops each dish onto its own plate at the hatch,
 where it is stacked before the bell is rung - and the moment the last item lands, the stack becomes **the finished
 dish**: every recipe has a picture of its own (`art/dishes.ts`: the pie under its lattice, the soup in its bowl, the
-stack of griddle cakes with the butter on top), so what sits at the hatch is what the customer asked for, and it is
-that picture they are seen eating on results, a bite out of it per chew. A prop only draws itself loaded while the
+stack of griddle cakes with the butter on top), so what sits at the hatch is what the customer asked for, what they
+are handed through it, and what they are seen eating on results, a bite out of it per chew. A prop only draws itself loaded while the
 batch is in it (lumps in the bowl, the ingredient's colour over the pot's rim, the tray in the oven window). This is a graphic: no step waits
 for a landing, and nothing about it is simulated (`kitchen.ts` flights are cosmetic).
 
@@ -431,12 +453,14 @@ made either way so every peer draws the same day.
 
 ## 7. Results
 
-The round at the hatch served at once on the lane the line screen stood on (the rest of the line waiting behind): a
-plate arcs out of the truck's hatch into every diner's paws on a stagger, everyone chews three times, each diner's
-1–3 stars pop up over their head, and one receipt lists every dish with its stars, the tip in coins and a stamp for
-the round as a whole (`DELICIOUS` / `TASTY` / `EDIBLE`, from the average), then `PRESS Z` (auto-return after 600
-frames) → `run.serveAll(stars)` → the `line` screen again (the line steps up for the next round) or the closed day
-board (that was the last round).
+The whole line eating at once on the lane the line screen stood on, everyone where they stood, holding out the plate
+the kitchen handed them through the hatch, out along the front row and up the lane to the row behind it: on a
+stagger, each lifts it for a bite three times, the dish on it going a bite at a time until the plate is empty and put
+down for a cheer, each diner's 1–3 stars pop up over their head (smaller, and a little higher, for the
+rows further up the lane), and one receipt reads the order by dish - how many of each went out, with its stars -
+then the tip in coins and a stamp for the line as a whole (`DELICIOUS` / `TASTY` / `EDIBLE`, from the average),
+with the tip's coins in stacks of ten beside it, then `PRESS Z` (auto-return after 600 frames) →
+`run.serveAll(stars)` → the closed day board.
 
 ## 8. Multiplayer
 
@@ -515,12 +539,16 @@ player has bound M to something, while a rebind is listening, and while a host k
   its `enter()`, at a screen boundary and never in an `update()`, and all four are keyed on the day so a board that
   opens closed twice counts once. BACK (open board only) leaves for the title, and is refused
   online (a peer walking out of a live room stalls the rest, as with the pause overlay).
-- **line**: the truck pulled up at the giant line on the dusk lane, turned so its hatch faces the diners still
-  waiting (one rig each, front first, the crew's heads in the windows). The front row stands along the lane at full
-  size; past six the line turns back on itself in smaller rows up the verge (`line.ts queueSpot`: an S winding
-  away, room for eighteen). The diners at the hatch this round (`run.batch()`) wave and each gets a paper bubble
-  with their name and their order; CONFIRM (or 600 frames) fades to the kitchen. After results the line comes back
-  here and steps up (an eased slide) for the next round. The sign over the scene says `9 IN THE LINE - STATION ROAD`.
+- **line**: the truck pulled up at the giant line on the dusk lane, turned so its hatch faces the diners (one rig
+  each, front first, the crew's heads in the windows). The front row stands along the lane at full size; past six
+  the line turns back on itself in smaller rows up the verge (`line.ts queueSpot`: an S winding away, room for
+  eighteen). The whole line orders at once: the diners wave in turn, front to back, and each joins the bubble of the
+  dish they want - one paper bubble per dish (`run.ts dishGroups`), its band counting them in (`3 X MUSHROOM
+  SOUP`), its words the dish's own line, and under them whoever wants theirs different (`BRUIN: A BIG ONE!`). The
+  bubbles stack up the sky, the dish asked for nearest the front lowest, and every diner has a tail from their
+  dish's bubble ending in a paper bead over their head with the dish's picture in it, so a tail that comes out from
+  under a lower bubble still says plainly what its diner wants. CONFIRM (or 600 frames) takes the whole order into
+  the kitchen. The sign over the scene says `9 IN THE LINE - STATION ROAD`.
 - **lobby**: HOST / JOIN, the host key large, invite link, four seats with busts, ready stamps, `STARTING!`; drives
   `net/session.js`; hands off to `select`-style picking on the same screen, then the host starts the match on the
   day board, so an online party reads the day's plan together and opens the truck.
@@ -554,11 +582,11 @@ comes on with the first key or tap, because browsers will not start audio before
   (a rubber boing, no pip), `fuse` and a soft `boom`, `splat` for an apple on the grass; `cast`, `bite`, the reel's
   ratchet (`reel`), the trout in the `bucket`; `squirt` per press; `pour` while the chute runs; `dip`; `grip` and
   `heave`. The round ends on the sign's knock and a four-note `round_over`.
-- **The kitchen** — the stations. `fridge` per item out, the knife's `chop`, and the three holds each with a noise
+- **The kitchen** — the stations. `fridge` per ingredient out, the knife's `chop`, and the three holds each with a noise
   that replays while the button is down (`stir`, `sizzle`, `bake`); `done` for a step, `perfect` with a sparkle on
   it; `nom` for the hungry one; and the `bell`, the one long ring in the game, because ringing it is the one thing a
-  whole order builds toward. At the results: `chew` per bite, `stamp`, `coin` as the tip lands, `cheer` from the
-  crew; `hello` when a diner steps up to the hatch; `day_done` over the closed board.
+  whole order builds toward, then `done` as each plate is taken at the hatch. At the results: `chew` per bite, `stamp`, `coin` as the tip lands, `cheer` from the
+  crew; `hello` as each diner in the line waves; `day_done` over the closed board.
 
 Sounds played on the same frame duck each other (four seats catching at once is one catch's loudness), and the
 percussive names get a few percent of pitch wobble so a mashed button does not sound like a machine.
