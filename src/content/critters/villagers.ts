@@ -5,14 +5,16 @@
 // headgear or back-piece (villagerParts.ts), so each reads on its own at a squint (docs/ART_STYLE.md section 0).
 //
 // They are muted village palettes that clear the hatch's plum wall (#4A3038, L .22) by value, they wear the
-// off-duty apron (critterRig(def, -1): no seat, no player colour), and they play the cast's own animation table.
+// off-duty apron (critterRig(def, -1): no seat, no player colour), and they play the cast's own animation table with
+// the diners' waiting beats added (dinerAnims.ts).
 //
 // Each carries a `map` look as well: the handful of colours and the one cue (ears, a comb, antlers, a shell...) the
 // town map's 10 px queue sprites are drawn from (art/backgrounds/map.ts drawDiner), so the figure on the pavement is
 // the same animal that reaches the hatch.
 //
 // ORDER IS DATA: diners.ts lists the ids in the order the day plan deals them. This file only defines them.
-import { critterBuild, makeCritterAnims, scarf, cap, bandana, maskMarking, cheekMarking } from './common.ts';
+import { critterBuild, scarf, cap, bandana, maskMarking, cheekMarking } from './common.ts';
+import { makeDinerAnims } from './dinerAnims.ts';
 import type { CritterSpec } from './common.ts';
 import {
   blazeMarking, patchMarking, tabbyMarking, snoutMarking, bigNose, billMarking, beakAndWattle, buckTeeth,
@@ -40,7 +42,7 @@ export interface MapLook {
   billHex?: string;
 }
 
-const ANIMS = makeCritterAnims();
+const ANIMS = makeDinerAnims();
 
 /** A village diner: a cast entry without the `bio` only the playable critters carry, plus its map sprite. */
 function villager(id: string, name: string, fullName: string, role: string, species: string, spec: CritterSpec, map: Partial<MapLook> & { cloth: string }) {

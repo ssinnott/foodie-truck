@@ -34,7 +34,10 @@
 // stick or press of his button ends it, so the joke never holds a player up.
 // THE FRIENDS WHO RIDE ALONG (game/kitchenFriends.ts): out on the floor in front of the counter, one takes the line's
 // orders under the hatch and the other runs about. They are cosmetic through and through - no input, no step, no
-// gameplay rng, nothing in checksumFields - so this screen only builds, steps and draws them.
+// gameplay rng, nothing in checksumFields - so this screen only builds, steps and draws them. The same goes for what
+// the line at the hatch does while it waits for its plates (game/waiting.ts): a sniff at the cooking, a hungry tummy,
+// up on the toes to see in, a bounce, a look back down the line, a yawn - all but whoever is giving the order-taker
+// their order, who holds still for it.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): every sim field is an integer or a px/frame sum driven by seat input;
 // the only random call is the gag, through `rng`; the steam, glow, rings, float text and the flights are cosmetic
@@ -66,6 +69,7 @@ import type { CardScheme } from '../controlcard.ts';
 import { drawText, measureText } from '../../engine/text.ts';
 import { twistTag, dishGroups } from '../run.ts';
 import { KitchenFriends } from '../kitchenFriends.ts';
+import { WaitingBeats, HATCH_BEATS, HATCH_SALT, beatSeed } from '../waiting.ts';
 import { kitchenLayer, ROWS, HATCH, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.ts';
 import {
   PROPS, paintStations, drawStationFocus, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
@@ -128,6 +132,9 @@ const CROWD_ROWS = Object.freeze([
   { n: 6, s: 0.55, top: 108, pitch: 22 },
 ]);
 const CROWD_CX = 572, STAGGER = 3;
+/** While the order-taker is asking a diner for their order their waiting beats hold off, and for ASKED_HOLD frames
+ *  after: they hold still to give it and then stand there for a breath, rather than yawn at the friend writing it. */
+const ASKED_HOLD = 40;
 /** The sound each hold station makes while its button is down, and the frames between replays (by station). */
 const HOLD_SOUND = { [MIX]: 'stir', [STOVE]: 'sizzle', [OVEN_S]: 'bake' };
 const HOLD_SOUND_EVERY = { [MIX]: 14, [STOVE]: 18, [OVEN_S]: 24 };
@@ -307,6 +314,9 @@ export interface HatchCustomer {
   dishId: string;
   /** True once their plate is in their paws. */
   served: boolean;
+  /** Which way they face: -1, into the kitchen, unless a beat has turned them round (game/waiting.ts); `opts.facing`
+   *  is set from it as they are drawn. */
+  facing: number;
 }
 
 export class KitchenScreen extends Screen {
@@ -424,9 +434,11 @@ export class KitchenScreen extends Screen {
   declare schemes: readonly CardScheme[];
   /** The friends riding along: the order-taker under the hatch and the runner on the floor (cosmetic only). */
   declare friends: KitchenFriends;
+  /** What the line at the hatch does with itself while its plates cook (cosmetic only, game/waiting.ts). */
+  declare beats: WaitingBeats;
 
   constructor(game: Game) {
-    super(game, 'kitchen'); this.seats = []; this.fields = []; this.friends = new KitchenFriends();
+    super(game, 'kitchen'); this.seats = []; this.fields = []; this.friends = new KitchenFriends(); this.beats = new WaitingBeats();
     this.flights = [];
     for (let i = 0; i < FLY_POOL; i++) this.flights.push({ active: false, unit: 0, x0: 0, y0: 0, x1: 0, y1: 0, t: 0, from: 0, dest: -1 });
     this.pt = { x: 0, y: 0 };
@@ -495,7 +507,7 @@ export class KitchenScreen extends Screen {
       for (let t = 0; t < i * 13; t++) player.tick();
       const c: HatchCustomer = {
         rig: critterRig(def, -1), player, pose: idlePoseOf(def), opts: { facing: -1, margin: BUST.margin },
-        bx: 0, by: 0, bw: BUST.w, bh: 0, scale: BUST.scale, paw: { x: 0, y: 0 }, dishId: o.id, served: false,
+        bx: 0, by: 0, bw: BUST.w, bh: 0, scale: BUST.scale, paw: { x: 0, y: 0 }, dishId: o.id, served: false, facing: -1,
       };
       if (i < front) {
         c.bx = BUST.x + (i - Math.max(0, front - 2)) * CROWD_DX; c.by = BUST.y - i * CROWD_DY; c.bh = BUST.h + i * CROWD_DY;
@@ -536,6 +548,9 @@ export class KitchenScreen extends Screen {
       });
     }
     this.friends.enter(run);
+    // and the line fidgets while it waits, everyone free from the start, off the hatch's own stream
+    this.beats.enter(beatSeed(run, HATCH_SALT), this.orders.map((o) => o.customer), HATCH_BEATS);
+    for (let i = 0; i < this.custs.length; i++) this.beats.free(i, this.frame);
     this.fields.length = 0;
   }
 
@@ -568,6 +583,9 @@ export class KitchenScreen extends Screen {
       if (this.serveT >= this.serveEnd) { game.replace('results', { stars: this.dishStars.slice(), score: this.total }); return; }
     }
     this.friends.update(this.custs, this.served);
+    // the line's waiting beats, after the friends: whoever is being asked for their order holds still for it
+    if (this.friends.asking >= 0) this.beats.delay(this.friends.asking, this.frame + ASKED_HOLD);
+    this.beats.update(this.frame, this.custs);
     for (let i = 0; i < this.seats.length; i++) this.pickAnim(this.seats[i]);
   }
 
@@ -879,6 +897,7 @@ export class KitchenScreen extends Screen {
     ctx.save(); ctx.beginPath(); ctx.rect(HATCH.x, HATCH.y, HATCH.w, HATCH.shelfY - HATCH.y); ctx.clip();
     for (let i = this.custs.length - 1; i >= 0; i--) {
       const c = this.custs[i];
+      c.opts.facing = c.facing;
       drawBust(ctx, c.rig, c.player.pose, c.pose, c.bx, c.by, c.bw, c.bh, c.scale, c.opts);
       jointScreen(c.rig, 'handN', c.paw);
       if (c.served) drawHeldPlate(ctx, c.paw.x, c.paw.y, c.dishId, 0, c.scale);
@@ -1077,6 +1096,8 @@ export class KitchenScreen extends Screen {
       seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
       // the friends riding along: who, where, doing what; whose order is being taken; orders taken, dashes run
       ...this.friends.summary(),
+      // what the line at the hatch is doing with itself: each diner's animation and facing, and the beats dealt so far
+      crowdAnims: this.custs.map((c) => c.player.name), crowdFacing: this.custs.map((c) => c.facing), crowdBeats: this.beats.summary(),
     };
   }
 

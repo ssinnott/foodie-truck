@@ -71,10 +71,12 @@ src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (
 src/game/      game (screen stack), run (the week's plan + the day + party + shopping list, the only cross-screen state),
                week (the week in progress, saved between sittings), book (the recipe book: written by the game,
                read only by screens/book), friends (who rides along with the party) + kitchenFriends (what they do
-               in the kitchen: cosmetic), animation, menuinput,
+               in the kitchen: cosmetic), waiting (what a line of diners does while it waits: cosmetic), animation,
+               menuinput,
                ui (the paper/chalk/wood kit), minigame (shared mini-game furniture), maphud, touchpad (the
                on-screen controls, drawn), screens/ (one per screen)
-src/content/   critters/ (the cast: common rig hooks + one file per critter + items + customers), recipes, places
+src/content/   critters/ (the cast: common rig hooks + one file per critter + items + customers + dinerAnims, the
+               diners' waiting beats), recipes, places
 src/net/       signal (room codes over MQTT / BroadcastChannel), mqtt-codec, peer (WebRTC), lockstep, protocol,
                checksum, session
 tools/         server, build, check, capture (screenshots of any screen), sheet (critter contact sheets),
@@ -377,6 +379,19 @@ runner (`enter(run)`, `update(custs, served)`, `draw(ctx, custs)`, `summary()`):
 input, no step, its own `makeRng` stream rather than the gameplay singleton, nothing in `checksumFields` — the same
 contract as the kitchen's flights. The `friends*` playtest scenarios hold all of that from outside.
 
+### `game/waiting.ts` — the line, waiting
+`WaitingBeats` deals a line of diners their waiting beats (docs/GDD.md section 10; the animations are
+`content/critters/dinerAnims.ts`, in every diner's table): `enter(seed, ids, set, rows, xs, first)` once per screen,
+`free(i, f)` when the screen has nothing left for diner `i` to do (the line once their `hello` ends, the hatch from the
+start, results once their `hooray` ends), `delay(i, f)` to hold one off (the hatch, while the order-taker asks them),
+and `update(f, diners)` once a fixed step AFTER the screen has ticked their players and played its own animations on
+them - so the screen always wins: a beat only starts on a diner at `idle`, and one the screen plays something else
+over is simply over. A diner is anything with a `player` and a `facing` (the lane's `Waiter`, the hatch's
+`HatchCustomer`), and a beat turns one round by its `turn` frame events or a chat, and puts them back. Three deals:
+`LINE_BEATS`, `HATCH_BEATS` (nothing all feet, no chat) and `FED_BEATS` (nothing hungry or impatient, a full tummy
+first), each on its own `beatSeed(run, salt)` stream - never the gameplay rng, nothing in `checksumFields`, the
+kitchenFriends contract again. The `waiting*` / `*Beats` playtest scenarios and `anim/beat*` in art-check hold it.
+
 ### Flow
 ```
 title -> select -> stage -> map -> <orchard|pond|coop|dairy|mill|hive|garden> -> map -> ... (run.complete())
@@ -394,7 +409,8 @@ title -> lobby (host key; the party picks critters there) -> stage ...  (online:
   seat's confirm (`game/menuinput.js`) fades to the map. Entered with `run.dayComplete()` it draws the closing
   card instead and its confirm leaves the room (if any) for the title.
 - `screens/line.js`: the queue at `run.lines[run.line]` from `run.customer` on, every diner ordering at once (one
-  bubble per dish, `run.ts dishGroups`); confirm (or 600 frames) fades to the kitchen.
+  bubble per dish, `run.ts dishGroups`) with a `hello` that ends, then fidgeting on the line's waiting beats
+  (`game/waiting.ts`); confirm (or 600 frames) fades to the kitchen.
 - `screens/kitchen.js`: one critter per seat, stations from `content/places.js STATIONS` (fridge, chop, mix, stove, oven,
   plate), steps from `run.order.steps` (every recipe's first is the fridge). It cooks the whole line as one giant
   order (`run.lineOrders()`) at the same time, their steps merged into one run of the counter (`mergeSteps`), the

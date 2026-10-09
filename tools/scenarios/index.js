@@ -29,5 +29,6 @@ import { SCENARIOS as links } from './links.js';
 import { SCENARIOS as garage } from './garage.js';
 import { SCENARIOS as arcade } from './arcade.js';
 import { SCENARIOS as friends } from './friends.js';
+import { SCENARIOS as waiting } from './waiting.js';
 
-export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...beach, ...holt, ...wood, ...terrace, ...kitchen, ...ui, ...pads, ...touch, ...controls, ...stage, ...week, ...book, ...playthrough, ...audio, ...links, ...garage, ...arcade, ...friends };
+export const SCENARIOS = { ...netplay, ...cast, ...map, ...orchard, ...pond, ...coop, ...dairy, ...mill, ...hive, ...garden, ...bramble, ...beach, ...holt, ...wood, ...terrace, ...kitchen, ...ui, ...pads, ...touch, ...controls, ...stage, ...week, ...book, ...playthrough, ...audio, ...links, ...garage, ...arcade, ...friends, ...waiting };

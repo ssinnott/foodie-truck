@@ -120,6 +120,10 @@ mole, so the seal, the same value and also earless, wears a white captain's cap 
 Each carries a `map` look (colours, ears and one cue) that the town map's 10 px queue sprites are drawn from
 (`art/backgrounds/map.ts drawVillagerDiner`).
 `node tools/sheet-capture.js <dir> "" none "who=diners&mode=cast&anims=idle,wave>diners.png"` is the contact sheet.
+Every diner's table is the cast's plus the **waiting beats** (`content/critters/dinerAnims.ts`, §8): what a line does
+with itself while it waits. `node tools/sheet-capture.js <dir> critter=fox none "mode=anims&facing=-1&anims=sniff,tummy,tiptoe,bounce,talk,agree,dance,tap,yawn,full>fox-beats.png"`
+draws them for one diner; look at a big one (the bear), a small one (the hedgehog) and the tall ones (the deer, the
+horse, the bat) before calling a beat done.
 
 ### The truck
 
@@ -314,6 +318,29 @@ effort and success keys. The shared table (`makeCritterAnims`) every critter shi
 
 The lengths of the holds and the tap counts belong to `docs/GDD.md`; the art fits inside them.
 
+**The diners' waiting beats** (`content/critters/dinerAnims.ts`, dealt by `game/waiting.ts`; lengths in
+`docs/GDD.md` section 10). The diners only, so no cast member's table changes. Every beat that is dealt starts and
+ends on idle's first key exactly (`SETTLE`, `anim/beat-ends`): a diner is only dealt one standing at idle, so it eases
+out of the breath over 4–6 frames instead of snapping into its first move, and the idle it hands back to never pops.
+Each sets `ease` on
+every key it authors (hello and hooray reuse the cast's wave and cheer keys as they are), and keeps the paws off the
+face like everything else here; a beat that turns the diner round carries a
+`turn` event on the key it turns on, in pairs (`anim/beat-turns`). Facing left on the lane, *back* is toward the
+diner behind, 62 px away at the front row's scale: nothing reaches further back than a paw's width.
+
+| beat | keys | pattern |
+|---|---|---|
+| hello / hooray | 6 / 8 | the cast's own wave / cheer keys twice over, eased up from `SETTLE` / out of the eat's last key and back down to `SETTLE`, so the line's wave and the empty plate's cheer END (the cast's loop) |
+| sniff | 9 | lean in 6–10°, the head tipped back to put the nose up, `closed`; three sniffs each a `stretch` 1.02–1.03; a `happy` "mmm" |
+| tummy / full | 8 | the near paw ON the belly: the elbow back at the body's middle and the forearm forward onto the egg's rim ([-40, 124]); held out level it read as a paw offered. A 5 px rub up and down; `hurt` and the head down when hungry, `closed` and leaning back when full |
+| tiptoe | 8 | a round paw foot (`pawFoot`) tipped toe-down drops its toe only ~2 px, so the root rises 2 and the rest of the height is `stretch` 1.05–1.06 from the feet: a bigger lift floats the critter off its shadow |
+| bounce | 7 | crouch on a real knee bend (thigh forward, shin back under it: the feet stay put) → air root −7 / −6 with the paws swinging out low; paws up in front read as a shove at the diner ahead, arms up as the cheer |
+| look | 7 | `turn` on the second key and on the sixth, each with a squash 1.05 bump |
+| talk / agree | 4 / 3, loops | both 24 frames and both opening on the breath's arms, torso and root, so a chat turn (48, `anim/chat-turn`) swaps them on matching keys: the near paw up from the breath, out in front of the chest palm up and down again, the mouth `shout` / `happy` alternate keys / a nod |
+| dance | 10 | two bars: rock back with the near knee up and the near paw up in front, down on the beat (squash 1.04), rock forward with the far knee up and the far paw up behind the head, down on the beat; the rock is `root.rot` ±5 about the feet |
+| tap | 11 | a paw on the hip; the near foot LIFTED on a knee bend and stamped four times: a round paw foot turned on its ankle hardly changes shape |
+| yawn | 8 | head back, `shout`, chest out, both arms back and DOWN (nothing like the cheer's arms up) no further back than the diner behind; a `closed` droop, an `overshoot` start awake |
+
 ## 9. Performance
 
 Zero allocation in draw hooks; count shapes, not maths: a critter stays under ~40 cel shapes and ~100 flat rects
@@ -340,6 +367,9 @@ Items covered by `npm run art-check` name their rule; *(eye)* means a human stil
 - [ ] Player spot: fur clears all four `PLAYER_COLORS` by value, shorts by value or hue — `palette/player-spot`, `palette/apron-vs-shorts`.
 - [ ] Height 46..68, 1.9..2.8 heads, paws ≥ 0.33 headR — `proportions/*`.
 - [ ] Every shared animation present, loops loop, cycle lengths in band, idle breathes, walk bobs — `anim/*`.
+- [ ] Diners: every waiting beat present, the dealt ones start and end on idle's first key (the chat's on its arms,
+      in whole loops of a turn), turns in pairs, a favourite the line deals for every diner on the roll —
+      `anim/beats`, `anim/beat-ends`, `anim/chat-turn`, `anim/beat-turns`, `diners/favourite`.
 - [ ] Cast: species unique, furs ≥ 25° hue or ≥ 20 % value apart, aprons apart — `cast/*`.
 - [ ] Nothing crosses the face at rest; raised paws land beside the muzzle — *(eye: anims sheet)*.
 - [ ] Squint: the cast sheet at 0.5× still tells five cast members apart — *(eye)*.

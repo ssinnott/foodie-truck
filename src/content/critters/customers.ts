@@ -5,7 +5,8 @@
 // short horns and a beard - in muted village palettes that clear the hatch's plum wall (#4A3038, L .22) by value.
 // They wear the off-duty apron (critterRig(def, -1)): no seat, no player colour.
 import { celPoly } from '../../lib/art/shading.ts';
-import { critterBuild, makeCritterAnims, muzzleGeom } from './common.ts';
+import { critterBuild, muzzleGeom } from './common.ts';
+import { makeDinerAnims } from './dinerAnims.ts';
 import type { RigAccessory } from '../../lib/art/rig.ts';
 import { VILLAGERS } from './villagers.ts';
 
@@ -38,7 +39,7 @@ export const owl = {
     ears: 'point', earTip: true, earR: 0.34, earPos: { near: { x: 0.26, y: -0.94 }, far: { x: -0.1, y: -0.92 } },
     face: { eyeY: -1, whitesAlways: true }, muzzle: 0.6, nose: false, markings: owlMarkings, tail: 'stub',
   }),
-  anims: makeCritterAnims(),
+  anims: makeDinerAnims(),
 };
 
 // ---------------------------------------------------------------- the otter
@@ -51,7 +52,7 @@ export const otter = {
     ears: 'small', earPos: { near: { x: 0.55, y: -0.7 }, far: { x: -0.5, y: -0.66 } },
     muzzle: 1.1, tail: 'thin', tailHex: OTTER_DARK,   // whiskers omitted: nothing under 2 px
   }),
-  anims: makeCritterAnims(),
+  anims: makeDinerAnims(),
 };
 
 // ---------------------------------------------------------------- the goat
@@ -76,7 +77,7 @@ export const goat = {
     muzzle: 1.05, markings: goatBeard, tail: 'stub',
     accessories: [horns],
   }),
-  anims: makeCritterAnims(),
+  anims: makeDinerAnims(),
 };
 
 /** Every diner by id: these three, then the village of villagers.ts. The ids and their order are diners.ts's. */
