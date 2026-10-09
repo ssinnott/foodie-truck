@@ -360,6 +360,16 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   hive_shlup: (c, d, t, o) => { noise(c, d, t, { dur: 0.12, vol: 0.16 * o.v, type: 'bandpass', f0: 500 * o.p, f1: 2200 * o.p, q: 2, attack: 0.05 }); return osc(c, d, t + 0.1, { type: 'sine', f0: 320 * o.p, f1: 980 * o.p, glide: 0.05, dur: 0.09, vol: 0.2 * o.v, attack: 0.002 }); },
   /** The cow's tail across the face: one quick whoosh of air, falling. */
   swish: (c, d, t, o) => whoosh(c, d, t, { v: o.v, p: o.p, f0: 1800, f1: 400, dur: 0.16, vol: 0.2 }),
+  /** The cow turns her head round to the milker: a low, soft moo with a wobble in it. */
+  dairy_moo: (c, d, t, o) => { osc(c, d, t, { type: 'sawtooth', f0: 125 * o.p, f1: 104 * o.p, dur: 0.5, vol: 0.09 * o.v, attack: 0.08, hold: 0.18, lp: 650, vib: { rate: 5, depth: 18 } }); return osc(c, d, t, { type: 'triangle', f0: 250 * o.p, f1: 206 * o.p, dur: 0.45, vol: 0.05 * o.v, attack: 0.1, hold: 0.12 }); },
+  /** The lick up the face: a wet slurp of noise sliding up, a wobbling sine under it and a little plop off the end. */
+  dairy_shlurp: (c, d, t, o) => { noise(c, d, t, { dur: 0.24, vol: 0.18 * o.v, type: 'bandpass', f0: 500 * o.p, f1: 2600 * o.p, q: 2.5, attack: 0.02 }); osc(c, d, t + 0.02, { type: 'sine', f0: 200 * o.p, f1: 640 * o.p, dur: 0.2, vol: 0.09 * o.v, attack: 0.01, vib: { rate: 26, depth: 60 } }); return plop(c, d, t + 0.2, { v: o.v * 0.7, p: o.p * 1.3, f: 520, vol: 0.16, splash: 0.06 }); },
+  /** The cowlick springs back up: a toy spring, a sine that leaps and then wobbles. */
+  dairy_boing: (c, d, t, o) => { osc(c, d, t, { type: 'sine', f0: 170 * o.p, f1: 420 * o.p, glide: 0.08, dur: 0.32, vol: 0.12 * o.v, attack: 0.004, vib: { rate: 16, depth: 90 } }); return osc(c, d, t, { type: 'triangle', f0: 340 * o.p, f1: 840 * o.p, glide: 0.08, dur: 0.2, vol: 0.03 * o.v, attack: 0.004, vib: { rate: 16, depth: 90 } }); },
+  /** The tail lands: a short falling whoosh and the slap of a tuft across a face. */
+  dairy_thwap: (c, d, t, o) => { whoosh(c, d, t, { v: o.v, p: o.p, f0: 2600, f1: 500, dur: 0.09, vol: 0.22, q: 1.2 }); noise(c, d, t + 0.08, { dur: 0.04, vol: 0.3 * o.v, type: 'highpass', f0: 1800 * o.p, attack: 0.001 }); return thump(c, d, t + 0.08, { v: o.v, p: o.p, f: 170, lp: 1600, dur: 0.08, vol: 0.28 }); },
+  /** Down on its bottom in the straw: a soft thud and the straw's rustle. */
+  dairy_flump: (c, d, t, o) => { thump(c, d, t, { v: o.v, p: o.p, f: 95, lp: 700, dur: 0.12, vol: 0.3 }); return noise(c, d, t + 0.02, { dur: 0.18, vol: 0.08 * o.v, type: 'highpass', f0: 2600 * o.p, f1: 3600 * o.p, attack: 0.01 }); },
   /** The broody hen's peck: one hard high knock, dry, and a short squawk after it. */
   peck: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1500, dur: 0.035, vol: 0.26 }); return osc(c, d, t + 0.05, { type: 'square', f0: 900 * o.p, f1: 1300 * o.p, glide: 0.05, dur: 0.09, vol: 0.06 * o.v, attack: 0.004, lp: 2400 }); },
   /** The hen hops off the nest: two clucks, a wobble of pitch on each, and a flap of noise. */

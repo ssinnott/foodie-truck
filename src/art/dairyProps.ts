@@ -6,9 +6,10 @@
 // one of them before its sorted pass.
 //
 // The cow is a PROP, not a rig: it has no paper-doll, no pose table and no secondary chains. Everything it does is
-// four numbers the screen hands in (`ear`, `tail`, `chew`, `cock`) plus the warning colour, exactly the way
-// art/hens.js takes the rooster's comb colour - so this file never decides WHEN the cow is about to kick, only
-// what that looks like. That keeps the reserved SIGNAL.hot out of the art module and in the one place that owns it.
+// a handful of numbers the screen hands in (`ear`, `tail` and its `lag`, `chew`, `cock`, `look`) plus the warning
+// colour, exactly the way art/hens.js takes the rooster's comb colour - so this file never decides WHEN the cow
+// swings her tail or turns her head round to lick the milker (game/screens/dairyGags.ts does), only what that looks
+// like. That keeps the reserved SIGNAL.hot out of the art module and in the one place that owns it.
 import { UI, PLAYER_COLORS, PLUM } from '../constants.ts';
 import { mix } from './palettes.ts';
 import { pathRoundedPoly, pathEllipse } from '../lib/art/shapes.ts';
@@ -105,6 +106,29 @@ const PATCHES = [
 ];
 /** The warning mark above the rump: an inked lozenge with a bar and a dot in the colour the screen hands in. */
 const MARK_X = 26, MARK_Y = -104;
+/**
+ * The tail: two inked segments off the rump's corner (TAIL_X, TAIL_Y), TAIL_UP and TAIL_LO long, each aimed by an
+ * angle in degrees measured from hanging straight down, positive toward the cow's rear (0 down the thigh, 90 out
+ * behind, 180 straight up, past 180 over the back). TAIL_REST / TAIL_LAG are the hang it has always had, the
+ * tuft just behind the hock: (36, -62) and (39, -34), the numbers the old fixed drawing used.
+ */
+export const TAIL_X = 30, TAIL_Y = -86, TAIL_UP = 25, TAIL_LO = 28, TAIL_REST = 14, TAIL_LAG = -8;
+/**
+ * The head turned round (the cowlick, game/screens/dairyGags.ts): the head is drawn MIRRORED about its neck joint
+ * (HEAD_JX, HEAD_JY - where the neck quad meets the poll and the throat) and slid TURN_DX / TURN_DY, which brings
+ * it round onto the near flank with its muzzle pointing back at the milker. A side view cannot rotate a head on
+ * its neck, so the turn is a flip that passes through a half-width head on the way: `look` 0..1, the head never
+ * thinner than half its width (a sliver for a frame read as a glitch, a half-width head reads as three quarters).
+ */
+const HEAD_JX = -46, HEAD_JY = -68, TURN_DX = 9, TURN_DY = 8;
+/** The neck bent round toward the viewer, the same four corners as NECK: the head end swung back under the withers. */
+const NECK_TURNED = [-26, -90, -44, -80, -40, -50, -22, -50];
+/** The neck this frame, lerped between the two in place (no array per call). */
+const NECK_NOW = [0, 0, 0, 0, 0, 0, 0, 0];
+/** The mouth: the lip line under the muzzle, in the head's own (facing-forward) coordinates. */
+const MOUTH_X = -81, MOUTH_Y = -51;
+/** Where the turned head's mouth lands, cow-local (look = 1): the screen roots the tongue there (game/screens/dairyGags.ts). */
+export const TURN_MOUTH_X = 2 * HEAD_JX - MOUTH_X + TURN_DX, TURN_MOUTH_Y = MOUTH_Y + TURN_DY;
 
 /** One stroked-then-filled path: the ink shows 1 px outside the fill (the same helper art/hens.js uses). */
 function ink(ctx, fill) { ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.fillStyle = fill; ctx.fill(); }
@@ -127,17 +151,19 @@ function cowLeg(ctx, x, foot, hex, hock) {
  * A cow with its feet at (x, y).
  * @param {number} kind 0 or 1: which patch layout, so four cows in a row are not one stamp four times
  * @param {number} ear 0 calm .. 1 flat back
- * @param {number} tail 0 hanging .. 1 lifted
+ * @param {number} tail the tail's swing in degrees (see TAIL_X): TAIL_REST hangs it down the thigh
  * @param {number} chew 0 or 1: the jaw beat (the head drops 1 px)
  * @param {number} cock 0 .. 1: the near hind leg drawn up, and the warning mark's plate filled solid. The mark is
  *   the half of this a player can actually read - see the note on the leg in drawCow
  * @param {string|null} mark the warning mark's colour above the rump, or null for none (the screen owns SIGNAL.hot)
+ * @param {number} look 0 .. 1: the head turned round to the milker (see HEAD_JX); at 1 the eye is half-lidded
+ * @param {number} lag degrees the tail's lower half trails its upper half by: TAIL_LAG at rest, a whip's bend in a swing
  */
-export function drawCow(ctx, x, y, kind, ear, tail, chew, cock, mark) {
+export function drawCow(ctx, x, y, kind, ear, tail, chew, cock, mark, look = 0, lag = TAIL_LAG) {
   const k = kind & 1, base = k ? COW.patch : COW.hide, spot = k ? COW.hide : COW.patch;
   const baseSh = k ? PATCH_SH : HIDE_SH, baseLit = k ? PATCH_LIT : HIDE_LIT;
   ctx.save(); ctx.translate(R(x), R(y));
-  drawTail(ctx, tail, base);
+  drawTail(ctx, tail, lag, base);
   cowLeg(ctx, LEG_X[0], 0, HIDE_FAR, HOCK_F); cowLeg(ctx, LEG_X[2], 0, HIDE_FAR, HOCK_F);
   // the barrel: one inked contour, then everything inside it clipped, so no patch carries a line (ART_STYLE 0.2)
   pathRoundedPoly(ctx, BODY, 9);
@@ -161,21 +187,37 @@ export function drawCow(ctx, x, y, kind, ear, tail, chew, cock, mark) {
   // so. Kept because the sliver is honest motion, not because it is a tell a player can be asked to read.
   cowLeg(ctx, LEG_X[3] + R(cock * 6), -R(cock * 16), COW.hide, HOCK_N);
   cowLeg(ctx, LEG_X[1], 0, COW.hide, HOCK_N);
-  drawHead(ctx, ear, chew, base, spot);
+  drawHead(ctx, ear, chew, base, spot, look);
   if (mark) drawMark(ctx, mark, cock);
   ctx.restore();
 }
 
+/**
+ * Enter the head's own space: the identity for a cow looking ahead, the flip about the neck joint as it turns
+ * round (HEAD_JX). Every head part is drawn inside this, so the turned head is the same head, ink and all.
+ */
+function headSpace(ctx, look) {
+  ctx.save();
+  if (look <= 0) return;
+  const sx = look < 0.5 ? 1 - look : -look;
+  ctx.translate(HEAD_JX + TURN_DX * look, HEAD_JY + TURN_DY * look); ctx.scale(sx, 1); ctx.translate(-HEAD_JX, -HEAD_JY);
+}
+
 /** The head and neck as one inked contour, with the ear behind it and the horns on top. */
-function drawHead(ctx, ear, chew, base, spot) {
+function drawHead(ctx, ear, chew, base, spot, look) {
   ctx.save(); ctx.translate(0, chew);
   // The horns are rooted INSIDE the poll and the head is drawn over their base, so they grow out of the skull.
   // Two plain rects at -95 were tried first and the capture read them as a pair of cream luggage tags stuck to the
   // withers: a horn has to TAPER and lean out, or at 1x it is a box. Each is a four-point wedge, 5 px at the skull
   // and 3 at the tip - over the 2 px floor (ART_STYLE 0.8) and no more than a 12 px mark.
+  headSpace(ctx, look);
   pathRoundedPoly(ctx, HORN_N, 1); ink(ctx, COW.horn);
   pathRoundedPoly(ctx, HORN_F, 1); ink(ctx, HORN_F_HEX);
-  pathRoundedPoly(ctx, NECK, 4); ink(ctx, base);
+  ctx.restore();
+  // the neck stays in the cow's own space and bends: its head end swings round under the withers as the head turns
+  for (let i = 0; i < 8; i++) NECK_NOW[i] = NECK[i] + (NECK_TURNED[i] - NECK[i]) * look;
+  pathRoundedPoly(ctx, NECK_NOW, 4); ink(ctx, base);
+  headSpace(ctx, look);
   pathRoundedPoly(ctx, HEAD, 5); ink(ctx, base);
   ctx.save(); pathRoundedPoly(ctx, HEAD, 5); ctx.clip();
   ctx.fillStyle = spot; ctx.beginPath(); ctx.ellipse(-68, -70, 6, 14, 0, 0, TAU); ctx.fill();      // the blaze
@@ -184,7 +226,10 @@ function drawHead(ctx, ear, chew, base, spot) {
   ctx.restore();
   ctx.fillStyle = COW.hoof; ctx.fillRect(-84, -60, 4, 4);                                     // nostril
   ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(-66, -70, 3.6, 0, TAU); ctx.fill();           // eye
-  ctx.fillStyle = MILK; ctx.fillRect(-67, -72, 2, 2);
+  // fully round, she EYES the milker: the top half of the eye under a lid (the blaze it sits in) and a 2 px ink lid
+  // line - a sidelong look with something on its mind, where the round eye and its catchlight are only a cow looking
+  if (look >= 1) { ctx.fillStyle = spot; ctx.fillRect(-70, -75, 8, 5); ctx.fillStyle = INK; ctx.fillRect(-71, -70, 10, 2); }
+  else { ctx.fillStyle = MILK; ctx.fillRect(-67, -72, 2, 2); }
   // The NEAR ear, drawn over the cheek rather than behind the skull. A critter's ears go behind the head
   // (ART_STYLE 0.3) because a critter's ears stand above it; a cow's stick out sideways from just behind the eye,
   // and drawn behind this head the whole ear disappeared under the jaw and the neck - which cost the telegraph
@@ -192,6 +237,7 @@ function drawHead(ctx, ear, chew, base, spot) {
   ctx.save(); ctx.translate(EAR_X, EAR_Y); ctx.rotate((EAR_CALM + (EAR_BACK - EAR_CALM) * ear) * DEG);
   pathRoundedPoly(ctx, EAR, 3); ink(ctx, HIDE_SH);
   ctx.fillStyle = COW.muzzle; ctx.beginPath(); ctx.ellipse(12, -1, 6, 3, 0, 0, TAU); ctx.fill();   // inner ear, no line
+  ctx.restore();
   ctx.restore();
   ctx.restore();
 }
@@ -207,14 +253,20 @@ function drawUdder(ctx) {
   ctx.fillStyle = COW.udder; ctx.fillRect(UDDER_X - 8, UDDER_Y + 5, 4, 11); ctx.fillRect(UDDER_X + 2, UDDER_Y + 5, 4, 11);
 }
 
-/** The tail: two inked segments off the rump with a tuft, hanging at rest and swung up over the back when cross. */
-function drawTail(ctx, t, base) {
-  const midX = 36 + t * 8, midY = -62 - t * 20, endX = 39 + t * 12, endY = -34 - t * 58;
+/**
+ * The tail: two inked segments off the rump with a tuft, hanging down the thigh at rest. `a` aims the upper half
+ * and `lag` bends the lower half off it (degrees, see TAIL_X), so a swing can trail its tuft like a whip; the tuft
+ * is an inked ellipse laid along the lower half, so it points wherever the tail does.
+ */
+function drawTail(ctx, a, lag, base) {
+  const b = (a + lag) * DEG;
+  const midX = TAIL_X + Math.sin(a * DEG) * TAIL_UP, midY = TAIL_Y + Math.cos(a * DEG) * TAIL_UP;
+  const endX = midX + Math.sin(b) * TAIL_LO, endY = midY + Math.cos(b) * TAIL_LO;
   ctx.strokeStyle = INK; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.beginPath(); ctx.moveTo(30, -86); ctx.lineTo(midX, midY); ctx.lineTo(endX, endY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(TAIL_X, TAIL_Y); ctx.lineTo(midX, midY); ctx.lineTo(endX, endY); ctx.stroke();
   ctx.strokeStyle = base; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.moveTo(30, -86); ctx.lineTo(midX, midY); ctx.lineTo(endX, endY); ctx.stroke();
-  pathEllipse(ctx, endX, endY + 2, 5, 7); ink(ctx, HIDE_SH);
+  ctx.beginPath(); ctx.moveTo(TAIL_X, TAIL_Y); ctx.lineTo(midX, midY); ctx.lineTo(endX, endY); ctx.stroke();
+  pathEllipse(ctx, endX + Math.sin(b) * 2, endY + Math.cos(b) * 2, 5, 7, -b); ink(ctx, HIDE_SH);
 }
 
 /**
@@ -243,9 +295,9 @@ export const SIT_ROOT_Y = 4;
 /** The chibi's hip is only 11..16 px off the ground, so a milking stool is a low one; each seat's is cut to its rig. */
 export const STOOL_MIN = 6;
 /**
- * The scene's own beats, an AnimPlayer overlay on top of the shared table (the pond's POND_ANIMS pattern). Every
- * key sets BOTH legs and the root, because a missing key resolves to DEFAULT_POSE and a seated critter would stand
- * up mid-beat.
+ * The scene's own beats, an AnimPlayer overlay on top of the shared table (the pond's POND_ANIMS pattern), and the
+ * two jokes' beats on top of those (art/dairyGags.ts DAIRY_SEAT_ANIMS). Every key sets BOTH legs and the root,
+ * because a missing key resolves to DEFAULT_POSE and a seated critter would stand up mid-beat.
  *
  * SIT is the milking stance: the thigh just past horizontal (88) with the shin folded back under it (a 26 degree
  * total) puts the knees up and the feet on the floor about 9 px in front of the stool, which is what sitting on a
@@ -274,20 +326,11 @@ export const STOOL_MIN = 6;
  * to magenta and counting), the silhouette is open, and the pump beat still rocks the braced paw against the
  * milking one, so which paw is down goes on saying which button just landed.
  */
-const SIT = { legR: [88, -62], legL: [76, -52] };
+export const SIT = Object.freeze({ legR: [88, -62], legL: [76, -52] });
 export const DAIRY_ANIMS = Object.freeze({
   milkIdle: { loop: true, frames: [
     F(26, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [0, SIT_ROOT_Y], torso: 4, head: 8, face: 'happy' }),
     F(26, { ...SIT, armR: [128, 2], armL: [-27, -10], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 10, face: 'happy' }),
-  ] },
-  /**
-   * The tail across the face (the byre's joke, game/screens/dairy.ts): the milker is rocked back on the stool with
-   * the head knocked over and `dazed`, then sits there blinking it off. Both paws stay where they were.
-   */
-  swished: { loop: false, frames: [
-    F(4, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [3, SIT_ROOT_Y], torso: 12, head: 22, squash: 0.96, face: 'dazed' }, { ease: 'out' }),
-    F(8, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [2, SIT_ROOT_Y], torso: 10, head: 18, face: 'dazed' }),
-    F(8, { ...SIT, armR: [126, 0], armL: [-30, -12], root: [0, SIT_ROOT_Y], torso: 6, head: 10, face: 'dazed' }, { ease: 'inout' }),
   ] },
   pumpR: { loop: false, frames: [
     F(4, { ...SIT, armR: [112, 8], armL: [-48, -18], root: [0, SIT_ROOT_Y + 1], torso: 6, head: 9, face: 'happy' }, { ease: 'out' }),
