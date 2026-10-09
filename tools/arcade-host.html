@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<!-- A stand-in for the arcade (github.com/ssinnott/arcade), for tools/scenarios/arcade.js. It frames ?src= under the
+     name in ?name= and keeps every message the frame posts it in window.__got. Served from localhost it is on the
+     game's own origin; served from 127.0.0.1 it is another one, which is the other half of what the game checks. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>arcade stand-in</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; }
+  iframe { display: block; border: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<script>
+  window.__got = [];
+  window.addEventListener('message', function (e) { window.__got.push({ origin: e.origin, data: e.data }); });
+  var q = new URLSearchParams(location.search);
+  var frame = document.createElement('iframe');
+  frame.name = q.get('name') || '';
+  frame.src = q.get('src') || 'about:blank';
+  document.body.appendChild(frame);
+</script>
+</body>
+</html>
