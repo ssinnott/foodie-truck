@@ -673,8 +673,9 @@ export const F = (dur: number, spec: PoseSpec, extra?: Partial<Frame>): Frame =>
 // lay across the belly as a horizontal bar and split the apron - the player's own colour - into two slivers; the
 // arm root itself is now out at the shoulder (CHIBI.shoulderX), so 14 degrees of upper and 12 of elbow is all it
 // takes to carry the whole limb past the bib's edge. The far arm hangs back behind the torso: only its paw shows,
-// past the hip, which is where a far paw belongs (docs/ART_STYLE.md sections 0.4, 0.7).
-const REST = { armR: [14, 12], armL: [-18, 8] };
+// past the hip, which is where a far paw belongs (docs/ART_STYLE.md sections 0.4, 0.7). Exported for the diners'
+// waiting beats (dinerAnims.ts), which start and end on it.
+export const REST = { armR: [14, 12], armL: [-18, 8] };
 // CARRY: the near paw holds the basket out BESIDE the hip, clear of the torso silhouette, and the off paw hangs at
 // the far side. Both paws forward (the old [56, 54]) laid two forearms across the chest and the basket over the
 // belly, and between them the seat colour had nowhere left to show. The near arm's angles are untouched: the

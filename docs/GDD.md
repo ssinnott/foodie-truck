@@ -70,7 +70,10 @@ live in `src/content/critters/`. Customers are NPC critters built with the same 
 raccoon, a cat, a dog, a hen, a duck, a mole, a tortoise, a beaver, a horse, a goose, a robin, a bat, a boar, a
 kingfisher, a seal and a puffin (`content/critters/villagers.ts`, their markings and headgear in `villagerParts.ts`).
 Each is its own silhouette (ears, tail, build), fur palette, face marking and at most one piece of headgear, so a line
-reads as a crowd. `content/critters/diners.ts` is the roll of ids, in the order the day plan deals them: append, never
+reads as a crowd - and none of them stands still in it: while a line waits, every diner fidgets in character (the
+waiting beats, section 10), each with a favourite taken from its role - the gossip and the chatterbox chat to the
+neighbour, the grumbler and the bossy one tap a foot, the foodie sniffs at the hatch, the big appetite rubs its tummy,
+the night shift yawns (`content/critters/dinerAnims.ts FAVOURITE`). `content/critters/diners.ts` is the roll of ids, in the order the day plan deals them: append, never
 reorder, and growing it moves `PROTOCOL_VERSION`, because the plan deals from the whole roll and a longer one lays a
 different week out from the same seed. Every cast member wears an apron in their seat's player colour.
 
@@ -493,6 +496,14 @@ their own (`makeRng`, salted from the run's seed and the day), never the gamepla
 every peer draws the same runner; and nothing about either is in `checksumFields`. The order-taker's beats (listen,
 write, nod) are laid over the cast's own table (`AnimPlayer.setOverlay`), so no cast member's animations change.
 
+**The line waits at the hatch** (`game/waiting.ts`, the hatch's deal): while the order cooks, every diner whose plate
+has not come fidgets on the waiting beats of section 10 that read in a bust - a sniff at the cooking, a hungry tummy,
+up on the toes to see in, a bounce, a look back down the line, a yawn; nothing that is all feet (the dance, the foot
+tap) and no chat, the busts being crowded in together. Whoever the order-taker is asking holds still to give their
+order - the wave puts their paw up over whatever they were doing - and stands a breath (40 frames) after it before
+fidgeting again; a diner with their plate in their paws holds it, and fidgets no more. Cosmetic, on its own stream,
+like the friends.
+
 Nothing can burn or be missed: every completed step scores its full 2, so stars = round(total / max × 3) is always
 3 for a served dish (minimum 1 by the formula).
 The hungry one, when seated, gets a `bite` beat on a seeded 1-in-6 chance each time a step completes: a crumb burst
@@ -506,7 +517,10 @@ made either way so every peer draws the same day.
 The whole line eating at once on the lane the line screen stood on, everyone where they stood, holding out the plate
 the kitchen handed them through the hatch, out along the front row and up the lane to the row behind it: on a
 stagger, each lifts it for a bite three times, the dish on it going a bite at a time until the plate is empty and put
-down for a cheer, each diner's 1–3 stars pop up over their head (smaller, and a little higher, for the
+down for a cheer - `hooray`, out of the last bite into the cast's cheer twice over and the paws back down, 78 frames -
+after which the fed line sits back and enjoys it on the waiting beats of section 10, its own deal: everybody pats a
+full tummy first (`full`, 68 frames), and then a little dance, a bounce, a look back down the line, a chat with the neighbour or a yawn, nothing
+hungry and nothing impatient. Each diner's 1–3 stars pop up over their head (smaller, and a little higher, for the
 rows further up the lane), and one receipt reads the order by dish - how many of each went out, with its stars -
 then the tip in coins and a stamp for the line as a whole (`DELICIOUS` / `TASTY` / `EDIBLE`, from the average),
 with the tip's coins in stacks of ten beside it, then `PRESS Z` (auto-return after 600 frames) →
@@ -594,13 +608,31 @@ player has bound M to something, while a rebind is listening, and while a host k
 - **line**: the truck pulled up at the giant line on the dusk lane, turned so its hatch faces the diners (one rig
   each, front first, the crew's heads in the windows). The front row stands along the lane at full size; past six
   the line turns back on itself in smaller rows up the verge (`line.ts queueSpot`: an S winding away, room for
-  eighteen). The whole line orders at once: the diners wave in turn, front to back, and each joins the bubble of the
+  eighteen). The whole line orders at once: the diners wave in turn, front to back (`hello`: the paw up, the cast's
+  wave twice and the paw back down, 64 frames - a wave that ends), and each joins the bubble of the
   dish they want - one paper bubble per dish (`run.ts dishGroups`), its band counting them in (`3 X MUSHROOM
   SOUP`), its words the dish's own line, and under them whoever wants theirs different (`BRUIN: A BIG ONE!`). The
   bubbles stack up the sky, the dish asked for nearest the front lowest, and every diner has a tail from their
   dish's bubble ending in a paper bead over their head with the dish's picture in it, so a tail that comes out from
   under a lower bubble still says plainly what its diner wants. CONFIRM (or 600 frames) takes the whole order into
   the kitchen. The sign over the scene says `9 IN THE LINE - STATION ROAD`.
+
+  **The waiting beats** (`game/waiting.ts`; the animations are `content/critters/dinerAnims.ts`, in every diner's
+  table): once a diner's hello is over they fidget while the line waits, each on their own. Their first beat comes
+  10..90 frames after the hello and the next after every rest of 60..200 frames, dealt from: a SNIFF at the truck (67
+  frames: lean in, nose up, eyes shut, three sniffs, mmm), a hungry TUMMY (68: a paw rubbing it, the sad brows of a
+  long wait, a hopeful look up), up on the TIPTOEs to see over the line (65), an excited BOUNCE (45: two little hops),
+  a LOOK back down the line (61: they turn round for it and back again), a little DANCE (62: two bars, rocking from
+  foot to foot), a TAPped foot with a paw on the hip (65), a YAWN (83), and a CHAT: dealt to a diner with a neighbour in
+  the same row of the line who is resting too, it turns whichever of the two stands on the left round to face the
+  other, and they take two or three turns of 48 frames, one talking (`talk`: the mouth going, a paw out with the
+  words) while the other agrees (`agree`: a nod and a smile); with nobody free to talk to they do something else on
+  their own. Every beat eases in from the breath and settles back onto it, and a chat's turns swap on matching keys,
+  so nobody ever snaps into or out of one. A diner's FAVOURITE (section 2) is dealt three times as often as any other beat. A diner whose feet
+  leave the ground takes their bead up with them, so the tallest ears never jump into its point. None of it is
+  simulation: the deal is a stream of its own (`makeRng`, salted from the run's seed, day and line and from the
+  screen), never the gameplay rng, stepped on the fixed step so every peer sees the same line do the same things,
+  and nothing about it is in `checksumFields`.
 - **lobby**: HOST / JOIN, the host key large, invite link, four seats with busts, ready stamps, `STARTING!`; drives
   `net/session.js`; hands off to `select`-style picking on the same screen, then the host starts the match on the
   day board, so an online party reads the day's plan together and opens the truck.

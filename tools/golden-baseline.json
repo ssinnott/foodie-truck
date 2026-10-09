@@ -1,14 +1,14 @@
 {
   "pure": "42c9f06c",
-  "total": "ac136381",
+  "total": "20f3ee4e",
   "subjects": {
     "critter:barley": "5f54d7fb",
     "critter:chicory": "a7bdedba",
     "critter:cress": "bd92c585",
     "critter:rowan": "b22076ef",
     "critter:sorrel": "643bc564",
-    "customer:goat": "9c957aad",
-    "customer:otter": "9085aa41",
-    "customer:owl": "01b8e9f4"
+    "customer:goat": "e0bf2e8e",
+    "customer:otter": "3f2e8f93",
+    "customer:owl": "f01c1884"
   }
 }

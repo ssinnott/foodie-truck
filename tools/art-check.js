@@ -11,6 +11,9 @@ import { CUSTOMERS, getCustomer } from '../src/content/critters/customers.ts';
 import { DINERS } from '../src/content/critters/diners.ts';
 import { PLAYER_COLORS, PLAYER_LABELS, OFF_DUTY_APRON } from '../src/constants.ts';
 import { PAINTS, TRUCK } from '../src/art/truck.ts';
+import { BEAT_ANIMS, FAVOURITE } from '../src/content/critters/dinerAnims.ts';
+import { LINE_BEATS, HATCH_BEATS, FED_BEATS, CHAT_TURN } from '../src/game/waiting.ts';
+import { makePose } from '../src/lib/art/poses.ts';
 
 const notes = process.argv.includes('--notes');
 const findings = [];
@@ -140,6 +143,44 @@ for (let i = 0; i < dinerIds.length; i++) for (let j = i + 1; j < dinerIds.lengt
   if (a.name === b.name) err(S, 'diners/name', 'two diners share a name');
   if (hueDelta(pa.skin, pb.skin) < 25 && relDiff(pa.skin, pb.skin) < 0.05) err(S, 'diners/fur', `fur ${pa.skin} vs ${pb.skin}: hue gap ${hueDelta(pa.skin, pb.skin).toFixed(0)} < 25 and relDiff ${relDiff(pa.skin, pb.skin).toFixed(2)} < 0.05`);
 }
+
+// ---- the diners' waiting beats (content/critters/dinerAnims.ts, dealt by game/waiting.ts) ----
+// Every diner ships every beat, so whoever is dealt one can play it. A beat that ends (all but the chat's two, which
+// the chat stops) must end: game/waiting.ts waits on `done`, and its last key must be idle's first breath exactly, or
+// the idle it hands back to pops - and a beat that is dealt (always to a diner at idle) must START on it too, or it
+// snaps into its first move. The chat's two loop instead, open on the breath's arms, torso and root, and a chat turn
+// is a whole number of both loops, so the talker and the listener swap on matching keys. A beat that turns the diner
+// round with `turn` events must turn them back (an even number). And every diner on the roll has a favourite the line
+// can deal, and no favourite names a diner off it.
+const CHAT_ANIMS = ['talk', 'agree'];
+const DEALT = new Set([...LINE_BEATS, ...HATCH_BEATS, ...FED_BEATS].flatMap((b) => (b === 'chat' ? CHAT_ANIMS : [b])));
+const poseKey = (pose) => JSON.stringify(makePose(pose));
+const bodyKey = (pose) => { const q = makePose(pose); return JSON.stringify([q.armR, q.armL, q.torso, q.root]); };
+for (const id of dinerIds) {
+  const c = CUSTOMERS[id], S = 'diner:' + id, A = c.anims || {};
+  const breath = A.idle && A.idle.frames && A.idle.frames[0] ? poseKey(A.idle.frames[0].pose) : '';
+  for (const n of BEAT_ANIMS) {
+    const a = A[n];
+    if (!a || !a.frames || !a.frames.length) { err(S, 'anim/beats', `missing waiting beat ${n}`); continue; }
+    a.frames.forEach((f, i) => { if (!f.pose || typeof f.pose !== 'object') err(S, 'anim/frame', `${n} #${i} has no pose`); if (!(f.dur >= 1)) err(S, 'anim/frame', `${n} #${i} dur ${f.dur}`); });
+    if (CHAT_ANIMS.includes(n)) {
+      if (!a.loop) err(S, 'anim/beat-ends', `${n} must loop: the chat stops it`);
+      if (A.idle && bodyKey(a.frames[0].pose) !== bodyKey(A.idle.frames[0].pose)) err(S, 'anim/beat-ends', `${n} does not open on the breath's arms, torso and root: the chat's swaps would pop`);
+      if (CHAT_TURN % animLen(a)) err(S, 'anim/chat-turn', `${n} is ${animLen(a)} frames, which a chat turn of ${CHAT_TURN} does not divide: the swaps would land mid-loop`);
+      continue;
+    }
+    if (a.loop) err(S, 'anim/beat-ends', `${n} loops: a dealt beat has to end`);
+    if (poseKey(a.frames[a.frames.length - 1].pose) !== breath) err(S, 'anim/beat-ends', `${n} does not end on idle's first key: the idle it hands back to would pop`);
+    if (DEALT.has(n) && poseKey(a.frames[0].pose) !== breath) err(S, 'anim/beat-ends', `${n} does not start on idle's first key: it would snap into its first move as it is dealt`);
+    const turns = a.frames.filter((f) => f.event === 'turn').length;
+    if (turns % 2) err(S, 'anim/beat-turns', `${n} turns the diner round ${turns} times and leaves them facing the wrong way`);
+  }
+}
+for (const id of DINERS) {
+  if (!FAVOURITE[id]) err('diner:' + id, 'diners/favourite', 'has no favourite beat (dinerAnims.ts FAVOURITE)');
+  else if (!LINE_BEATS.includes(FAVOURITE[id])) err('diner:' + id, 'diners/favourite', `favourite ${FAVOURITE[id]} is not a beat the line deals`);
+}
+for (const id of Object.keys(FAVOURITE)) if (!DINERS.includes(id)) err('diner:' + id, 'diners/favourite', 'has a favourite beat but is not on the roll in diners.ts');
 
 // ---- the truck's paint jobs (art/truck.ts PAINTS, sold by the garage) ----
 // The crew's heads break out of the windows onto the body, so every paint has to clear the dusk glass the way the

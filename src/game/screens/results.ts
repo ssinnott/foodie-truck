@@ -12,8 +12,10 @@
 //
 // The crew in the windows throw `cheer` when the stars land, each seat a few frames behind the last so four critters
 // never move as one body - and the friends riding along (game/friends.ts) after them, on the same stagger - and each
-// diner cheers once their plate is empty. Params: { stars: number[] } (one per
-// dish, front of the line first; a bare number is one dish); a bare ?skipTo=results gives every diner two stars.
+// diner cheers once their plate is empty (`hooray`: twice, then down), and from then on sits back and enjoys it - a
+// pat of a full tummy, a little dance, a bounce, a chat with the neighbour, a yawn (game/waiting.ts). Params:
+// { stars: number[] } (one per dish, front of the line first; a bare number is one dish); a bare ?skipTo=results
+// gives every diner two stars.
 import { VIEW_W, UI } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
@@ -42,6 +44,7 @@ import { ridersFor, pushRiderHeads } from '../friends.ts';
 import type { TruckStyle } from '../../art/truck.ts';
 import { TRUCK_X, QUEUE_SCALE, ROW_SLOTS, DRIVER, queueSpot, drawWaiters } from './line.ts';
 import type { LineHead, Waiter, HeldPlate } from './line.ts';
+import { WaitingBeats, FED_BEATS, FED_SALT, beatSeed } from '../waiting.ts';
 // The diners hold their dishes, so their rigs are the kitchen's own rig-plus-held-food type rather than a bare Rig.
 // Imported, not redeclared: `import type` erases, so this adds no runtime edge between the two screens.
 import type { CritterRig } from './kitchen.ts';
@@ -117,7 +120,7 @@ export interface Served extends Waiter {
   chews: number;
   /** True once the plate is in their paw, and once it is empty again. */
   holding: boolean;
-  /** True once they have cheered at the empty plate. */
+  /** True once they have cheered at the empty plate (and once the cheer ends, they are the beats', game/waiting.ts). */
   cheered: boolean;
 }
 
@@ -150,6 +153,8 @@ export class ResultsScreen extends Screen {
   declare truckOpts: { scale: number; wheel: number; facing: number; heads: LineHead[]; style: TruckStyle };
   /** The diners being served: the whole line, front first, where the line screen left them. */
   declare diners: Served[];
+  /** What the fed line does with itself once each diner has cheered their empty plate (game/waiting.ts). */
+  declare beats: WaitingBeats;
   /** The stars per dish, in line order, clamped to 1..3: what `serveAll` banks. */
   declare stars: number[];
   /** What the kitchen banked for the batch: `params.score`, or twice each dish's stars for a bare ?skipTo=results. */
@@ -181,7 +186,7 @@ export class ResultsScreen extends Screen {
   /** The blinking PRESS <key> line. */
   declare prompt: string;
 
-  constructor(game: Game) { super(game, 'results'); this.fields = []; this.crew = []; this.friends = []; this.heads = []; this.diners = []; this.rowText = []; this.rowStars = []; }
+  constructor(game: Game) { super(game, 'results'); this.fields = []; this.crew = []; this.friends = []; this.heads = []; this.diners = []; this.rowText = []; this.rowStars = []; this.beats = new WaitingBeats(); }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -212,7 +217,7 @@ export class ResultsScreen extends Screen {
     this.diners.length = 0; this.stars = [];
     const first = ln ? Math.min(run.customer, ln.customers.length - 1) : 0;
     const count = ln ? Math.max(1, ln.customers.length - first) : 1;
-    const ids: string[] = [];
+    const ids: string[] = [], who: string[] = [];
     for (let i = 0; i < count; i++) {
       const c = ln ? ln.customers[first + i] : null;
       const order = c ? run.orderFor(first + i) : run.order;
@@ -221,16 +226,19 @@ export class ResultsScreen extends Screen {
       for (let t = 0; t < i * 11; t++) player.tick();
       const stars = Math.max(1, Math.min(3, R(given && given[i] != null ? given[i] : 2)));
       this.stars.push(stars);
-      ids.push(order.id);
+      ids.push(order.id); who.push(def.id);
       const ing = order.needs.length ? INGREDIENTS[order.needs[0].id] : null;
       this.diners.push({
-        rig: this.served(critterRig(def, -1), order.id, ing ? ing.hex : UI.cream), player, x: sp.x, y: sp.y, s: sp.s,
+        rig: this.served(critterRig(def, -1), order.id, ing ? ing.hex : UI.cream), player, x: sp.x, y: sp.y, s: sp.s, facing: -1,
         plate: { dish: order.id, bites: 0, x: 0, y: 0, follow: true },
         starY: HEAD_STARS_Y - STARS_LIFT * row, starR: HEAD_STAR_R[Math.min(HEAD_STAR_R.length - 1, row)],
         dishId: order.id, dishText: order.dish, hex: ing ? ing.hex : UI.cream, stars,
         eatAt: EAT_AT + i * EAT_LAG, starsAt: STARS_AT + i * STAR_LAG, chews: 0, holding: true, cheered: false,
       });
     }
+    // what they do once their plate is empty and the cheer is done, off the fed line's own stream: a pat of a full
+    // tummy first, then anything, a chat between neighbours in the same row of the line
+    this.beats.enter(beatSeed(run, FED_SALT), who, FED_BEATS, this.diners.map((_, i) => Math.floor(i / ROW_SLOTS)), this.diners.map((d) => d.x), 'full');
     let sum = 0; for (const s of this.stars) sum += s;
     this.score = params.score != null ? params.score : sum * 2;
     this.left = false;
@@ -287,11 +295,13 @@ export class ResultsScreen extends Screen {
         if (i === 0) game.audio.play('chew');
         burstCrumbs(R(d.plate.x), R(d.plate.y - 8 * d.s), R(d.y - 30 * d.s / QUEUE_SCALE), d.hex, 5, true);
       }
-      // `cheer` raises the near arm: the paw must be empty before it, or the plate crosses the face
-      if (d.chews >= CHEWS && !d.cheered && d.player.done) { d.cheered = true; this.dropFood(d); d.player.play('cheer', { restart: true }); }
-      else if (d.player.done) { d.player.play(d.holding ? 'carry' : 'idle', { restart: true }); if (d.plate) d.plate.follow = true; }
+      // `hooray` raises the near arm: the paw must be empty before it, or the plate crosses the face; once it is over
+      // the diner is the beats' to deal to
+      if (d.chews >= CHEWS && !d.cheered && d.player.done) { d.cheered = true; this.dropFood(d); d.player.play('hooray', { restart: true }); }
+      else if (d.player.done) { d.player.play(d.holding ? 'carry' : 'idle', { restart: true }); if (d.plate) d.plate.follow = true; if (d.cheered) this.beats.free(i, f); }
       if (f === d.starsAt) { burstSparkle(d.x, d.starY, 5, UI.cream, true); game.audio.play('coin'); }
     }
+    this.beats.update(f, this.diners);
     if (f === this.stampAt) { burstSparkle(RECEIPT_X + RECEIPT_W / 2, RECEIPT_Y + this.receiptH - 22, 6, UI.cream, true); game.audio.play('stamp'); }
     if (this.left) return;
     if ((f >= CONFIRM_AT && confirmPressed(game.input) >= 0) || f >= AUTO_AT) {
@@ -366,6 +376,8 @@ export class ResultsScreen extends Screen {
       stamp: this.frame >= this.stampAt ? this.stampText : '', left: this.left, receipt: this.rowText.slice(), coins: this.tip,
       // the truck's windows: every head in them, how many are friends riding along, and how many of those have cheered
       heads: this.heads.length, friends: this.friends.length, friendsCheered: this.friends.filter((c) => c.cheered).length,
+      // what the fed line is doing with itself: each diner's animation and facing, and the beats dealt so far
+      anims: this.diners.map((d) => d.player.name), facing: this.diners.map((d) => d.facing), beats: this.beats.summary(),
     };
   }
   /** Every field that could diverge between peers (net/checksum.js). */

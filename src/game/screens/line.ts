@@ -9,10 +9,15 @@
 // tail came out from under, the diner under it is plainly asking for that. CONFIRM (or 600 frames) takes the whole
 // order into the kitchen at once; `results` serves the whole line, and the day is done.
 //
+// A diner's wave is a `hello` that ends (content/critters/dinerAnims.ts); then they are the line's to fidget with while
+// it waits (game/waiting.ts): a sniff at the truck, a hungry tummy, up on the toes to see, a bounce, a look back down
+// the line, a chat with the neighbour, a little dance, a foot tapped, a yawn - each on a stream of its own, so every
+// peer sees the same line do the same things, and none of it is simulated.
+//
 // The picture is the title's dusk lane with the parked truck turned round so its hatch faces the queue, the crew's
 // heads in its windows, and one rig per diner: the front row at full size along the lane and the rest of the line
 // winding back behind it in smaller rows (queueSpot). Nothing here simulates anything but the frame count and the
-// one press, so `checksumFields` is two numbers; the rigs, the wave and the bubbles are visual.
+// one press, so `checksumFields` is two numbers; the rigs, the wave, the beats and the bubbles are visual.
 import { VIEW_W, UI } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
@@ -39,6 +44,7 @@ import type { TicketOpts } from '../ui.ts';
 import { confirmPressed } from '../menuinput.ts';
 import { drawLane, TRUCK_Y, CREW_Y } from '../../art/logo.ts';
 import { recipeOf, twistSay, dishGroups } from '../run.ts';
+import { WaitingBeats, LINE_BEATS, LINE_SALT, beatSeed } from '../waiting.ts';
 
 /** The truck parks where the title parks it, turned to face LEFT so the hatch (its rear) opens on the queue.
  *  Exported with the queue's geometry below: results serves the whole line on this same lane, everyone where they stood. */
@@ -80,6 +86,8 @@ export interface Waiter {
   x: number;
   y: number;
   s: number;
+  /** Which way they face: -1, at the hatch, unless a beat has turned them round (game/waiting.ts). */
+  facing: number;
   /** The plate in their paws, if they are holding one. */
   plate?: HeldPlate | null;
 }
@@ -98,7 +106,7 @@ export function drawWaiters(ctx: CanvasRenderingContext2D, list: readonly Waiter
       const d = list[i];
       if (d.y < lo || d.y >= hi) continue;
       drawShadow(ctx, d.x, d.y, 34 * d.s / QUEUE_SCALE, 0.4);
-      drawRig(ctx, d.rig, d.player.pose, { x: d.x, y: d.y, facing: -1, scale: d.s });
+      drawRig(ctx, d.rig, d.player.pose, { x: d.x, y: d.y, facing: d.facing, scale: d.s });
       const p = d.plate;
       if (p) {
         if (p.follow) { jointScreen(d.rig, 'handN', PAW); p.x = PAW.x; p.y = PAW.y; }
@@ -110,8 +118,8 @@ export function drawWaiters(ctx: CanvasRenderingContext2D, list: readonly Waiter
 
 /** The driver in the cab, as on the map. */
 export const DRIVER = 'chicory';
-/** The diners wave once the screen has settled, WAVE_LAG apart front to back, and each one joins their dish's
- *  bubble JOIN_AT after their wave; confirm counts from CONFIRM_AT. */
+/** The diners wave (their `hello`, which ends on the breath) once the screen has settled, WAVE_LAG apart front to
+ *  back, and each one joins their dish's bubble JOIN_AT after their wave; confirm counts from CONFIRM_AT. */
 const WAVE_AT = 12, WAVE_LAG = 10, JOIN_AT = 18, CONFIRM_AT = 20, AUTO_AT = 600;
 /** The bubbles: a paper ticket per dish with the count on the band and the dish's line under it, then a row per
  *  pair of twists. The one asked for nearest the front hangs lowest, its foot at BUBBLE_FOOT, and each after it
@@ -157,7 +165,7 @@ export interface Diner extends Waiter {
   beadY: number;
   beadR: number;
   beadS: number;
-  /** True once this diner's one wave has been thrown. */
+  /** True once this diner's one wave has been thrown (and once it ends, they are the beats', game/waiting.ts). */
   waved: boolean;
   /** The frame they wave, and the frame they join in: their tail drops from their dish's bubble and its count goes up. */
   waveAt: number;
@@ -201,6 +209,8 @@ export class LineScreen extends Screen {
   declare queue: Diner[];
   /** The giant order by dish, the dish asked for nearest the front first: one bubble each. */
   declare chorus: Chorus[];
+  /** What the line does with itself while it waits, once each diner has waved (game/waiting.ts). */
+  declare beats: WaitingBeats;
   /** 1 once confirm has taken the order and the fade is running. */
   declare taken: number;
   /** The sign over the scene: how long the line is and where. */
@@ -209,7 +219,7 @@ export class LineScreen extends Screen {
   /** The hint line. */
   declare hint: string;
 
-  constructor(game: Game) { super(game, 'line'); this.fields = []; this.seats = []; this.heads = []; this.riders = []; this.queue = []; this.chorus = []; }
+  constructor(game: Game) { super(game, 'line'); this.fields = []; this.seats = []; this.heads = []; this.riders = []; this.queue = []; this.chorus = []; this.beats = new WaitingBeats(); }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -243,11 +253,15 @@ export class LineScreen extends Screen {
       for (let g = 0; g < groups.length; g++) if (groups[g].members.indexOf(i) >= 0) { dish = g; break; }
       const row = Math.min(BEAD_R.length - 1, Math.floor(i / ROW_SLOTS)), tipY = Math.round(sp.y - TAIL_RISE * sp.s / QUEUE_SCALE);
       this.queue.push({
-        rig: critterRig(def, -1), player, x: sp.x, y: sp.y, s: sp.s, dish, recipe: waiting[i].recipe,
+        rig: critterRig(def, -1), player, x: sp.x, y: sp.y, s: sp.s, facing: -1, dish, recipe: waiting[i].recipe,
         tipY, beadY: tipY - POINT_H - BEAD_R[row], beadR: BEAD_R[row], beadS: BEAD_S[row],
         waved: false, waveAt: WAVE_AT + i * WAVE_LAG, joinAt: WAVE_AT + i * WAVE_LAG + JOIN_AT,
       });
     }
+    // what they do while they wait: dealt off the line's own stream, and only once each has waved; a chat is between
+    // neighbours in the same row of the line
+    this.beats.enter(beatSeed(run, LINE_SALT), waiting.map((c) => c.customer), LINE_BEATS,
+      this.queue.map((_, i) => Math.floor(i / ROW_SLOTS)), this.queue.map((d) => d.x));
     // the order, a bubble per dish: its band counts the diners in as they join, its words are the dish's own line,
     // and whoever wants theirs different says so under it, two to a row
     this.chorus.length = 0;
@@ -293,10 +307,12 @@ export class LineScreen extends Screen {
     for (const r of this.riders) r.player.tick();
     for (let i = 0; i < this.queue.length; i++) {
       const d = this.queue[i];
-      if (!d.waved && f >= d.waveAt) { d.waved = true; d.player.play('wave', { restart: true }); game.audio.play('hello'); }
+      if (!d.waved && f >= d.waveAt) { d.waved = true; d.player.play('hello', { restart: true }); game.audio.play('hello'); }
       d.player.tick();
-      if (d.player.done) d.player.play('idle', { restart: true });
+      // the hello ends on the breath, and from then on the diner is the beats' to deal to
+      if (d.player.done) { d.player.play('idle', { restart: true }); if (d.waved) this.beats.free(i, f); }
     }
+    this.beats.update(f, this.queue);
     if (this.taken) return;
     if ((f >= CONFIRM_AT && confirmPressed(game.input) >= 0) || f >= AUTO_AT) {
       this.taken = 1;
@@ -329,20 +345,22 @@ export class LineScreen extends Screen {
 
   /** A dish, said out loud by everyone who wants it: a paper bubble with the count on its band and the dish's line
    *  under it, and a tail down from its foot to a bead over each of their heads with the dish's picture in it. Tails
-   *  first, so the paper sits on their roots. Nothing until its first diner has joined in. */
+   *  first, so the paper sits on their roots. Nothing until its first diner has joined in. A diner whose feet leave
+   *  the ground (a bounce) takes their bead up with them, so the tallest ears never jump into its point. */
   bubble(ctx: CanvasRenderingContext2D, c: Chorus, f: number): void {
     const n = this.joined(c, f);
     if (!n) return;
     const x = c.bx, y = c.by, w = c.bw, base = y + c.bh - 2;
     for (let j = 0; j < n; j++) {
-      const d = this.queue[c.members[j]], tx = d.x, top = d.beadY - d.beadR;
+      const d = this.queue[c.members[j]], tx = d.x, lift = Math.min(0, Math.round(d.player.pose.root.y * d.s));
+      const by = d.beadY + lift, tip = d.tipY + lift, top = by - d.beadR;
       // a stem down from the paper (hidden behind any lower bubble) to the bead, and the bead's point at their head
       ctx.fillStyle = UI.ink; ctx.fillRect(tx - STEM - 1, base, STEM * 2 + 2, top - base + 1);
-      ctx.beginPath(); ctx.moveTo(tx - POINT_H - 1, d.beadY + d.beadR - 2); ctx.lineTo(tx + POINT_H + 1, d.beadY + d.beadR - 2); ctx.lineTo(tx, d.tipY + 1); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.arc(tx, d.beadY, d.beadR + 1, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(tx - POINT_H - 1, by + d.beadR - 2); ctx.lineTo(tx + POINT_H + 1, by + d.beadR - 2); ctx.lineTo(tx, tip + 1); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(tx, by, d.beadR + 1, 0, TAU); ctx.fill();
       ctx.fillStyle = UI.paper; ctx.fillRect(tx - STEM + 1, base, STEM * 2 - 2, top - base + 2);
-      ctx.beginPath(); ctx.arc(tx, d.beadY, d.beadR - 1, 0, TAU); ctx.fill();
-      drawDish(ctx, d.recipe, tx, d.beadY + 1, d.beadS);
+      ctx.beginPath(); ctx.arc(tx, by, d.beadR - 1, 0, TAU); ctx.fill();
+      drawDish(ctx, d.recipe, tx, by + 1, d.beadS);
     }
     BUBBLE_OPTS.title = c.titles[n - 1];
     drawTicket(ctx, x, y, w, c.bh, BUBBLE_OPTS);
@@ -361,7 +379,9 @@ export class LineScreen extends Screen {
       bubbles: this.chorus.filter((c) => this.joined(c, f) > 0).map((c) => c.text),
       chorus: this.chorus.map((c) => ({ title: this.joined(c, f) ? c.titles[this.joined(c, f) - 1] : '', joined: this.joined(c, f), count: c.members.length, notes: c.notes.slice(), box: [c.bx, c.by, c.bw, c.bh] })),
       // who stands where: the whole line's species and places, front first, and which bubble each one's tail hangs from
-      diners: this.queue.map((d, i) => run.lines[run.line].customers[run.customer + i].customer), spots: this.queue.map((d) => d.x + ',' + d.y), dishes: this.queue.map((d) => d.dish) };
+      diners: this.queue.map((d, i) => run.lines[run.line].customers[run.customer + i].customer), spots: this.queue.map((d) => d.x + ',' + d.y), dishes: this.queue.map((d) => d.dish),
+      // what the line is doing with itself while it waits: each diner's animation and facing, and the beats dealt so far
+      anims: this.queue.map((d) => d.player.name), facing: this.queue.map((d) => d.facing), beats: this.beats.summary() };
   }
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] { const f = this.fields; f.length = 0; f.push(this.frame, this.taken); return f; }
