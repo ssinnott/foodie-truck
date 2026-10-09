@@ -7,9 +7,9 @@
 //        CONFIRM opens the truck: the map, at home, with the whole list still to gather and the compass on the
 //        first missing ingredient's landmark. Writes tools/screens/stage-board.png.
 //   giantLine - the line screen on the fete's nine-long line: all nine diners stand in it (a front row along the lane
-//        and the rest winding back in a second row), a round of three at the hatch wave and order, the next press
-//        takes just those three orders into the kitchen, and the board lays the nine out as one wide ticket.
-//        Writes tools/screens/giant-line.png and giant-line-board.png.
+//        and the rest winding back in a second row) and ALL of them order at once - one bubble per dish with a tail
+//        to every diner who asked for it - the next press takes the whole giant order into the kitchen, and the board
+//        lays the nine out as one wide ticket. Writes tools/screens/giant-line.png and giant-line-board.png.
 //   stagePlan - the plan is a pure function of the seed: the same seed lays the same day out, another seed lays
 //        another, ?order= forces a recipe onto the menu and into the first customer's paws, and ?recipes= fixes
 //        the menu outright. What keeps four online machines on one day and lets a scenario pick its landmarks.
@@ -19,11 +19,11 @@
 import { withPage, assert } from '../playtest.js';
 import { ORDERS, INGREDIENTS } from '../../src/content/recipes.ts';
 import { STOPS } from '../../src/content/places.ts';
-import { planDay, planWeek, needsOf, batchSize, DAY_SHAPES, DAYS_PER_WEEK, dishesIn } from '../../src/game/run.ts';
+import { planDay, planWeek, needsOf, dishGroups, DAY_SHAPES, DAYS_PER_WEEK, dishesIn } from '../../src/game/run.ts';
 
 export const SCENARIOS = {
   async giantLine(server) {
-    const total = DAY_SHAPES[DAYS_PER_WEEK - 1].lines[0], round = batchSize(total);
+    const total = DAY_SHAPES[DAYS_PER_WEEK - 1].lines[0];
     await withPage(server, 'skipTo=stage&critters=0,1&day=5', async (api) => {
       await api.step(5);
       const s = await api.summary();
@@ -31,19 +31,34 @@ export const SCENARIOS = {
       await api.shot('giant-line-board');
     });
     await withPage(server, 'skipTo=line&critters=0,1&day=5', async (api) => {
-      await api.step(100);
+      await api.step(4);
       let s = await api.summary();
-      assert(s.top.waiting === total && s.top.round === round, `all ${total} are in the line with ${round} at the hatch (${s.top.waiting}, round ${s.top.round})`);
+      const recipes = s.run.lines[s.run.line].customers.map((c) => c.split(':')[1]), dishes = dishGroups(recipes);
+      assert(s.top.waiting === total, `all ${total} are in the line (${s.top.waiting})`);
       assert(new Set(s.top.diners).size === total, `${total} different animals (${s.top.diners.join()})`);
       const ys = new Set(s.top.spots.map((p) => p.split(',')[1]));
       assert(ys.size >= 2, `the line winds back in more than one row (${[...ys].join()})`);
-      assert(s.top.bubbles.length === round, `only the round at the hatch orders (${s.top.bubbles.length} bubbles)`);
+      assert(s.top.bubbles.length === 0, `nobody has spoken before the line has waved (${s.top.bubbles.length} bubbles)`);
+      // the whole line orders: a bubble per dish, each diner's tail joining their dish's as they wave, front to back
+      await api.step(80);
+      s = await api.summary();
+      assert(s.top.chorus.length > 0 && s.top.chorus[0].joined > 0 && s.top.chorus.some((c) => c.joined < c.count), `the line is still joining in, front first (${s.top.chorus.map((c) => c.joined + '/' + c.count).join()})`);
+      await api.step(80);
+      s = await api.summary();
+      assert(s.top.chorus.length === dishes.length && s.top.bubbles.length === dishes.length, `ONE bubble per dish of the order, not one per diner (${s.top.bubbles.length} bubbles for ${dishes.length} dishes)`);
+      assert(s.top.chorus.every((c, k) => c.joined === c.count && c.count === dishes[k].members.length && c.title.startsWith(c.count + ' X ')),
+        `every diner has joined their dish's bubble and its band counts them (${s.top.chorus.map((c) => c.title).join(' / ')})`);
+      assert(s.top.dishes.every((g, i) => dishes[g].members.includes(i)), `every diner's tail hangs from the bubble of the dish they ordered (${s.top.dishes.join()})`);
+      const boxes = s.top.chorus.map((c) => c.box);
+      assert(boxes.every((b, k) => k === 0 || b[1] + b[3] < boxes[k - 1][1]), `the bubbles stack up the sky without overlapping (${boxes.map((b) => b.join(':')).join(' ')})`);
       assert((await api.errors()).length === 0, 'no errors drawing the line');
       await api.shot('giant-line');
       await api.press(0, { action: true }, 2, 4);
       for (let i = 0; i < 20 && (await api.screen()) !== 'kitchen'; i++) await api.step(6);
       s = await api.summary();
-      assert(s.screen === 'kitchen' && s.top.orders.length === round, `the kitchen takes just the round's ${round} orders (${s.top.orders.length})`);
+      assert(s.screen === 'kitchen' && s.top.orders.length === total && s.top.orders.join() === recipes.join(), `the kitchen takes the whole line's ${total} orders as one (${s.top.orders.length})`);
+      assert(s.top.dishes.join() === dishes.map((g) => g.id).join() && s.top.counts.join() === dishes.map((g) => g.members.length).join(),
+        `and reads them by dish, as the bubbles did (${s.top.ticket.join(' / ')})`);
     });
   },
 

@@ -62,6 +62,14 @@ export interface Order {
   extra: string;
 }
 
+/** One dish of the giant order (game/run.ts dishGroups): an ORDERS id, and which orders of the line ask for it. */
+export interface DishGroup {
+  /** ORDERS id ('applePie'). */
+  id: string;
+  /** Indices into the list that was grouped, front of the line first. */
+  members: number[];
+}
+
 /** One seat of the party, in slot order. */
 export interface PartySeat {
   /** Player slot 0..3: the seat's colour, its keys and its place in the START packet. */
@@ -250,9 +258,9 @@ export interface Run {
   serve(stars: number): void;
   /** What customer `k` of the line the truck stands at ordered, as the kitchen cooks it. */
   orderFor(k: number): Order;
-  /** How many diners are at the hatch in this round of the line (run.ts batchSize): the front of the line, clamped to who is left. */
-  batch(): number;
-  /** Serve this round's diners at once: `stars[i]` for the i-th of them, front first. */
+  /** The giant order: one order per customer still waiting in the line the truck stands at, front first (never empty). */
+  lineOrders(): Order[];
+  /** Serve the whole line at once: `stars[i]` for the i-th customer still waiting, front first. */
   serveAll(stars: readonly number[]): void;
   /** True once everyone in the line the truck stands at has been served. */
   lineDone(): boolean;

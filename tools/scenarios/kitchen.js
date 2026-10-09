@@ -10,13 +10,16 @@
 //             runs the FISH CAKES order (chop, mix, stove, plate) for the stove's hold and
 //             writes tools/screens/kitchen-stove.png with the pot lit mid-hold. The tags are shot as they come up
 //             (kitchen-chop / -mix / -oven / -plate / -stove): each carries its owner's colour across its head.
-//             The food is followed down the line too: the pulls have landed at the board by the time seat 0 gets
+//             The fridge gives up an ingredient a tap (every apple, then every egg). The food is followed down the
+//             line too: the pulls have landed at the board by the time seat 0 gets
 //             there, the tenth chop clears the board and puts the whole batch in the air for the bowl
 //             (kitchen-fly.png, mid-arc), it has dropped in by the time seat 0 arrives, and the dish is stacked
 //             on the plate before the bell.
-//   kitchenTogether - the fete's three-deep line cooked AT THE SAME TIME: every order on the ticket and at the
-//             hatch, the steps merged with each order's own kept in order, one fridge run, every plate dished before
-//             the one bell, and results serving all three. Writes kitchen-together(-plated).png.
+//   kitchenTogether - the fete's nine-long line cooked AS ONE GIANT ORDER: all nine orders taken at once, read by
+//             dish on the ticket and the hatch shelf (a plate per dish, how many it is for under it), the front three
+//             at the hatch, the steps merged with each order's own kept in order, one fridge run a tap per
+//             ingredient, every plate dished before the one bell, and results serving all nine and closing the day.
+//             Writes kitchen-together(-plated).png and results-together.png.
 //   kitchenPause - `start` from a seat pushes the pause overlay, `cancel` pops it and the kitchen underneath is
 //             exactly as it was left (step, scores, owners, seat positions); online the push is refused.
 //   kitchenGag - Barley's eat gag hands him an apple and TAKES IT BACK: the rig's held item is cleared with the
@@ -24,11 +27,11 @@
 //             the joke never holds a player still. Writes tools/screens/kitchen-gag.png.
 //   results - opens straight onto results with the whole line on the lane, every diner handed their plate and eating
 //             at once, the crew cheering from the truck on a stagger once the stars have landed, and action serves
-//             the whole line and sends the truck on. Writes tools/screens/results-crew.png.
+//             the whole line and closes the day. Writes tools/screens/results-crew.png.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withPage, assert } from '../playtest.js';
-import { TIP_COINS } from '../../src/game/run.ts';
+import { TIP_COINS, dishGroups } from '../../src/game/run.ts';
 
 /** Where the harness writes its screenshots (tools/playtest.js SHOTS). */
 const SHOTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'screens');
@@ -58,7 +61,7 @@ export async function chopOnce(api) {
   return api.summary();
 }
 
-/** The fridge: walk to it and tap until the step moves on (one tap per item the order wants, so the count is the order's). */
+/** The fridge: walk to it and tap until the step moves on (one tap per ingredient the order wants, so the count is the order's). */
 export async function pullAll(api) {
   let s = await walkTo(api, FRIDGE);
   const step = s.top.step;
@@ -82,9 +85,9 @@ async function chopAndMix(api) {
 const STATION = { fridge: 0, chop: 1, mix: 2, stove: 3, oven: 4, plate: 5 };
 
 /**
- * Cook whatever steps the order carries, each with the input its station asks for: a tap per item at the fridge,
+ * Cook whatever steps the order carries, each with the input its station asks for: a tap per ingredient at the fridge,
  * ten taps on the board, a hold on the bowl, a hold on the stove, a hold on the oven, and the bell. Every hold is
- * kept down until the step advances, which is what a player does. Leaves the kitchen on the bell: the next order of the line comes up, or, after the last, the hand-over to results.
+ * kept down until the step advances, which is what a player does. Leaves the kitchen on the bell: the hand-over to results.
  */
 export async function cook(api) {
   let s = await api.summary();
@@ -167,20 +170,20 @@ export const SCENARIOS = {
       assert(s0.run.dish === 'APPLE PIE' && s0.run.line === 0 && s0.run.customer === 0, `the first customer of the first line has ordered the pie (${s0.run.dish}, line ${s0.run.line}, customer ${s0.run.customer})`);
       assert(s0.top.steps.join() === 'FRIDGE,CHOP,MIX,OVEN,PLATE', `the first order's steps are fridge, chop, mix, oven, plate (${s0.top.steps.join()})`);
       assert(s0.top.step === 0 && !s0.top.served, 'the first step is up and nothing is served');
-      assert(s0.top.pulls === 6 && s0.top.pulled === 0, `the fridge holds the pie's six items, none out yet (${s0.top.pulls}, ${s0.top.pulled})`);
+      assert(s0.top.pulls === 2 && s0.top.units === 6 && s0.top.pulled === 0, `the fridge holds the pie's six items, two ingredients, none out yet (${s0.top.pulls} ingredients, ${s0.top.units} items, ${s0.top.pulled} out)`);
 
-      // FRIDGE: seat 0 opens on its spot; the first tap claims the step and pulls the first apple, six taps empty it
+      // FRIDGE: seat 0 opens on its spot; the first tap claims the step and brings out every apple, the second the eggs
       let s = await api.summary();
       assert(s.top.seats[0][2] === FRIDGE, `seat 0 opens at the fridge (station ${s.top.seats[0][2]}, x ${s.top.seats[0][1]})`);
       assert(s.top.seats.slice(1).every((x, i) => x[1] === s0.top.seats[i + 1][1]), 'the other seats, with no input, stayed put');
       s = await chopOnce(api);
-      assert(s.top.count === 1 && s.top.pulled === 1 && s.top.owners[0] === 0, `the first tap pulls one item and claims the step for P1 (count ${s.top.count}, pulled ${s.top.pulled}, owner ${s.top.owners[0]})`);
+      assert(s.top.count === 1 && s.top.pulled === 1 && s.top.owners[0] === 0 && s.top.flying === 4, `the first tap brings out all four apples and claims the step for P1 (count ${s.top.count}, pulled ${s.top.pulled}, owner ${s.top.owners[0]}, flying ${s.top.flying})`);
       assert(s.top.routes[0][1] === 'CHOP', `the pie's pulls fly to the chopping board, its next step (route ${s.top.routes[0].join()})`);
       await api.step(8);
       await api.shot('kitchen-fridge');
       await api.step(40);                        // a long think between pulls costs nothing
-      for (let i = 0; i < 5; i++) s = await chopOnce(api);
-      assert(s.top.step === 1 && s.top.scores[0] === 2 && s.top.pulled === 6, `six taps empty the fridge and complete the step as PERFECT (step ${s.top.step}, score ${s.top.scores[0]}, pulled ${s.top.pulled})`);
+      s = await chopOnce(api);
+      assert(s.top.step === 1 && s.top.scores[0] === 2 && s.top.pulled === 2, `two taps - the apples, then the eggs - empty the fridge and complete the step as PERFECT (step ${s.top.step}, score ${s.top.scores[0]}, pulled ${s.top.pulled})`);
 
       // CHOP: walk to the board; the pulls have all landed there by the time seat 0 arrives. The first tap claims
       // the step, ten taps in any rhythm finish it
@@ -379,22 +382,25 @@ export const SCENARIOS = {
   },
 
   /**
-   * THE WHOLE LINE AT THE SAME TIME: the kitchen opens on every order in the queue at once - one ticket row pair and
-   * one face at the hatch per customer - with their steps merged into one run of the counter, each order's own
-   * steps kept in its own order along it. One fridge run pulls every item of every order, each station is worked
-   * once, every plate is dished before the one bell, and results serves the whole line.
+   * THE WHOLE LINE AS ONE GIANT ORDER: the kitchen opens on every order in the fete's line at once - read by dish,
+   * one ticket row and one plate per dish with how many it is for, the front three at the hatch - with their steps
+   * merged into one run of the counter, each order's own steps kept in its own order along it. One fridge run pulls
+   * every ingredient (a tap each), each station is worked once, every plate is dished before the one bell, and
+   * results serves the whole line and closes the day.
    */
   async kitchenTogether(server) {
     await withPage(server, 'skipTo=kitchen&critters=0,1&day=5', async (api, page) => {
-      await page.evaluate(() => { const g = window.__game.game; g.run.startLine(g.run.lines.length - 1); g.reset('kitchen'); });
       await api.step(2);
       let s = await api.summary();
-      const want = await page.evaluate(() => { const r = window.__game.game.run; return r.lines[r.line].customers.slice(r.customer, r.customer + r.batch()).map((c, k) => r.orderFor(r.customer + k)).map((o) => ({ id: o.id, steps: o.steps.map((x) => x.toUpperCase()), units: o.needs.reduce((n, x) => n + x.amount, 0) })); });
-      assert(want.length === 3 && s.top.orders.join() === want.map((o) => o.id).join(), `the kitchen opens on the three orders of the round at the hatch, the rest of the line of nine waiting outside (${s.top.orders.join()})`);
-      assert(s.top.custs === 3, `all three customers are at the hatch (${s.top.custs})`);
+      const want = await page.evaluate(() => window.__game.game.run.lineOrders().map((o) => ({ id: o.id, steps: o.steps.map((x) => x.toUpperCase()), units: o.needs.reduce((n, x) => n + x.amount, 0), kinds: o.needs.map((x) => x.id) })));
+      const dishes = dishGroups(want.map((o) => o.id)), kinds = new Set(want.flatMap((o) => o.kinds));
+      assert(want.length === 9 && s.top.orders.join() === want.map((o) => o.id).join(), `the kitchen opens on all nine orders of the fete's line at once (${s.top.orders.join()})`);
+      assert(s.top.custs === 3, `the front three are at the hatch, the rest of the line outside (${s.top.custs})`);
       assert(want.every((o, d) => s.top.routes[d].join() === o.steps.join()), `each order keeps its own steps in its own order along the merged run (${s.top.routes.map((r) => r.join('>')).join(' | ')} on ${s.top.steps.join('>')})`);
       assert(s.top.steps.filter((x) => x === 'FRIDGE').length === 1 && s.top.steps.filter((x) => x === 'PLATE').length === 1, `one fridge run and one bell for the whole line (${s.top.steps.join()})`);
-      assert(s.top.pulls === want.reduce((n, o) => n + o.units, 0), `the fridge holds every item of every order (${s.top.pulls})`);
+      assert(s.top.pulls === kinds.size && s.top.units === want.reduce((n, o) => n + o.units, 0), `the fridge gives up the whole order an ingredient a tap (${s.top.pulls} taps for ${s.top.units} items)`);
+      assert(s.top.dishes.join() === dishes.map((g) => g.id).join() && s.top.counts.join() === dishes.map((g) => g.members.length).join(), `the ticket reads the order by dish (${s.top.ticket.join(' / ')})`);
+      assert(s.top.plateX.length === dishes.length && s.top.plateX.every((x, g) => x <= 626 && (g === 0 || x > s.top.plateX[g - 1])), `a plate per dish stands along the hatch shelf (${s.top.plateX.join()})`);
       await api.shot('kitchen-together');
       // cook it all, station by station, and look at the hatch shelf just before the bell
       const steps = s.top.steps.length;
@@ -409,16 +415,26 @@ export const SCENARIOS = {
         }
       }
       s = await walkTo(api, PLATE);
-      await api.step(90);
+      await api.step(120);
       s = await api.summary();
-      assert(s.top.dished.join() === want.map((o) => o.id).join() && s.top.flying === 0, `every order is dished on its own plate before the bell (${s.top.dished.join()})`);
+      assert(s.top.dished.join() === want.map((o) => o.id).join() && s.top.flying === 0, `every order is dished before the bell (${s.top.dished.join()})`);
+      assert(s.top.plates.join() === dishes.map((g) => g.id).join(), `and every dish's plate is the finished dish (${s.top.plates.join()})`);
       await api.shot('kitchen-together-plated');
       await api.press(0, { action: true }, 1, 0);
       s = await api.summary();
-      assert(s.top.served && s.top.dishStars.join() === '3,3,3', `the one bell serves them all (${s.top.dishStars.join()})`);
+      assert(s.top.served && s.top.dishStars.length === 9 && s.top.dishStars.every((v) => v === 3), `the one bell serves them all (${s.top.dishStars.join()})`);
       for (let i = 0; i < 30 && (await api.screen()) !== 'results'; i++) await api.step(6);
       s = await api.summary();
-      assert(s.screen === 'results' && s.top.diners === 3 && s.top.stars.join() === '3,3,3', `results serves the whole line at once (on ${s.screen}, ${s.top.stars})`);
+      assert(s.screen === 'results' && s.top.diners === 9 && s.top.stars.every((v) => v === 3), `results serves the whole line at once (on ${s.screen}, ${s.top.stars})`);
+      assert(s.top.receipt.length === dishes.length && s.top.receipt.every((r, g) => r.startsWith(dishes[g].members.length + ' X ')), `the receipt reads the order by dish (${s.top.receipt.join(' / ')})`);
+      await api.step(230);
+      s = await api.summary();
+      assert(s.top.chews.every((c) => c === 3) && s.top.stamp === 'DELICIOUS' && s.top.coins === 9 * TIP_COINS[3], `all nine eat, the line is stamped DELICIOUS and tips ${s.top.coins} coins (${s.top.chews}, '${s.top.stamp}')`);
+      assert((await api.errors()).length === 0, 'no errors serving the whole line');
+      await api.shot('results-together');
+      await api.press(0, { action: true }, 1, 2);
+      s = await api.summary();
+      assert(s.screen === 'stage' && s.run.served === 9 && s.run.dayComplete === true, `one confirm banks the whole line and the day closes (on ${s.screen}, served ${s.run.served})`);
     });
   },
 
@@ -426,7 +442,8 @@ export const SCENARIOS = {
     await withPage(server, 'skipTo=results&critters=0,1', async (api, page) => {
       await api.step(30);
       const s0 = await api.summary();
-      assert(s0.screen === 'results' && s0.top.diners === 2 && s0.top.stars.join() === '2,2', `results opens on its own with the whole line and two stars each (${s0.screen}, ${s0.top.diners}, ${s0.top.stars})`);
+      const total = s0.run.lines[s0.run.line].customers.length;
+      assert(s0.screen === 'results' && s0.top.diners === total && total > 1 && s0.top.stars.every((v) => v === 2), `results opens on its own with the whole line and two stars each (${s0.screen}, ${s0.top.diners} of ${total}, ${s0.top.stars})`);
 
       // the whole line is served at once: every diner has their plate in their paws and is eating, and the crew in
       // the truck's windows cheer a few frames after each other once the stars have landed
@@ -438,15 +455,16 @@ export const SCENARIOS = {
       assert(k.crew.length === 2 && k.crew.every((c) => c[0] === 'cheer'), `both seats cheer from the truck (${k.crew.map((c) => c[0]).join()})`);
       assert(k.crew[1][1] > k.crew[0][1], `the seats cheer on a stagger (${k.crew.map((c) => c[1]).join()})`);
       assert(k.diners.every((d) => d[1] && d[2] >= 1), `every diner has their plate and is eating (${k.diners.map((d) => d.slice(1).join(':')).join()})`);
-      assert(k.diners[0][0] < k.diners[1][0], `they stand where they queued, front first (${k.diners.map((d) => d[0]).join()})`);
+      assert(k.diners.every((d, i) => i === 0 || d[0] > k.diners[i - 1][0]), `they stand where they queued, front first (${k.diners.map((d) => d[0]).join()})`);
       await api.shot('results-crew');
 
       await api.step(140);
       const s1 = await api.summary();
-      assert(s1.top.chews.join() === '3,3' && s1.top.holding.every((h) => !h) && s1.top.stamp === 'TASTY', `both plates are cleaned and the line stamped TASTY (${s1.top.chews}, ${s1.top.holding}, '${s1.top.stamp}')`);
+      assert(s1.top.chews.every((c) => c === 3) && s1.top.holding.every((h) => !h) && s1.top.stamp === 'TASTY', `every plate is cleaned and the line stamped TASTY (${s1.top.chews}, ${s1.top.holding}, '${s1.top.stamp}')`);
       await api.press(0, { action: true }, 1, 2);
       const s2 = await api.summary();
-      assert(s2.screen === 'line' && s2.run.served === 2 && s2.run.customer === 2 && s2.run.linesServed === 0, `action serves the round and the line steps up for the next one (on ${s2.screen}, served ${s2.run.served}, customer ${s2.run.customer})`);
+      assert(s2.screen === 'stage' && s2.run.served === total && s2.run.customer === total && s2.run.linesServed === 1 && s2.run.dayComplete === true,
+        `action serves the whole line at once and the board closes the day (on ${s2.screen}, served ${s2.run.served}, customer ${s2.run.customer})`);
     });
   },
 };

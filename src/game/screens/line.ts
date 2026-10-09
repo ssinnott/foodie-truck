@@ -1,25 +1,27 @@
 // THE LINE (docs/GDD.md sections 3 and 10): the truck pulled up at a town stop with ONE GIANT LINE of village diners
-// waiting at its hatch - a crowd of different animals, the whole day's customers, snaking back along the lane. The
-// line is far too long for the kitchen to cook at once, so it is served in ROUNDS (run.batch()): the diners at the
-// front say what they want - each one's order on a paper bubble over their own head, front first, the bubbles
-// stacked up the sky so each one's tail runs down behind the ones below it to the diner who said it - and CONFIRM
-// (or 600 frames) takes the round's orders into the kitchen at once. `results` serves them, and the line comes back
-// here with the next round stepping up to the hatch, until the last diner has been fed; the run's `line` and
-// `customer` say who is where.
+// waiting at its hatch - a crowd of different animals, the whole day's customers, snaking back along the lane - and
+// the whole line orders at once: ONE GIANT ORDER. The diners wave in turn, front to back, and each one joins in with
+// everyone else who wants the same dish: one paper bubble per dish on the order (run.ts dishGroups), its words the
+// dish's own line, its band the count so far (`3 X MUSHROOM SOUP`), a tail running down from it to every diner who
+// asked for it, and under the words whoever wants theirs a little different (`BRUIN: A BIG ONE!`). The bubbles stack
+// up the sky, the dish asked for nearest the front lowest, so each one's tails run down behind the ones below it -
+// and every tail ends in a paper bead over its diner's head with the dish's own picture in it, so whichever bubble a
+// tail came out from under, the diner under it is plainly asking for that. CONFIRM (or 600 frames) takes the whole
+// order into the kitchen at once; `results` serves the whole line, and the day is done.
 //
 // The picture is the title's dusk lane with the parked truck turned round so its hatch faces the queue, the crew's
-// heads in its windows, and one rig per diner still waiting: the front row at full size along the lane and the rest
-// of the line winding back behind it in smaller rows (queueSpot). Nothing here simulates anything but the frame
-// count and the one press, so `checksumFields` is two numbers; the rigs, the wave, the step up and the bubbles are
-// visual.
+// heads in its windows, and one rig per diner: the front row at full size along the lane and the rest of the line
+// winding back behind it in smaller rows (queueSpot). Nothing here simulates anything but the frame count and the
+// one press, so `checksumFields` is two numbers; the rigs, the wave and the bubbles are visual.
 import { VIEW_W, UI } from '../../constants.ts';
 import { Screen } from '../game.ts';
-import type { Game, Run, ScreenParams } from '../game.ts';
+import type { Game, ScreenParams } from '../game.ts';
 import { drawText, measureText } from '../../engine/text.ts';
 import { drawRig } from '../../lib/art/rig.ts';
 import type { Rig } from '../../lib/art/rig.ts';
 import type { Pose } from '../../lib/art/poses.ts';
 import { drawShadow } from '../../art/fx.ts';
+import { drawDish } from '../../art/dishes.ts';
 import { drawTruck } from '../../art/truck.ts';
 import type { TruckStyle } from '../../art/truck.ts';
 import { truckStyleFor } from '../garage.ts';
@@ -28,10 +30,11 @@ import { getCritter } from '../../content/critters/index.ts';
 import { getCustomer } from '../../content/critters/customers.ts';
 import { placeName } from '../../content/places.ts';
 import { AnimPlayer } from '../../lib/art/animation.ts';
-import { drawTicket, drawSign, drawHint } from '../ui.ts';
+import { drawTicket, drawSign, drawHint, ROW } from '../ui.ts';
+import type { TicketOpts } from '../ui.ts';
 import { confirmPressed } from '../menuinput.ts';
 import { drawLane, TRUCK_Y, CREW_Y } from '../../art/logo.ts';
-import { recipeOf, twistSay, batchSize } from '../run.ts';
+import { recipeOf, twistSay, dishGroups } from '../run.ts';
 
 /** The truck parks where the title parks it, turned to face LEFT so the hatch (its rear) opens on the queue.
  *  Exported with the queue's geometry below: results serves the whole line on this same lane, everyone where they stood. */
@@ -68,25 +71,10 @@ export interface Waiter {
   y: number;
   s: number;
 }
-/**
- * The diners of the line behind the ones at the hatch, for a screen that shows the lane (results): everyone from
- * place `from` of the line (counted from the front of what is left) back, each built once and idling on its own beat.
- */
-export function buildWaiters(run: Run, from: number): Waiter[] {
-  const out: Waiter[] = [], ln = run.lines[run.line];
-  if (!ln) return out;
-  for (let k = run.customer + from, i = from; k < ln.customers.length; k++, i++) {
-    const def = getCustomer(ln.customers[k].customer), player = new AnimPlayer(def.anims), sp = queueSpot(i);
-    player.play('idle');
-    for (let t = 0; t < i * 11; t++) player.tick();
-    out.push({ rig: critterRig(def, -1), player, x: sp.x, y: sp.y, s: sp.s });
-  }
-  return out;
-}
 /** Draw the diners of a line back to front: the smaller rows further up the lane first, the front row over them. */
 export function drawWaiters(ctx: CanvasRenderingContext2D, list: readonly Waiter[]): void {
-  // three passes by how far up the lane a diner stands now (a diner stepping up between rows is in whichever pass
-  // its y has reached); within a pass the back of the line is drawn first
+  // three passes by which row of the line a diner stands in, the furthest up the lane first; within a pass the back
+  // of the line is drawn first
   for (let pass = 0; pass < 3; pass++) {
     const lo = pass === 0 ? -1e9 : pass === 1 ? (ROWS[2].y + ROWS[1].y) / 2 : (ROWS[1].y + ROWS[0].y) / 2;
     const hi = pass === 0 ? (ROWS[2].y + ROWS[1].y) / 2 : pass === 1 ? (ROWS[1].y + ROWS[0].y) / 2 : 1e9;
@@ -101,17 +89,28 @@ export function drawWaiters(ctx: CanvasRenderingContext2D, list: readonly Waiter
 
 /** The driver in the cab, as on the map. */
 export const DRIVER = 'chicory';
-/** The diners wave at the hatch once the screen has settled, WAVE_LAG apart front to back, and each one's bubble
- *  opens BUBBLE_AT after their wave; confirm counts from CONFIRM_AT. */
-const WAVE_AT = 12, WAVE_LAG = 14, BUBBLE_AT = 18, CONFIRM_AT = 20, AUTO_AT = 600;
-/** When the next round comes back to the lane, the line steps up this many frames (the front of it, the hatch's round, last). */
-const STEP_FRAMES = 24;
-/** The bubbles: a paper ticket per diner with their name on the band and their words under it, the front diner's
- *  lowest and each one behind it BUBBLE_STEP higher, never further left than BUBBLE_MIN_X (where the truck's roof
- *  board ends). Every tail is a STEM-wide strip ending in a TIP_H point at TAIL_Y, just over its diner's head. */
-const BUBBLE_Y = 148, BUBBLE_STEP = 38, BUBBLE_TOP = 30, BUBBLE_H = 30, BUBBLE_PAD = 12, BUBBLE_TAIL = 6, BUBBLE_MIN_X = 236, TAIL_Y = 196, TIP_H = 12, STEM = 3;
+/** The diners wave once the screen has settled, WAVE_LAG apart front to back, and each one joins their dish's
+ *  bubble JOIN_AT after their wave; confirm counts from CONFIRM_AT. */
+const WAVE_AT = 12, WAVE_LAG = 10, JOIN_AT = 18, CONFIRM_AT = 20, AUTO_AT = 600;
+/** The bubbles: a paper ticket per dish with the count on the band and the dish's line under it, then a row per
+ *  pair of twists. The one asked for nearest the front hangs lowest, its foot at BUBBLE_FOOT, and each after it
+ *  BUBBLE_GAP higher (less, down to 2, when a stack of twists would push the top one above BUBBLE_TOP); none starts
+ *  further left than BUBBLE_MIN_X (where the truck's roof board ends). */
+const BUBBLE_FOOT = 166, BUBBLE_GAP = 8, BUBBLE_TOP = 26, BUBBLE_H = 30, BUBBLE_PAD = 12, BUBBLE_MIN_X = 236, STEM = 3;
+/** Every tail is a STEM-wide strip from the paper's foot down to a paper bead with the diner's dish in it (BEAD_R
+ *  across, the dish drawn at BEAD_S, both by the row of the line they stand in), and a POINT_H point under the bead
+ *  ending just over their head: at TAIL_Y over the front row, TAIL_RISE over the feet scaled down with the diner for
+ *  the rows further up the lane. */
+const TAIL_Y = 196, TAIL_RISE = CREW_Y - TAIL_Y, POINT_H = 3, BEAD_R = [9, 7, 6], BEAD_S = [5, 4, 3];
+const TAU = Math.PI * 2;
+/** A bubble reaches TAIL_PAD past the outermost diner it points at, so every tail leaves from under the paper; two
+ *  twists share a row while they fit in NOTE_ROW_W. */
+const TAIL_PAD = 14, NOTE_ROW_W = 300, NOTE_SEP = '   ';
 const SIGN_Y = 2;
 const BLINK_PERIOD = 60, BLINK_ON = 40;
+/** The bubble's paper and its two kinds of words, reused for every bubble every frame (the band's title is set per draw). */
+const BUBBLE_OPTS: TicketOpts = { title: '', rules: false, perforated: false };
+const LINE_TEXT = { size: 1, color: UI.ink, align: 'center' as const, shadow: false }, NOTE_TEXT = { size: 1, color: UI.wood, align: 'center' as const, shadow: false };
 
 /** A head riding in the truck's window: the crew, drawn by art/truck.ts drawTruck. */
 export interface LineHead {
@@ -126,28 +125,38 @@ export interface LineSeat {
   player: AnimPlayer;
 }
 
-/** One diner still in the line, front first: a Waiter (rig, idle beat and where they stand) plus what they say. */
+/** One diner in the line, front first: a Waiter (rig, idle beat and where they stand) plus when they speak up. */
 export interface Diner extends Waiter {
-  /** Where they stand when the line has settled, and where they stood before it stepped up (the last round just left). */
-  tx: number;
-  ty: number;
-  ts: number;
-  fx: number;
-  fy: number;
-  fs: number;
-  /** True for the diners at the hatch this round: only they wave and order; the rest of the line waits behind. */
-  speaks: boolean;
+  /** Which dish of the order they asked for: an index into the screen's `chorus`, and its ORDERS id (the bead's picture). */
+  dish: number;
+  recipe: string;
+  /** Where the tail to them ends (just over their head), and the bead on it: centre, radius and the dish's size in it,
+   *  all by the row of the line they stand in. */
+  tipY: number;
+  beadY: number;
+  beadR: number;
+  beadS: number;
   /** True once this diner's one wave has been thrown. */
   waved: boolean;
-  /** The frame they wave, and the frame their bubble opens. */
+  /** The frame they wave, and the frame they join in: their tail drops from their dish's bubble and its count goes up. */
   waveAt: number;
-  bubbleAt: number;
-  /** Their bubble: their name on the band, their order under it, where it hangs. */
-  title: string;
+  joinAt: number;
+}
+
+/** One dish of the giant order, said by everyone who wants it: a paper bubble with a tail to each of them. */
+export interface Chorus {
+  /** The band, by how many have joined in: `titles[k - 1]` once k of them have ('3 X MUSHROOM SOUP'). */
+  titles: string[];
+  /** The dish's own line, and the twist rows under it ('BRUIN: A BIG ONE!'). */
   text: string;
+  notes: string[];
+  /** Indices into the queue of the diners who asked for it, front first. */
+  members: number[];
+  /** Where the paper hangs, and how big it is. */
   bx: number;
   by: number;
   bw: number;
+  bh: number;
 }
 
 export class LineScreen extends Screen {
@@ -165,19 +174,19 @@ export class LineScreen extends Screen {
   declare heads: LineHead[];
   /** The livery the truck is drawn in, read once in enter() (game/garage.ts: never from update()). */
   declare truckStyle: TruckStyle;
-  /** The diners still waiting, front first: the whole line, the first `round` of them at the hatch. */
+  /** The diners still waiting, front first: the whole line, every one of them ordering. */
   declare queue: Diner[];
-  /** How many of the queue are at the hatch this round (run.batch()). */
-  declare round: number;
+  /** The giant order by dish, the dish asked for nearest the front first: one bubble each. */
+  declare chorus: Chorus[];
   /** 1 once confirm has taken the order and the fade is running. */
   declare taken: number;
-  /** The sign over the scene: which line this is and where. */
+  /** The sign over the scene: how long the line is and where. */
   declare signText: string;
   declare signW: number;
   /** The hint line. */
   declare hint: string;
 
-  constructor(game: Game) { super(game, 'line'); this.fields = []; this.seats = []; this.heads = []; this.queue = []; }
+  constructor(game: Game) { super(game, 'line'); this.fields = []; this.seats = []; this.heads = []; this.queue = []; this.chorus = []; }
 
   override enter(params: ScreenParams): void {
     super.enter(params);
@@ -195,31 +204,59 @@ export class LineScreen extends Screen {
     const di = Math.max(0, run.party.findIndex((p) => p.critter === DRIVER));
     this.heads.push({ rig: this.seats[di].rig, pose: this.seats[di].player.pose });
     for (let i = 0; i < this.seats.length; i++) if (i !== di) this.heads.push({ rig: this.seats[i].rig, pose: this.seats[i].player.pose });
-    // the queue: everyone from the customer at the hatch to the back of the line, each on their own idle beat; the
-    // first run.batch() of them are this round's diners at the hatch, who wave and order
+    // the queue: everyone from the customer at the hatch to the back of the line, each on their own idle beat and
+    // waving in turn - the whole line is ordering
     this.queue.length = 0;
-    this.round = run.batch();
-    // a line that has had a round served steps up: everyone starts where they stood a round ago
-    const shift = run.customer > 0 ? batchSize(ln.customers.length) : 0;
-    for (let k = run.customer; k < ln.customers.length; k++) {
-      const c = ln.customers[k], def = getCustomer(c.customer), player = new AnimPlayer(def.anims), i = this.queue.length;
+    const waiting = ln.customers.slice(run.customer);
+    const groups = dishGroups(waiting.map((c) => c.recipe));
+    for (let i = 0; i < waiting.length; i++) {
+      const def = getCustomer(waiting[i].customer), player = new AnimPlayer(def.anims), sp = queueSpot(i);
       player.play('idle');
       for (let t = 0; t < i * 11; t++) player.tick();
-      const to = queueSpot(i), from = shift ? queueSpot(i + shift) : to;
-      const speaks = i < this.round, text = recipeOf(c.recipe).line + (twistSay(c) ? ' ' + twistSay(c) : '');
-      const bw = Math.max(measureText(def.name, 1), measureText(text, 1)) + BUBBLE_PAD * 2;
+      let dish = 0;
+      for (let g = 0; g < groups.length; g++) if (groups[g].members.indexOf(i) >= 0) { dish = g; break; }
+      const row = Math.min(BEAD_R.length - 1, Math.floor(i / ROW_SLOTS)), tipY = Math.round(sp.y - TAIL_RISE * sp.s / QUEUE_SCALE);
       this.queue.push({
-        rig: critterRig(def, -1), player, x: from.x, y: from.y, s: from.s, tx: to.x, ty: to.y, ts: to.s, fx: from.x, fy: from.y, fs: from.s,
-        speaks, waved: false, waveAt: WAVE_AT + i * WAVE_LAG, bubbleAt: WAVE_AT + i * WAVE_LAG + BUBBLE_AT,
-        title: def.name, text, bw, by: Math.max(BUBBLE_TOP, BUBBLE_Y - i * BUBBLE_STEP),
-        // each bubble steps right with its diner, so the stack cascades down to the front of the line
-        bx: Math.min(VIEW_W - 8 - bw, Math.max(BUBBLE_MIN_X + i * QUEUE_PITCH, Math.round(to.x - bw / 2))),
+        rig: critterRig(def, -1), player, x: sp.x, y: sp.y, s: sp.s, dish, recipe: waiting[i].recipe,
+        tipY, beadY: tipY - POINT_H - BEAD_R[row], beadR: BEAD_R[row], beadS: BEAD_S[row],
+        waved: false, waveAt: WAVE_AT + i * WAVE_LAG, joinAt: WAVE_AT + i * WAVE_LAG + JOIN_AT,
       });
     }
+    // the order, a bubble per dish: its band counts the diners in as they join, its words are the dish's own line,
+    // and whoever wants theirs different says so under it, two to a row
+    this.chorus.length = 0;
+    for (const g of groups) {
+      const rec = recipeOf(g.id), titles: string[] = [], notes: string[] = [];
+      for (let k = 1; k <= g.members.length; k++) titles.push(`${k} X ${rec.dish}`);
+      let row = '';
+      for (const i of g.members) {
+        const say = twistSay(waiting[i]);
+        if (!say) continue;
+        const note = `${getCustomer(waiting[i].customer).name}: ${say}`;
+        if (row && measureText(row + NOTE_SEP + note, 1) <= NOTE_ROW_W) row += NOTE_SEP + note;
+        else { if (row) notes.push(row); row = note; }
+      }
+      if (row) notes.push(row);
+      let lo = VIEW_W, hi = 0;
+      for (const i of g.members) { lo = Math.min(lo, this.queue[i].x); hi = Math.max(hi, this.queue[i].x); }
+      let tw = Math.max(measureText(titles[titles.length - 1], 1), measureText(rec.line, 1));
+      for (const n of notes) tw = Math.max(tw, measureText(n, 1));
+      const bw = Math.max(tw + BUBBLE_PAD * 2, hi - lo + TAIL_PAD * 2);
+      this.chorus.push({
+        titles, text: rec.line, notes, members: g.members.slice(), bw, bh: BUBBLE_H + ROW * notes.length,
+        bx: Math.max(BUBBLE_MIN_X, Math.min(VIEW_W - 8 - bw, Math.round((lo + hi) / 2 - bw / 2))), by: 0,
+      });
+    }
+    // stack them up the sky from BUBBLE_FOOT, closing the gaps when a pile of twists would run into the sign
+    let tall = 0;
+    for (const c of this.chorus) tall += c.bh;
+    const gap = this.chorus.length > 1 ? Math.max(2, Math.min(BUBBLE_GAP, Math.floor((BUBBLE_FOOT - BUBBLE_TOP - tall) / (this.chorus.length - 1)))) : 0;
+    let foot = BUBBLE_FOOT;
+    for (const c of this.chorus) { c.by = foot - c.bh; foot = c.by - gap; }
     this.taken = 0;
     this.signText = run.lines.length > 1 ? `LINE ${run.line + 1} OF ${run.lines.length}  -  ${placeName(ln.place)}` : `${this.queue.length} IN THE LINE  -  ${placeName(ln.place)}`;
     this.signW = measureText(this.signText, 1) + 24;
-    this.hint = `${game.input.keyText(0, 'action')}: ${this.round > 1 ? 'TAKE EVERYONE\'S ORDER' : 'TAKE THE ORDER'}`;
+    this.hint = `${game.input.keyText(0, 'action')}: ${this.queue.length > 1 ? 'TAKE EVERYONE\'S ORDER' : 'TAKE THE ORDER'}`;
     this.fields.length = 0;
   }
 
@@ -229,12 +266,7 @@ export class LineScreen extends Screen {
     for (const s of this.seats) { s.player.tick(); if (s.player.done) s.player.play('idle', { restart: true }); }
     for (let i = 0; i < this.queue.length; i++) {
       const d = this.queue[i];
-      // the line stepping up to the hatch after a round: an eased slide from the place a round back
-      if (f <= STEP_FRAMES && (d.fx !== d.tx || d.fy !== d.ty)) {
-        const t = f / STEP_FRAMES, k = t * t * (3 - 2 * t);
-        d.x = Math.round(d.fx + (d.tx - d.fx) * k); d.y = Math.round(d.fy + (d.ty - d.fy) * k); d.s = d.fs + (d.ts - d.fs) * k;
-      }
-      if (d.speaks && !d.waved && f >= d.waveAt) { d.waved = true; d.player.play('wave', { restart: true }); game.audio.play('hello'); }
+      if (!d.waved && f >= d.waveAt) { d.waved = true; d.player.play('wave', { restart: true }); game.audio.play('hello'); }
       d.player.tick();
       if (d.player.done) d.player.play('idle', { restart: true });
     }
@@ -254,33 +286,53 @@ export class LineScreen extends Screen {
     drawTruck(ctx, TRUCK_X, TRUCK_Y, TRUCK_OPTS);
     // the line, back to front: the rows winding away up the lane first, the diner at the hatch drawn last and in front
     drawWaiters(ctx, this.queue);
-    // the bubbles, back of the round first: the highest is drawn first, so each lower bubble covers the tails that
-    // run down behind it and every tail comes out underneath pointing at the one who said it
-    for (let i = this.round - 1; i >= 0; i--) if (f >= this.queue[i].bubbleAt) this.bubble(ctx, this.queue[i]);
+    // the bubbles, the highest first: each lower bubble covers the tails that run down behind it, so every tail
+    // comes out from under the paper of the dish it belongs to and points at a diner who asked for it
+    for (let k = this.chorus.length - 1; k >= 0; k--) this.bubble(ctx, this.chorus[k], f);
     drawSign(ctx, VIEW_W / 2, SIGN_Y, this.signW, 22, this.signText, { size: 1 });
-    if (this.queue.length && f >= this.queue[0].bubbleAt && f % BLINK_PERIOD < BLINK_ON) drawHint(ctx, this.hint);
+    if (this.queue.length && f >= this.queue[0].joinAt && f % BLINK_PERIOD < BLINK_ON) drawHint(ctx, this.hint);
   }
 
-  /** An order, said out loud: a paper bubble over its diner with their name on the band, the tail tapering down to
-   *  just over their head. The tail is drawn first so the paper sits on its root. */
-  bubble(ctx: CanvasRenderingContext2D, d: Diner): void {
-    const x = d.bx, y = d.by, w = d.bw, tx = d.tx, base = y + BUBBLE_H - 2, tip = TAIL_Y - TIP_H;
-    // a stem down from the paper (hidden behind any lower bubble), then the point over the diner's head
-    ctx.fillStyle = UI.ink; ctx.fillRect(tx - STEM - 1, base, STEM * 2 + 2, tip - base + 1);
-    ctx.beginPath(); ctx.moveTo(tx - BUBBLE_TAIL - 1, tip); ctx.lineTo(tx + BUBBLE_TAIL + 1, tip); ctx.lineTo(tx, TAIL_Y + 1); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = UI.paper; ctx.fillRect(tx - STEM + 1, base, STEM * 2 - 2, tip - base + 2);
-    ctx.beginPath(); ctx.moveTo(tx - BUBBLE_TAIL + 1, tip + 1); ctx.lineTo(tx + BUBBLE_TAIL - 1, tip + 1); ctx.lineTo(tx, TAIL_Y - 2); ctx.closePath(); ctx.fill();
-    drawTicket(ctx, x, y, w, BUBBLE_H, { title: d.title, rules: false, perforated: false });
-    drawText(ctx, d.text, x + w / 2, y + 19, { size: 1, color: UI.ink, align: 'center', shadow: false });
+  /** How many of a dish's diners have joined in by frame `f` (they join front first). */
+  joined(c: Chorus, f: number): number {
+    let n = 0;
+    for (let j = 0; j < c.members.length; j++) if (f >= this.queue[c.members[j]].joinAt) n++;
+    return n;
+  }
+
+  /** A dish, said out loud by everyone who wants it: a paper bubble with the count on its band and the dish's line
+   *  under it, and a tail down from its foot to a bead over each of their heads with the dish's picture in it. Tails
+   *  first, so the paper sits on their roots. Nothing until its first diner has joined in. */
+  bubble(ctx: CanvasRenderingContext2D, c: Chorus, f: number): void {
+    const n = this.joined(c, f);
+    if (!n) return;
+    const x = c.bx, y = c.by, w = c.bw, base = y + c.bh - 2;
+    for (let j = 0; j < n; j++) {
+      const d = this.queue[c.members[j]], tx = d.x, top = d.beadY - d.beadR;
+      // a stem down from the paper (hidden behind any lower bubble) to the bead, and the bead's point at their head
+      ctx.fillStyle = UI.ink; ctx.fillRect(tx - STEM - 1, base, STEM * 2 + 2, top - base + 1);
+      ctx.beginPath(); ctx.moveTo(tx - POINT_H - 1, d.beadY + d.beadR - 2); ctx.lineTo(tx + POINT_H + 1, d.beadY + d.beadR - 2); ctx.lineTo(tx, d.tipY + 1); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(tx, d.beadY, d.beadR + 1, 0, TAU); ctx.fill();
+      ctx.fillStyle = UI.paper; ctx.fillRect(tx - STEM + 1, base, STEM * 2 - 2, top - base + 2);
+      ctx.beginPath(); ctx.arc(tx, d.beadY, d.beadR - 1, 0, TAU); ctx.fill();
+      drawDish(ctx, d.recipe, tx, d.beadY + 1, d.beadS);
+    }
+    BUBBLE_OPTS.title = c.titles[n - 1];
+    drawTicket(ctx, x, y, w, c.bh, BUBBLE_OPTS);
+    drawText(ctx, c.text, x + w / 2, y + 19, LINE_TEXT);
+    for (let r = 0; r < c.notes.length; r++) drawText(ctx, c.notes[r], x + w / 2, y + 19 + ROW * (r + 1), NOTE_TEXT);
   }
 
   override summary() {
-    const run = this.game.run;
-    return { line: run.line, place: run.lines[run.line].place, waiting: this.queue.length, round: this.round, customer: run.order.customer, dish: run.order.dish, taken: this.taken,
-      bubble: this.queue.length && this.frame >= this.queue[0].bubbleAt ? this.queue[0].text : '',
-      bubbles: this.queue.filter((d) => d.speaks && this.frame >= d.bubbleAt).map((d) => d.text),
-      // who stands where: the whole line's species and places, front first
-      diners: this.queue.map((d, i) => run.lines[run.line].customers[run.customer + i].customer), spots: this.queue.map((d) => d.tx + ',' + d.ty) };
+    const run = this.game.run, f = this.frame;
+    return { line: run.line, place: run.lines[run.line].place, waiting: this.queue.length, customer: run.order.customer, dish: run.order.dish, taken: this.taken,
+      // the order as said so far: what the diner at the hatch is asking for, one bubble per dish, its band and its
+      // words, and how many have joined in
+      bubble: this.queue.length && f >= this.queue[0].joinAt ? this.chorus[this.queue[0].dish].text : '',
+      bubbles: this.chorus.filter((c) => this.joined(c, f) > 0).map((c) => c.text),
+      chorus: this.chorus.map((c) => ({ title: this.joined(c, f) ? c.titles[this.joined(c, f) - 1] : '', joined: this.joined(c, f), count: c.members.length, notes: c.notes.slice(), box: [c.bx, c.by, c.bw, c.bh] })),
+      // who stands where: the whole line's species and places, front first, and which bubble each one's tail hangs from
+      diners: this.queue.map((d, i) => run.lines[run.line].customers[run.customer + i].customer), spots: this.queue.map((d) => d.x + ',' + d.y), dishes: this.queue.map((d) => d.dish) };
   }
   /** Every field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] { const f = this.fields; f.length = 0; f.push(this.frame, this.taken); return f; }

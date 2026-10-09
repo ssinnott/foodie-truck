@@ -33,13 +33,14 @@ const TOP = ROWS.counterTop;
 export const FRIDGE = Object.freeze({ x: PROP_X[FRIDGE_I] - 22, y: 146, w: 44, h: 110, doorY: 172 });
 /**
  * The pile beside the chopping board: the board is the one station that is a flat surface rather than a vessel,
- * so what waits there is laid out on the counter to its RIGHT - past the round board, short of the bowl - in two
- * rows of PILE_COLS on PILE_PITCH. To the left it stood exactly where the cook chopping stands, behind their
- * head for the whole step; on the right only a second cook waiting at the bowl can cover it. Everywhere else the
- * batch goes INTO the prop (`intake`).
+ * so what waits there is laid out on the counter to its RIGHT - past the round board, short of the bowl - in rows
+ * of PILE_COLS on PILE_PITCH. To the left it stood exactly where the cook chopping stands, behind their head for
+ * the whole step; on the right only a second cook waiting at the bowl can cover it. Everywhere else the batch goes
+ * INTO the prop (`intake`). PILE_ROWS rows is a full pile: a whole line's chopping lands on top of what is already
+ * there rather than stacking up the wall into the timing card.
  */
 export const PILE_X = PROP_X[CHOP_I] + 30;
-const PILE_COLS = 4, PILE_PITCH = 9;
+const PILE_COLS = 4, PILE_PITCH = 9, PILE_ROWS = 3, PILE_SLOTS = PILE_COLS * PILE_ROWS;
 /** How high a flying item arcs over the counter between two stations, and the size it is drawn at on its way. */
 export const FLY_ARC = 44, FLY_S = 4;
 /** The chopping board: 48x11 on the counter top, with the big round board leaning behind it (the station's
@@ -238,9 +239,10 @@ export function drawFridge(ctx, openT, icons, hexes, next) {
   ctx.fillStyle = PROPS.brass; ctx.fillRect(F.x - 7, dy + 8, 2, 22);
 }
 
-/** Slot `i` of the pile beside the board: two rows of PILE_COLS on the counter, the second behind and above the first. */
-export function pileSlotX(i) { return PILE_X + (i % PILE_COLS) * PILE_PITCH; }
-export function pileSlotY(i) { return TOP - 5 - ((i / PILE_COLS) | 0) * 7; }
+/** Slot `i` of the pile beside the board: rows of PILE_COLS on the counter, each behind and above the last, and past
+ *  PILE_SLOTS round again onto the front row. */
+export function pileSlotX(i) { return PILE_X + ((i % PILE_SLOTS) % PILE_COLS) * PILE_PITCH; }
+export function pileSlotY(i) { return TOP - 5 - (((i % PILE_SLOTS) / PILE_COLS) | 0) * 7; }
 /** Where component `j` of the dish sits on a plate drawn at (x, y): three across, the third up on the first two. */
 export function plateSlotX(x, j) { return x - 6 + j * 7 + (j > 1 ? 1 : 0); }
 export function plateSlotY(y, j) { return y - 3 - (j > 1 ? 5 : 0); }
@@ -264,9 +266,10 @@ export function intake(station, unit, dish, out) {
   }
 }
 
-/** The pile beside the board: units 1..n-1 of the batch (unit 0 is ON the board, drawChopItem's). Nothing for n <= 1. */
+/** The pile beside the board: units 1..n-1 of the batch (unit 0 is ON the board, drawChopItem's), a full pile's
+ *  worth of them. Nothing for n <= 1. */
 export function drawPile(ctx, icons, hexes, n) {
-  for (let i = 1; i < n && i < icons.length; i++) drawFood(ctx, icons[i], pileSlotX(i - 1), pileSlotY(i - 1), FLY_S, hexes[i]);
+  for (let i = 1; i < n && i < icons.length && i <= PILE_SLOTS; i++) drawFood(ctx, icons[i], pileSlotX(i - 1), pileSlotY(i - 1), FLY_S, hexes[i]);
 }
 
 /**

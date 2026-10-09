@@ -279,7 +279,7 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   coin: (c, d, t, o) => { [0, 0.06, 0.13].forEach((dt, i) => { ring(c, d, t + dt, { type: 'sine', f0: (2200 + i * 300) * o.p, modF: 60 * o.p, dur: 0.16, vol: 0.09 * o.v, attack: 0.001 }); knock(c, d, t + dt, { v: o.v * 0.5, p: o.p, f: 3000 + i * 400, dur: 0.015, vol: 0.1 }); }); return t + 0.3; },
   /** The crew's cheer: a little rising fanfare. */
   cheer: (c, d, t, o) => arp(c, d, t, { v: o.v, p: o.p, notes: [67, 72, 76, 79], gap: 0.08, dur: 0.16, last: 0.45, vol: 0.12, type: 'triangle' }),
-  /** A diner steps up and waves. */
+  /** A diner in the line waves as they order. */
   hello: (c, d, t, o) => { osc(c, d, t, { type: 'triangle', f0: 520 * o.p, f1: 700 * o.p, glide: 0.06, dur: 0.12, vol: 0.09 * o.v, attack: 0.01, vib: { rate: 24, depth: 30 } }); return osc(c, d, t + 0.13, { type: 'triangle', f0: 640 * o.p, f1: 560 * o.p, glide: 0.08, dur: 0.14, vol: 0.08 * o.v, attack: 0.01, vib: { rate: 24, depth: 30 } }); },
   /** The day's stars, at CLOSING TIME: a slow bell arpeggio with a tail. */
   day_done: (c, d, t, o) => { const e = echo(c, d, { time: 0.14, wet: 0.3, lowpass: 3000, when: t, life: 1.6 }); return arp(c, e, t, { v: o.v, p: o.p, notes: [67, 71, 74, 79, 83], gap: 0.13, dur: 0.4, last: 1.0, vol: 0.1 }); },
