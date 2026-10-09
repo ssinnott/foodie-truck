@@ -170,9 +170,17 @@ export const SCENARIOS = {
         await step('the releases land everywhere', pages, () => waitFrames(pages, f1 + 12));
         await checkLockstep(pages, `after ${SCENE_FRAMES} frames of ${id}`);
         // the canary only compares a hash; compare the SIM itself too, so a scene whose checksum is too thin is
-        // caught by the thing the checksum is standing in for
-        const tops = await Promise.all(pages.map((p) => p.evaluate(() => JSON.stringify(window.__game.game.screen.checksumFields()))));
-        assert(tops[0] === tops[1], `${id}: both machines hold identical checksum fields after the push`);
+        // caught by the thing the checksum is standing in for. Both machines are still running, and lockstep lets
+        // them stand a frame or two apart, so they are compared on the SAME frame: each page answers with its frame
+        // and its fields in one go, and a pair read across a step is read again. Reading the two at "the same
+        // moment" instead compared frame N with frame N+1 now and then, and failed on a room that was in step.
+        let tops = null;
+        for (let tries = 0; tries < 40 && !tops; tries++) {
+          const got = await Promise.all(pages.map((p) => p.evaluate(() => ({ frame: window.__game.game.frame, fields: JSON.stringify(window.__game.game.screen.checksumFields()) }))));
+          if (got[0].frame === got[1].frame) tops = got.map((g) => g.fields);
+        }
+        assert(tops !== null, `${id}: the two machines can be read on the same frame`);
+        assert(!!tops && tops[0] === tops[1], `${id}: both machines hold identical checksum fields after the push`);
         const errs = await Promise.all(pages.map((p) => p.evaluate(() => window.__game.errors.length)));
         assert(errs.every((e) => e === 0), `${id}: no runtime errors in the room (${errs.join()})`);
       });
