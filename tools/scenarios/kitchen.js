@@ -14,19 +14,27 @@
 //             line too: the pulls have landed at the board by the time seat 0 gets
 //             there, the tenth chop clears the board and puts the whole batch in the air for the bowl
 //             (kitchen-fly.png, mid-arc), it has dropped in by the time seat 0 arrives, and the dish is stacked
-//             on the plate before the bell.
+//             on the plate before the bell. The ceiling slice is held off after the board's first chop
+//             (`holdOffSlice`): a rules test sees no joke.
 //   kitchenTogether - the fete's nine-long line cooked AS ONE GIANT ORDER: all nine orders taken at once, read by
 //             dish on the ticket and the hatch shelf (a plate per dish, how many it is for under it), the whole line
 //             at the hatch (the front three leaning in, the rest in rows behind them), the steps merged with each
 //             order's own kept in order, one fridge run a tap per ingredient, every plate dished before the one bell,
 //             then every plate SERVED out through the hatch to its diner, front of the line first, and results with
-//             all nine eating and the day closed. Writes kitchen-together(-plated / -serving / -served).png and
-//             results-together.png.
+//             all nine eating and the day closed, the ceiling slice held off. Writes
+//             kitchen-together(-plated / -serving / -served).png and results-together.png.
 //   kitchenPause - `start` from a seat pushes the pause overlay, `cancel` pops it and the kitchen underneath is
 //             exactly as it was left (step, scores, owners, seat positions); online the push is refused.
-//   kitchenGag - Barley's eat gag hands him an apple and TAKES IT BACK: the rig's held item is cleared with the
-//             state, at a spot where no station suggests one; and a push of the stick ends the gag at once, so
-//             the joke never holds a player still. Writes tools/screens/kitchen-gag.png.
+//   kitchenGag - Barley's bite: CHOMP!, a proper chew, MMM! at the swallow. It hands him an apple and TAKES IT BACK:
+//             the rig's held item is cleared with the state, at a spot where no station suggests one; and a push of
+//             the stick ends the beat at once, so the joke never holds a player still (and it still goes down:
+//             MMM!). Writes tools/screens/kitchen-gag.png and kitchen-gag-mmm.png.
+//   kitchenSlice - the ceiling slice: a chop dealt the slice flicks one up off the board onto the ceiling, where it
+//             hangs dripping (the tell), sags off it on a strand (the wind-up) and, dangling, lets go onto the first
+//             head to come under it: PLOP!, worn while the stick still walks, then shaken off onto the floor. Nobody
+//             under it, it waits, then SPLATs on the floor. Under it, the hungry one EATS it - CHOMP!, MMM! - and
+//             holding the bowl's stir under it, the stir never stops for it. Nothing about the dish changes. Writes
+//             kitchen-slice-flick / -ceiling / -peel / -drop / -plop / -hat / -floor / -gape / -barley / -mmm.png.
 //   results - opens straight onto results with the whole line on the lane, every diner holding the plate the
 //             kitchen handed them and eating it at once, a bite at a time, the crew cheering from the truck on a
 //             stagger once the stars have landed, and action banks the whole line and closes the day. Writes
@@ -43,6 +51,31 @@ const SHOTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'scr
 const STATION_X = [36, 122, 214, 306, 398, 490];
 /** Station indices (content/places.js STATIONS). */
 export const FRIDGE = 0, CHOP = 1, MIX = 2, STOVE = 3, OVEN = 4, PLATE = 5;
+/** Walking pace, px/frame (screens/kitchen.ts SPEED). */
+const SPEED = 2;
+/**
+ * The jokes' numbers (game/kitchenGags.ts), mirrored - and checked against the module itself by `kitchenSlice`, so
+ * a change there fails here rather than passing on stale arithmetic. The slice: the first chop it can be dealt to,
+ * its clock (stuck at FLICK, peeling from PEEL_AT, dangling by its strand at READY_AT, given up at GIVE_UP), FALL frames
+ * down, UNDER px either side of it, worn HAT_FRAMES and shaken off over the last SHAKE_FRAMES. The hungry one's eat
+ * beat is EAT_FRAMES, his MMM! MMM_AT frames into it.
+ */
+export const GAGS = Object.freeze({
+  SLICE_FIRST: 3, FLICK: 14, PEEL_AT: 60, PEEL_STEP: 30, READY_AT: 150, GIVE_UP: 270, FALL: 14, UNDER: 16, HAT_FRAMES: 90, SHAKE_FRAMES: 18,
+  EAT_FRAMES: 74, MMM_AT: 50,
+});
+/** How many word cards are up (game/gags.ts gagsUp, the same module instance the game draws from). */
+export const cardsUp = (page) => page.evaluate(async () => (await import('/src/game/gags.ts')).gagsUp());
+/** Walk seat `seat` to x (an even number: the seats walk 2 px a frame) and let go. */
+export async function walkX(api, seat, x) {
+  const x0 = (await api.summary()).top.seats[seat][1];
+  if (x0 !== x) {
+    await api.hold(seat, x > x0 ? { right: true } : { left: true });
+    await api.step(Math.round(Math.abs(x - x0) / SPEED));
+    await api.release(seat);
+  }
+  return api.summary();
+}
 
 /**
  * Walk seat 0 to a station: hold the direction and step until the summary says it is there (a budget of 400 frames,
@@ -64,6 +97,15 @@ export async function chopOnce(api) {
   return api.summary();
 }
 
+/**
+ * Hold the ceiling slice off a rules test (it has a scenario of its own, `kitchenSlice`): its deal is rolled on the
+ * board's first chop, so this takes it back straight after that chop, through the field the roll writes
+ * (game/kitchenGags.ts `deal`) - before the earliest chop a slice can be dealt to.
+ */
+export async function holdOffSlice(page) {
+  await page.evaluate(() => { window.__game.game.screen.gags.deal = 0; });
+}
+
 /** The fridge: walk to it and tap until the step moves on (one tap per ingredient the order wants, so the count is the order's). */
 export async function pullAll(api) {
   let s = await walkTo(api, FRIDGE);
@@ -72,11 +114,14 @@ export async function pullAll(api) {
   return s;
 }
 
-/** The fridge, the chop and the mix are the first three steps of both prototype orders; drive them through. */
-async function chopAndMix(api) {
+/** The fridge, the chop and the mix are the first three steps of both prototype orders; drive them through (with no
+ *  slice flicked off the board: a rules test sees no joke). */
+async function chopAndMix(api, page) {
   await pullAll(api);
   await walkTo(api, CHOP);
-  for (let i = 0; i < 10; i++) await chopOnce(api);
+  await chopOnce(api);
+  await holdOffSlice(page);
+  for (let i = 1; i < 10; i++) await chopOnce(api);
   await walkTo(api, MIX);
   await api.hold(0, { action: true });
   await api.step(241);
@@ -195,6 +240,7 @@ export const SCENARIOS = {
       assert(s.top.at[CHOP] === 6 && s.top.flying === 0, `the six pulls are on and beside the board (at ${s.top.at}, flying ${s.top.flying})`);
       s = await chopOnce(api);
       assert(s.top.count === 1 && s.top.owners[1] === 0, `the first tap is a chop and claims the step for P1 (count ${s.top.count}, owner ${s.top.owners[1]})`);
+      await holdOffSlice(page);                  // the slice a chop can flick onto the ceiling is kitchenSlice's
       await api.step(40);                        // a long think between chops costs nothing
       for (let i = 0; i < 9; i++) { s = await chopOnce(api); if (i === 3) { await api.step(7); await api.shot('kitchen-chop'); } }
       assert(s.top.step === 2 && s.top.scores[1] === 2, `ten taps complete the step as PERFECT (step ${s.top.step}, score ${s.top.scores[1]})`);
@@ -270,7 +316,7 @@ export const SCENARIOS = {
       await api.step(2);
       let s = await oneOrder(api, page);
       assert(s.top.steps.join() === 'FRIDGE,CHOP,MIX,STOVE,PLATE', `the fish cakes order cooks on the stove (${s.top.steps.join()})`);
-      s = await chopAndMix(api);
+      s = await chopAndMix(api, page);
       assert(s.top.step === 3 && s.top.scores[1] === 2 && s.top.scores[2] === 2, `the chop and the mix are PERFECT (step ${s.top.step}, ${s.top.scores.slice(0, 3).join()})`);
       s = await walkTo(api, STOVE);
       assert(s.top.seats[0][2] === STOVE, `seat 0 is at the stove (station ${s.top.seats[0][2]})`);
@@ -332,9 +378,10 @@ export const SCENARIOS = {
   },
 
   /**
-   * Barley's eat gag hands him an ingredient for 42 frames. The rig has to give it back: the reconcile in
-   * updateSeats only runs when the wanted item CHANGES, so a gag that ends where no station suggests one used to
-   * leave the apple welded to his paw for the rest of the service.
+   * Barley's bite: the eat beat hands him an ingredient for EAT_FRAMES - CHOMP! as he bites, three chews with the
+   * crumbs flying, MMM! at the swallow - and the rig has to give it back: the reconcile in updateSeats only runs when
+   * the wanted item CHANGES, so a beat that ends where no station suggests one used to leave the apple welded to his
+   * paw for the rest of the service. And any push of the stick ends it on that frame.
    */
   async kitchenGag(server) {
     await withPage(server, 'skipTo=kitchen&critters=0,1', async (api, page) => {
@@ -348,39 +395,171 @@ export const SCENARIOS = {
       let s = await api.summary();
       assert(s.top.seats[0][2] === -1 && s.top.seats[0][5] === 0, `seat 0 stands at no station with empty paws (station ${s.top.seats[0][2]}, item ${s.top.seats[0][5]})`);
 
-      // the gag is a seeded one-in-six on each completed step, so force steps until it rolls (the step index is
+      // the bite is a seeded one-in-six on each completed step, so force steps until it rolls (the step index is
       // put back each time, so the order is never actually served out from under the test)
-      const eatT = await page.evaluate(() => {
+      const force = () => page.evaluate(() => {
         const g = window.__game.game, k = g.screens[g.screens.length - 1];
         for (let i = 0; i < 200 && k.seats[0].eatT === 0; i++) { k.completeStep(1, null); k.stepIdx = 0; }
         return k.seats[0].eatT;
       });
-      assert(eatT > 0, `the gag fires and locks the seat for ${eatT} frames`);
-      await api.step(4);
+      const eatT = await force();
+      assert(eatT === GAGS.EAT_FRAMES, `the bite fires and he eats for ${GAGS.EAT_FRAMES} frames (eatT ${eatT})`);
+      const total = (await api.summary()).top.total;
+      await api.step(6);
       s = await api.summary();
-      assert(s.top.seats[0][3] === 'eat' && s.top.seats[0][5] === 1, `he is eating, with something in his paw (${s.top.seats[0][3]}, item ${s.top.seats[0][5]})`);
+      const cards = await cardsUp(page);
+      assert(s.top.seats[0][3] === 'chomp' && s.top.seats[0][5] === 1, `he is chomping, with the apple in his paw (${s.top.seats[0][3]}, item ${s.top.seats[0][5]})`);
+      assert(cards >= 1, `CHOMP! is up over him (${cards} cards)`);
       await api.shot('kitchen-gag');
 
-      await api.step(50);            // past EAT_FRAMES (42) with no station to suggest an item
+      // the swallow: the paw empties, MMM!
+      await api.step(GAGS.MMM_AT - 6 + 4);
       s = await api.summary();
-      assert(s.top.seats[0][4] === 0, `the gag is over (eatT ${s.top.seats[0][4]})`);
+      assert(s.top.seats[0][4] > 0 && s.top.seats[0][5] === 0, `at the swallow the apple is gone from his paw, the beat still running (eatT ${s.top.seats[0][4]}, item ${s.top.seats[0][5]})`);
+      assert((await cardsUp(page)) >= 1, 'MMM! is up');
+      await api.shot('kitchen-gag-mmm');
+
+      await api.step(GAGS.EAT_FRAMES - GAGS.MMM_AT + 2);   // past the beat, with no station to suggest an item
+      s = await api.summary();
+      assert(s.top.seats[0][4] === 0, `the bite is over (eatT ${s.top.seats[0][4]})`);
       assert(s.top.seats[0][5] === 0, `the rig's held item went with it (item ${s.top.seats[0][5]})`);
       assert(s.top.seats[0][3] === 'idle', `and he is idling again (${s.top.seats[0][3]})`);
+      assert(s.top.total === total, `the bite cost nothing and scored nothing (total ${total} -> ${s.top.total})`);
 
-      // the gag never holds a player still: roll it again and push the stick, and it is over on that frame
-      const again = await page.evaluate(() => {
-        const g = window.__game.game, k = g.screens[g.screens.length - 1];
-        for (let i = 0; i < 200 && k.seats[0].eatT === 0; i++) { k.completeStep(1, null); k.stepIdx = 0; }
-        return k.seats[0].eatT;
-      });
-      assert(again > 0, `the gag fires a second time (eatT ${again})`);
+      // the bite never holds a player still: roll it again and push the stick, and it is over on that frame
+      const again = await force();
+      assert(again > 0, `the bite fires a second time (eatT ${again})`);
       const x0 = (await api.summary()).top.seats[0][1];
       await api.hold(0, { left: true });
       await api.step(3);
       await api.release(0);
       s = await api.summary();
-      assert(s.top.seats[0][4] === 0 && s.top.seats[0][5] === 0, `a push of the stick ends the gag at once and takes the apple back (eatT ${s.top.seats[0][4]}, item ${s.top.seats[0][5]})`);
+      assert(s.top.seats[0][4] === 0 && s.top.seats[0][5] === 0, `a push of the stick ends the bite at once and takes the apple back (eatT ${s.top.seats[0][4]}, item ${s.top.seats[0][5]})`);
       assert(s.top.seats[0][1] < x0, `and he walked on that same push (${x0} -> ${s.top.seats[0][1]})`);
+      await api.step(GAGS.MMM_AT);
+      assert((await cardsUp(page)) >= 1, 'a bite the stick cut short still goes down: MMM!');
+    });
+  },
+
+  /**
+   * THE CEILING SLICE. One chopping in three has a chop that flicks a slice of the ingredient up onto the ceiling; the
+   * deal is one roll on the board's first chop, so the scenario rolls it and then sets the dealt chop by hand
+   * (`gags.deal`), the field the roll writes. The slice goes up spinning, sticks over the board and drips (the tell),
+   * peels in three stages, sagging on a strand (the wind-up), and dangling it waits for a head: the first free cook
+   * under it gets it - PLOP!, worn on the head while the stick still walks, shaken off, onto the floor - and with
+   * nobody under it, it gives up and SPLATs on the floor. The hungry one under it EATS it: CHOMP!, the chew, MMM!; and
+   * holding the bowl's stir under it, the stir never loses a frame. The dish is untouched throughout.
+   */
+  async kitchenSlice(server) {
+    const G = GAGS;
+    // a party without the hungry one: the slice is worn
+    await withPage(server, 'skipTo=kitchen&critters=1,2&order=1', async (api, page) => {
+      await api.step(2);
+      await oneOrder(api, page);
+      const mod = await page.evaluate(async (keys) => { const m = await import('/src/game/kitchenGags.ts'); return Object.fromEntries(keys.map((k) => [k, m[k]])); }, Object.keys(G));
+      assert(JSON.stringify(mod) === JSON.stringify(G), `the scenario's numbers are the module's (${JSON.stringify(mod)})`);
+      await pullAll(api);
+      let s = await walkTo(api, CHOP);
+      // the deal is rolled on the first chop; set the chop it lands on, as the roll would
+      s = await chopOnce(api);
+      assert(s.top.count === 1 && s.top.slicePhase === 'none', `the first chop deals and nothing has flown yet (count ${s.top.count}, ${s.top.slicePhase})`);
+      await page.evaluate((k) => { window.__game.game.screen.gags.deal = k; }, G.SLICE_FIRST);
+      for (let i = 1; i < G.SLICE_FIRST; i++) s = await chopOnce(api);
+      assert(s.top.slicePhase === 'up' && s.top.sliceT > 0 && s.top.sliceT < G.FLICK, `the dealt chop flicks a slice up off the board (${s.top.slicePhase}, t ${s.top.sliceT})`);
+      await api.step(4);
+      await api.shot('kitchen-slice-flick');
+      // THE TELL: stuck to the ceiling over the board, dripping, while the chopping goes on underneath it
+      await api.step(G.FLICK + 8 - (await api.summary()).top.sliceT);
+      s = await api.summary();
+      const x = s.top.sliceX;
+      assert(s.top.slicePhase === 'hang' && x === 168, `it sticks to the ceiling over the board (${s.top.slicePhase} at x ${x})`);
+      await api.shot('kitchen-slice-ceiling');
+      for (let i = G.SLICE_FIRST; i < 10; i++) s = await chopOnce(api);
+      assert(s.top.step === 2 && s.top.scores[1] === 2 && s.top.total === 4, `the chopping finishes under it, PERFECT as ever (step ${s.top.step}, scores ${s.top.scores}, total ${s.top.total})`);
+      // THE WIND-UP: it peels, a stage at a time
+      await api.step(G.PEEL_AT + G.PEEL_STEP + 10 - (await api.summary()).top.sliceT);
+      s = await api.summary();
+      assert(s.top.slicePhase === 'peel', `it peels (${s.top.slicePhase}, t ${s.top.sliceT})`);
+      await api.shot('kitchen-slice-peel');
+      // dangling, and nobody under it (seat 0 chopped left of the board, seat 1 stands at the board's left): it waits
+      await api.step(G.READY_AT + 6 - s.top.sliceT);
+      s = await api.summary();
+      assert(s.top.slicePhase === 'ready' && s.top.seats.every((q) => Math.abs(q[1] - x) > G.UNDER), `ready, it hangs on while nobody is under it (${s.top.slicePhase}; seats at ${s.top.seats.map((q) => q[1])})`);
+      // THE BANG: seat 1 walks under it, and it lets go onto that head
+      s = await walkX(api, 1, x - G.UNDER);
+      assert(s.top.slicePhase === 'fall' && s.top.sliceOn === 1, `the moment seat 1 is under it, it lets go onto them (${s.top.slicePhase}, on seat ${s.top.sliceOn})`);
+      await api.step(G.FALL - 6);
+      await api.shot('kitchen-slice-drop');
+      await api.step(6 + 2);
+      s = await api.summary();
+      assert(s.top.slices === 1 && s.top.slicePhase === 'none' && s.top.hats[1] > G.HAT_FRAMES - 6 && s.top.hats[0] === 0, `PLOP: it is on seat 1's head (slices ${s.top.slices}, hats ${s.top.hats})`);
+      assert((await cardsUp(page)) >= 1, 'PLOP! is up');
+      await api.step(4);
+      await api.shot('kitchen-slice-plop');
+      // THE LOOK, and the stick still walks: seat 1 goes on with it on their head
+      const x1 = s.top.seats[1][1];
+      s = await walkX(api, 1, x1 - 24);
+      assert(s.top.seats[1][1] === x1 - 24 && s.top.hats[1] > 0, `wearing it, the stick still walks (x ${x1} -> ${s.top.seats[1][1]}, hat ${s.top.hats[1]})`);
+      await api.shot('kitchen-slice-hat');
+      // ...then shaken off, onto the floor behind them
+      await api.step(s.top.hats[1] - G.SHAKE_FRAMES + 4);
+      s = await api.summary();
+      assert(s.top.seats[1][3] === 'shake' && s.top.hats[1] > 0, `at the end of it the cook shakes it off (${s.top.seats[1][3]}, hat ${s.top.hats[1]})`);
+      await api.step(G.SHAKE_FRAMES + 20);
+      s = await api.summary();
+      assert(s.top.hats[1] === 0 && s.top.splats >= 1 && s.top.seats[1][3] === 'idle', `off it comes, and it lies on the floor (hat ${s.top.hats[1]}, splats ${s.top.splats}, ${s.top.seats[1][3]})`);
+      // nothing about the dish changed: the batch is in the bowl, the scores as they were
+      assert(s.top.at[MIX] === 6 && s.top.total === 4 && s.top.scores.join() === '2,2,-1,-1,-1', `the dish never knew (at ${s.top.at}, total ${s.top.total}, scores ${s.top.scores})`);
+      // NOBODY UNDER IT: a second one, forced through the deal again; it waits its while and gives up onto the floor
+      await page.evaluate((k) => { const g = window.__game.game.screen.gags; g.deal = k; g.chop(k, '#D9463B'); }, G.SLICE_FIRST);
+      await api.step(G.GIVE_UP + G.FALL + 4);
+      s = await api.summary();
+      assert(s.top.slices === 2 && s.top.sliceOn === -1 && s.top.hats.every((h) => h === 0) && s.top.splats >= 1, `with nobody under it, it SPLATs on the floor (slices ${s.top.slices}, on ${s.top.sliceOn}, hats ${s.top.hats})`);
+      assert((await cardsUp(page)) >= 1, 'SPLAT! is up');
+      await api.shot('kitchen-slice-floor');
+    });
+
+    // the hungry one: he eats the evidence
+    await withPage(server, 'skipTo=kitchen&critters=0,1&order=1', async (api, page) => {
+      await api.step(2);
+      await oneOrder(api, page);
+      await pullAll(api);
+      let s = await walkTo(api, CHOP);
+      s = await chopOnce(api);
+      await page.evaluate((k) => { window.__game.game.screen.gags.deal = k; }, G.SLICE_FIRST);
+      for (let i = 1; i < 10; i++) s = await chopOnce(api);
+      // (his own bite may roll on the chopping's last chop; a step of the stick ends it, as it would for a player)
+      if (s.top.seats[0][4] > 0) { await walkX(api, 0, s.top.seats[0][1] + 2); s = await api.summary(); }
+      assert(s.top.step === 2 && s.top.slicePhase !== 'none', `the chopping is done with a slice up (step ${s.top.step}, ${s.top.slicePhase})`);
+      const x = s.top.sliceX, total = s.top.total;
+      await api.step(G.READY_AT + 2 - s.top.sliceT);
+      s = await walkX(api, 0, x - G.UNDER);
+      assert(s.top.slicePhase === 'fall' && s.top.sliceOn === 0, `under it, it lets go onto Barley (${s.top.slicePhase}, on ${s.top.sliceOn})`);
+      await api.step(G.FALL - 4);
+      await api.shot('kitchen-slice-gape');
+      await api.step(4 + 6);
+      s = await api.summary();
+      assert(s.top.slices === 1 && s.top.hats[0] === 0 && s.top.seats[0][3] === 'chomp' && s.top.seats[0][4] > 0 && s.top.seats[0][5] === 1,
+        `Barley eats it: no hat, the chomp, the slice in his paw (hats ${s.top.hats}, ${s.top.seats[0][3]}, eatT ${s.top.seats[0][4]}, item ${s.top.seats[0][5]})`);
+      assert((await cardsUp(page)) >= 1, 'CHOMP! is up');
+      await api.shot('kitchen-slice-barley');
+      await api.step(G.MMM_AT - 6 + 2);
+      s = await api.summary();
+      assert(s.top.seats[0][5] === 0 && s.top.seats[0][4] > 0, `swallowed: the paw is empty (item ${s.top.seats[0][5]})`);
+      await api.shot('kitchen-slice-mmm');
+      await api.step(G.EAT_FRAMES);
+      s = await api.summary();
+      assert(s.top.seats[0][4] === 0 && s.top.seats[0][3] === 'idle' && s.top.total === total && s.top.at[MIX] === 6, `and that is all: idle again, nothing about the dish changed (eatT ${s.top.seats[0][4]}, total ${s.top.total}, at ${s.top.at})`);
+
+      // UNDER IT AT THE BOWL, HOLDING THE STIR: the slice lands in his mouth, and the stir never misses a frame
+      s = await walkX(api, 0, x + 8);
+      assert(s.top.seats[0][2] === MIX && Math.abs(s.top.seats[0][1] - x) <= G.UNDER, `Barley stands at the bowl, under the ceiling spot (station ${s.top.seats[0][2]}, x ${s.top.seats[0][1]})`);
+      await page.evaluate((k) => { const g = window.__game.game.screen.gags; g.deal = k; g.chop(k, '#D9463B'); }, G.SLICE_FIRST);
+      await api.hold(0, { action: true });
+      await api.step(G.READY_AT + G.FALL + 3);
+      s = await api.summary();
+      await api.release(0);
+      assert(s.top.slices === 2 && s.top.t === G.READY_AT + G.FALL + 3 && s.top.seats[0][4] === 0, `it came down on him mid-stir and the stir ran on every frame (slices ${s.top.slices}, t ${s.top.t}, eatT ${s.top.seats[0][4]})`);
     });
   },
 
@@ -415,7 +594,7 @@ export const SCENARIOS = {
         if (name === 'FRIDGE') s = await pullAll(api);
         else {
           s = await walkTo(api, [FRIDGE, CHOP, MIX, STOVE, OVEN, PLATE][['FRIDGE', 'CHOP', 'MIX', 'STOVE', 'OVEN', 'PLATE'].indexOf(name)]);
-          if (name === 'CHOP') { for (let i = 0; i < 20 && (await api.summary()).top.step === k; i++) await chopOnce(api); }
+          if (name === 'CHOP') { await chopOnce(api); await holdOffSlice(page); for (let i = 1; i < 20 && (await api.summary()).top.step === k; i++) await chopOnce(api); }
           else { await api.hold(0, { action: true }); for (let i = 0; i < 80 && (await api.summary()).top.step === k; i++) await api.step(4); await api.release(0); }
           s = await api.summary();
         }

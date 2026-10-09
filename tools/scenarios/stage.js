@@ -247,23 +247,81 @@ SCENARIOS.twists = async (server) => {
   });
 };
 /**
- * kitchenGags - the room's two jokes: a stove step with the lid due rattles the pot lid for 40 frames, an oven step
- *               with the cloud due puffs flour out of the door. Both are one in six on the seeded rng, so the two
- *               are forced here through the same fields the roll sets, and the draw is checked for errors.
+ * kitchenGags - the room's two jokes, bigger: a stove step with the lid due rattles the pot lid harder and harder with
+ *               steam squirting out under it, blows it off - CLANG! - spinning up like a saucer, and clatters it home
+ *               onto the pot; or, with a cook stood at the pot, down onto their head, the stars going round, before
+ *               it hops home. An oven step with the flour due puffs a cloud out of the door - POOF! - that
+ *               leaves whoever is at the oven flour-white and coughing while they cook on. One in three each on the
+ *               seeded rng, so both are forced here through the calls their rolls make; nothing about either scores.
+ *               Writes kitchen-lid-rattle / -lid / -lid-head / -flour / -flour-cough.png.
  */
 SCENARIOS.kitchenGags = async (server) => {
+  /** The lid's clock and the flour's (game/kitchenGags.ts): RATTLE rattling, then off with the CLANG!, UP, DOWN,
+   *  CLATTER on the pot; on a head OW! OW_LATE in, LID_HAT there, HOP home. Floured FLOUR_FRAMES, the first cough
+   *  COUGH_AT in. */
+  const RATTLE = 32, UP = 14, DOWN = 16, CLATTER = 14, LID_HAT = 48, HOP = 16, OW_LATE = 28, FLOUR_FRAMES = 150, COUGH_AT = 58;
+  /** The pot's x (art/kitchenProps.ts POT, the stove's prop), which is inside the oven's reach; the oven's station index. */
+  const POT_X = 362, OVEN = 4;
+  const cards = (page) => page.evaluate(async () => (await import('/src/game/gags.ts')).gagsUp());
   await withPage(server, 'skipTo=kitchen&critters=0,1&order=1', async (api, page) => {
     await api.step(2);
     const s0 = await api.summary();
-    assert(s0.top.chops === 10 && s0.top.lids === 0 && s0.top.poofs === 0, `a plain order chops ten and nothing has rattled yet (chops ${s0.top.chops})`);
-    await page.evaluate(() => { const sc = window.__game.game.screen; sc.lidT = 40; sc.lids = 1; });
-    await api.step(6);
+    assert(s0.top.chops === 10 && s0.top.lids === 0 && s0.top.poofs === 0 && s0.top.lidT === -1, `a plain order chops ten and nothing has rattled yet (chops ${s0.top.chops}, lidT ${s0.top.lidT})`);
+    const lid = () => page.evaluate(() => window.__game.game.screen.gags.lid());
+    // THE LID, with nobody near the pot: the rattle builds, then it is off
+    await lid();
+    await api.step(RATTLE - 4);
+    let s = await api.summary();
+    assert(s.top.lids === 1 && s.top.lidT === RATTLE - 4, `the lid rattles, harder and harder (lidT ${s.top.lidT})`);
+    await api.shot('kitchen-lid-rattle');
+    // THE BANG: off it goes, CLANG!, spinning up
+    await api.step(4 + 8);
+    assert((await cards(page)) >= 1, 'CLANG! is up as it blows off');
     await api.shot('kitchen-lid');
-    const s1 = await api.summary();
-    assert(s1.top.lidT === 34 && s1.top.lids === 1, `the lid rattles down its forty frames (lidT ${s1.top.lidT})`);
-    await api.step(40);
-    assert((await api.summary()).top.lidT === 0, 'and settles');
-    assert((await api.errors()).length === 0, 'no errors drawing the lid');
+    await api.step(UP - 8 + 2);
+    s = await api.summary();
+    assert(s.top.lidT === RATTLE + UP + 2 && s.top.lidOn === -1, `past the top of its flight, with nobody at the pot to come down on (lidT ${s.top.lidT}, on ${s.top.lidOn})`);
+    await api.step(DOWN - 2 + CLATTER);
+    s = await api.summary();
+    assert(s.top.lidT === -1 && s.top.lidHome === true, `it clatters back down onto the pot and stays there (lidT ${s.top.lidT}, home ${s.top.lidHome})`);
+    // ...and with a cook stood at the pot, it comes down on their head
+    await api.hold(1, { right: true });
+    await api.step((POT_X - s.top.seats[1][1]) / 2);   // two px a frame
+    await api.release(1);
+    s = await api.summary();
+    assert(s.top.seats[1][1] === POT_X && s.top.seats[1][2] === OVEN, `seat 1 stands in front of the pot, at the oven (x ${s.top.seats[1][1]}, station ${s.top.seats[1][2]})`);
+    await lid();
+    await api.step(RATTLE + UP + DOWN + OW_LATE + 6);
+    s = await api.summary();
+    assert(s.top.lidOn === 1 && s.top.lids === 2, `this time it comes down on seat 1's head (on ${s.top.lidOn})`);
+    assert((await cards(page)) >= 1, 'stars, and then: OW!');
+    await api.shot('kitchen-lid-head');
+    await api.step(LID_HAT + HOP + CLATTER);
+    s = await api.summary();
+    assert(s.top.lidT === -1 && s.top.lidHome === true, `then it hops home onto the pot (lidT ${s.top.lidT})`);
+
+    // THE FLOUR: seat 1 is at the oven when the bake is done, and the door puffs it white
+    await page.evaluate(() => { const sc = window.__game.game.screen; sc.gags.poof(sc.seats, sc.seats[1]); });
+    await api.step(8);
+    s = await api.summary();
+    assert(s.top.poofs === 1 && s.top.flour[1] > FLOUR_FRAMES - 10 && s.top.flour[0] === 0, `POOF: whoever was at the oven is floured, nobody else (flour ${s.top.flour})`);
+    assert((await cards(page)) >= 1, 'POOF! is up');
+    await api.shot('kitchen-flour');
+    await api.step(COUGH_AT - 8 + 4);
+    s = await api.summary();
+    assert(s.top.seats[1][3] === 'cough', `stood in it, they cough (${s.top.seats[1][3]})`);
+    assert((await cards(page)) >= 1, 'COUGH');
+    await api.shot('kitchen-flour-cough');
+    // and they cook on: the stick walks in the flour
+    await api.hold(1, { left: true });
+    await api.step(10);
+    await api.release(1);
+    s = await api.summary();
+    assert(s.top.seats[1][1] === POT_X - 20 && s.top.flour[1] > 0, `floured, the stick still walks (x ${s.top.seats[1][1]}, flour ${s.top.flour[1]})`);
+    await api.step(FLOUR_FRAMES);
+    s = await api.summary();
+    assert(s.top.flour.every((v) => v === 0) && s.top.total === 0 && s.top.scores.every((v) => v === -1), `the flour shakes off, and nothing was scored or lost (flour ${s.top.flour}, total ${s.top.total})`);
+    assert((await api.errors()).length === 0, 'no errors drawing the lid and the flour');
   });
 };
 
