@@ -188,7 +188,8 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
 - **Cockle Cove**: the pond's golden hour over the cove's own sea (`art/backgrounds/pond.js COVE`: open water
   `#5E93A8` to an inked horizon, the near water `#3F7E8E`), a cream breaker line, wet sand `#A88E66`, the dry sand
   `#D9C393` with the trodden path `#BFA574` (L .63) under the crew's torsos, marram in the corners, a rowing boat
-  and crab pots; the crab in the ingredient's red is the one red object in the scene; signal: the pond's mint on a
+  with its mooring post (the gull's perch) and crab pots; the crab in the ingredient's red is the one red object in
+  the scene; signal: the pond's mint on a
   grab's ring and over a stopped crab or a crusted pan.
 - **Kitchen**: plum wall `#4A3038`, slate counter top `#4F5A62` (rows 200–206), steel counter front `#3E4A55`
   (rows 206–246), floor checker `#4E4450` / `#5A4E5C` (rows 246–340), feet line y 252 so torsos read on the counter
