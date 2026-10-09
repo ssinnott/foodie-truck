@@ -312,6 +312,11 @@ export class MapScreen extends Screen {
   declare _to?: TruckDrawOpts;
   /** The livery the token is drawn in, read once in enter() (game/garage.ts: never from update()). */
   declare truckStyle: TruckStyle;
+  /**
+   * The hint strip, joined once in enter() because it names the player's own horn: X on the stock keys, ALT on a
+   * phone - where the button marked X is BACK, and a strip that said HONK: X sent thumbs to the wrong one.
+   */
+  declare hint: string;
 
   constructor(game: Game) { super(game, 'map'); this.touchAlt = true; this.sprites = []; this.order = []; this.seats = []; this.heads = []; this.sum = [0, 0, 0, 0, 0, 0]; this.lineRows = []; this.diners = []; }
   override enter(params: ScreenParams): void {
@@ -319,6 +324,7 @@ export class MapScreen extends Screen {
     const run = this.game.run, truck = run.truck;
     particles.clear();
     this.truckStyle = truckStyleFor(this.game);
+    this.hint = 'STEER: ARROWS   HONK: ' + this.game.input.keyText(0, 'alt');
     if (truck.x === 0 && truck.y === 0) { truck.x = PARK_AT.x; truck.y = PARK_AT.y; truck.heading = 0; truck.at = 'home'; }
     this.truck = truck;
     this.speed = 0; this.want = -1; this.turnCd = 0; this.facing = COS[truck.heading] < 0 ? -1 : 1;
@@ -725,7 +731,7 @@ export class MapScreen extends Screen {
     drawWheel(ctx, this.pushMask, this.lean);
     drawDestArrow(ctx, gs.x - cam.x, gs.y - 12 - cam.y, f);
     if (this.signTimer > 0) drawSignPlate(ctx, this.signText, this.signW, SIGN_FRAMES - this.signTimer);
-    drawMapHint(ctx);
+    drawMapHint(ctx, this.hint);
   }
   /**
    * The weather, over the world and under the HUD. Drizzle: RAIN_N streaks of river-blue on a frame hash, falling

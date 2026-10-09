@@ -1,5 +1,5 @@
 // CONTROLS (docs/GDD.md section 9) - the order pad the crew's own buttons are written on. Eight action rows down
-// the left, three columns across: P1's keys, P2's keys, and the one pad table every controller shares.
+// the left, two columns across: the keys, and the one pad table every controller shares.
 //
 // Rebinding is a CAPTURE, not a menu: pick a cell, press ACTION, and engine/input.js stops playing input and hands
 // this screen the very next key or button instead (`capture()` / `capturedKey()` / `capturedButton()`). That is
@@ -10,7 +10,7 @@
 // The rules live in engine/bindings.js, not here: this screen shows what it is told, prints the refusal it is
 // handed when a binding is refused, and never reaches into a table itself. Bindings are written to storage in
 // exit() - one write, on the way out, off the simulation path (docs/MULTIPLAYER.md).
-import { VIEW_W, UI, PLAYER_COLORS } from '../../constants.ts';
+import { VIEW_W, UI } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, ScreenParams } from '../game.ts';
 import { ACTIONS, ACTION_LABELS } from '../../engine/actions.ts';
@@ -22,22 +22,22 @@ import { navX, navY, cancelPressed } from '../menuinput.ts';
 
 const R = Math.round;
 const HEAD_TEXT = 'CONTROLS';
+const HEAD_TEXT_OPTS = { size: 1, color: UI.ink, align: 'center' as const, shadow: false };
 /**
- * Three columns of bindings and the action name they belong to. `seat` is the keyboard slot a column edits, or -1
- * for the column that edits the shared pad table.
+ * Two columns of bindings beside the action names: the keyboard's, and the pad table every controller shares
+ * (`pad`). There was a third, for a couch P2's keys, until local co-op went.
  */
 const COLS = [
-  { title: 'P1 KEYS', seat: 0 },
-  { title: 'P2 KEYS', seat: 1 },
-  { title: 'GAMEPAD', seat: -1 },
+  { title: 'KEYBOARD', pad: false },
+  { title: 'GAMEPAD', pad: true },
 ];
 /**
- * The pad on the counter: wide enough for the longest binding name ('D-RIGHT') in every column at size 1, and
- * exactly as tall as the eight rows and their rules - a ticket with a hand's depth of blank paper under the last
- * line reads as a form somebody forgot to finish.
+ * The pad on the counter: wide enough for the longest binding in each column at size 1 (C / ESC / BKSP on the keys,
+ * D-RIGHT on the pad), and exactly as tall as the eight rows and their rules - a ticket with a hand's depth of
+ * blank paper under the last line reads as a form somebody forgot to finish.
  */
-const PAD_X = 64, PAD_Y = 40, PAD_W = 512, PAD_H = 216;
-/** The action column, then three binding columns of equal width across what is left. */
+const PAD_W = 400, PAD_X = (VIEW_W - PAD_W) / 2, PAD_Y = 40, PAD_H = 216;
+/** The action column, then the binding columns, of equal width, across what is left. */
 const NAME_W = 116;
 const CELL_W = R((PAD_W - NAME_W - 24) / COLS.length);
 const COL_X = COLS.map((_, i) => PAD_X + 12 + NAME_W + i * CELL_W);
@@ -101,11 +101,8 @@ export class ControlsScreen extends Screen {
     for (let c = 0; c < COLS.length; c++) {
       const col = COLS[c];
       for (let a = 0; a < ACTIONS.length; a++) {
-        if (col.seat < 0) this.cells[c][a] = bindings.padLabel((bindings.padMap()[ACTIONS[a]] || [])[0]);
-        else {
-          const map = bindings.keyboardMap(col.seat);
-          this.cells[c][a] = map ? (map[ACTIONS[a]] || []).map(bindings.keyLabel).join(' / ') : '-';
-        }
+        if (col.pad) this.cells[c][a] = bindings.padLabel((bindings.padMap()[ACTIONS[a]] || [])[0]);
+        else this.cells[c][a] = (bindings.keyboardMap()[ACTIONS[a]] || []).map(bindings.keyLabel).join(' / ');
       }
     }
   }
@@ -127,11 +124,11 @@ export class ControlsScreen extends Screen {
       audio.play('menu_confirm');
       return;
     }
-    // ALT puts THIS COLUMN back to stock - the column the cursor is in, so a player who has tangled one seat's
-    // keys is not made to throw away the other seat's and the pad's as well.
+    // ALT puts THIS COLUMN back to stock - the column the cursor is in, so a player who has tangled their keys is
+    // not made to throw away their pad's buttons as well.
     if (inp.anyPressed('alt') >= 0) {
       const col = COLS[this.col];
-      if (col.seat < 0) bindings.resetPad(); else bindings.resetKeyboard(col.seat);
+      if (col.pad) bindings.resetPad(); else bindings.resetKeyboard();
       this.dirty = true;
       this.refresh();
       this.say(`${col.title} BACK TO DEFAULTS`);
@@ -152,12 +149,12 @@ export class ControlsScreen extends Screen {
     const col = COLS[this.col], action = ACTIONS[this.row];
     let done = false;
     if (code === 'Escape') { this.say('REBIND CANCELLED'); this.game.audio.play('menu_back'); done = true; }
-    else if (col.seat < 0 && button >= 0) { done = this.apply(bindings.bindPad(action, button)); }
-    else if (col.seat >= 0 && code) { done = this.apply(bindings.bindKey(col.seat, action, code)); }
-    // a key pressed at the pad column (or a button at a key column) is the wrong device for this cell, and saying
+    else if (col.pad && button >= 0) { done = this.apply(bindings.bindPad(action, button)); }
+    else if (!col.pad && code) { done = this.apply(bindings.bindKey(action, code)); }
+    // a key pressed at the pad column (or a button at the key column) is the wrong device for this cell, and saying
     // so is friendlier than a cell that silently refuses to change
-    else if (col.seat < 0 && code) { this.say('THAT COLUMN WANTS A BUTTON'); done = true; }
-    else if (col.seat >= 0 && button >= 0) { this.say('THAT COLUMN WANTS A KEY'); done = true; }
+    else if (col.pad && code) { this.say('THAT COLUMN WANTS A BUTTON'); done = true; }
+    else if (!col.pad && button >= 0) { this.say('THAT COLUMN WANTS A KEY'); done = true; }
     else if (this.listenT >= CAPTURE_FRAMES) { this.say('REBIND TIMED OUT'); done = true; }
     if (done) { inp.endCapture(); this.listening = false; }
   }
@@ -175,13 +172,8 @@ export class ControlsScreen extends Screen {
     drawSign(ctx, VIEW_W / 2, 2, measureText(HEAD_TEXT, 2) + 18, 26, HEAD_TEXT, { size: 2 });
     drawTicket(ctx, PAD_X, PAD_Y, PAD_W, PAD_H, { title: 'WHO PRESSES WHAT', rules: false });
 
-    // column headings, each in its own seat colour so the table reads as the couch does
-    for (let c = 0; c < COLS.length; c++) {
-      const col = COLS[c];
-      drawText(ctx, col.title, COL_X[c] + CELL_W / 2, PAD_Y + HEAD_ROW_Y, {
-        size: 1, color: col.seat < 0 ? UI.ink : PLAYER_COLORS[col.seat], align: 'center', shadow: false,
-      });
-    }
+    // column headings
+    for (let c = 0; c < COLS.length; c++) drawText(ctx, COLS[c].title, COL_X[c] + CELL_W / 2, PAD_Y + HEAD_ROW_Y, HEAD_TEXT_OPTS);
     ctx.fillStyle = UI.paperLine;
     ctx.fillRect(PAD_X + 8, PAD_Y + HEAD_ROW_Y + 11, PAD_W - 16, 1);
 

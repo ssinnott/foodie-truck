@@ -18,14 +18,16 @@
 //    `exit()`; the zones are in internal 640x360 px like everything else on screen.
 //
 // One `click` listener covers both a mouse and a finger: nothing in this game preventDefaults `touchstart` - the
-// on-screen controls hold the canvas with pointer events and `touch-action: none` rather than by swallowing the
+// on-screen controls hold the page with pointer events and `touch-action: none` rather than by swallowing the
 // touch (engine/touch.ts) - so a tap still synthesizes the click, and a synthesized click carries the activation
 // `window.open` wants.
 //
 // That is also why a tap the thumb controls own is dropped below. The overlay lies along the bottom of the
-// screen, which is where the addresses are drawn, and the two are clear of each other by 19 px today: a longer
+// screen, which is where the addresses are drawn: the repository address runs under the move stick's side of the
+// glass, and X's hit circle stops a few pixels short of the Ko-fi one. A thumb that steered from on top of an
 // address, or a button moved a little, and pressing BACK would open a browser tab in the middle of a game. There
-// is no undoing that from a phone, so the geometry is not what keeps them apart - the check is.
+// is no undoing that from a phone, so the geometry is not what keeps them apart - the check is. A thumb that only
+// rested on the stick's side pressed nothing, so its tap is still a click on the address it landed on.
 //
 // And whichever way it goes, the address stays drawn: a player whose browser refuses the tab can read it off the
 // screen and type it in.

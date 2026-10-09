@@ -13,7 +13,7 @@
 //    index 4 of a four-critter cast are the same pick.
 //  * The match boundary hands every seat to the lockstep buffers and forgets every buffered menu press.
 //    The READY press that starts the match is still in the input buffer on EVERY machine, in slot 0's
-//    buffer (everybody plays on P1's keys whatever seat they hold), and slot 0 is somebody else's seat on
+//    buffer (every machine's own devices drive slot 0 until the match takes the seats over), and slot 0 is somebody else's seat on
 //    everyone but the host. A press that survived into frame 0 would be a desync no input mask ever
 //    asked for - and a load-dependent one, since the buffer is only INPUT_BUFFER deep.
 
@@ -97,13 +97,11 @@ export function sortRoster(roster, myPid) {
 }
 
 /**
- * The match boundary, input side: every seat of the party exists from frame 0 (drop-in is off), pad
- * claims are a couch-only idea (any unbound pad drives the local player through pollRaw), no seat is
- * virtual yet (beforeStep injects all of them from frame 0), and no menu press is left buffered. The
- * nettest stub input has only some of these methods, so each is guarded.
+ * The match boundary, input side: every seat of the party is in the room from frame 0 and no other is,
+ * no seat is virtual yet (beforeStep injects all of them from frame 0), and no menu press is left
+ * buffered. The nettest stub input has only some of these methods, so each is guarded.
  */
 export function resetSeats(input, players) {
-  if (typeof input.resetClaims === 'function') input.resetClaims();
   const n = input.playerCount || Math.max(players | 0, NET_PLAYERS);
   for (let s = 0; s < n; s++) {
     input.clearVirtual(s);

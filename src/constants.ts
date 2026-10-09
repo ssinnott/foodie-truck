@@ -10,14 +10,12 @@ export const DT = 1 / 60;
 export const MAX_STEPS_PER_FRAME = 5;
 /** Input buffer length in frames: a press is remembered this long for a late confirm. */
 export const INPUT_BUFFER = 8;
-/** Player slots the engine holds. Four, because an online room seats four. */
-export const MAX_PLAYERS = 4;
 /**
- * How many of those slots COUCH play may fill. All four: the keyboard seats two (one nine-key block each) and a
- * gamepad claims any free seat on its first press, so four pads - or two pads either side of the keyboard pair -
- * fill the truck without anybody going online.
+ * Player slots the engine holds. Four, because an online room seats four. One machine is one player - slot 0 is
+ * whoever is at it, on every device they have - and the other three are only ever other people's, online
+ * (engine/input.ts): there is no couch co-op.
  */
-export const LOCAL_PLAYERS = 4;
+export const MAX_PLAYERS = 4;
 /** An online room holds this many players at most... */
 export const NET_PLAYERS = 4;
 /** ...and at least this many. Below it there is nobody to be in lockstep with. */

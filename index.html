@@ -8,22 +8,36 @@
 <meta name="theme-color" content="#2a1f1a">
 <title>Foodie Truck</title>
 <style>
+  /* The whole page, not just the canvas, belongs to the thumbs: on a phone held sideways the canvas sits between two
+     dark bands and that is where thumbs rest (src/engine/touch.ts listens there too). So no pan, no pinch, no
+     double-tap zoom, no text selection and no long-press callout anywhere on it - a long press is HOLD GO here. */
   html, body { margin: 0; padding: 0; background: #2a1f1a; width: 100%; height: 100%; overflow: hidden;
-               overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+               overscroll-behavior: none; -webkit-text-size-adjust: 100%;
+               touch-action: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none;
+               -webkit-user-select: none; user-select: none; }
   body { display: flex; align-items: center; justify-content: center; }
   canvas#game { display: block; image-rendering: pixelated; image-rendering: crisp-edges; outline: none;
-                touch-action: none; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
-  #rotate { display: none; position: fixed; inset: 0; z-index: 5; align-items: center; justify-content: center;
-            background: #2a1f1a; color: #f7e9c9; font: 14px/1.6 ui-monospace, Menlo, Consolas, monospace;
-            text-align: center; letter-spacing: 1px; padding: 24px; box-sizing: border-box; }
-  @media (hover: none) and (orientation: portrait) { #rotate { display: flex; } }
+                touch-action: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none;
+                -webkit-user-select: none; user-select: none; }
+  /* A phone held upright plays the game ON ITS SIDE: the canvas turns a quarter turn clockwise, sized so the game's
+     long side runs down the screen, and the player turns the phone anticlockwise (top to the left) to play. This page
+     used to cover the game with TURN YOUR DEVICE SIDEWAYS instead, which a phone with its rotation lock on could
+     never get past - the page stays upright however the phone is held. A phone that does rotate goes landscape as
+     it turns, this rule stops matching and the game is the right way up whichever way it went. src/engine/sideways.ts
+     maps a touch through the turn. `!important` because the canvas library sizes the element inline for a landscape
+     window; `flex: none` so the body's flex row cannot squeeze a box wider than the screen it is turned across; and
+     dvh where it is understood, so the long side fits between the browser's own bars. */
+  @media (hover: none) and (orientation: portrait) {
+    canvas#game { flex: none; transform: rotate(90deg);
+                  width: min(100vh, 100vw * 16 / 9) !important; height: min(100vh * 9 / 16, 100vw) !important;
+                  width: min(100dvh, 100vw * 16 / 9) !important; height: min(100dvh * 9 / 16, 100vw) !important; }
+  }
   #errors { position: fixed; left: 0; top: 0; max-width: 100%; margin: 0; padding: 6px 8px; box-sizing: border-box;
             background: rgba(120, 0, 0, .9); color: #fff; font: 12px/1.4 monospace; white-space: pre-wrap; z-index: 10; display: none; }
 </style>
 </head>
 <body>
 <canvas id="game" width="640" height="360" tabindex="0"></canvas>
-<div id="rotate">TURN YOUR DEVICE SIDEWAYS<br>TO PLAY FOODIE TRUCK</div>
 <pre id="errors"></pre>
 <script>
   // Installed BEFORE the module graph loads so that import/parse failures are captured too.

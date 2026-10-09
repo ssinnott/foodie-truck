@@ -60,6 +60,7 @@ src/constants.js         every shared number and UI colour (never hardcode these
 src/main.js              boot: services, Game, screens, loop, window.__game
 src/engine/    loop, canvas, actions (the eight, frozen), bindings (which key/button each one is on), input
                (8-action masks), touch (the on-screen controls a phone presses, and the field it types into),
+               sideways (a phone held upright gets the game on its side, and touches measured through the turn),
                links (the only module that navigates anywhere), rng, math, trig, text (5x7 pixel font),
                audio (the WebAudio facade) +
                audio/ (this game's SFX library and its tracks; the primitives and the sequencer are lib/audio/)
@@ -103,25 +104,22 @@ gating render — lockstep returns false while waiting for a peer's input.
 
 ### `engine/input.js`
 `ACTIONS = ['left','right','up','down','action','alt','cancel','start']`, bit i of a mask. Three device sources —
-keyboard, gamepad, touch — folded into one mask per seat, so nothing downstream can tell which of them a press came
-from. Four seats (`MAX_PLAYERS`),
-and couch play fills all four (`LOCAL_PLAYERS`): P1 arrows/WASD + Z X C Enter, P2 T F G H + V B N 5, and seats 3
-and 4 pad-only. A gamepad claims the LOWEST couch seat that is free — not bound to another pad, not being driven by
-a keyboard block, not virtual — on its first press. Lowest, because a run's party is a dense array indexed by input
-slot (`game/run.js` startRun), so a hole would hand a seat somebody else's critter. Standard mapping: A/B/X →
-action/cancel/alt, Start, d-pad 12–15, left stick on axes 0/1 past a 0.45 dead zone.
-
-Claims are COUCH-ONLY. `setPadClaims(false)` turns them off for the whole of an online session (`screens/lobby.js`
-on the way in, back on for the couch on the way out), because seats 1–3 belong to other machines; online, every pad
-in the room reaches the local seat through `pollRaw()`, which reads every pad whether or not it is claimed.
+keyboard, gamepad, touch — folded into one mask, so nothing downstream can tell which of them a press came from.
+**One player per machine**: seat 0 is whoever is at it, and every device they have reaches it — the keys
+(arrows/WASD + Z X C Enter), EVERY gamepad (whichever is picked up; a pad sits in no seat of its own) and the
+on-screen controls. Standard pad mapping: A/B/X → action/cancel/alt, Start, d-pad 12–15, left stick on axes 0/1
+past a 0.45 dead zone. There is no couch co-op: the second keyboard block and the pads that claimed seats of their
+own went, and two to four players now means an online room. Four seats remain (`MAX_PLAYERS`) because a room
+seats four; seats 1–3 hold only what `net/session.js` injects through `setVirtual`, and nothing at all otherwise.
 
 API: `update()` once per step; `held(p,a)`, `pressed(p,a)`, `buffered(p,a,window)`, `consume(p,a)`, `axisX(p)`,
-`axisY(p)`, `mask(p)`, `anyPressed(a)` → slot or −1, `typedCodes()` (text entry), `setVirtual(p, mask|actions)` /
-`clearVirtual(p)` (netplay + tests), `pollRaw(p)` (the local devices as a mask, no edge state — netplay samples this
-to send), `joined(p)`, `joinPressed(p)`, `setJoined`, `resetClaims`, `setPadClaims(on)`, `padOf(p)`,
+`axisY(p)`, `mask(p)`, `anyPressed(a)` → slot or −1 (joined seats only: every shared menu's CONFIRM),
+`typedCodes()` (text entry), `setVirtual(p, mask|actions)` / `clearVirtual(p)` (netplay + tests), `pollRaw(p)`
+(this machine's devices as a mask, no edge state — netplay samples this to send, whichever seat it holds),
+`joined(p)`, `setJoined(p,on)`, `resetJoins()` (every seat but 0 out of the room — the title's `enter()`),
 `device(p)` (`'keyboard' | 'gamepad' | 'touch' | 'virtual' | 'none'`), `touchOn()` / `touchMask()` (are the
-on-screen controls up, and what is held on them), `keyText(p,a)`, `padText(a)` (the button an action sits on, for a hint line a pad seat reads —
-seats 3 and 4 have no keys to name, so a screen builds both lines in `enter()` and picks one in `draw()` by
+on-screen controls up, and what is held on them), `keyText(p,a)`, `padText(a)` (the button an action sits on, for
+the hint line a player on a pad reads — a screen builds both lines in `enter()` and picks one in `draw()` by
 `device(p)`; never read the device in `update()`, see docs/MULTIPLAYER.md), `setPadVirtual(list)` (tests).
 `packMask` / `unpackMask` own the bit layout; `net/protocol.js` sends the mask as is.
 
@@ -131,44 +129,72 @@ REBINDING goes through a CAPTURE, because a screen otherwise only ever hears "th
 not then played as what it now means. `game/screens/controls.js` is the only caller.
 
 ### `engine/touch.js`
-A phone reaches SEAT 0 and only seat 0: four thumbs on one piece of glass is not couch play. `TOUCH_PAD`,
-`TOUCH_BUTTONS` and `TOUCH_LABELS` are the layout — there is nothing for `bindings.js` to own here, because the
-layout IS the binding — and `game/touchpad.js` draws that same exported table, so a control is never seen in one
-place and hit in another. `maskAt(x, y)` is the hit test; `touchMask()` is what `input.js` folds into seat 0 and
-`pollRaw()` puts on the wire; `attachTouch(view)` takes the canvas api (not the element) because a contact is
-mapped through `toInternal` into the 640x360 the layout is written in.
+A phone reaches SEAT 0 — the only seat a machine has. The layout is the sibling game *Aether & Brass*'s, because it
+plays well on glass and the fixed d-pad it replaced did not: `TOUCH_STICK` is a FLOATING stick — a contact that
+lands anywhere left of `zoneX` is the stick, centred where it landed, a direction (one of eight) once dragged past
+`dead`, and a thumb dragged past `radius` pulls the centre after it so turning round is one ring's width — and
+`TOUCH_BUTTONS` are round buttons on the right, each hit by a circle (`hit`) wider than its face (`r`), with GO
+also owning its whole corner out to the edge of the glass. A contact is decided where it lands and never changes:
+a button stays held until its thumb lifts, wherever it rolls (half the mini-games are HOLD GO), and the stick stays
+the stick however far it wanders. `TOUCH_LABELS` names each action as the hint lines say it to a thumb. There is
+nothing for `bindings.js` to own here, because the layout IS the binding, and `game/touchpad.js` draws that same
+exported table (the ring at the live contact's centre, or at rest), so a control is never seen in one place and hit
+in another. `touchMask()` is what `input.js` folds into seat 0 and `pollRaw()` puts on the wire; `touchStick()` is
+the live stick contact, for drawing; `attachTouch(view)` takes the canvas api (not the element) because a contact
+is mapped through `toInternal` into the 640x360 the layout is written in.
 
-The overlay is offered on `(hover: none) and (pointer: coarse)` — the query `index.html` already asks before it
-tells a portrait phone to turn sideways — so a laptop with a touchscreen is not handed thumb controls. ALT is
-offered more narrowly still: only on a screen that declares `touchAlt` (the road's horn, the crew gallery's turn,
-the CONTROLS column reset), because a thumb control that does nothing on the screen it is drawn over is worse than
-no control, and that circle otherwise lay across the day board's shopping list. `setTouchAlt(on)` is how `main.js`
-says so each step, off the top screen's flag, and `tools/check.js` holds a screen that reads `alt` to declaring
-it. A keyboard
-or pad mask stands it down (`suppressTouch`), the next touch brings it back, and `keyText` names the button on the
-glass while it is up, so the hint lines screens build in `enter()` read as instructions rather than as a keyboard
-nobody in the room has.
+The listeners are on the DOCUMENT, not the canvas. A phone held sideways is wider than 16:9, so the canvas sits
+between two dark bands (about 100 px each on a common phone) and that is where thumbs rest; a contact there maps to
+an x below 0 or past 640 and lands on the stick or GO like any other. A contact on something laid over the game
+(the error box) is not one. `index.html` gives the whole page `touch-action: none`, no text selection and no
+long-press callout, and the listeners refuse a context menu while a finger is down and iOS's `gesturestart` — a
+long press is HOLD GO here, and two thumbs moving apart are not a pinch. A first finger down (`isPrimary`) retires
+any contact whose lift the browser never reported. Nothing preventDefaults a `touchstart`: a tap must still become
+a click, because the title's Ko-fi address is reached by a click and nothing else.
 
-`touchHitAt(x, y)` answers whether the overlay owns a point at all (the pad's whole square, its still centre
-included, and every button on offer) rather than what that point presses, which is what `engine/links.js` asks
-before it treats a tap as a click on an address underneath: the controls lie along the bottom of the screen where
-the addresses are drawn, and BACK opening a browser tab mid-game is not something a player can undo from a phone.
+The overlay is offered from the first frame on `(hover: none) and (pointer: coarse)` — a phone or a tablet — and
+anywhere else from the first real touch, so a
+laptop with a touchscreen is not handed thumb controls until a finger asks for them. ALT is offered more narrowly
+still: only on a screen that declares `touchAlt` (the road's horn, the crew gallery's turn, the CONTROLS column
+reset), because a thumb control that does nothing on the screen it is drawn over is worse than no control.
+`setTouchAlt(on)` is how `main.js` says so each step, off the top screen's flag, and `tools/check.js` holds a screen
+that reads `alt` to declaring it. A keyboard or pad mask stands the overlay down (`suppressTouch`), the next touch
+brings it back, and `keyText` names the button on the glass while it is up, so the hint lines screens build in
+`enter()` read as instructions rather than as a keyboard nobody in the room has.
+
+`touchHitAt(x, y)` answers whether a click at a point belongs to the overlay — a button on offer there, or a contact
+that just lifted having pressed something — which is what `engine/links.js` asks before it treats a tap as a click
+on an address underneath: the controls lie along the bottom of the screen where the addresses are drawn, and BACK
+opening a browser tab mid-game is not something a player can undo from a phone. A thumb that only rested on the
+stick's side pressed nothing, so its tap still opens the repository address it landed on; one that steered does not.
 
 The mask is sampled from the live contacts ONCE a step, not on the DOM event, so a seat's input is stable for the
-whole of a fixed step; a press is held until the step after it so a tap shorter than 16 ms is still played
-(`endTouchStep()` is what forgets it). Text is the one thing a thumb cannot spell: `setTouchTyping(on)` — which
+whole of a fixed step; a press — and a direction the stick was pushed in — is held until the step after it so a tap
+or a flick shorter than 16 ms is still played (`endTouchStep()` is what forgets it). Text is the one thing a thumb cannot spell: `setTouchTyping(on)` — which
 `main.js` drives off the top screen's `typing` flag — raises an off-screen field, and what a soft keyboard puts in
 it comes back out as the `KeyboardEvent.code` stream `screens/lobby.js` already reads. While that field is up the
 X button spells ESCAPE, which a soft keyboard has not got and a player backing out of a room code needs.
+
+### `engine/sideways.js`
+A phone is always landscape. Held upright — `(hover: none) and (orientation: portrait)` — `index.html` draws the
+canvas a quarter turn clockwise, sized so the game's long side runs down the screen (`!important` over the canvas
+library's inline size, `flex: none` so the body's flex row cannot squeeze it, `dvh` where it is understood), and the
+player turns the phone anticlockwise to play. It replaces a TURN YOUR DEVICE notice that a phone with its rotation
+lock on could never get past. `turnSideways(view)` (called by `main.js` straight after `createCanvas`) is the input
+half: it wraps `view.toInternal` so a contact on the turned canvas maps through the turn — x down the screen, y right
+to left — and every caller (`engine/touch.js`, `engine/links.js`) keeps asking the view. Whether the canvas is turned
+is read off its computed transform, cached with its rect until a resize, so the mapping follows what the stylesheet
+actually did. The bands above and below a turned canvas come back as x below 0 or past 640, as the side bands do.
 
 ### `engine/actions.js`, `engine/bindings.js`
 `actions.js` is `ACTIONS` (frozen — bit i of a mask, and `net/protocol.js` puts that byte on the wire), `BIT` and
 `ACTION_LABELS`. Its own module so `bindings.js` and `input.js` can both have it without importing each other.
 
-`bindings.js` owns WHICH key and button each action sits on, and is the only place that answer changes: two
-keyboard maps (seats 3 and 4 are pad-only) and one pad map shared by every controller. `keyboardMap(slot)`,
-`padMap()`, `bindKey(slot, action, code)` / `bindPad(action, button)` → `{ ok, reason }`, `resetKeyboard(slot)` /
-`resetPad()` / `resetAll()`, `isDefault()`, `keyLabel(code)` / `padLabel(button)`, `serialize()` / `deserialize()`,
+`bindings.js` owns WHICH key and button each action sits on, and is the only place that answer changes: one
+keyboard map and one pad map shared by every controller. `keyboardMap()`, `padMap()`, `bindKey(action, code)` /
+`bindPad(action, button)` → `{ ok, reason }`, `resetKeyboard()` / `resetPad()` / `resetAll()`, `isDefault()`,
+`keyLabel(code)` / `padLabel(button)`, `serialize()` / `deserialize()` (the stored `keys` is still a list — of one
+now — so a set saved with a couch P2 block loads its first block and ignores the second),
 `load()` / `save()` (localStorage, never throws — a private window just means defaults), `bindingRevision()` and
 `onBindingsChanged(fn)`, which is how `input.js` knows to drop its cached set of bound codes.
 
@@ -341,7 +367,7 @@ banks nothing.
 title -> select -> stage -> map -> <orchard|pond|coop|dairy|mill|hive|garden> -> map -> ... (run.complete())
       -> map -> line -> kitchen -> results -> map -> line -> kitchen -> results ... -> results -> stage (closed)
       -> garage -> stage (tomorrow) ...  (online: stage (closed) -> stage (tomorrow), no garage)
-title -> lobby (host key) -> select (shared) -> stage ...  (online: the host's START opens the same scene everywhere)
+title -> lobby (host key; the party picks critters there) -> stage ...  (online: the host's START opens the same scene everywhere)
 ```
 - `screens/map.js`: the truck drives (`run.truck`); arriving at a landmark pushes whatever `run.screenForPlace(id)`
   names via `game.replace(screen, { place: id })` - its mini-game while the shopping list is short of what it
@@ -407,11 +433,12 @@ window.__game = {
   step(n), screen(), screenIds(), summary(), goto(id, params),
   setInput(slot, actions|mask), clearInput(slot), critterList(), errors: [],
   // bindings: get() / set(data) / reset() / saved() — what the CONTROLS scenario drives
-  // couch gamepads: stand fake pads in for navigator.getGamepads(), one { down: [buttonIndex], axes: [x, y] }
-  // per port (null for an empty one), null to clear them all again
-  setPads(specs), padOf(slot),
-  // a phone: stand a list of { x, y } contact points in GAME space for real thumbs (null lets go), read the
-  // layout back rather than copying its coordinates, and read a seat's mask / device / typed codes
+  // gamepads: stand fake pads in for navigator.getGamepads(), one { down: [buttonIndex], axes: [x, y] }
+  // per port (null for an empty one), null to clear them all again - every one of them drives seat 0
+  setPads(specs),
+  // a phone: pretend fingers in GAME space, entry i being finger i from call to call (a new entry lands, one that
+  // was there moves - which is how a test drags the stick - and a missing one lifts; null lets go), the layout
+  // read back rather than copied ({ stick, buttons }), and a seat's mask / device / typed codes
   touch(points), touchLayout(), inputState(slot),
   // online co-op (net/session.js installNetHooks): drive a room without the lobby screen
   netHost({ transport }) -> room code, netJoin(code, { transport }), net(), netState(), netSetCritter(i), netReady(on), netBegin(scene)
@@ -448,9 +475,13 @@ peer calls `startRun` with it and `game.reset(SCENES[scene])`.
   own cannot hand over. The `audio` scenario renders every SFX and every track through an OfflineAudioContext and
   fails on a silent or a throwing one, then walks the screens and reads which track each asked for, presses M for
   real and reads the mute, and opens the closed board for its own track.
-  The `touch` scenario plays the same walk `pads` does — title to day board — on nothing but thumbs, `touchlinks`
-  presses every control over the title's addresses and checks no tab opens (and that the addresses beside them
-  still do), and the
+  The `touch` scenario plays the same walk `pads` does — title to day board — on nothing but thumbs, and then the
+  stick's own rules (wherever the thumb lands, no edge to fall off, a ring's width to turn round) and the buttons'
+  (held while the thumb rolls, GO's corner); `touchphone` does it through real DOM contacts on a phone-shaped page,
+  the dark bands beside the canvas included; `touchupright` holds that phone upright, where the game is drawn on its
+  side, and plays it through the turn before turning the phone back; `touchlinks` presses every control over the title's addresses and
+  checks no tab opens — a thumb that steered from on top of one included — while a plain tap on either address
+  still does; and the
   `touchtyping` one feeds the off-screen field the way a soft keyboard feeds one (an input event and no keydown at
   all) to check what comes out is the code stream the lobby reads.
 - `npm run capture -- <dir> [screen[:params]...]` — screenshots of any screen at 2x (`tools/capture.js`).

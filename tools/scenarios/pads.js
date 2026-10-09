@@ -1,20 +1,29 @@
-// Playtest scenarios for COUCH GAMEPADS (registered in tools/scenarios/index.js). Each export is
+// Playtest scenarios for GAMEPADS (registered in tools/scenarios/index.js). Each export is
 // `async (server) => void` using withPage / assert from ../playtest.js.
 //
-//   pads - four controllers and nothing else: no keyboard press anywhere in this scenario. A pad opens PLAY from
-//        the title, three more sit down on the critter select, each picks a different card and stamps it, and the
-//        day board opens with a party of four in seat order. This is the whole point of the feature, so it is
-//        walked through the real screens rather than poked at through the input module (tools/nettest.js does
-//        that). The last beat is the one that used to be impossible: a fifth pad has no seat to take.
+//   pads - controllers and nothing else: no keyboard press anywhere in this scenario. A pad opens PLAY from the
+//        title, walks the critter cursor, stamps READY, and the day board opens with a party of one. Four pads
+//        are plugged in throughout, and that is the rule the scenario is really about: since local co-op went, a
+//        pad sits nobody else down - every controller is the one player's, whichever they pick up - so the select
+//        screen never grows a second cursor, any pad moves the one there is, and a second player is somebody on
+//        another machine, online. tools/nettest.js pokes at the same rule through the input module; this walks it
+//        through the real screens.
 import { withPage, assert } from '../playtest.js';
 
 /** Four ports, all resting; `press(i, ...buttons)` is that list with one pad holding something. */
-const IDLE = [null, null, null, null];
+const IDLE = [null, null, null, null].map(() => ({ down: [] }));
 const A = 0, B = 1, RIGHT = 15;
 function press(i, ...buttons) {
   const list = IDLE.slice();
   list[i] = { down: buttons };
   return list;
+}
+/** One pad presses and lets go, and the press settles. */
+async function tapPad(api, i, ...buttons) {
+  await api.pads(press(i, ...buttons));
+  await api.step(2);
+  await api.pads(IDLE);
+  await api.step(4);
 }
 
 export const SCENARIOS = {
@@ -26,82 +35,37 @@ export const SCENARIOS = {
       // ---- a pad opens the game ----
       await api.pads(IDLE);
       await api.step(2);
-      assert((await api.padOf(0)) === -1, 'a resting pad takes no seat');
-      await api.pads(press(0, A));
-      await api.step(2);
-      await api.pads(IDLE);
-      await api.step(4);
-      assert((await api.padOf(0)) === 0, 'the pad that pressed A is in seat 1');
-      assert((await api.screen()) === 'select', `and its A opened PLAY (now on ${await api.screen()})`);
+      assert((await api.screen()) === 'title' && (await api.inputState()).mask === 0, 'four resting pads press nothing');
+      await tapPad(api, 0, A);
+      assert((await api.screen()) === 'select', `the first pad's A opened PLAY (now on ${await api.screen()})`);
+      assert((await api.inputState()).device === 'gamepad', 'and the seat knows a pad is driving it');
 
-      // ---- three more sit down, one at a time, without stamping anything ----
+      // ---- every pad is the same player ----
       const s0 = await api.summary();
-      assert(s0.top.seats.length === 1 && s0.top.seats[0].ready === false, `only P1 is seated, unstamped (${JSON.stringify(s0.top.seats)})`);
-      for (const pad of [1, 2, 3]) {
-        await api.pads(press(pad, A));
-        await api.step(2);
-        await api.pads(IDLE);
-        await api.step(4);
-        assert((await api.padOf(pad)) === pad, `pad ${pad + 1} took seat ${pad + 1}`);
-      }
+      assert(s0.top.seats.length === 1 && s0.top.seats[0].critter === 'barley' && !s0.top.seats[0].ready, `one cursor, on the first card, unstamped (${JSON.stringify(s0.top.seats)})`);
+      await tapPad(api, 2, RIGHT);
+      assert((await api.summary()).top.seats[0].critter === 'sorrel', 'the third pad moves that one cursor');
+      await tapPad(api, 3, A);
       const s1 = await api.summary();
-      assert(s1.top.seats.length === 4, `four pads fill the couch (${s1.top.seats.length} seated)`);
-      assert(s1.top.seats.every((s) => !s.ready), 'the button that sat each of them down did NOT also stamp their card');
-      assert(s1.top.seats.map((s) => s.slot).join() === '0,1,2,3', `and the seats are dense, in slot order (${s1.top.seats.map((s) => s.slot).join()})`);
-      assert(s1.top.seats[1].critter === 'sorrel' && s1.top.seats[3].critter === 'cress', `each seat opens on its own card (${s1.top.seats.map((s) => s.critter).join()})`);
-
-      // ---- a pad's d-pad moves only its own cursor ----
-      await api.pads(press(3, RIGHT));
-      await api.step(2);
-      await api.pads(IDLE);
-      await api.step(4);
+      assert(s1.top.seats.length === 1, `a fourth pad pressing A sits nobody else down (${s1.top.seats.length} seated)`);
+      assert(s1.top.seats[0].ready && s1.top.seats[0].critter === 'sorrel', 'it stamps the one card instead, the card the cursor is on');
+      await tapPad(api, 1, B);
       const s2 = await api.summary();
-      assert(s2.top.seats[3].critter === 'rowan', `seat 4's d-pad moved its own cursor onto the fifth card (${s2.top.seats[3].critter})`);
-      assert(s2.top.seats[0].critter === 'barley' && s2.top.seats[1].critter === 'sorrel' && s2.top.seats[2].critter === 'chicory', 'and left every other cursor where it was');
+      assert(!s2.top.seats[0].ready && s2.top.starting === false && (await api.screen()) === 'select', "the second pad's B lifts the stamp and calls the countdown off");
+      await tapPad(api, 1, RIGHT);
+      await tapPad(api, 0, A);
+      await api.shot('select-pad');                         // one jam-jar cursor, stamped, however many pads there are
 
-      // walk seat 4 the rest of the way round the cast (five cards, so four more steps from the fifth), back onto
-      // its own card: four distinct critters again
-      for (let k = 0; k < 4; k++) {
-        await api.pads(press(3, RIGHT));
-        await api.step(2);
-        await api.pads(IDLE);
-        await api.step(4);
-      }
-      assert((await api.summary()).top.seats[3].critter === 'cress', 'and a lap of the cast (wrapping past the fifth card) brings it home');
-
-      // ---- B un-stamps, and a run only starts when every seat has stamped ----
-      for (const pad of [0, 1, 2, 3]) {
-        await api.pads(press(pad, A));
-        await api.step(2);
-        await api.pads(IDLE);
-        await api.step(4);
-      }
+      // ---- the run opens with a party of one ----
+      await api.step(90);                                   // the stamp holds, then the fade hands over to the board
       const s3 = await api.summary();
-      assert(s3.top.seats.every((s) => s.ready), 'a second A stamps READY on all four cards');
-      await api.pads(press(2, B));
-      await api.step(2);
-      await api.pads(IDLE);
-      await api.step(4);
-      const s4 = await api.summary();
-      assert(s4.top.seats[2].ready === false && s4.top.starting === false, "seat 3's B lifts its stamp and calls the countdown off");
-      await api.shot('select-four-pads');                  // four jam-jar cursors, three stamps and a change of mind
-      await api.pads(press(2, A));
-      await api.step(2);
-      await api.pads(IDLE);
-      await api.step(4);
-
-      // ---- the run opens with a party of four ----
-      await api.step(90);                                  // the stamps hold, then the fade hands over to the board
-      const s5 = await api.summary();
-      assert(s5.screen === 'stage', `a full couch of readies opens the day board (now on ${s5.screen})`);
-      assert(s5.run && s5.run.party.length === 4, `the run is seated with four critters (${JSON.stringify(s5.run && s5.run.party)})`);
-      assert(s5.run.party.join() === 'barley,sorrel,chicory,cress', `one per pad, in seat order (${s5.run.party.join()})`);
-
-      // ---- a fifth controller has nowhere to sit ----
-      await api.pads([null, null, null, null, { down: [A] }]);
-      await api.step(4);
+      assert(s3.screen === 'stage', `the stamp opens the day board (now on ${s3.screen})`);
+      assert(s3.run && s3.run.party.join() === 'chicory', `with the one critter that was picked (${JSON.stringify(s3.run && s3.run.party)})`);
+      await tapPad(api, 3, A);
+      await api.step(60);
+      assert((await api.screen()) === 'map', `and any pad opens the truck from the board (now on ${await api.screen()})`);
       await api.pads(null);
-      assert((await api.errors()).length === 0, 'and a fifth pad pressing against a full couch breaks nothing');
+      assert((await api.errors()).length === 0, 'four pads at once break nothing');
     });
   },
 };

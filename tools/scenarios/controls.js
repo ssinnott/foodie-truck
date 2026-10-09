@@ -11,10 +11,10 @@
 // Every page here boots with `defaults=1` so it starts from stock bindings whatever an earlier beat stored.
 import { withPage, assert } from '../playtest.js';
 
-/** Row order is engine/actions.js ACTIONS; these are the two the scenario edits. */
-const ROW_ACTION = 4, ROW_ALT = 5;
-/** Column order is the CONTROLS table: P1 keys, P2 keys, gamepad. */
-const COL_P1 = 0, COL_P2 = 1, COL_PAD = 2;
+/** Row order is engine/actions.js ACTIONS; these are the three the scenario edits. */
+const ROW_ACTION = 4, ROW_ALT = 5, ROW_START = 7;
+/** Column order is the CONTROLS table: the keyboard, then the gamepad. */
+const COL_KEYS = 0, COL_PAD = 1;
 const RB = 5, RT = 7;
 
 /** Walk the cell cursor to (row, col) from wherever it is, through the screen's own navigation. */
@@ -54,40 +54,40 @@ export const SCENARIOS = {
       assert((await api.screen()) === 'controls', 'the controls screen comes up');
       const s0 = await api.summary();
       assert(s0.top.isDefault === true, 'on stock bindings');
-      assert(s0.top.cells[COL_P1][ROW_ACTION] === 'Z / SPACE', `P1 ACTION starts on Z and SPACE (${s0.top.cells[COL_P1][ROW_ACTION]})`);
-      assert(s0.top.cells[COL_PAD][ROW_ACTION] === 'A', `the pad starts on A (${s0.top.cells[COL_PAD][ROW_ACTION]})`);
-      assert(s0.top.cells[COL_P2][ROW_ACTION] === 'V', `and P2 on V (${s0.top.cells[COL_P2][ROW_ACTION]})`);
+      assert(s0.top.cells.length === 2, `two columns, the keys and the pad - no couch P2 (${s0.top.cells.length})`);
+      assert(s0.top.cells[COL_KEYS][ROW_ACTION] === 'Z / SPACE', `ACTION starts on Z and SPACE (${s0.top.cells[COL_KEYS][ROW_ACTION]})`);
+      assert(s0.top.cells[COL_PAD][ROW_ACTION] === 'A', `and the pad on A (${s0.top.cells[COL_PAD][ROW_ACTION]})`);
 
-      // ---- a real key rebinds P1's ACTION ----
-      await goTo(api, ROW_ACTION, COL_P1);
+      // ---- a real key rebinds ACTION ----
+      await goTo(api, ROW_ACTION, COL_KEYS);
       await beginRebind(api);
       await holdKey(page, api, 'KeyM');
       const s1 = await api.summary();
       assert(s1.top.listening === false, 'the capture closes on the key');
-      assert(s1.top.cells[COL_P1][ROW_ACTION] === 'M', `P1 ACTION is now M alone (${s1.top.cells[COL_P1][ROW_ACTION]})`);
+      assert(s1.top.cells[COL_KEYS][ROW_ACTION] === 'M', `ACTION is now M alone (${s1.top.cells[COL_KEYS][ROW_ACTION]})`);
       assert(s1.top.isDefault === false, 'and the set is no longer stock');
 
       // the key that did the binding must not ALSO have been played as a press
       assert((await api.screen()) === 'controls', 'and binding a key did not act on the screen it was bound from');
 
       // ---- the new key really is ACTION now: it opens a rebind on the next cell ----
-      await goTo(api, ROW_ALT, COL_P1);
+      await goTo(api, ROW_ALT, COL_KEYS);
       await holdKey(page, api, 'KeyM');
       assert((await api.summary()).top.listening === true, 'pressing M now opens a rebind, because M is ACTION');
       await page.keyboard.press('Escape');
       await api.step(4);
       const s2 = await api.summary();
       assert(s2.top.listening === false && /CANCELLED/.test(s2.top.message), `and ESC backs out of one (${s2.top.message})`);
-      assert(s2.top.cells[COL_P1][ROW_ALT] === 'X / LSHIFT', 'leaving the cell it was opened on alone');
+      assert(s2.top.cells[COL_KEYS][ROW_ALT] === 'X / LSHIFT', 'leaving the cell it was opened on alone');
 
       // ---- a refusal is shown, not swallowed ----
-      await goTo(api, ROW_ACTION, COL_P2);
+      await goTo(api, ROW_START, COL_KEYS);
       await beginRebind(api);
       await page.keyboard.press('KeyM');
       await api.step(4);
       const s3 = await api.summary();
-      assert(/P1 ACTION/.test(s3.top.message), `taking P1's only ACTION key is refused, and says why (${s3.top.message})`);
-      assert(s3.top.cells[COL_P2][ROW_ACTION] === 'V', 'and P2 keeps the key it had');
+      assert(/M IS ACTION/.test(s3.top.message), `taking ACTION's only key is refused, and says why (${s3.top.message})`);
+      assert(s3.top.cells[COL_KEYS][ROW_START] === 'ENTER', 'and START keeps the key it had');
 
       // ---- the pad column wants a button ----
       await goTo(api, ROW_ACTION, COL_PAD);
@@ -117,8 +117,8 @@ export const SCENARIOS = {
       await api.press(0, { alt: true }, 2, 4);
       const s5 = await api.summary();
       assert(s5.top.cells[COL_PAD][ROW_ACTION] === 'A' && s5.top.cells[COL_PAD][ROW_ALT] === 'X', 'the gamepad column goes back to defaults');
-      assert(s5.top.cells[COL_P1][ROW_ACTION] === 'M', "and P1's own rebind is untouched by it");
-      await api.shot('controls-rebound');                   // the table mid-edit: P1 on M, the pad back to stock
+      assert(s5.top.cells[COL_KEYS][ROW_ACTION] === 'M', 'and the keyboard rebind is untouched by it');
+      await api.shot('controls-rebound');                   // the table mid-edit: ACTION on M, the pad back to stock
 
       // ---- it survives a reload, because leaving the screen wrote it ----
       await api.press(0, { cancel: true }, 2, 6);
@@ -127,7 +127,7 @@ export const SCENARIOS = {
       await page.waitForFunction(() => window.__game && window.__game.ready === true, null, { timeout: 15000 });
       await api.step(5);
       const s6 = await api.summary();
-      assert(s6.screen === 'controls' && s6.top.cells[COL_P1][ROW_ACTION] === 'M', `the rebind came back from storage (${s6.top.cells[COL_P1][ROW_ACTION]})`);
+      assert(s6.screen === 'controls' && s6.top.cells[COL_KEYS][ROW_ACTION] === 'M', `the rebind came back from storage (${s6.top.cells[COL_KEYS][ROW_ACTION]})`);
       assert(s6.top.isDefault === false, 'and the reloaded set knows it is not stock');
 
       // ---- and ?defaults=1 is the way back in for somebody who has bound themselves out ----
@@ -135,7 +135,7 @@ export const SCENARIOS = {
       await page.waitForFunction(() => window.__game && window.__game.ready === true, null, { timeout: 15000 });
       await api.step(5);
       const s7 = await api.summary();
-      assert(s7.top.isDefault === true && s7.top.cells[COL_P1][ROW_ACTION] === 'Z / SPACE', 'booting on defaults ignores what was stored');
+      assert(s7.top.isDefault === true && s7.top.cells[COL_KEYS][ROW_ACTION] === 'Z / SPACE', 'booting on defaults ignores what was stored');
       assert((await page.evaluate(() => window.__game.bindings.saved())) !== null, 'without throwing the stored set away');
     });
   },

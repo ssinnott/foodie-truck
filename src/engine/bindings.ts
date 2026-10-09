@@ -4,11 +4,10 @@
 //
 // Two namespaces, because they cannot collide with each other:
 //
-//   * KEYBOARD - one map per couch keyboard slot (two of them; seats 3 and 4 are pad-only). Both slots share one
-//     physical keyboard, so a code may be bound ONCE across both: P2 taking P1's Z would leave P1 pressing a key
-//     that moves somebody else.
-//   * PAD - ONE map shared by every pad. Four people on four identical controllers want the same buttons, and a
-//     per-pad table would ask each of them to rebind the same thing four times.
+//   * KEYBOARD - one map: the keys of the one player at this machine. There used to be a second, for a couch P2 on
+//     T F G H; local co-op is gone (a second player joins online, from their own machine), and so is that block.
+//   * PAD - ONE map shared by every pad. Whichever controller the player picks up drives their seat, and a per-pad
+//     table would ask them to rebind the same thing once per controller.
 //
 // A rebind SETS the action to exactly one input. The defaults list alternates (Z or Space) because they are the
 // keys everybody already expects; the moment a player picks their own, their pick is the answer and the alternate
@@ -19,21 +18,21 @@
 // never from an update() (docs/MULTIPLAYER.md: no localStorage on the simulation path).
 import { ACTIONS } from './actions.ts';
 
-/** Where a saved set of bindings lives, and the shape version that invalidates it. */
+/**
+ * Where a saved set of bindings lives, and the shape version that invalidates it. Version 1 stored `keys` as one map
+ * per couch keyboard block; it still does - an array of one - so a set saved before local co-op went loads as it
+ * was, P1's keys and all, and the old P2 block in it is simply never read.
+ */
 const STORE_KEY = 'foodie-truck.bindings';
 const STORE_VERSION = 1;
 
-/** Default keyboard bindings per couch slot (KeyboardEvent.code). Two entries: seats 3 and 4 are pad-only. */
-export const KEY_DEFAULTS = Object.freeze([
-  { left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'],
-    action: ['KeyZ', 'Space'], alt: ['KeyX', 'ShiftLeft'], cancel: ['KeyC', 'Escape', 'Backspace'], start: ['Enter'] },
-  { left: ['KeyF'], right: ['KeyH'], up: ['KeyT'], down: ['KeyG'], action: ['KeyV'], alt: ['KeyB'], cancel: ['KeyN'], start: ['Digit5'] },
-]);
+/** Default keyboard bindings (KeyboardEvent.code). */
+export const KEY_DEFAULTS = Object.freeze({
+  left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'],
+  action: ['KeyZ', 'Space'], alt: ['KeyX', 'ShiftLeft'], cancel: ['KeyC', 'Escape', 'Backspace'], start: ['Enter'],
+});
 /** Standard gamepad mapping: A action, B cancel, X alt, Start start, d-pad 12-15. The left stick is not bindable. */
 export const PAD_DEFAULTS = Object.freeze({ action: [0], cancel: [1], alt: [2], start: [9], up: [12], down: [13], left: [14], right: [15] });
-
-/** How many couch seats have a keyboard block at all. */
-export const KEY_SLOTS = KEY_DEFAULTS.length;
 /**
  * Buttons a player may bind, in the W3C standard layout. 16 is the vendor/guide button, which the OS usually eats
  * before the page sees it, so it is not offered. 6 and 7 are the analogue triggers - input.js takes them past half
@@ -63,7 +62,7 @@ const KEY_LABELS = {
 
 /** Deep copy of a binding map, so the live tables never share an array with the frozen defaults. */
 function copyMap(map) { const out = {}; for (const a of ACTIONS) out[a] = (map[a] || []).slice(); return out; }
-function defaultKeys() { return KEY_DEFAULTS.map(copyMap); }
+function defaultKeys() { return copyMap(KEY_DEFAULTS); }
 function defaultPad() { return copyMap(PAD_DEFAULTS); }
 
 let keys = defaultKeys();
@@ -73,8 +72,8 @@ let revision = 0;
 const listeners = [];
 function changed() { revision++; for (const fn of listeners) fn(); }
 
-/** The live keyboard map for a couch slot, or null for a pad-only seat. Read-only: edit through bindKey. */
-export function keyboardMap(slot) { return keys[slot] || null; }
+/** The live keyboard map. Read-only: edit through bindKey. */
+export function keyboardMap() { return keys; }
 /** The live pad map, shared by every pad. Read-only: edit through bindPad. */
 export function padMap() { return pad; }
 /** Edits so far; engine/input.js watches this rather than being told. */
@@ -92,14 +91,14 @@ export function keyLabel(code) {
 /** What a pad button is called ('A', 'RT', 'D-UP'). */
 export function padLabel(button) { return PAD_LABELS[button] || ('BTN' + button); }
 
-/** The seat and action a keyboard code is currently bound to, or null. */
+/** The action a keyboard code is currently bound to, or null. */
 function keyOwner(code) {
-  for (let s = 0; s < keys.length; s++) for (const a of ACTIONS) if (keys[s][a].indexOf(code) >= 0) return { slot: s, action: a };
+  for (const a of ACTIONS) if (keys[a].indexOf(code) >= 0) return a;
   return null;
 }
 /**
- * Is a keyboard code bound to ANY seat's action? main.ts asks before it reads a global key (M mutes): a player who
- * has put M on their CANCEL is pressing CANCEL, and the game must not also go quiet on them.
+ * Is a keyboard code bound to an action? main.ts asks before it reads a global key (M mutes): a player who has put M
+ * on their CANCEL is pressing CANCEL, and the game must not also go quiet on them.
  */
 export function isKeyBound(code) { return keyOwner(code) !== null; }
 /** The action a pad button is currently bound to, or null. */
@@ -109,25 +108,25 @@ function padOwner(button) {
 }
 
 /**
- * Bind a keyboard code to one seat's action, replacing whatever that action held.
+ * Bind a keyboard code to an action, replacing whatever that action held.
  *
  * Refused, with a reason the CONTROLS screen prints as it stands, when the code is reserved or when taking it would
  * leave ANOTHER action with nothing on it at all - an action with no key is one a player cannot press and cannot
  * see to fix. Taking a code off an action that has a spare is fine and is what the alternates are for.
  * @returns {{ ok: boolean, reason?: string }}
  */
-export function bindKey(slot, action, code) {
-  if (!keys[slot] || ACTIONS.indexOf(action) < 0) return { ok: false, reason: 'NO SUCH SEAT' };
+export function bindKey(action, code) {
+  if (ACTIONS.indexOf(action) < 0) return { ok: false, reason: 'NO SUCH ACTION' };
   if (!code) return { ok: false, reason: 'NO KEY' };
   if (RESERVED_CODES.indexOf(code) >= 0) return { ok: false, reason: `${keyLabel(code)} IS RESERVED` };
   const owner = keyOwner(code);
-  if (owner && owner.slot === slot && owner.action === action) return { ok: true };
+  if (owner === action) return { ok: true };
   if (owner) {
-    const held = keys[owner.slot][owner.action];
-    if (held.length < 2) return { ok: false, reason: `${keyLabel(code)} IS P${owner.slot + 1} ${owner.action.toUpperCase()}` };
+    const held = keys[owner];
+    if (held.length < 2) return { ok: false, reason: `${keyLabel(code)} IS ${owner.toUpperCase()}` };
     held.splice(held.indexOf(code), 1);
   }
-  keys[slot][action] = [code];
+  keys[action] = [code];
   changed();
   return { ok: true };
 }
@@ -152,17 +151,17 @@ export function bindPad(action, button) {
   return { ok: true };
 }
 
-/** Put one keyboard seat back to its defaults. */
-export function resetKeyboard(slot) { if (!keys[slot]) return; keys[slot] = copyMap(KEY_DEFAULTS[slot]); changed(); }
+/** Put the keyboard back to its defaults. */
+export function resetKeyboard() { keys = defaultKeys(); changed(); }
 /** Put the pad back to its defaults. */
 export function resetPad() { pad = defaultPad(); changed(); }
 /** Put everything back. */
 export function resetAll() { keys = defaultKeys(); pad = defaultPad(); changed(); }
 /** True while every table is exactly as it shipped (the CONTROLS screen says so rather than offering a no-op). */
-export function isDefault() { return JSON.stringify(serialize().keys) === JSON.stringify(defaultKeys()) && JSON.stringify(serialize().pad) === JSON.stringify(defaultPad()); }
+export function isDefault() { return JSON.stringify(copyMap(keys)) === JSON.stringify(defaultKeys()) && JSON.stringify(copyMap(pad)) === JSON.stringify(defaultPad()); }
 
-/** The whole set as plain data, for storage and for tests. */
-export function serialize() { return { v: STORE_VERSION, keys: keys.map(copyMap), pad: copyMap(pad) }; }
+/** The whole set as plain data, for storage and for tests. `keys` is a list of one: see STORE_VERSION. */
+export function serialize() { return { v: STORE_VERSION, keys: [copyMap(keys)], pad: copyMap(pad) }; }
 
 /**
  * Take a set of bindings back in. Anything malformed - a wrong version, a missing action, a code that is not a
@@ -174,14 +173,12 @@ export function deserialize(data) {
   if (!data || data.v !== STORE_VERSION) return false;
   const nextKeys = defaultKeys();
   const nextPad = defaultPad();
-  if (Array.isArray(data.keys)) {
-    for (let s = 0; s < nextKeys.length; s++) {
-      const src = data.keys[s];
-      if (!src) continue;
-      for (const a of ACTIONS) {
-        const list = Array.isArray(src[a]) ? src[a].filter((c) => typeof c === 'string' && c && RESERVED_CODES.indexOf(c) < 0) : null;
-        if (list && list.length) nextKeys[s][a] = list;
-      }
+  // The first map is the player's keys; a second one, from a build with a couch P2 block, is not read.
+  const src = Array.isArray(data.keys) ? data.keys[0] : null;
+  if (src) {
+    for (const a of ACTIONS) {
+      const list = Array.isArray(src[a]) ? src[a].filter((c) => typeof c === 'string' && c && RESERVED_CODES.indexOf(c) < 0) : null;
+      if (list && list.length) nextKeys[a] = list;
     }
   }
   if (data.pad) {

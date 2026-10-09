@@ -17,7 +17,6 @@ const ICONS = {}, HEXES = {};
 for (const id of Object.keys(INGREDIENTS)) { ICONS[id] = INGREDIENTS[id].icon; HEXES[id] = INGREDIENTS[id].hex; }
 const TICKET_OPTS = { icons: ICONS, hexes: HEXES };
 
-export const HINT = 'STEER: ARROWS   HONK: X';
 /** The wheel widget's box (bottom-left, above the hint strip). */
 export const WHEEL_X = 8, WHEEL_Y = VIEW_H - 8 - 12 - 30, WHEEL_SIZE = 30;
 
@@ -142,5 +141,5 @@ export function drawSignPlate(ctx, text, w, age) {
   drawSign(ctx, VIEW_W / 2, 18 - drop, w, 22, text, { size: 1, swing, rope: 14 });
 }
 
-/** The hint strip along the bottom. */
-export function drawMapHint(ctx) { drawHint(ctx, HINT); }
+/** The hint strip along the bottom: the map joins it in enter(), because it names the player's own horn. */
+export function drawMapHint(ctx, text) { drawHint(ctx, text); }

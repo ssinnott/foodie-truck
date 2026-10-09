@@ -9,7 +9,9 @@ public MQTT brokers and then talk directly over WebRTC.
 
 ## What shipped
 
-Two to four players, every browser running the same simulation at 60Hz, exchanging only one-byte input masks.
+Two to four players, every browser running the same simulation at 60Hz, exchanging only one-byte input masks. This
+is the game's only multiplayer: there is no couch co-op, so every player is on their own machine and a machine is
+always exactly one seat - its keys, every pad plugged into it and its touchscreen all drive that one seat.
 
 | Piece | Module | Notes |
 |---|---|---|
@@ -75,14 +77,14 @@ it desyncs peers that are otherwise identical:
 - `game.frame = 0` — it is hashed, and it counted every update since boot.
 - a fade-out in flight is turned into a fade-in — `Game.update()` skips the top screen while fading out, and one
   peer may be mid-fade when START lands.
-- `input.resetClaims()`, every seat's virtual cleared, every buffered press consumed, seats 1..n-1 joined —
+- every seat's virtual cleared, every buffered press consumed, seats 1..n-1 joined and the rest not —
   the READY press that started the match is still in slot 0's buffer on every machine, and slot 0 is somebody
   else's seat on everyone but the host.
 - then `game.reset(SCENES[scene])`: the same scene opens everywhere. The state goes to `playing` and the
   disconnect watchdog starts on a 250 ms timer (never off rAF: a backgrounded tab has no rAF).
 
-From here `main.js` runs the pump every fixed step: `net.beforeStep()` samples `input.pollRaw(0)` (everyone
-plays on P1's keys whatever seat they hold), records it into lockstep, sends `INPUT` to every peer, and — only if
+From here `main.js` runs the pump every fixed step: `net.beforeStep()` samples `input.pollRaw(0)` (this machine's
+keys, pads and thumbs, whatever seat it holds), records it into lockstep, sends `INPUT` to every peer, and — only if
 every seat's input for this frame is present — injects **every** seat's mask with `input.setVirtual(slot, mask)`
 and advances. If a mask is missing it injects nothing and `canStep()` returns false, so the loop waits rather
 than guesses: a zero-filled frame would manufacture release and press edges no player made. `afterStep()` hashes
@@ -99,7 +101,7 @@ and the frame it names is the one the party has come to a halt on — after two 
 known dead, eight when the player has merely gone quiet. The forwarded tails are what bring everyone to that
 same frame first. From it on the seat reads as neutral; there is no bot. When the last other player goes, the
 session ends. After an end mid-run the other seats freeze on neutral and the survivor keeps their own seat on
-their own keyboard (`beforeStep` keeps feeding it from `pollRaw(0)`); `leave()` releases everything.
+their own devices (`beforeStep` keeps feeding it from `pollRaw(0)`); `leave()` releases everything.
 
 ## What a screen must do to be net-safe
 

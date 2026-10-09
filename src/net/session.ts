@@ -6,9 +6,9 @@
 // The rules that keep every peer identical live here, and each exists because breaking it desyncs
 // the match:
 //
-//  * The local device is always read through keyboard block 0 (input.pollRaw(0)), whichever seat this
-//    peer holds. Everyone sits alone at their own keyboard on P1's keys, so there is nothing for a seat
-//    assignment to switch out from under them.
+//  * The local devices are always read through input.pollRaw(0) - the keys, every pad, the thumbs -
+//    whichever seat this peer holds. Everyone sits alone at their own machine (there is no couch co-op),
+//    so there is nothing for a seat assignment to switch out from under them.
 //  * Missing remote input NEVER becomes a neutral mask. Zero-filling manufactures a release edge and a
 //    re-press edge that no player made. We stall instead: canStep() gates the loop, and beforeStep()
 //    refuses to inject or advance without every seat's input even when loop.step(n) skips the gate.
@@ -81,7 +81,7 @@ export type NetState = 'idle' | 'signalling' | 'connecting' | 'lobby' | 'playing
 export interface NetSessionOptions {
   /** The shell. The session seeds its rng, rebuilds its run and resets its screens through this. */
   game: Game;
-  /** The input service: read through keyboard block 0, written one virtual seat per player. */
+  /** The input service: read through pollRaw(0), written one virtual seat per player. */
   input: Input;
   /** True on the peer that mints the room code, owns the roster and declares the drops. */
   isHost: boolean;
