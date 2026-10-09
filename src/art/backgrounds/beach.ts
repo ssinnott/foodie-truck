@@ -5,8 +5,9 @@
 //
 //   far     rows   0..236   sky, the low sun, the open sea to the horizon with one headland, the near swell and
 //                           the BREAKERS: the foam line where the sea meets the sand (the screen twinkles it)
-//   mid     rows 200..250   the WET SAND the last wave left, darker and glossy, with the rowing boat pulled up at
-//                           one end and two crab pots at the other
+//   mid     rows 180..250   the WET SAND the last wave left, darker and glossy, with the rowing boat pulled up at
+//                           one end, its mooring post standing in the shallows beside it (the gull's perch), and
+//                           two crab pots at the other
 //   ground  rows 250..360   the DRY SAND the crew runs on (the clean walk band, no scatter), then the STRAND LINE
 //                           in front of it - the strip the crabs scuttle along, the weed washes onto and the salt
 //                           pans crust on - with the shells and pebbles the tide left, and the marram fringe
@@ -67,8 +68,23 @@ export const ROWS = Object.freeze({
   sky: 146, horizon: 148, swell: 196, breakers: 226, wet: 236, ground: 250,
   bandTop: 282, bandBot: 322, strand: 322, quarry: 338, fringe: 350, bottom: VIEW_H,
 });
-/** The mid layer's window: blitted at 200, 50 rows deep, so it reaches the ground layer's top edge exactly. */
-const MID_Y = 200, MID_H = ROWS.ground - MID_Y;
+/**
+ * THE POST: the rowing boat's mooring pile, standing in the shallows just past the boat's end with the painter tied
+ * round its foot. It is the one place in the cove a gull lands (game/screens/beachGags.ts), and it is part of the
+ * BEACH rather than of the joke: it stands there all visit, empty, so a gull on it is the tell. POST_X is its centre
+ * line and POST_TOP the row its cap is on - where a perched gull's feet go. Tall on purpose: the cap clears every
+ * name plate in the back lane (row ~200 at the tallest ears), so a gull on it is never hidden by a plate, and it
+ * stands against the open sea, where a white bird reads from across a room.
+ */
+export const POST_X = 136, POST_TOP = 186;
+/** The post's half-width inside its ink, and the row its foot is sunk to in the wet sand. */
+const POST_HALF = 4, POST_FOOT = 247;
+/**
+ * The mid layer's window: blitted at 180, 70 rows deep, so it reaches the ground layer's top edge exactly and holds
+ * the post from its cap down. Everything above the wet line is clear (the far layer's sea shows through) except
+ * the boat and the post.
+ */
+const MID_Y = 180, MID_H = ROWS.ground - MID_Y;
 
 /**
  * 30 twinkle positions on the breakers and the swell (screen coords + width), index-hashed alight by the screen:
@@ -150,6 +166,33 @@ function paintMid(g, w, h, rnd) {
   g.strokeStyle = BEACH.hull; g.lineWidth = 2; g.stroke();
   // two crab pots at the right end, stacked a little
   pot(g, w - 62, h - 4); pot(g, w - 44, h - 12);
+  post(g, bx + 82, by - 14);
+}
+
+/**
+ * The mooring post (POST_X, POST_TOP), in layer rows, with the boat's painter running to it from the bow at
+ * (bowX, bowY): a timber pile in the boat's own wood, its cap rounded by the weather, the shadow band down its right
+ * side (light is top-left), and the dark wet band and a fringe of weed where the tide reaches it.
+ */
+function post(g, bowX, bowY) {
+  const x0 = POST_X - POST_HALF, w = POST_HALF * 2, top = POST_TOP - MID_Y, foot = POST_FOOT - MID_Y, tide = ROWS.breakers - 4 - MID_Y;
+  // the painter first, so the pile stands in front of it: a sagging 2 px rope inside its own ink
+  g.strokeStyle = INK; g.lineWidth = 4; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(bowX, bowY); g.quadraticCurveTo((bowX + x0) / 2, bowY + 9, x0, foot - 10); g.stroke();
+  g.strokeStyle = BEACH.wetGloss; g.lineWidth = 2; g.stroke();
+  g.fillStyle = INK; g.beginPath(); g.ellipse(POST_X, top + 2, POST_HALF + 1, 3, 0, 0, TAU); g.fill();
+  g.fillRect(x0 - 1, top + 2, w + 2, foot - top - 2);
+  g.fillStyle = BEACH.hull; g.fillRect(x0, top + 2, w, foot - top - 3);
+  g.beginPath(); g.ellipse(POST_X, top + 2, POST_HALF, 2, 0, 0, TAU); g.fill();
+  g.fillStyle = UI.woodLight; g.fillRect(x0, top + 1, 3, 2);
+  g.fillStyle = BEACH.hullDark; g.fillRect(x0 + w - 2, top + 3, 2, foot - top - 4);
+  // the tide's mark: the wood darkened from the breakers down, and a fringe of weed at the top of it
+  g.fillStyle = mix(BEACH.hullDark, BEACH.seaDeep, 0.4); g.fillRect(x0, tide, w, foot - tide - 1);
+  g.fillStyle = INK; g.fillRect(x0 - 1, tide - 1, w + 2, 4);
+  g.fillStyle = mix(BEACH.marram, BEACH.seaDeep, 0.45); g.fillRect(x0, tide, w, 2);
+  // two turns of the painter round the foot, over the wood: 2 px of rope each, inked between
+  g.fillStyle = INK; g.fillRect(x0 - 1, foot - 13, w + 2, 7);
+  g.fillStyle = BEACH.wetGloss; g.fillRect(x0, foot - 12, w, 2); g.fillRect(x0, foot - 9, w, 2);
 }
 
 // ---------------------------------------------------------------- ground: the dry sand, the strand line

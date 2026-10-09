@@ -163,10 +163,88 @@ export function drawFlyingCatch(ctx, x, y, icon, hex) {
  * `player.setOverlay`: the coop's crouch to a floor egg, kept for the same reason - the basket dips to the ground
  * and comes back up with both paws on it, `weapon: 90` keeping it upright, the face and the apron open
  * (ART_STYLE 0.7). 12 frames, the screen's POUNCE_FRAMES. A crab is grabbed from above, which is a crouch.
+ *
+ * ...and the cove's three jokes (game/screens/beachGags.ts), on the same table. Raised paws go up FORWARD with the
+ * elbow open (upper 110-125, lower 14-22) so the paw - and whatever is in it - clears the muzzle; a key's length is
+ * the screen's beat where the screen switches on `done`.
+ *   THE GULL   scoop      down to the strand and up with the catch held high (the basket is set down for it);
+ *              holdUp     admiring it, smiling, while a shadow comes across the sand;
+ *              startle    the '!': head snapped up at the gull coming, mouth open, the catch still up;
+ *              spun       the downdraft: arms flung wide, on one foot (the screen swaps the facing every few frames);
+ *              shakeFist  glaring up at the gull with the basket shaken at the sky;
+ *              bonked     the catch lands on the head: squashed down, then `dazed`, a slow sway with the basket out;
+ *              shakeOff   a shake of the whole body, and back to work.
+ *   THE PINCH  clamped    frozen with the crab on the paw, the paw thrust out, OW; then
+ *              pinchRun   running round in a panic with that paw held out and the far one flailing.
+ *   THE WAVE   lookOut    up on tiptoe, staring out at the sea going out;
+ *              splooshed  flung back flat onto the bottom, then `sitWet`, sat in the wet with the legs out (the
+ *                         shared `sit`'s legs and lap), dazed; then `getUp` off the sand.
  */
+const BASKET = { armR: [60, 50], armL: [-18, 8], weapon: 90 };
+const SIT = { armR: [44, 40], armL: [30, 40], weapon: 90, legR: [80, 0], legL: [70, 4] };
 export const BEACH_ANIMS = Object.freeze({
   pounce: { loop: false, frames: [
     F(5, { armR: [44, 36], armL: [40, 40], weapon: 90, legR: [20, 30], legL: [-14, 30], torso: 14, head: 8, root: [0, 4], squash: 1.1, face: 'shout' }, { ease: 'in' }),
     F(7, { armR: [60, 50], armL: [56, 54], weapon: 90, torso: 2, root: [0, 0], face: 'happy' }, { ease: 'out' }),
+  ] },
+  scoop: { loop: false, frames: [
+    F(4, { armR: [40, 40], armL: [-20, 20], legR: [20, 30], legL: [-14, 30], torso: 16, head: 10, root: [0, 4], squash: 1.1, face: 'shout' }, { ease: 'in' }),
+    F(6, { armR: [114, 18], armL: [-18, 10], torso: -4, head: 4, root: [0, -1], face: 'happy' }, { ease: 'overshoot' }),
+  ] },
+  holdUp: { loop: true, frames: [
+    F(10, { armR: [114, 18], armL: [-18, 8], torso: -4, head: 6, root: [0, 0], face: 'happy' }),
+    F(10, { armR: [118, 16], armL: [-16, 10], torso: -5, head: 8, root: [0, -1], face: 'happy' }),
+  ] },
+  startle: { loop: false, frames: [
+    F(3, { armR: [120, 14], armL: [-36, 24], torso: -10, head: -16, root: [0, -3], stretch: 1.05, face: 'shout' }, { ease: 'out' }),
+    F(15, { armR: [118, 16], armL: [-40, 26], torso: -8, head: -18, root: [0, -2], stretch: 1.03, face: 'shout' }),
+  ] },
+  spun: { loop: true, frames: [
+    F(3, { armR: [80, 10], armL: [-80, 10], weapon: 90, legR: [30, 30], legL: [-6, 4], torso: -6, head: -8, root: [0, -4], face: 'dazed' }),
+    F(3, { armR: [96, 6], armL: [-96, 6], weapon: 90, legR: [-6, 4], legL: [30, 30], torso: 4, head: -2, root: [0, -2], face: 'dazed' }),
+  ] },
+  shakeFist: { loop: true, frames: [
+    F(5, { armR: [114, 14], armL: [-20, 10], weapon: 60, torso: -6, head: -16, root: [0, 0], face: 'angry' }),
+    F(5, { armR: [124, 22], armL: [-22, 10], weapon: 40, torso: -8, head: -18, root: [0, -1], face: 'angry' }),
+  ] },
+  bonked: { loop: false, frames: [
+    F(3, { armR: [50, 40], armL: [-40, 20], weapon: 90, legR: [16, 20], legL: [-12, 20], torso: 12, head: 20, root: [0, 4], squash: 1.14, face: 'dazed' }, { ease: 'out' }),
+    F(9, { ...BASKET, armL: [-24, 10], torso: 4, head: 6, root: [0, 1], face: 'dazed' }, { ease: 'inout' }),
+  ] },
+  dazed: { loop: true, frames: [
+    F(10, { ...BASKET, torso: 4, head: 8, root: [-1, 0, -5], face: 'dazed' }, { ease: 'inout' }),
+    F(10, { ...BASKET, armL: [-14, 10], torso: 4, head: 6, root: [1, 0, 5], face: 'dazed' }, { ease: 'inout' }),
+  ] },
+  shakeOff: { loop: false, frames: [
+    F(3, { ...BASKET, head: -8, root: [0, -1, -7], face: 'closed' }),
+    F(3, { ...BASKET, head: 8, root: [0, -1, 7], face: 'closed' }),
+    F(4, { ...BASKET, torso: 2, root: [0, 0], face: 'happy' }, { ease: 'out' }),
+  ] },
+  clamped: { loop: false, frames: [
+    F(2, { armR: [96, 4], armL: [-40, 20], weapon: 90, torso: -12, head: -8, root: [0, -3], stretch: 1.06, face: 'shout' }, { ease: 'out' }),
+    F(6, { armR: [100, 0], armL: [-46, 24], weapon: 90, torso: -10, head: -6, root: [0, -2], stretch: 1.04, face: 'hurt' }),
+  ] },
+  pinchRun: { loop: true, frames: [
+    F(4, { legR: [50, 20], legL: [-40, 55], armR: [100, 6], armL: [-110, 20], weapon: 90, torso: 14, head: -6, root: [0, -3], face: 'shout' }),
+    F(4, { legR: [10, 40], legL: [-10, 10], armR: [108, 14], armL: [-70, 30], weapon: 90, torso: 14, head: -4, root: [0, 0], squash: 1.04, face: 'shout' }),
+    F(4, { legR: [-40, 55], legL: [50, 20], armR: [100, 6], armL: [-110, 20], weapon: 90, torso: 14, head: -6, root: [0, -3], face: 'shout' }),
+    F(4, { legR: [-10, 10], legL: [10, 40], armR: [108, 14], armL: [-70, 30], weapon: 90, torso: 14, head: -4, root: [0, 0], squash: 1.04, face: 'shout' }),
+  ] },
+  lookOut: { loop: true, frames: [
+    F(12, { ...BASKET, armL: [-30, 16], torso: -6, head: -14, root: [0, -2], stretch: 1.05, face: 'shout' }, { ease: 'inout' }),
+    F(12, { ...BASKET, armL: [-34, 18], torso: -7, head: -16, root: [0, -3], stretch: 1.06, face: 'shout' }, { ease: 'inout' }),
+  ] },
+  splooshed: { loop: false, frames: [
+    F(4, { armR: [-70, -20], armL: [-90, -10], weapon: 90, legR: [70, 10], legL: [50, 20], torso: -30, head: -24, root: [-6, -6, -18], face: 'hurt' }, { ease: 'out' }),
+    F(5, { ...SIT, legR: [86, 0], legL: [76, 4], torso: -14, head: -2, root: [-3, 10, -6], squash: 1.12, face: 'dazed' }, { ease: 'in' }),
+    F(6, { ...SIT, torso: -6, head: 4, root: [-2, 9], face: 'dazed' }, { ease: 'out' }),
+  ] },
+  sitWet: { loop: true, frames: [
+    F(16, { ...SIT, torso: -6, head: 6, root: [-2, 9], face: 'dazed' }),
+    F(16, { ...SIT, armR: [46, 42], armL: [32, 40], torso: -4, head: 8, root: [-2, 10], face: 'hurt' }),
+  ] },
+  getUp: { loop: false, frames: [
+    F(6, { armR: [50, 40], armL: [20, 30], weapon: 90, legR: [50, 70], legL: [40, 70], torso: 24, head: 6, root: [0, 6], face: 'closed' }, { ease: 'inout' }),
+    F(6, { ...BASKET, torso: 2, root: [0, 0], face: 'happy' }, { ease: 'out' }),
   ] },
 });

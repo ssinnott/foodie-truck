@@ -292,6 +292,34 @@ export const SFX_DEFS: Record<string, SfxDef> = {
   pinch: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 1900, dur: 0.03, vol: 0.24 }); return osc(c, d, t + 0.04, { type: 'square', f0: 900 * o.p, f1: 380 * o.p, glide: 0.14, dur: 0.18, vol: 0.07 * o.v, attack: 0.004, lp: 2200 }); },
   /** The seventh wave up the sand: a long swell of lowpassed noise that rises, breaks and hisses back. */
   wave: (c, d, t, o) => { noise(c, d, t, { dur: 0.7, vol: 0.2 * o.v, type: 'lowpass', f0: 500 * o.p, f1: 2200 * o.p, attack: 0.35 }); return noise(c, d, t + 0.5, { dur: 0.6, vol: 0.12 * o.v, type: 'highpass', f0: 1800 * o.p, f1: 3500 * o.p, attack: 0.05 }); },
+  /** The sea drawing back before the seventh wave: a long sucking hiss sliding down, the shingle ticking under it. */
+  beach_suck: (c, d, t, o) => { for (let i = 0; i < 6; i++) knock(c, d, t + 0.12 + i * 0.12, { v: o.v * 0.5, p: o.p, f: 1500 - i * 140, dur: 0.02, vol: 0.08 }); return noise(c, d, t, { dur: 1.0, vol: 0.16 * o.v, type: 'bandpass', f0: 2400 * o.p, f1: 300 * o.p, q: 0.8, attack: 0.25 }); },
+  /** SPLOOSH: the seventh wave landing on the crew - a soft deep thump, a spray, and a big wash of water after it. */
+  beach_sploosh: (c, d, t, o) => {
+    thump(c, d, t, { v: o.v, p: o.p, f: 80, lp: 700, dur: 0.22, vol: 0.4 });
+    noise(c, d, t, { dur: 0.25, vol: 0.2 * o.v, type: 'bandpass', f0: 3000 * o.p, f1: 1200 * o.p, q: 0.8, attack: 0.004 });
+    return noise(c, d, t + 0.02, { dur: 1.0, vol: 0.3 * o.v, type: 'lowpass', f0: 2600 * o.p, f1: 300 * o.p, attack: 0.01 });
+  },
+  /** A fish flopping on the sand: a wet slap and a flick of its tail. */
+  beach_flop: (c, d, t, o) => { plop(c, d, t, { v: o.v, p: o.p * 0.7, f: 260, vol: 0.18, splash: 0.18 }); return knock(c, d, t + 0.09, { v: o.v * 0.6, p: o.p, f: 700, dur: 0.03, vol: 0.12 }); },
+  /** The gull landing on its post: a far-off kee-ow, rising and falling away with a wobble, and a shorter one after. */
+  beach_cry: (c, d, t, o) => {
+    osc(c, d, t, { type: 'square', f0: 900 * o.p, f1: 1400 * o.p, dur: 0.1, vol: 0.04 * o.v, attack: 0.02, lp: 2400, vib: { rate: 26, depth: 40 } });
+    osc(c, d, t + 0.09, { type: 'square', f0: 1400 * o.p, f1: 760 * o.p, dur: 0.24, vol: 0.04 * o.v, attack: 0.01, lp: 2400, vib: { rate: 26, depth: 40 } });
+    return osc(c, d, t + 0.42, { type: 'square', f0: 1300 * o.p, f1: 820 * o.p, dur: 0.16, vol: 0.03 * o.v, attack: 0.01, lp: 2400, vib: { rate: 26, depth: 40 } });
+  },
+  /** The gull's dive: a whoosh of air falling past, and a thin whistle going down with it. */
+  beach_swoop: (c, d, t, o) => { osc(c, d, t + 0.05, { type: 'sine', f0: 1700 * o.p, f1: 650 * o.p, dur: 0.34, vol: 0.05 * o.v, attack: 0.05 }); return whoosh(c, d, t, { v: o.v, p: o.p, f0: 2600, f1: 500, dur: 0.4, vol: 0.24 }); },
+  /** SQUAWK: the gull's snatch - a clap of wings and a harsh buzzing cry, twice. */
+  beach_squawk: (c, d, t, o) => {
+    noise(c, d, t, { dur: 0.12, vol: 0.14 * o.v, type: 'bandpass', f0: 1200 * o.p, f1: 600 * o.p, q: 0.7, attack: 0.005 });
+    osc(c, d, t + 0.02, { type: 'sawtooth', f0: 1150 * o.p, f1: 760 * o.p, dur: 0.2, vol: 0.07 * o.v, attack: 0.005, lp: 2600, vib: { rate: 34, depth: 70 } });
+    return osc(c, d, t + 0.24, { type: 'sawtooth', f0: 1050 * o.p, f1: 700 * o.p, dur: 0.14, vol: 0.06 * o.v, attack: 0.005, lp: 2600, vib: { rate: 34, depth: 70 } });
+  },
+  /** BONK: a dropped catch on a head - a hollow wooden knock and a little spring of a boing after it. */
+  beach_bonk: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 520, dur: 0.07, vol: 0.28 }); return osc(c, d, t + 0.05, { type: 'triangle', f0: 240 * o.p, f1: 420 * o.p, glide: 0.12, dur: 0.3, vol: 0.1 * o.v, attack: 0.005, vib: { rate: 16, depth: 35 } }); },
+  /** OW! OW!: a pinched critter running round, two squeaks sliding up. */
+  beach_yelp: (c, d, t, o) => { osc(c, d, t, { type: 'sine', f0: 680 * o.p, f1: 1150 * o.p, dur: 0.11, vol: 0.09 * o.v, attack: 0.004 }); return osc(c, d, t + 0.15, { type: 'sine', f0: 720 * o.p, f1: 1250 * o.p, dur: 0.12, vol: 0.09 * o.v, attack: 0.004 }); },
   /** A thorn in the paw: one tiny high tick, and a squeak sliding up after it. */
   prick: (c, d, t, o) => { knock(c, d, t, { v: o.v, p: o.p, f: 2600, dur: 0.02, vol: 0.18 }); return osc(c, d, t + 0.04, { type: 'sine', f0: 700 * o.p, f1: 1300 * o.p, glide: 0.1, dur: 0.14, vol: 0.09 * o.v, attack: 0.004 }); },
   /** OW! as the leap goes up: a yelp, a soft square sliding up an octave and tumbling back down. */
