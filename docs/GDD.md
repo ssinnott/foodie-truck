@@ -181,6 +181,15 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
 
 - World `2560 x 1440` px (`content/places.js WORLD_W/H`), one flat plane in 3/4 storybook view, y-sorted sprites
   with ground-contact shadows. Camera follows the truck (0.1 lerp, integer snap, clamped to the world).
+- **The town** round the depot (`art/backgrounds/map.ts` `TOWN_QUARTERS`) is the old square core and the paved
+  quarters that have grown out of it along its streets, so its kerb wanders: a business district up the mill road
+  (the six-storey office tower, two office blocks, the bank, the town hall with its clock tower over the square, the
+  hotel), the station end, the chapel end, and terraces round a little green over the high street. Its houses are a
+  mix - detached houses, semis, terraces, a town house, thatched cottages - with a bakery, a cafe, a greengrocer, a
+  bookshop and a pub along its streets. Every building is a y-sorted sprite with only its footprint walled, so the
+  truck passes behind a house as it does behind the tower, and in front of one it is driving past. No building
+  stands on a street, over a stop's queue or over its lamp (the `town` scenario holds that), and no crossing, cart
+  or mud patch is ever laid in town.
 - **Landmarks** (`PLACES`): home (the truck stop), orchard (apples, pears, peaches, avocados), pond (trout), coop
   (eggs), dairy (milk, butter), mill (flour, rice), hives (honey), Furrow Farm (carrots, potatoes, onions, leeks,
   beetroot, pumpkins, cabbages), Cockle Cove on the east edge (crabs, seaweed, sea salt) and Bramble Bank on the
