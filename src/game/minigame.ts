@@ -122,9 +122,14 @@ export interface Seat {
   anim: string;
   /** Rows the critter's tallest head part reaches above its skull, for the name plate. */
   crown: number;
+  /** Walking speed multiplier for this seat: FORAGER_WALK for a seated Cress, else 1 (set in makeSeats). */
+  walk: number;
   /** This seat's own drawRig options object, mutated per draw instead of allocated. */
   opts: DrawRigOpts;
 }
+
+/** The forager walks every gather game 25% faster: a seated Cress (ride-along friends have no seat, so none). */
+export const FORAGER_WALK = 1.25;
 
 /**
  * One seat per party member. `floorY(i)` gives the feet line for party index i. Each seat carries its own draw
@@ -141,6 +146,7 @@ export function makeSeats<S extends Seat = Seat>(game: Game, floorY: (i: number)
       index: i, slot: p.slot, critter: def.id, name: def.name, rig, player, colour: PLAYER_COLORS[p.slot] || UI.paperDark,
       x: 0, y: floorY(i), facing: 1, moving: false, count: 0, bumpT: 0, catchT: 0, anim: '',
       crown: CROWN[def.id] != null ? CROWN[def.id] : 8,
+      walk: def.id === 'cress' ? FORAGER_WALK : 1,
       opts: { x: 0, y: 0, facing: 1, scale: 1 },
     });
   }

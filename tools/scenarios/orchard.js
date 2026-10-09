@@ -67,6 +67,21 @@ function seat0(page) {
 }
 
 export const SCENARIOS = {
+  // the forager walks 1.25 times the stick's pace in every gather game (FORAGER_WALK): the same 40 frames right by
+  // Cress in seat 0 cover 1.25 times the ground Barley covers from the same seat
+  async forager(server) {
+    const walked = {};
+    for (const [critters, who] of [['3,0,1,2', 'Cress'], ['0,1,2,3', 'Barley']]) {
+      await withPage(server, `skipTo=orchard&critters=${critters}&order=1`, async (api) => {
+        await api.step(2);
+        const x0 = (await api.summary()).top.seats[0][1];
+        await api.hold(0, { right: true }); await api.step(40); await api.release(0);
+        walked[who] = (await api.summary()).top.seats[0][1] - x0;
+      });
+    }
+    assert(walked.Barley > 60, `Barley walks the orchard at the stick's pace (${walked.Barley} px in 40 frames)`);
+    assert(Math.abs(walked.Cress - 1.25 * walked.Barley) <= 2, `Cress walks 1.25 times as far as Barley (${walked.Cress} px vs ${walked.Barley} px)`);
+  },
   async orchard(server) {
     // ?order=1 is ORDERS[0], APPLE PIE: apple 4 + egg 2, so `apple` is a real line on the ticket. The orchard now drops
     // pears, peaches and avocados too, and gathers whichever the day is short of (game/run.js gatherTarget); a seed

@@ -28,9 +28,9 @@ differences, never gates: anyone can do any job.
 | Role | Verb | What the role changes |
 |---|---|---|
 | **The hungry one** | EAT / CARRY | Biggest basket; slowest; in the kitchen a random `bite` beat now and then that costs nothing but makes everyone laugh |
-| **The chef** | CHOP / MIX | Smallest basket; the one who plates with a flourish |
+| **The chef** | CHOP / MIX | Smallest basket; the one who plates with a flourish. Sorrel cooks 25% faster: her holds (MIX, STOVE, OVEN) fill in 192 frames, not 240 (section 6) |
 | **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks. The hare runs the grass: with Chicory seated, the truck moves 1.4 px/frame off the road instead of 1.0 (section 4; mud and the road are unchanged) |
-| **The forager** | GATHER / CAST | Fastest in the mini-games; longest fishing cast |
+| **The forager** | GATHER / CAST | Cress walks 25% faster in every gather mini-game (section 5); longest fishing cast |
 | **The head chef** | TASTE / ORDER | Owns the truck and runs the crew; steady everywhere, best at the pass; tastes from the spoon |
 
 | Cast index | Name | Species | Role |
@@ -284,7 +284,8 @@ Common rules: side view, feet on a scene-specific floor line, one critter per se
 whose bar fills as the party gathers, the target count from the shopping list (that ingredient's remainder). **A
 round has no time limit**: it ends only when the party's total reaches the target, so one visit always fills that
 line of the list; the scene ends with a sign dropping in (`APPLES: 12`) and a 60-frame hold, then `run.gather` and
-back to the map. All randomness through `rng` inside `update()`.
+back to the map. All randomness through `rng` inside `update()`. A seated Cress walks 1.25 times as fast as the stick
+says in every game that walks (`FORAGER_WALK`); a ride-along friend has no seat and walks nothing.
 
 A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the farm, the bank, the
 cove) asks `run.js gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the tally
@@ -444,9 +445,9 @@ cooked out of thin air - and the recipe card shows them with checks. Interaction
 |---|---|---|
 | FRIDGE | tap | one `action` press per INGREDIENT the order wants (the line's apples, then its eggs: two taps however many pies), any rhythm; each tap swings the door open and every one of that ingredient the whole order wants comes out at once, each flying along the counter into the station ITS dish uses next (onto the board for a recipe that chops, else into the bowl). Nothing to choose: the fridge holds exactly the order. A whole line's fridge is two to eleven taps, about as many as a chop |
 | CHOP | tap | ten `action` presses, any rhythm (fifteen on an EXTRA CRUNCHY order, `order.chops`); the pips on the card light one per chop |
-| MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it |
-| STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way |
-| OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way |
+| MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it. Sorrel, the chef, fills it 1.25 a frame: 192 frames (section 2) |
+| STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way. The chef's fills 1.25 a frame: 192 frames |
+| OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way. The chef's fills 1.25 a frame: 192 frames |
 | PLATE | tap | `action` rings the bell: every plate goes out through the hatch to the diner who ordered it, front of the line first |
 
 **The whole line is at the hatch.** The opening on the right of the room is where the line waits on its order, all

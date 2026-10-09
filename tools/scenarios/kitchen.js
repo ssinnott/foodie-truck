@@ -165,6 +165,27 @@ export const SCENARIOS = {
     });
   },
 
+  // the chef's holds fill 1.25 a frame (CHEF_HOLD): Sorrel finishes a 240-frame MIX in 192 held frames, Barley in 240
+  async chef(server) {
+    for (const [critters, who, rate] of [['1,0,2,3', 'Sorrel', 1.25], ['0,1,2,3', 'Barley', 1]]) {
+      await withPage(server, `skipTo=kitchen&critters=${critters}&order=1`, async (api, page) => {
+        await oneOrder(api, page);
+        await pullAll(api);
+        await walkTo(api, CHOP);
+        for (let i = 0; i < 10; i++) await chopOnce(api);
+        await walkTo(api, MIX);
+        await api.hold(0, { action: true });
+        await api.step(120);
+        let s = await api.summary();
+        assert(s.top.step === 2 && s.top.t === 120 * rate, `${who} holds the bowl and the dial fills ${rate} a frame (step ${s.top.step}, t ${s.top.t})`);
+        await api.step(72);
+        s = await api.summary();
+        if (rate > 1) assert(s.top.step === 3, `Sorrel's 192 held frames finish the MIX (step ${s.top.step}, t ${s.top.t})`);
+        else assert(s.top.step === 2 && s.top.t === 192, `Barley's 192 held frames leave the MIX unfinished (step ${s.top.step}, t ${s.top.t})`);
+        await api.release(0);
+      });
+    }
+  },
   async kitchen(server) {
     await withPage(server, 'skipTo=kitchen&critters=0,1,2,3&order=1', async (api, page) => {
       await api.step(2);
