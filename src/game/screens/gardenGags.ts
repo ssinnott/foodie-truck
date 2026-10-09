@@ -38,7 +38,7 @@ import { jointScreen } from '../../lib/art/rig.ts';
 import type { RigWeapon } from '../../lib/art/rig.ts';
 import type { Point } from '../../lib/art/rigParts.ts';
 import { seatAnim } from '../minigame.ts';
-import { gagBurst, gagBubble, gagBump, overHead, drawDizzy } from '../gags.ts';
+import { gagBurst, gagBubble, gagBump, gagHush, overHead, drawDizzy } from '../gags.ts';
 import type { GagCard } from '../gags.ts';
 import { CROP, GARDEN_TRUG, GAUGE_UNITS, TAG_H } from '../../art/gardenProps.ts';
 import { ROWS } from '../../art/backgrounds/garden.ts';
@@ -168,12 +168,12 @@ export function windUp(s: GardenSeat, t: CropTop, presses: number): void {
  * live their own lives in game/gags.ts (a burst is up for nearly a second), and the rocket root says four things
  * in two seconds - '!', POP!, '?', BONK! - so left to themselves they stacked into one unreadable heap of paper;
  * each now takes the one before it down, in the frame it pops in over the same spot. The pool is shared and reused
- * in turn, so the old card is only taken down while it is still this seat's (its rim is the seat's colour).
- * `card` is cosmetic - it never reaches the sim, the checksum or the rng.
+ * in turn, so the old card is only taken down while it is still this seat's (gagHush's owner check, the seat's
+ * colour) and never when the pool has just handed its slot to the new word. `card` is cosmetic - it never reaches
+ * the sim, the checksum or the rng.
  */
 function say(s: GardenSeat, card: GagCard): void {
-  const c = s.card;
-  if (c && c.active && c.rim === s.colour) c.active = false;
+  if (s.card !== card) gagHush(s.card, s.colour);
   s.card = card;
 }
 

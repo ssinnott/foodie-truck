@@ -169,7 +169,7 @@ export function overHead(seat: Seat): number { return R(seat.y - seat.rig.height
  * the seat's colour as `rim` and a card that is no longer that seat's is left alone. Cosmetic, like every card.
  */
 export function gagHush(c: GagCard | null | undefined, rim?: string): void {
-  if (c && c.active && (rim === undefined || c.rim === rim)) c.life = c.t;
+  if (c && c.active && (rim === undefined || c.rim === rim)) c.active = false;
 }
 
 /** Nudge the world: `amp` rows (2 is a thump, 3 a big one), for the biggest bangs only. From update(). */
