@@ -162,6 +162,16 @@ export function gagBubble(x: number, y: number, text: string, rim?: string): Gag
  */
 export function overHead(seat: Seat): number { return R(seat.y - seat.rig.height * seat.rig.scale - seat.crown - PLATE_CLEAR); }
 
+/**
+ * Take a card down at once, the frame it is called: a later word over the same head knocks the last one away (the
+ * bang interrupts the remark), so two cards never print over each other with the old one's rim showing round the new.
+ * The pool hands slots out in turn, so a card a seat kept may since have been given to another seat's word: pass
+ * the seat's colour as `rim` and a card that is no longer that seat's is left alone. Cosmetic, like every card.
+ */
+export function gagHush(c: GagCard | null | undefined, rim?: string): void {
+  if (c && c.active && (rim === undefined || c.rim === rim)) c.life = c.t;
+}
+
 /** Nudge the world: `amp` rows (2 is a thump, 3 a big one), for the biggest bangs only. From update(). */
 export function gagBump(amp: number = 2): void { bumpT = BUMP_FRAMES; bumpAmp = amp; }
 

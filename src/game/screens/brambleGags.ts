@@ -23,7 +23,7 @@ import { particles } from '../../engine/particles.ts';
 import { ringAt, burstCrumbs, burstDust } from '../../art/fx.ts';
 import type { RigWeapon } from '../../lib/art/rig.ts';
 import { seatAnim, RIBBON_BASKET } from '../minigame.ts';
-import { gagBurst, gagBubble, overHead } from '../gags.ts';
+import { gagBurst, gagBubble, gagHush, overHead } from '../gags.ts';
 import type { GagCard } from '../gags.ts';
 import { BUSH, BERRY_S, SPOTS, SWOLLEN, SWELL_MAX, PRICK_RISE } from '../../art/brambleProps.ts';
 import { BUSH_X, ROWS } from '../../art/backgrounds/bramble.ts';
@@ -111,11 +111,10 @@ export function setJuice(hex: string, juice: string): void { PULP.color = hex; S
 /**
  * Put a word card up over a seat, knocking its last one away first: game/gags.ts cards age on their own, and the
  * squishy one's '!' was still up when its SPLUT! landed on top of it, its rim showing round the burst. One card over
- * a head at a time - the bang interrupts the remark. Cosmetic: the card's own life is all that is touched.
+ * a head at a time - the bang interrupts the remark (gagHush). Cosmetic: the card's own life is all that is touched.
  */
 function say(s: BrambleSeat, card: GagCard): void {
-  const last = s.card;
-  if (last && last !== card && last.active && last.rim === s.colour) last.life = last.t;
+  if (s.card !== card) gagHush(s.card, s.colour);
   s.card = card;
 }
 
