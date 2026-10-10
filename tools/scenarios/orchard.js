@@ -67,8 +67,10 @@ function seat0(page) {
 }
 
 export const SCENARIOS = {
-  // the hungry one gulps one pick in twenty (GULP_CHANCE): over a long run of catches, a gulp is never banked (so the
-  // party's total is exactly what the baskets hold), only Barley's seat gulps, and gulps stay rare
+  // the hungry one gulps one pick in twenty (GULP_CHANCE): a gulp is never banked (so the party's total is exactly what
+  // the baskets hold), only Barley's seat gulps, and gulps stay rare. This run gives Barley about a dozen picks, and a
+  // 5% roll misses over a dozen picks about half the time, so it does not assert that a gulp happens: hungryPond
+  // (sixty fish) is the test that the gulp fires
   async hungry(server) {
     await withPage(server, 'skipTo=orchard&critters=0,1,2,3&order=1', async (api, page) => {
       await api.step(2);
@@ -82,7 +84,7 @@ export const SCENARIOS = {
       const baskets = r.seats.reduce((a, s) => a + s.count, 0), b = r.seats[0];
       assert(r.total === baskets, `the party's total is what the baskets hold: gulps are never banked (total ${r.total}, baskets ${baskets})`);
       assert(r.seats.slice(1).every((s) => s.gulped === 0), `only Barley's seat gulps (gulped ${JSON.stringify(r.seats.map((s) => s.gulped))})`);
-      assert(b.gulped >= 1 && b.gulped * 4 < b.count + b.gulped, `Barley gulps some picks and they stay rare (${b.gulped} gulped, ${b.count} banked)`);
+      assert(b.count + b.gulped >= 8 && b.gulped * 4 < b.count + b.gulped, `Barley's picks stay mostly banked (${b.gulped} gulped of ${b.count + b.gulped})`);
     });
   },
   // the forager walks 1.25 times the stick's pace in every gather game (FORAGER_WALK): the same 40 frames right by

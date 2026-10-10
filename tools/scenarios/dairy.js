@@ -23,7 +23,8 @@ const PUMP_PER_PAIL = 12;
 /** ?order=5 is ORDERS[4], CUSTARD TART: milk 3 + egg 2, so `milk` is a real line on the ticket. */
 const BOOT = 'skipTo=dairy&critters=0,1,2,3&order=5';
 /** ?recipes=8 fixes the menu to ORDERS[8], PEACH COBBLER: peach 3 + butter 2, so the dairy's visit is for butter. */
-const BOOT_BUTTER = 'skipTo=dairy&critters=0,1&recipes=8';
+// no Barley in the butter party: his one-in-twenty gulp of the only pat would leave the ending with nothing banked
+const BOOT_BUTTER = 'skipTo=dairy&critters=1,2&recipes=8';
 const CHURN_PRESSES = 12;
 /** The frame of the squirt the pump shot is taken on: the jet is still up and the ring has opened. */
 const PUMP_SHOT = 3;

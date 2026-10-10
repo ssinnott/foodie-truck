@@ -38,8 +38,11 @@ export type { Decoded } from '../lib/net/protocol.ts';
  * 8: the hungry one gulps one pick in twenty (game/minigame.ts GULP_CHANCE). A seated Barley's successful picks spend a
  * roll on the shared rng, so every later draw moves on any peer that does not draw it, and the eaten pick never reaches
  * the basket or the party's total.
+ * 9: the millpond's catch rolls the gulp too (game/screens/pond.ts hook). A seated Barley's landed fish spend a roll
+ * on the shared rng there as they do in the other gather games, so a build without it draws a different sequence from
+ * the first fish. The v8 entry above was cut before the pond took the rule, which is why this bump exists.
  */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 if (ACTIONS.length > 16) throw new Error('net/protocol: more than 16 actions no longer fit a uint16 mask');
 /**
  * START: the host's authoritative session parameters. Every peer seeds from this and begins at

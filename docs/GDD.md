@@ -30,7 +30,7 @@ differences, never gates: anyone can do any job.
 | **The hungry one** | EAT / CARRY | Biggest basket; slowest; in the kitchen a random `bite` beat now and then that costs nothing but makes everyone laugh. In every gather mini-game one pick in twenty goes in his mouth (NOM) instead of his basket, and never into the party's total (section 5) |
 | **The chef** | CHOP / MIX | Smallest basket; the one who plates with a flourish. Sorrel cooks 25% faster: her holds (MIX, STOVE, OVEN) fill in 192 frames, not 240 (section 6) |
 | **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks. The hare runs the grass: with Chicory seated, the truck moves 1.4 px/frame off the road instead of 1.0 (section 4; mud and the road are unchanged) |
-| **The forager** | GATHER / CAST | Cress walks 25% faster in every gather mini-game (section 5); longest fishing cast |
+| **The forager** | GATHER / CAST | Cress walks 25% faster in every gather mini-game that walks (section 5); longest fishing cast |
 | **The head chef** | TASTE / ORDER | Owns the truck and runs the crew; steady everywhere, best at the pass; tastes from the spoon |
 
 | Cast index | Name | Species | Role |
@@ -588,7 +588,7 @@ player has bound M to something, while a rebind is listening, and while a host k
 
 - **title**: logo, the parked truck (wearing what the garage put on it) with the cast idling, menu PLAY / ONLINE / GARAGE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Seven rows, so the A-frame is 14 px taller than it was at six, grown upward so its legs stay put. Along the bottom, on one paper strip, the two addresses this game has: the repository - the SOURCE row's other half, lit while that row is selected - and the Ko-fi address beside it, which is a click and nothing else, no row and no key. Both are underlined, and both stay readable to type where a browser refuses the tab (`engine/links.ts`).
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
-- **select**: five 116×200 cards (the kit's 140 fitted four across), the player's one cursor, a READY stamp;
+- **select**: five 116×150 cards (the kit's 140×200 fitted four across; the card carries name and role only, no stat bars), the player's one cursor, a READY stamp;
   `next` = stage (starts the run). The two cards riding along with the pick under the cursor (section 2) wear the
   truck's mustard across their header, lettered `TAKES ORDERS` / `RUNS ABOUT`, and the bio strip names them under
   the bio (`SORREL AND CHICORY RIDE ALONG`). A party picks in the online lobby instead, each player on their own machine.
