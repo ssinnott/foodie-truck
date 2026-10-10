@@ -330,7 +330,8 @@ or held down with a bar filling under it (HOLD). The key is labelled with the se
 The whole game is built on **three inputs and nothing else**: move left and right, tap ACTION over and over, and
 hold ACTION down. There are no timing windows, no beats to hit and no wrong buttons — a young player can never lose
 what they have gathered, and there is no clock to race: a round lasts as long as it takes. The only hazards left are
-jokes (the orchard's wormy apple and its bomb), and they cost nothing but a moment.
+jokes (the orchard's wormy apple and its bomb), and they cost nothing but a moment. The one real cost is Barley's gulp
+(section 5), which takes a pick out of the basket.
 
 - **Orchard — CATCH** (*move*). Move left/right with a basket held in front. Apples (14 px, so they read from
   across a room) spawn above the canopy every 30–60 frames at a seeded x and fall at 1.4–2.4 px/frame with a small

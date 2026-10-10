@@ -6,9 +6,9 @@
 //          once (the whole line's apples, then its eggs) and sends each flying along the counter to the station ITS
 //          dish uses next (a graphic, never a choice); the last one closes the door
 //   CHOP  ten presses (fifteen if anyone ordered EXTRA CRUNCHY), any rhythm: every tap is a chop
-//   MIX   hold for 240 frames while a dial fills; letting go pauses it, and it picks up where it left off
-//   STOVE hold for 240 frames while a bar fills; letting go pauses it the same way
-//   OVEN  hold for 240 frames while the bake runs; letting go pauses it the same way
+//   MIX   hold for 240 frames (192 for Sorrel, the chef: CHEF_HOLD) while a dial fills; letting go pauses it, and it picks up where it left off
+//   STOVE hold for 240 frames (192 for the chef) while a bar fills; letting go pauses it the same way
+//   OVEN  hold for 240 frames (192 for the chef) while the bake runs; letting go pauses it the same way
 //   PLATE a press at the hatch rings the bell: ORDER UP!, and every plate goes out through the hatch
 // THE WHOLE LINE IS COOKED AT THE SAME TIME: ONE GIANT ORDER. The kitchen is handed every order in the line
 // (`orders`: run.lineOrders(), front first) and their steps are MERGED into one run of the counter (`mergeSteps`):

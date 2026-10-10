@@ -18,6 +18,23 @@ async function untilState(api, state, budget) {
 }
 
 export const SCENARIOS = {
+  // the hungry one's gulp applies at the millpond too: sixty landed fish per seat, straight through the catch handler
+  // (hook), so the rng is the one the game would draw from. A gulp is never banked, and only Barley's seat gulps
+  async hungryPond(server) {
+    await withPage(server, 'skipTo=pond&critters=0,1,2,3', async (api, page) => {
+      await api.step(2);
+      const r = await page.evaluate(() => {
+        const sc = window.__game.game.screen;
+        sc.target = 999;
+        for (let i = 0; i < 60; i++) for (const s of sc.seats) sc.hook(s);
+        return { total: sc.total, seats: sc.seats.map((s) => ({ count: s.count, gulped: s.gulped })) };
+      });
+      const baskets = r.seats.reduce((a, s) => a + s.count, 0), b = r.seats[0];
+      assert(r.total === baskets, `the millpond's total is what the baskets hold: gulps are never banked (total ${r.total}, baskets ${baskets})`);
+      assert(r.seats.slice(1).every((s) => s.gulped === 0), `only Barley's seat gulps a fish (gulped ${JSON.stringify(r.seats.map((s) => s.gulped))})`);
+      assert(b.gulped >= 1 && b.count + b.gulped === 60, `Barley gulps some of his sixty fish and banks the rest (${b.gulped} gulped, ${b.count} banked)`);
+    });
+  },
   async pond(server) {
     await withPage(server, 'skipTo=pond&critters=0,1,2,3', async (api, page) => {
       await api.step(5);

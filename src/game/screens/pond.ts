@@ -34,7 +34,7 @@ import { drawFood } from '../../art/food.ts';
 import { POND, ROWS, SEAT_X, SEAT_PITCH, FLOAT_DX, FLOAT_Y, GLINTS, SUN_GLINTS, pondLayers } from '../../art/backgrounds/pond.ts';
 import { PARA_N, PARA_T, PARA_H, BOB, POND_ANIMS_CAST, CAST_LAUNCH, drawLine, drawFloat, drawTrout, drawBucket, drawBoot } from '../../art/fishing.ts';
 import {
-  makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
+  makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -344,11 +344,13 @@ export class PondScreen extends Screen {
 
   hook(s: PondSeat): void {
     if (s.boot) { this.bootUp(s); return; }
-    s.state = HOOKED; s.t = RESULT_FRAMES; s.reel = 0; s.count++;
-    this.game.audio.play('hook');
-    this.total++; this.countStr = this.total + '/' + this.target;
+    s.state = HOOKED; s.t = RESULT_FRAMES; s.reel = 0;
     seatAnim(s, 'pull', true);
     burstDrops(s.fx, s.fy, 6, true); ringAt(s.fx, s.fy, 4, 14, UI.cream, 2, 14, true, true);
+    if (gulps(s)) { gulp(this.game, s, s.fx, s.fy - 24); return; }
+    s.count++;
+    this.game.audio.play('hook');
+    this.total++; this.countStr = this.total + '/' + this.target;
     floatText(s.fx, s.fy - 24, PLUS_ONE, UI.cream, 1, true);
   }
 
