@@ -29,8 +29,20 @@ export type { Decoded } from '../lib/net/protocol.ts';
  * 5: the village grew to twenty-seven diners (content/critters/diners.ts). The plan deals each line by shuffling the
  * whole roll on its seeded stream, so a peer with the shorter roll draws a different crowd and then a different
  * everything after it - twists, crossings, weather and every later day's menu - from the same seed.
+ * 6: the hare runs the grass (game/screens/map.ts GRASS_SPEED): a seated Chicory takes the truck off the road at 1.4
+ * px/frame instead of 1.0. A simulation rule changed, so a peer on the old rule drives the same party at a different
+ * speed from the first frame and the two drift apart on the map.
+ * 7: Sorrel cooks 25% faster and Cress walks 25% faster (game/screens/kitchen.ts CHEF_HOLD, game/minigame.ts
+ * FORAGER_WALK). A seated Sorrel's holds fill 1.25 a frame and a seated Cress walks the gather games at 1.25 times the
+ * stick. Both are simulation rules, so a peer on the old rules runs the same party at different speeds from the first frame.
+ * 8: the hungry one gulps one pick in twenty (game/minigame.ts GULP_CHANCE). A seated Barley's successful picks spend a
+ * roll on the shared rng, so every later draw moves on any peer that does not draw it, and the eaten pick never reaches
+ * the basket or the party's total.
+ * 9: the millpond's catch rolls the gulp too (game/screens/pond.ts hook). A seated Barley's landed fish spend a roll
+ * on the shared rng there as they do in the other gather games, so a build without it draws a different sequence from
+ * the first fish. The v8 entry above was cut before the pond took the rule, which is why this bump exists.
  */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 9;
 if (ACTIONS.length > 16) throw new Error('net/protocol: more than 16 actions no longer fit a uint16 mask');
 /**
  * START: the host's authoritative session parameters. Every peer seeds from this and begins at

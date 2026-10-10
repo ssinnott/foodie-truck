@@ -39,7 +39,7 @@ import {
   drawBump, drawToadstool, drawVineCurl, drawVineCreep, drawVineHang, drawVineCuff, drawLeaf, drawStinkLine, WOOD_ANIMS,
   CREEP_FRAMES, CREEP_REACH, DANGLE_FRAMES, FALL_FRAMES, LIE_FRAMES, GETUP_FRAMES, STAND_FRAMES, SHAKE_FRAMES, DANGLE_LIFT, SNIFF_FRAMES, POOH_FRAMES,
 } from '../../art/woodProps.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates, RIBBON_BASKET } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates, RIBBON_BASKET } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { clearGags, stepGags, drawGags, gagBurst, gagBubble, gagBump, gagShakeY, overHead, coat } from '../gags.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -299,7 +299,7 @@ export class WoodScreen extends Screen {
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x += ax * SPEED;
+        s.x += ax * SPEED * s.walk;
         if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
       }
       if (input.pressed(s.slot, 'action')) this.tryBrush(s);
@@ -323,9 +323,10 @@ export class WoodScreen extends Screen {
     if (b.vine) { this.snag(s, b); return; }
     if (b.toadstool) { this.pooh(s, b); return; }
     b.active = false;
-    s.count++; this.setTotal(this.total + 1);
     s.reachT = BRUSH_FRAMES;
     seatAnim(s, 'brush', true);
+    if (gulps(s)) { gulp(this.game, s, b.x, BUMP_Y - 20); return; }
+    s.count++; this.setTotal(this.total + 1);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     h.t = 0; h.x0 = b.x; h.y0 = BUMP_Y - 8; h.seat = s.index;
     ringAt(b.x, BUMP_Y - 4, 3, 12, UI.cream, 2, 12, true, true);

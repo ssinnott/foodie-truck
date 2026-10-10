@@ -41,7 +41,7 @@ import { drawRig } from '../../lib/art/rig.ts';
 import { orchardLayers, ORCHARD, GRASS_Y, FENCE_Y, BLEED_X, PARALLAX } from '../../art/backgrounds/orchard.ts';
 import type { OrchardLayers } from '../../art/backgrounds/orchard.ts';
 import { drawFuse, drawWormyApple, FUSE_H, clearLitter, stepLitter, drawLitter } from '../../art/orchardGags.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock } from '../minigame.ts';
 import { clearGags, stepGags, drawGags, gagShakeY, coat, COAT } from '../gags.ts';
 import { ORCHARD_ANIMS, pawRoot, lightFuse, stepBoom, findGrub, stepWormy, inJoke, sooty, endJokes, drawJoke } from './orchardGags.ts';
@@ -330,7 +330,7 @@ export class OrchardScreen extends Screen {
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x += ax * SPEED;
+        s.x += ax * SPEED * s.walk;
         if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
       }
       seatAnim(s, s.moving ? 'carryWalk' : 'catch');
@@ -373,11 +373,14 @@ export class OrchardScreen extends Screen {
         if (a.kind === RIPE) {
           // cherries fall two on one stem (the glyph is the pair), so a catch is +2 while the list wants two more
           const n = this.ing === 'cherry' && this.total + 1 < this.target ? 2 : 1;
-          s.count += n; s.catchT = CATCH_FRAMES;
-          this.setTotal(this.total + n);
-          ringAt(bx, by, 4, 14, UI.cream, 2, 12, false, true);
-          floatText(bx, by - 12, n === 2 ? PLUS_TWO : PLUS_ONE, s.colour, 1, true);
-          this.game.audio.play('catch');
+          if (gulps(s)) gulp(this.game, s, bx, by - 12);
+          else {
+            s.count += n; s.catchT = CATCH_FRAMES;
+            this.setTotal(this.total + n);
+            ringAt(bx, by, 4, 14, UI.cream, 2, 12, false, true);
+            floatText(bx, by - 12, n === 2 ? PLUS_TWO : PLUS_ONE, s.colour, 1, true);
+            this.game.audio.play('catch');
+          }
         } else if (a.kind === WORMY) findGrub(this, s);
         else lightFuse(this, s);
       }

@@ -67,6 +67,8 @@ for (let h = 0; h < HEADINGS; h++) { COS[h] = dcos(h * Math.PI / 8); SIN[h] = ds
 const BEE_X = new Int8Array(32), BEE_Y = new Int8Array(32);
 for (let i = 0; i < 32; i++) { BEE_X[i] = Math.round(Math.cos(i * Math.PI / 16) * 10); BEE_Y[i] = Math.round(Math.sin(i * Math.PI / 16) * 6); }
 const LANE_SPEED = 2.2, FIELD_SPEED = 1.0, TURN_EVERY = 4, ARRIVE_R = 40, DRIVER = 'chicory', DRIVER_WEIGHT = 1.5;
+/** The hare runs the grass: a seated Chicory (never a ride-along friend) takes the truck off the road at GRASS_SPEED. Mud and the road keep theirs. */
+const GRASS_RUNNER = 'chicory', GRASS_SPEED = 1.4;
 const HONK_FRAMES = 30, SQUASH_FRAMES = 4, SIGN_FRAMES = 90, RING_FRAMES = 60, TOKEN_SCALE = 0.5;
 const KIND_TREE = 0, KIND_SIGN = 1, KIND_SAILS = 2, KIND_TRUCK = 3, KIND_HERD = 4, KIND_CART = 5, KIND_DINER = 6, KIND_BUILDING = 7;
 /** The tipped cart: the truck takes its spill within CART_R of the spot. */
@@ -250,6 +252,8 @@ export class MapScreen extends Screen {
   declare truck: TruckState;
   /** Current speed in px/frame along the heading, eased toward the lane or field speed. */
   declare speed: number;
+  /** The off-road speed for this party: GRASS_SPEED with a seated hare aboard, else FIELD_SPEED. Set in enter(). */
+  declare grassSpeed: number;
   /** The heading the summed sticks are asking for (0..15), or -1 when nobody is pushing. */
   declare want: number;
   /** Frames until the truck may step its heading again (TURN_EVERY between steps). */
@@ -342,6 +346,7 @@ export class MapScreen extends Screen {
       const plateText = `P${p.slot + 1} ${def.name}`;
       this.seats.push({ slot: p.slot, critter: p.critter, rig, player, plateText, plateW: measureText(plateText, 1) + 8, isDriver: false });
     }
+    this.grassSpeed = this.seats.some((s) => s.critter === GRASS_RUNNER) ? GRASS_SPEED : FIELD_SPEED;
     // the driver sits in the cab: the hare when seated, else seat 0. Whoever it is carries the x1.5 steering weight
     // (GDD section 4), so the critter visibly driving and the weighted sum can never disagree.
     const di = Math.max(0, this.seats.findIndex((s) => s.critter === DRIVER));
@@ -457,7 +462,7 @@ export class MapScreen extends Screen {
     this.lean = approach(this.lean, leanTo, 0.08);
     const onLane = laneDist(truck.x, truck.y) <= LANE_HALF + 2;
     const inMud = this.inMud(truck.x, truck.y);
-    const target = pushing ? (onLane && !inMud ? LANE_SPEED : FIELD_SPEED) : 0;
+    const target = !pushing ? 0 : onLane && !inMud ? LANE_SPEED : inMud ? FIELD_SPEED : this.grassSpeed;
     this.speed = approach(this.speed, target, this.speed < target ? 0.12 : 0.25);
     this.blocked = false;
     if (this.speed > 0) {

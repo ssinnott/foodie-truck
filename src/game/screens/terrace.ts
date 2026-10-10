@@ -41,7 +41,7 @@ import { terraceLayers, CLUMP_X, CLUMP_Y } from '../../art/backgrounds/terrace.t
 import { drawClump, drawWildClump, WILD_H, TERRACE_ANIMS } from '../../art/terraceProps.ts';
 import { resetStatues, blankFace } from '../../art/terraceGags.ts';
 import { NONE, tintJokes, dealJokes, grownBack, springJoke, stepJoke, stepHedgehog, cutting, endJokes, liftOf, drawTopiary, drawLook, drawStorms, drawHedgehogRun } from './terraceGags.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { clearGags, stepGags, drawGags } from '../gags.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -209,7 +209,7 @@ export class TerraceScreen extends Screen {
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x += ax * SPEED;
+        s.x += ax * SPEED * s.walk;
         if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
       }
       if (input.pressed(s.slot, 'action')) this.trySnip(s);
@@ -235,9 +235,10 @@ export class TerraceScreen extends Screen {
     if (springJoke(this, s, best)) return;
     const c = this.clumps[best];
     c.snips--; c.regrow = 0;
-    s.count++; this.setTotal(this.total + 1);
     s.reachT = SNIP_FRAMES;
     seatAnim(s, 'snip', true);
+    if (gulps(s)) { gulp(this.game, s, CLUMP_X[best], CLUMP_Y - 28); return; }
+    s.count++; this.setTotal(this.total + 1);
     this.hop(s, CLUMP_X[best], CLUMP_Y - 14, 0);
     ringAt(CLUMP_X[best], CLUMP_Y - 10, 3, 12, UI.cream, 2, 12, false, true);
     burstSparkle(CLUMP_X[best], CLUMP_Y - 16, 2, UI.cream, true);

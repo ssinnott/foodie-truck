@@ -38,7 +38,7 @@ import {
 import { DAIRY_SEAT_ANIMS } from '../../art/dairyGags.ts';
 import { clearGags, stepGags, drawGags } from '../gags.ts';
 import { dealJoke, startJoke, stepJoke, clearJoke, drawStallCow, drawJokeShadow, drawJokeMarks, quiffClear, quiffFur } from './dairyGags.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
@@ -375,6 +375,7 @@ export class DairyScreen extends Screen {
    */
   bank(s: DairySeat): void {
     s.fill = 0; s.pailT = PAIL_LAND;
+    if (gulps(s)) { gulp(this.game, s, s.pailX, s.pailY - PAIL_H - 16); return; }
     s.count++; this.setTotal(this.total + 1);
     const slot = Math.min(this.total - 1, CHURN_X.length - 1);
     this.hop(HOP_PAIL, s.pailX, s.pailY, CHURN_X[slot], ROWS.rack, s.slot, HOP_FRAMES, HOP_LIFT);
@@ -411,12 +412,13 @@ export class DairyScreen extends Screen {
   /** The butter comes: +1 for the PARTY, the pat hops out of the barrel to the rack, and the milker turns back to the cow. */
   pat(s: DairySeat): void {
     s.churn = 0; s.phase = MILK; s.facing = -1;
+    seatAnim(s, 'milkIdle', true);
+    if (gulps(s)) { gulp(this.game, s, s.churnX, s.hubY - CHURN_ABOVE_HUB - 18); return; }
     s.count++; this.setTotal(this.total + 1);
     const slot = Math.min(this.total - 1, CHURN_X.length - 1);
     this.hop(HOP_BUTTER, s.churnX, s.hubY - CHURN_ABOVE_HUB - 6, CHURN_X[slot], ROWS.rack, s.slot, HOP_FRAMES, HOP_LIFT);
     ringAt(s.churnX, s.hubY - CHURN_ABOVE_HUB, 4, 18, SIGNAL.dairy, 2, 16, false, true);
     floatText(s.churnX, s.hubY - CHURN_ABOVE_HUB - 18, PLUS_ONE, s.colour, 1, true);
-    seatAnim(s, 'milkIdle', true);
     this.game.audio.play('pail');   // the dairy's +1 pip, the same for a pat as for a pail
   }
 

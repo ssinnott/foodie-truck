@@ -43,7 +43,7 @@ import type { Point } from '../../lib/art/rigParts.ts';
 import { brambleLayers, ROWS, BUSH_X, BRAMBLE } from '../../art/backgrounds/bramble.ts';
 import { BUSH, BUSH_H, SPOT, SPOTS, BRAMBLE_ANIMS, drawBush, drawFlyingBerry, drawHeldBerry, drawJuiceSplash, drawJuiceSplat, spotDX, juiceFor } from '../../art/brambleProps.ts';
 import {
-  makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates, RIBBON_BASKET,
+  makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates, RIBBON_BASKET,
 } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { clearGags, stepGags, drawGags, coat } from '../gags.ts';
@@ -328,7 +328,7 @@ export class BrambleScreen extends Screen {
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x += ax * SPEED;
+        s.x += ax * SPEED * s.walk;
         if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
       }
       if (input.pressed(s.slot, 'action')) this.tryPick(s);
@@ -340,9 +340,9 @@ export class BrambleScreen extends Screen {
 
   /**
    * `action`: the nearest bush inside the reach with a ripe berry on it gives up its LOWEST ripe spot (no random
-   * number spent on which, so a pick costs the rng stream nothing): the reach beat, the berry's hop, +1. Unless
-   * that berry is a joke: a thorn across it is the prick and the berry stays; the squishy one comes off the bush
-   * into the paw, and is not scored.
+   * number spent on which): the reach beat, the berry's hop, +1. Unless that berry is a joke: a thorn across it is the
+   * prick and the berry stays; the squishy one comes off the bush into the paw, and is not scored. Only Barley's seat
+   * spends a roll, on the gulp.
    */
   tryPick(s: BrambleSeat): void {
     let best = -1, bd = REACH + 1;
@@ -361,9 +361,10 @@ export class BrambleScreen extends Screen {
     if (b.squish & bit) { b.squish &= ~bit; b.ripe &= ~bit; startSquish(this, s, best, k); return; }
     const spot = best * SPOTS + k, sx = this.spotX(spot), sy = this.spotY(spot);
     b.ripe &= ~bit;
-    s.count++; this.setTotal(this.total + 1);
     s.reachT = REACH_FRAMES; s.moving = false;
     seatAnim(s, 'pick', true);
+    if (gulps(s)) { gulp(this.game, s, sx, sy - 14); return; }
+    s.count++; this.setTotal(this.total + 1);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     h.t = 0; h.x0 = sx; h.y0 = sy; h.seat = s.index;
     ringAt(sx, sy, 3, 10, UI.cream, 2, 12, false, true);

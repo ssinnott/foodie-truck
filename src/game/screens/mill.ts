@@ -56,7 +56,7 @@ import {
   drawChute, drawPour, drawPile, drawBarrow, drawTiedSack, drawFillTag, drawGear, drawSail,
 } from '../../art/millProps.ts';
 import {
-  makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
+  makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, PlateStack, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -614,7 +614,7 @@ export class MillScreen extends Screen {
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x += ax * SPEED;
+        s.x += ax * SPEED * s.walk;
         clampX(s);
       }
       s.chute = -1;
@@ -644,11 +644,12 @@ export class MillScreen extends Screen {
 
   /** Full to the brim: +1 flour, the sack leaves the paw on the toss key and hops onto the barrow. */
   tie(s: MillSeat): void {
-    s.count++; this.setTotal(this.total + 1); this.tied++;
     s.fill = 0; s.chute = -1; s.tieT = TIE_FRAMES; s.moving = false;
-    s.sneezeDue = rng.int(1, SNEEZE_ODDS) === 1 ? 1 : 0;   // the deal: one sack in SNEEZE_ODDS is up the nose
     seatAnim(s, 'tie', true);
     const mx = R(s.x + s.facing * s.sackDX), my = R(s.y + s.sackDY);
+    if (gulps(s)) { s.sneezeDue = 0; gulp(this.game, s, mx, my - 26); return; }
+    s.count++; this.setTotal(this.total + 1); this.tied++;
+    s.sneezeDue = rng.int(1, SNEEZE_ODDS) === 1 ? 1 : 0;   // the deal: one sack in SNEEZE_ODDS is up the nose
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     // the hop is started NEGATIVE so it is still counting up to 0 through the heft: the sack leaves the paw on the
     // toss key, not on the frame the count ticked over

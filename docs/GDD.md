@@ -27,10 +27,10 @@ differences, never gates: anyone can do any job.
 
 | Role | Verb | What the role changes |
 |---|---|---|
-| **The hungry one** | EAT / CARRY | Biggest basket; slowest; in the kitchen a random `bite` beat now and then that costs nothing but makes everyone laugh |
-| **The chef** | CHOP / MIX | Smallest basket; the one who plates with a flourish |
-| **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks |
-| **The forager** | GATHER / CAST | Fastest in the mini-games; longest fishing cast |
+| **The hungry one** | EAT / CARRY | Biggest basket; slowest; in the kitchen a random `bite` beat now and then that costs nothing but makes everyone laugh. In every gather mini-game one pick in twenty goes in his mouth (NOM) instead of his basket, and never into the party's total (section 5) |
+| **The chef** | CHOP / MIX | Smallest basket; the one who plates with a flourish. Sorrel cooks 25% faster: her holds (MIX, STOVE, OVEN) fill in 192 frames, not 240 (section 6) |
+| **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks. The hare runs the grass: with Chicory seated, the truck moves 1.4 px/frame off the road instead of 1.0 (section 4; mud and the road are unchanged) |
+| **The forager** | GATHER / CAST | Cress walks 25% faster in every gather mini-game that walks (section 5); longest fishing cast |
 | **The head chef** | TASTE / ORDER | Owns the truck and runs the crew; steady everywhere, best at the pass; tastes from the spoon |
 
 | Cast index | Name | Species | Role |
@@ -242,7 +242,8 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   (`NOTHING NEEDED HERE`, `FILL THE PANTRY FIRST` at home, `NO LINE HERE`, `THIS LINE IS SERVED`,
   `THE LINES ARE WAITING` at home).
 - **The truck** is one shared vehicle. Every seated player's stick is a vector; they are summed (the driver's ×1.5),
-  quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it,
+  quantised to 16 headings with `dcos/dsin` tables, and the truck moves at 2.2 px/frame on a road and 1.0 off it
+  (1.4 on the grass with a seated hare aboard, section 2; the mud patch slows it to 1.0 either way),
   turning at most 1 heading step per 4 frames. Roads are the fast path; fields are drivable but slow and dusty;
   water is not drivable — the river (its bridges are), the millpond and the cove's sea: the truck stops a
   half-token short of the edge with a splash. Arrival = within 40 px of a landmark's door point.
@@ -283,7 +284,10 @@ Common rules: side view, feet on a scene-specific floor line, one critter per se
 whose bar fills as the party gathers, the target count from the shopping list (that ingredient's remainder). **A
 round has no time limit**: it ends only when the party's total reaches the target, so one visit always fills that
 line of the list; the scene ends with a sign dropping in (`APPLES: 12`) and a 60-frame hold, then `run.gather` and
-back to the map. All randomness through `rng` inside `update()`.
+back to the map. All randomness through `rng` inside `update()`. A seated Cress walks 1.25 times as fast as the stick
+says in every game that walks (`FORAGER_WALK`); a ride-along friend has no seat and walks nothing. A seated Barley gulps
+one successful pick in twenty (`GULP_CHANCE`): the pick goes in his mouth, a NOM and a chew over the seat, and it is
+never banked. Nothing else about the pick changes, and only his seat draws the roll.
 
 A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the farm, the bank, the
 cove) asks `run.js gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the tally
@@ -353,7 +357,8 @@ or held down with a bar filling under it (HOLD). The key is labelled with the se
 The whole game is built on **three inputs and nothing else**: move left and right, tap ACTION over and over, and
 hold ACTION down. There are no timing windows, no beats to hit and no wrong buttons — a young player can never lose
 what they have gathered, and there is no clock to race: a round lasts as long as it takes. The only hazards left are
-the jokes (the table above), and they cost nothing but a moment.
+the jokes (the table above), and they cost nothing but a moment. The one real cost is Barley's gulp (section 5), which
+takes a pick out of the basket.
 
 - **Orchard — CATCH** (*move*). Move left/right with a basket held in front. Apples (14 px, so they read from
   across a room) spawn above the canopy every 30–60 frames at a seeded x and fall at 1.4–2.4 px/frame with a small
@@ -506,9 +511,9 @@ cooked out of thin air - and the recipe card shows them with checks. Interaction
 |---|---|---|
 | FRIDGE | tap | one `action` press per INGREDIENT the order wants (the line's apples, then its eggs: two taps however many pies), any rhythm; each tap swings the door open and every one of that ingredient the whole order wants comes out at once, each flying along the counter into the station ITS dish uses next (onto the board for a recipe that chops, else into the bowl). Nothing to choose: the fridge holds exactly the order. A whole line's fridge is two to eleven taps, about as many as a chop |
 | CHOP | tap | ten `action` presses, any rhythm (fifteen on an EXTRA CRUNCHY order, `order.chops`); the pips on the card light one per chop |
-| MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it |
-| STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way |
-| OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way |
+| MIX | hold | hold `action` for 240 frames while a dial fills; releasing pauses it, holding again resumes it. Sorrel, the chef, fills it 1.25 a frame: 192 frames (section 2) |
+| STOVE | hold | hold `action` for 240 frames while a bar fills; releasing pauses it the same way. The chef's fills 1.25 a frame: 192 frames |
+| OVEN | hold | hold `action` for 240 frames while the bake runs; releasing pauses it the same way. The chef's fills 1.25 a frame: 192 frames |
 | PLATE | tap | `action` rings the bell: every plate goes out through the hatch to the diner who ordered it, front of the line first |
 
 **The whole line is at the hatch.** The opening on the right of the room is where the line waits on its order, all
@@ -658,7 +663,7 @@ player has bound M to something, while a rebind is listening, and while a host k
 
 - **title**: logo, the parked truck (wearing what the garage put on it) with the cast idling, menu PLAY / ONLINE / GARAGE / BOOK / CONTROLS / CREW (gallery) / SOURCE; `PRESS START`. The first row is **CONTINUE** instead of PLAY while a week is in progress (`game/week.ts`, read once in `enter()`), and opens that week's saved day straight away; PLAY starts a fresh week and forgets the saved one. Seven rows, so the A-frame is 14 px taller than it was at six, grown upward so its legs stay put. Along the bottom, on one paper strip, the two addresses this game has: the repository - the SOURCE row's other half, lit while that row is selected - and the Ko-fi address beside it, which is a click and nothing else, no row and no key. Both are underlined, and both stay readable to type where a browser refuses the tab (`engine/links.ts`).
 - **controls**: the binding table as an order pad; rebinds through an input capture; writes to storage on the way out.
-- **select**: five 116×200 cards (the kit's 140 fitted four across), the player's one cursor, a READY stamp;
+- **select**: five 116×150 cards (the kit's 140×200 fitted four across; the card carries name and role only, no stat bars), the player's one cursor, a READY stamp;
   `next` = stage (starts the run). The two cards riding along with the pick under the cursor (section 2) wear the
   truck's mustard across their header, lettered `TAKES ORDERS` / `RUNS ABOUT`, and the bio strip names them under
   the bio (`SORREL AND CHICORY RIDE ALONG`). A party picks in the online lobby instead, each player on their own machine.
