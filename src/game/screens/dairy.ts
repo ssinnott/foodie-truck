@@ -4,10 +4,10 @@
 // the churn rack as +1 milk for the PARTY and a fresh one slides under the cow. The cows are placid: nothing in
 // this byre kicks, refuses or costs anything, and the only question the scene asks is how fast you can tap.
 //
-// THE JOKE: every SWISH_MIN..SWISH_MAX squirts (a seeded count per seat, `swishIn`), the cow flicks her tail across
-// the milker's face: the tail swings up and over for SWISH_FRAMES, the milker is rocked back `dazed` and the buttons
-// are locked for those frames (the shared bump lock), and the pail keeps every squirt it had. Nothing is lost but
-// the moment.
+// THE JOKES: one pail in three a stall starts carries one of the cow's two (dealt per stall: `jokeIn`, `jokeKind`).
+// THE COWLICK: she turns round, tongue out, and SHLURP! - one lick up the face leaves the fur standing in a quiff the
+// milker pats down three times. THE TAIL: up over her rump, faster and faster, and THWAP! - off the stool into the
+// straw, seeing stars. The pail keeps every squirt it had; screens/dairyGags.ts deals and runs both.
 //
 // A BUTTER visit is the same byre with a second beat: a barrel churn stands beside every stall, the full pail pours
 // into it instead of flying to the rack, the milker turns round on the stool and CRANKS - the same tapping, on a
@@ -16,14 +16,13 @@
 // jobs and not one job with two glyphs (docs/GDD.md section 5).
 //
 // Determinism (docs/ARCHITECTURE.md section 0): every seat is a plain sim object built in enter() and never grown;
-// nothing in update() draws from rng, calls Math.sin/cos or reads a clock, and input is read by seat slot only. The
-// stall geometry is arithmetic on each rig's own proportions with the two trig constants below precomputed, so four
-// browsers place four identical stalls. The squirt's bright head, the jet's slide, the pail's hop arc, the swallow
-// and the particles are draw only and stay out of checksumFields().
+// rng is drawn only for the jokes' deal, nothing in update() calls Math.sin/cos or reads a clock, and input is read
+// by seat slot only. The stall geometry is arithmetic on each rig's own proportions with the two trig constants
+// below precomputed, so four browsers place four identical stalls. The squirt's bright head, the jet's slide, the
+// pail's hop arc, the swallow, the cards and the particles are cosmetic and stay out of checksumFields().
 import { UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, Input, ScreenParams } from '../game.ts';
-import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
 import { blitAt } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt } from '../../art/fx.ts';
@@ -33,9 +32,12 @@ import { INGREDIENTS } from '../../content/recipes.ts';
 import { gatherTarget } from '../run.ts';
 import { ROWS, SEAT_X, SEAT_PITCH, CHURN_X, dairyLayers } from '../../art/backgrounds/dairy.ts';
 import {
-  drawCow, drawStool, drawPail, drawJet, drawChevrons, drawChurn, drawSwallow, drawBarrelChurn, drawCrankArm,
-  TEAT_DX, TEAT_DY, PAIL_H, CHURN_W, CHURN_ABOVE_HUB, SIT_ROOT_Y, STOOL_MIN, DAIRY_ANIMS,
+  drawStool, drawPail, drawJet, drawChevrons, drawChurn, drawSwallow, drawBarrelChurn, drawCrankArm,
+  TEAT_DX, TEAT_DY, PAIL_H, CHURN_W, CHURN_ABOVE_HUB, SIT_ROOT_Y, STOOL_MIN,
 } from '../../art/dairyProps.ts';
+import { DAIRY_SEAT_ANIMS } from '../../art/dairyGags.ts';
+import { clearGags, stepGags, drawGags } from '../gags.ts';
+import { dealJoke, startJoke, stepJoke, clearJoke, drawStallCow, drawJokeShadow, drawJokeMarks, quiffClear, quiffFur } from './dairyGags.ts';
 import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -101,8 +103,6 @@ const PAIL_DX = -13, PAIL_DY = -2;
 const CHEV_DY = 2;
 const FALLBACK_TARGET = 3;
 const PLUS_ONE = '+1', TITLE = 'BUTTERCUP DAIRY';
-/** The tail: after a seeded SWISH_MIN..SWISH_MAX squirts it comes across the face for SWISH_FRAMES, and the count is rolled again. */
-const SWISH_MIN = 20, SWISH_MAX = 40, SWISH_FRAMES = 20;
 
 /** One pre-rendered backdrop layer and the screen y it is blitted at (art/backgrounds/dairy.ts dairyLayers). */
 export interface DairyLayer {
@@ -160,10 +160,16 @@ export interface DairySeat extends Seat {
   churnX: number;
   hubX: number;
   hubY: number;
-  /** Squirts left before this cow's tail comes across (SWISH_MIN..SWISH_MAX, seeded; rolled again after each swish). */
-  swishIn: number;
-  /** Frames left of the swish: the tail is up and over and the milker is dazed. */
+  /** Squirts (every press of the pump, a pail's twelfth too) until this cow's next joke (dealt in screens/dairyGags.ts). */
+  jokeIn: number;
+  /** Which joke is waiting at the end of `jokeIn`: LICK or TAIL (screens/dairyGags.ts). */
+  jokeKind: number;
+  /** Frames left of the cowlick: the tell (the seat is free), then the wind-up and the look (locked). */
+  lickT: number;
+  /** Frames left of the tail: the wind-up, the somersault, the stars and the climb back (all locked). */
   swishT: number;
+  /** The colour the cowlick stands up in: this critter's fur (draw only, set once in enter()). */
+  fur: string;
 }
 
 /** A full pail on its way to the churn rack (cosmetic). */
@@ -225,8 +231,10 @@ export class DairyScreen extends Screen {
   declare clock: Clock;
   /** True on a butter visit: the barrel churns stand, and a full pail pours instead of banking. */
   declare butter: boolean;
-  /** Tail flicks taken this round (the joke's count, for the tests and the desync canary). */
+  /** Tails that have thrown somebody off a stool this round (the joke's count, for the tests and the desync canary). */
   declare swishes: number;
+  /** Cowlicks this round: licks that have landed (the new joke's count, the same two uses). */
+  declare licks: number;
   /** The sorted pass's fixed index array: five objects per stall (the cow, its pail, the stool, the churn, the milker). */
   declare sortIdx: Int16Array;
   /** Their sort keys (the row * 32 + the tiebreak), sorted alongside `sortIdx`. */
@@ -239,6 +247,7 @@ export class DairyScreen extends Screen {
     const game = this.game, run = game.run;
     this.layers = dairyLayers();
     particles.clear();
+    clearGags();
     this.seats = makeSeats<DairySeat>(game, (i) => ROWS.feet + (i & 1) * STALL_DY);
     const n = this.seats.length;
     // SEAT_X is the four-stall layout; a smaller party keeps the pitch and slides to the middle of the byre
@@ -249,7 +258,7 @@ export class DairyScreen extends Screen {
       // the milking paw is on the teats and the off paw is braced on the stool, so the ribbon basket makeSeats
       // hands out has nowhere to go but across the udder
       rig.weapon = null;
-      s.player.setOverlay(DAIRY_ANIMS);
+      s.player.setOverlay(DAIRY_SEAT_ANIMS);
       s.facing = -1;                                  // every milker works from its cow's right rear, facing the udder
       const reach = (p.upperArm + p.lowerArm + p.handR * 0.6) * rig.scale;
       const shoulderY = s.y + (rig.hipY + SIT_ROOT_Y - (p.torsoH - 5)) * rig.scale;
@@ -268,7 +277,8 @@ export class DairyScreen extends Screen {
       s.phase = MILK; s.churn = 0;
       s.hubX = R(s.x + p.shoulderX * rig.scale + reach * PAW_FWD); s.hubY = R(pawY);
       s.churnX = s.hubX + CHURN_DX;
-      s.swishIn = SWISH_MIN + ((i * 7) % (SWISH_MAX - SWISH_MIN + 1)); s.swishT = 0;   // staggered per stall; enter() has no rng
+      // the first pail's deal (it may carry a joke itself), from rng here as the bramble and the beach deal theirs
+      dealJoke(s, 0, PUMP_PER_PAIL); s.lickT = 0; s.swishT = 0; s.fur = quiffFur(s);
       seatAnim(s, 'milkIdle', true);
       // four people at four stools, not one pose printed four times: each breath starts a beat later (pose only)
       for (let k = i * 11; k > 0; k--) s.player.tick();
@@ -285,7 +295,7 @@ export class DairyScreen extends Screen {
     const need = run ? run.need(this.ing) : null;
     // the remainder, not the whole order: the map may already have banked some (the orchard, pond and coop agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
-    this.total = 0; this.swishes = 0;
+    this.total = 0; this.swishes = 0; this.licks = 0;
     this.countStr = '0/' + this.target;
     const key = game.input.keyText(0, 'action');
     this.hint = this.butter ? 'MILK: TAP ' + key + (this.ing === 'cheese' ? '   THEN PRESS: TAP ' : '   THEN CHURN: TAP ') + key + ' OVER AND OVER' : 'MILK: TAP ' + key + ' OVER AND OVER';
@@ -301,6 +311,7 @@ export class DairyScreen extends Screen {
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
+    stepGags();
     for (let i = 0; i < this.hops.length; i++) { const h = this.hops[i]; if (h.t < h.frames) h.t++; }
     const clock = this.clock;
     if (clock.phase === 0) {
@@ -319,15 +330,15 @@ export class DairyScreen extends Screen {
   }
 
   /**
-   * One seat's frame. The beats run down first, then the press is read by SLOT (never anyPressed): every `action`
-   * press is a squirt, and the twelfth one fills the pail. `bumpT` is only ever set by the shared furniture (a seat
-   * arrives with it at 0 and nothing here raises it), but it is still honoured so the shared bump beat, if a future
-   * rule ever uses it, locks the buttons the way it does in every other mini-game.
+   * One seat's frame. The beats run down first (a joke holds the buttons as long as it says), then the press is read
+   * by SLOT (never anyPressed): every `action` press is a squirt, and the twelfth one fills the pail. `bumpT` is only
+   * ever set by the shared furniture (a seat arrives with it at 0 and nothing here raises it), but it is still
+   * honoured so the shared bump beat, if a future rule ever uses it, locks the buttons as in every other mini-game.
    */
   stepSeat(s: DairySeat, input: Input): void {
     if (s.squirtT > 0) s.squirtT--;
     if (s.pailT > 0) s.pailT--;
-    if (s.swishT > 0) s.swishT--;
+    if (stepJoke(this, s)) { s.player.tick(); return; }
     if (s.bumpT > 0) {
       s.bumpT--;
       if (s.bumpT === 0) seatAnim(s, 'milkIdle', true);
@@ -339,7 +350,7 @@ export class DairyScreen extends Screen {
     s.player.tick();
   }
 
-  /** One press: a squirt, the paws swap over, and the twelfth one fills the pail. */
+  /** One press: a squirt, the paws swap over, and the twelfth one fills the pail. Every squirt counts the joke deal down. */
   pump(s: DairySeat): void {
     const down = s.fill & 1;
     s.fill++;
@@ -347,18 +358,9 @@ export class DairyScreen extends Screen {
     seatAnim(s, down === 0 ? 'pumpR' : 'pumpL', true);
     ringAt(s.pailX, s.pailY - PAIL_H, 3, 10, UI.cream, 2, 10, true, true);
     this.game.audio.play('squirt');
+    s.jokeIn--;
     if (s.fill >= PUMP_PER_PAIL) { if (this.butter) this.pour(s); else this.bank(s); }
-    else if (--s.swishIn <= 0) this.swish(s);   // never on the pail's last squirt: the pail's hop is the beat then
-  }
-
-  /** The joke: the tail comes across. The buttons lock for SWISH_FRAMES (the shared bump lock), the pail keeps its count. */
-  swish(s: DairySeat): void {
-    s.swishIn = rng.int(SWISH_MIN, SWISH_MAX);
-    s.swishT = SWISH_FRAMES; s.bumpT = SWISH_FRAMES; s.squirtT = 0;
-    this.swishes++;
-    seatAnim(s, 'swished', true);
-    ringAt(s.x - 10, s.y - 40, 3, 14, UI.cream, 2, 10, false, true);
-    this.game.audio.play('swish');
+    else if (s.jokeIn <= 0) startJoke(this, s, PUMP_PER_PAIL - s.fill, PUMP_PER_PAIL);   // never on the twelfth: the pail's hop is the beat then
   }
 
   /** A hop slot, filled in: what flies, from where to where, over how many frames and how high. */
@@ -428,7 +430,7 @@ export class DairyScreen extends Screen {
     endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      s.bumpT = 0; s.squirtT = 0;
+      s.bumpT = 0; s.squirtT = 0; clearJoke(s);
       seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true);
     }
   }
@@ -447,9 +449,10 @@ export class DairyScreen extends Screen {
       drawShadow(ctx, s.pailX, s.pailY, 26, 0.32, 0);
       drawShadow(ctx, s.x, s.y, s.rig.width + 18, 0.4, 0);   // wide enough to carry the stool's feet too
       if (this.butter) drawShadow(ctx, s.churnX, s.y, CHURN_W + 12, 0.35, 0);
+      drawJokeShadow(ctx, s);
     }
     this.drawSorted(ctx, f);
-    for (let i = 0; i < this.seats.length; i++) this.drawJetAt(ctx, this.seats[i]);
+    for (let i = 0; i < this.seats.length; i++) { this.drawJetAt(ctx, this.seats[i]); drawJokeMarks(ctx, this.seats[i], f); }
     for (let i = 0; i < this.hops.length; i++) this.drawHop(ctx, this.hops[i]);
     blitAt(ctx, L.near.L, 0, L.near.y);
     particles.draw(ctx, null, 'front');
@@ -461,8 +464,10 @@ export class DairyScreen extends Screen {
       if (s.phase === CHURN) drawChevrons(ctx, s.churnX, s.y + CHEV_DY, s.churn & 1, s.colour, SIGNAL.dairy, 0, ((f >> 3) & 1) === 0);
       else drawChevrons(ctx, s.pailX, s.pailY + CHEV_DY, s.fill & 1, s.colour, SIGNAL.dairy, 0, ((f >> 3) & 1) === 0);
     }
+    // a name plate stands clear of a cowlick: the crown it is placed over grows by the quiff while it is up
     resetPlates();
-    for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
+    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i], up = quiffClear(s); s.crown += up; drawSeatPlate(ctx, s, PLATES); s.crown -= up; }
+    drawGags(ctx);
     drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
@@ -514,13 +519,10 @@ export class DairyScreen extends Screen {
 
   /**
    * One cow, chewing: a slow index-hashed beat off the frame counter, one cow to the next, so a row of four never
-   * chews in unison. Ears up, tail down, no mark: there is nothing to warn about in this byre.
+   * chews in unison. Ears up, tail down, no mark - until one of her jokes is on (screens/dairyGags.ts drawStallCow).
    */
   drawCowAt(ctx: CanvasRenderingContext2D, s: DairySeat, f: number): void {
-    const chew = (((f + s.slot * 37) >> 4) & 3) === 0 ? 1 : 0;
-    // the swish: the tail goes up and over in the first third and comes back down through the rest
-    const k = s.swishT > 0 ? s.swishT / SWISH_FRAMES : 0, tail = k > 0.66 ? (1 - k) * 3 : k * 1.5;
-    drawCow(ctx, s.cowX, s.cowY, s.cow.kind, 0, tail, chew, 0, null);
+    drawStallCow(ctx, s, f, (((f + s.slot * 37) >> 4) & 3) === 0 ? 1 : 0);
   }
 
   drawPailAt(ctx: CanvasRenderingContext2D, s: DairySeat): void {
@@ -583,8 +585,9 @@ export class DairyScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, swishes: this.swishes,
-      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), fill: s.fill, count: s.count, bumpT: s.bumpT, phase: s.phase, churn: s.churn, swishIn: s.swishIn, swishT: s.swishT })),
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, swishes: this.swishes, licks: this.licks,
+      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), fill: s.fill, count: s.count, bumpT: s.bumpT, phase: s.phase, churn: s.churn,
+        facing: s.facing, jokeIn: s.jokeIn, jokeKind: s.jokeKind, lickT: s.lickT, swishT: s.swishT, anim: s.anim })),
       cows: this.seats.map((s) => s.cow.kind),
     };
   }
@@ -592,10 +595,10 @@ export class DairyScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.swishes);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.swishes, this.licks);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      f.push(s.fill, s.count, s.bumpT, s.squirtT, s.pailT, s.phase, s.churn, s.facing, s.swishIn, s.swishT);
+      f.push(s.fill, s.count, s.bumpT, s.squirtT, s.pailT, s.phase, s.churn, s.facing, s.jokeIn, s.jokeKind, s.lickT, s.swishT);
     }
     return f;
   }

@@ -71,8 +71,8 @@ src/art/       shading (cel bands), shapes, rig + rigParts + poses + secondary (
 src/game/      game (screen stack), run (the week's plan + the day + party + shopping list, the only cross-screen state),
                week (the week in progress, saved between sittings), book (the recipe book: written by the game,
                read only by screens/book), friends (who rides along with the party) + kitchenFriends (what they do
-               in the kitchen: cosmetic), waiting (what a line of diners does while it waits: cosmetic), animation,
-               menuinput,
+               in the kitchen: cosmetic), waiting (what a line of diners does while it waits: cosmetic), gags (the
+               jokes' word cards, dizzy stars, bump and coats: cosmetic), animation, menuinput,
                ui (the paper/chalk/wood kit), minigame (shared mini-game furniture), maphud, touchpad (the
                on-screen controls, drawn), screens/ (one per screen)
 src/content/   critters/ (the cast: common rig hooks + one file per critter + items + customers + dinerAnims, the
@@ -378,6 +378,19 @@ never in the cab, and never past the four heads the windows hold. `KitchenFriend
 runner (`enter(run)`, `update(custs, served)`, `draw(ctx, custs)`, `summary()`): cosmetic by construction — no
 input, no step, its own `makeRng` stream rather than the gameplay singleton, nothing in `checksumFields` — the same
 contract as the kitchen's flights. The `friends*` playtest scenarios hold all of that from outside.
+
+### `game/gags.ts` — the jokes' furniture
+Every mini-game joke (docs/GDD.md section 5) draws its bang and its aftermath with this module, so a joke reads the
+same way from across a room in every scene: `gagBurst(x, y, word, rim)` (a comic starburst card for the bang) and
+`gagBubble(x, y, word, rim)` (a speech bubble for the beats round it), `overHead(seat)` (the row over a seat's name
+plate, from the rig alone, so `update()` can place a card), `gagBump(amp)` / `gagShakeY()` (a few rows of world bump
+for the biggest bangs: a screen translates its world by it, never its paper), `drawDizzy` / `drawStar`, and `coat(rig,
+colour)` with the `COAT` colours. A coat is `rig.override` with `rig.coatEyes` set, which `content/critters/common.ts
+critterRig`'s `col()` turns into a fill that keeps the ink outline and the face's whites and pupils; without the flag
+`col()` is the library's own `override || hex`, so the hit flash and the golden fingerprint never see it.
+Cosmetic under the particles' contract: one module pool, `stepGags()` from `update()`, `drawGags(ctx)` after the
+plates, `clearGags()` in `enter()`; no rng, nothing in `checksumFields`, and a joke's timing always lives on the
+screen's own sim fields — a card never ends a beat.
 
 ### `game/waiting.ts` — the line, waiting
 `WaitingBeats` deals a line of diners their waiting beats (docs/GDD.md section 10; the animations are

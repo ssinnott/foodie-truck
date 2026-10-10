@@ -29,9 +29,12 @@
 // takes off on a stagger and arcs into the prop of the step ITS dish takes next (`flights`, kitchenProps.ts
 // `intake`). A prop draws itself loaded only while some unit is in it. A graphic: no step waits for a landing.
 // Every step completed is worth its full 2 (there is no way to burn, miss or spoil anything), so every dish is
-// three stars: stars = max(1, round(its steps' total / (2 * its steps) * 3)). Barley's gag: on every completed
-// step, a seeded one-in-six chance he eats an ingredient (crumbs, NOM, no score change) - and the first push of his
-// stick or press of his button ends it, so the joke never holds a player up.
+// three stars: stars = max(1, round(its steps' total / (2 * its steps) * 3)). THE JOKES (game/kitchenGags.ts runs
+// them, this screen deals them): Barley's bite, a seeded one in six on every completed step - CHOMP!, a proper chew,
+// MMM!, no score change - which the first push of his stick, press of his button or hold at the step being cooked
+// ends, so the joke never holds a player up; the pot lid blowing off after a stove step and the flour out of the
+// oven after an oven step, one in three each; and the slice a chop flicks onto the ceiling, one chopping in three,
+// that drops on whoever comes under it. None of them touches a step, a score or a timing.
 // THE FRIENDS WHO RIDE ALONG (game/kitchenFriends.ts): out on the floor in front of the counter, one takes the line's
 // orders under the hatch and the other runs about. They are cosmetic through and through - no input, no step, no
 // gameplay rng, nothing in checksumFields - so this screen only builds, steps and draws them. The same goes for what
@@ -40,15 +43,15 @@
 // their order, who holds still for it.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): every sim field is an integer or a px/frame sum driven by seat input;
-// the only random call is the gag, through `rng`; the steam, glow, rings, float text and the flights are cosmetic
-// and stay out of checksumFields() (a flight is launched by a sim event and timed by an integer counter, so every
-// peer draws the same one, but nothing reads it back). Rigs and the flight pool are built once, never in draw().
+// the only random calls are the jokes' deals, through `rng`; the steam, glow, rings, float text and the flights are
+// cosmetic and stay out of checksumFields() (a flight is launched by a sim event and timed by an integer counter, so
+// every peer draws the same one, but nothing reads it back). Rigs and the flight pool are built once, never in draw().
 import { VIEW_W, UI, SIGNAL, PLAYER_COLORS } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { CritterDef, DishGroup, Game, Input, Order, ScreenParams } from '../game.ts';
 import { rng } from '../../lib/engine/rng.ts';
 import { particles } from '../../engine/particles.ts';
-import { blitAt, INK } from '../../art/layers.ts';
+import { blitAt } from '../../art/layers.ts';
 import { drawShadow, floatText, ringAt, burstCrumbs, burstSparkle, burstSteam } from '../../art/fx.ts';
 import { drawRig, jointScreen } from '../../lib/art/rig.ts';
 import type { DrawRigOpts, Rig, RigWeapon } from '../../lib/art/rig.ts';
@@ -70,11 +73,13 @@ import { drawText, measureText } from '../../engine/text.ts';
 import { twistTag, dishGroups } from '../run.ts';
 import { KitchenFriends } from '../kitchenFriends.ts';
 import { WaitingBeats, HATCH_BEATS, HATCH_SALT, beatSeed } from '../waiting.ts';
+import { clearGags, stepGags, drawGags } from '../gags.ts';
+import { KitchenGags, KITCHEN_ANIMS, LID_CHANCE, POOF_CHANCE, BARLEY } from '../kitchenGags.ts';
 import { kitchenLayer, ROWS, HATCH, BUST, STATION_X, PROP_X, AT_RANGE, X_MIN, X_MAX, TICKET, RECIPE } from '../../art/backgrounds/kitchen.ts';
 import {
-  PROPS, paintStations, drawStationFocus, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
+  paintStations, drawStationFocus, drawChopItem, drawBowlContents, drawStove, drawOvenWindow, drawPlate, drawBellRing,
   drawFridge, drawPile, drawFlight, intake, drawPullBar, drawChopBar, drawDial, drawStoveBar, drawOvenTimer, drawPlatePrompt, drawTag, drawKettleSteam,
-  drawHeldPlate, PLATE, BELL, POT, OVEN, FRIDGE, BOARD,
+  drawHeldPlate, PLATE, BELL, OVEN, FRIDGE, BOARD,
 } from '../../art/kitchenProps.ts';
 
 /** The HOW TO PLAY card's pictograms per station (game/controlcard.ts): walk, then the station's own verb. */
@@ -143,24 +148,19 @@ const HOLD_SOUND_EVERY = { [MIX]: 14, [STOVE]: 18, [OVEN_S]: 24 };
 /** The ORDER UP! stamp's resting row: the wall's clear band between the station signs (104..121) and the props
  *  that stand on the counter (156..200). At its old row 110 it printed straight across the MIX and STOVE signs. */
 const STAMP_Y = 140;
-/** The reach beat's hold, the eat gag's length, the chop anim's length. */
-const ACT_FRAMES = 20, EAT_FRAMES = 42, CHOP_ANIM = 21, GAG_CHANCE = 1 / 6;
-/**
- * The two beats for the crew who are not Barley (docs/CONTENT_ROADMAP.md section A), on the same seeded one-in-six
- * as the bite: the pot lid that rattles and lifts on its own for LID_FRAMES when a STOVE step completes, and the
- * cloud of flour out of the oven door when an OVEN step completes. Both are draw-side: nothing about them scores.
- */
-const LID_FRAMES = 40, LID_STEAM_EVERY = 5, CLOUD_PUFFS = 14;
-const POOF = 'POOF!';
+/** The reach beat's hold and the chop anim's length; and the hungry one's bite, a seeded chance on every completed
+ *  step (its beat is game/kitchenGags.ts's, as are the room's own jokes and their odds). */
+const ACT_FRAMES = 20, CHOP_ANIM = 21, GAG_CHANCE = 1 / 6;
 /** Segments on each station's paper tag; the fridge's is the order's own ingredient count (`segs`). */
 const SEGS = [1, CHOP_HITS, 4, 4, 4, 1];
 /** Rows a critter's tallest head part reaches above its skull (ears, toque, sunhat), for the name plate. */
 const CROWN = { barley: 6, sorrel: 20, chicory: 22, cress: 18, rowan: 18 };
 /** The lowest row a name plate's top may take: the module's own contract is that nothing to read sits in rows
- *  156..200, where the pot, the bowl and the board's ingredient are. A tall crown lifts a plate above this. */
-const PLATE_Y_MAX = 160;
+ *  156..200, where the pot, the bowl and the board's ingredient are. A tall crown lifts a plate above this. A plate
+ *  floats PLATE_LIFT rows over its cook's tallest head part (the jokes' cards stand over it: game/kitchenGags.ts). */
+const PLATE_Y_MAX = 160, PLATE_LIFT = 14;
 const HINTS = { fridge: 'FRIDGE: TAP TO PULL IT ALL OUT', chop: 'CHOP: TAP OVER AND OVER', mix: 'MIX: HOLD TO STIR', stove: 'STOVE: HOLD TO COOK', oven: 'OVEN: HOLD TO BAKE', plate: 'PLATE: RING THE BELL' };
-const PERFECT = 'PERFECT!', DONE = 'DONE', NOM = 'NOM', ORDER_UP = 'ORDER UP!', RING = 'RING!';
+const PERFECT = 'PERFECT!', DONE = 'DONE', ORDER_UP = 'ORDER UP!', RING = 'RING!';
 const CARD_X = RECIPE.x, CARD_Y = RECIPE.y, CARD_W = RECIPE.w;
 // the recipe card is the SMALLER paper: it hangs below the rail on two strings and carries no perforated top, so
 // it never reads as the order ticket's twin at the other end of the same rail (the two papers used to match)
@@ -255,9 +255,11 @@ export interface Seat {
   anim: string;
   /** Frames left of the current reach / chop / stir beat. */
   actT: number;
-  /** Frames left of the eat gag; any input from the seat ends it early. */
+  /** Frames left of the hungry one's eat beat (game/kitchenGags.ts): a push of the stick, a press, or a hold at the
+   *  step being cooked ends it early. */
   eatT: number;
-  /** Which ITEMS entry is in its paws ('knife' | 'spoon' | 'plate' | 'food'), '' for empty paws. */
+  /** Which ITEMS entry is in its paws ('knife' | 'spoon' | 'plate' | 'food'), or the hungry one's 'slice' off the
+   *  ceiling (game/kitchenGags.ts), '' for empty paws. */
   weapon: string;
   /** The drawRig options, reused every frame (this file allocates nothing in draw()). */
   opts: DrawRigOpts;
@@ -396,10 +398,8 @@ export class KitchenScreen extends Screen {
   declare st: StepState;
   /** Taps the CHOP step takes: the most any order asks for (EXTRA CRUNCHY is more). */
   declare chops: number;
-  /** Frames left of the pot lid rattling; and the two gags' counts, for the tests. */
-  declare lidT: number;
-  declare lids: number;
-  declare poofs: number;
+  /** The jokes: the slice on the ceiling, the hungry one's chew, the pot lid and the flour (game/kitchenGags.ts). */
+  declare gags: KitchenGags;
   /** True from the bell to the results screen. */
   declare served: boolean;
   /** Frames since the bell (the components land, then the stamp slams). */
@@ -441,6 +441,7 @@ export class KitchenScreen extends Screen {
 
   constructor(game: Game) {
     super(game, 'kitchen'); this.seats = []; this.fields = []; this.friends = new KitchenFriends(); this.beats = new WaitingBeats();
+    this.gags = new KitchenGags(PLATE_Y_MAX, PLATE_LIFT);
     this.flights = [];
     for (let i = 0; i < FLY_POOL; i++) this.flights.push({ active: false, unit: 0, x0: 0, y0: 0, x1: 0, y1: 0, t: 0, from: 0, dest: -1 });
     this.pt = { x: 0, y: 0 };
@@ -450,7 +451,7 @@ export class KitchenScreen extends Screen {
     super.enter(params);
     const game = this.game, run = game.run;
     this.layer = kitchenLayer(paintStations);
-    particles.clear();
+    particles.clear(); clearGags();
     // the orders: the whole line, front first, all cooked at once - and the same order read by dish
     this.orders = run.lineOrders();
     run.order = this.orders[0];
@@ -466,7 +467,6 @@ export class KitchenScreen extends Screen {
     this.owners = this.steps.map(() => -1);
     this.chops = CHOP_HITS;
     for (const o of this.orders) if (o.steps.indexOf('chop') >= 0 && (o.chops || CHOP_HITS) > this.chops) this.chops = o.chops;
-    this.lidT = 0; this.lids = 0; this.poofs = 0;
     // what the fridge holds: one entry per unit, order by order, each order's in its own order - and the kinds it
     // comes out by, each the first time an order wants it
     this.dishIcons = []; this.dishHexes = []; this.dishFirst = [];
@@ -532,6 +532,8 @@ export class KitchenScreen extends Screen {
     let tw = 0;
     for (let g = 0; g < this.dishes.length; g++) tw = Math.max(tw, measureText(this.ticketRows[g], 1), measureText(this.ticketNotes[g], 1));
     this.ticketW = Math.max(TICKET.w, tw + 46);
+    // no jokes up yet; the slice will stick to the ceiling clear of the ticket's right edge
+    this.gags.enter(game.audio, TICKET.x + this.ticketW);
     // a plate per dish along the hatch shelf: the first where the plate always stood, the rest right of the bell
     const shelf0 = BELL.x + BELL.w + 14, pitch = this.dishes.length > 2 ? Math.min(PASS_PITCH, Math.floor((SHELF_END - shelf0) / (this.dishes.length - 2))) : PASS_PITCH;
     this.plateX = this.dishes.map((_, g) => g === 0 ? PLATE.x + 13 : shelf0 + (g - 1) * pitch);
@@ -542,6 +544,7 @@ export class KitchenScreen extends Screen {
     this.seats.length = 0;
     for (let i = 0; i < run.party.length; i++) {
       const p = run.party[i], def = getCritter(p.critter), rig = critterRig(def, p.slot), player = new AnimPlayer(def.anims);
+      player.setOverlay(KITCHEN_ANIMS);   // the jokes' own beats: the chomp, the shake, the cough
       player.play('idle');
       this.seats.push({
         slot: p.slot, def, rig, player, name: def.name, crown: CROWN[def.id] != null ? CROWN[def.id] : 8,
@@ -568,7 +571,7 @@ export class KitchenScreen extends Screen {
     const game = this.game, inp = game.input;
     if (inp.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
-    if (this.lidT > 0) { if (--this.lidT % LID_STEAM_EVERY === 0) particles.spawn('steam', PROP_X[STOVE] + ((this.lidT >> 2) & 1 ? 8 : -8), ROWS.counterTop - 40, { screen: true }); }
+    stepGags();
     this.stepFlights();
     // the line idles at the hatch until its plates come, reaches out as each one's leaves the shelf, and holds it
     for (const c of this.custs) { c.player.tick(); if (c.player.done) c.player.play(c.served ? 'carry' : 'idle', { restart: true }); }
@@ -584,12 +587,17 @@ export class KitchenScreen extends Screen {
       this.handOver();
       if (this.serveT >= this.serveEnd) { game.replace('results', { stars: this.dishStars.slice(), score: this.total }); return; }
     }
+    // the jokes, once the seats and the step have moved: the slice lets go over whoever has just walked under it
+    this.gags.update(this);
     this.friends.update(this.custs, this.served);
     // the line's waiting beats, after the friends: whoever is being asked for their order holds still for it
     if (this.friends.asking >= 0) this.beats.delay(this.friends.asking, this.frame + ASKED_HOLD);
     this.beats.update(this.frame, this.custs);
-    for (let i = 0; i < this.seats.length; i++) this.pickAnim(this.seats[i]);
+    for (let i = 0; i < this.seats.length; i++) this.pickAnim(this.seats[i], i);
   }
+
+  /** True for the three stations whose step is a HOLD rather than taps. */
+  holds(k: number): boolean { return k === MIX || k === STOVE || k === OVEN_S; }
 
   currentStation(): number { return this.stepIdx < this.steps.length ? this.steps[this.stepIdx] : -1; }
 
@@ -601,12 +609,15 @@ export class KitchenScreen extends Screen {
       if (s.actT > 0) s.actT--;
       const ax = inp.axisX(s.slot);
       s.moving = ax !== 0;
-      // the gag plays out on its own unless the seat does anything at all, in which case it is over this frame: a
-      // joke that held a player still was the one thing left in the game that could get in a player's way. On its
-      // last frame the ITEM goes with the state, or the reconcile below (guarded by `want !== s.weapon`) leaves the
-      // apple in his paw for ever at any spot that suggests no item
+      // the eat plays out on its own unless the seat does anything at all - a push of the stick, a press, or holding
+      // the button at the step being cooked (a hold never presses again, and a bar that stopped filling under a
+      // held button would be a joke holding a player still) - in which case it is over this frame: a joke that held
+      // a player still was the one thing left in the game that could get in a player's way. On its last frame the
+      // ITEM goes with the state, or the reconcile below (guarded by `want !== s.weapon`) leaves the apple in his
+      // paw for ever at any spot that suggests no item
       if (s.eatT > 0) {
-        if (s.moving || inp.pressed(s.slot, 'action')) { s.eatT = 0; this.clearItem(s); }
+        const cooking = inp.held(s.slot, 'action') && s.station === this.currentStation() && this.holds(s.station);
+        if (s.moving || inp.pressed(s.slot, 'action') || cooking) { s.eatT = 0; this.clearItem(s); }
         else { s.eatT--; if (s.eatT === 0) this.clearItem(s); continue; }
       }
       if (s.moving) {
@@ -643,8 +654,7 @@ export class KitchenScreen extends Screen {
   stepStation(inp: Input): void {
     const station = this.currentStation(), st = this.st, audio = this.game.audio;
     if (station < 0) { this.serve(null); return; }
-    const holdStation = station === MIX || station === STOVE || station === OVEN_S;
-    const s = this.actor(inp, station, holdStation);
+    const s = this.actor(inp, station, this.holds(station));
     const pressed = s ? inp.pressed(s.slot, 'action') : false, held = s ? inp.held(s.slot, 'action') : false;
     switch (station) {
       case FRIDGE_S:
@@ -670,6 +680,8 @@ export class KitchenScreen extends Screen {
           st.count++; this.tak = 6; s.facing = 1; s.actT = CHOP_ANIM; this.playAnim(s, 'chop', true);
           ringAt(PROP_X[CHOP], ROWS.counterTop - 8, 3, 12, UI.cream, 2, 10, false, true);
           audio.play('chop');
+          // the slice's deal on the first chop, and its flick on the chop dealt (game/kitchenGags.ts)
+          this.gags.chop(st.count, this.boardHexes[0] || this.pullHexes[0] || UI.cream);
           if (st.count >= this.chops) this.completeStep(2, s);
         }
         break;
@@ -714,28 +726,19 @@ export class KitchenScreen extends Screen {
     // the food moves on: everything at this station takes off for the step ITS dish takes next (the fridge's items
     // are already on their way, one per tap, and the plates are the end of the line)
     if (station !== FRIDGE_S && station !== PLATE_S) this.launchFrom(idx);
-    // the room's own two jokes, one in six each: the pot lid rattles after a stove step, a cloud of flour comes out
-    // of the oven after an oven step (the roll is made whether or not it lands, so every peer draws the same day)
-    if (station === STOVE && rng.chance(GAG_CHANCE)) { this.lidT = LID_FRAMES; this.lids++; this.game.audio.play('rattle'); }
-    if (station === OVEN_S && rng.chance(GAG_CHANCE)) {
-      this.poofs++;
-      particles.burst('dust', PROP_X[OVEN_S], ROWS.counterTop - 20, CLOUD_PUFFS, { color: UI.cream, speed: 1.6, up: 1.2, size: 4, life: 36, gravity: -0.01, screen: true });
-      floatText(PROP_X[OVEN_S], ROWS.counterTop - 56, POOF, UI.cream, 1, true);
-      this.game.audio.play('poof');
-    }
-    // the hungry one: a seeded one-in-six bite on every completed step, whoever completed it
+    // the room's own two jokes, one in three each: the pot lid blows off after a stove step, a cloud of flour comes
+    // out of the oven over whoever baked after an oven step (the roll is made whether or not it lands, so every peer
+    // draws the same day; game/kitchenGags.ts plays them)
+    if (station === STOVE && rng.chance(LID_CHANCE)) this.gags.lid();
+    if (station === OVEN_S && rng.chance(POOF_CHANCE)) this.gags.poof(this.seats, s);
+    // the hungry one: a seeded one-in-six bite on every completed step, whoever completed it - rolled all the same
+    // when he is already in another joke, and then not taken: never two jokes at once on one seat
     for (let i = 0; i < this.seats.length; i++) {
       const b = this.seats[i];
-      if (b.def.id !== 'barley' || b.eatT > 0) continue;
-      if (!rng.chance(GAG_CHANCE)) continue;
-      b.eatT = EAT_FRAMES; b.weapon = 'food';
-      b.rig.weapon = ITEMS.food as RigWeapon; b.rig.heldIcon = this.pullIcons[0]; b.rig.heldHex = this.pullHexes[0];   // `as` for the same reason as in updateSeats
-      this.playAnim(b, 'eat', true);
-      burstCrumbs(b.x + b.facing * 8, ROWS.feet - 40, ROWS.feet, this.pullHexes[0], 6, true);
-      floatText(b.x, ROWS.feet - 70, NOM, UI.cream, 1, true);
-      this.game.audio.play('nom', { delay: 0.25 });
+      if (b.def.id !== BARLEY || b.eatT > 0) continue;
+      if (!rng.chance(GAG_CHANCE) || !this.gags.free(this.seats, i)) continue;
+      this.gags.bite(this, b, i, this.pullIcons[0], this.pullHexes[0]);
     }
-    void s;
   }
 
   /** The bell: every dish is served, each rated on its own route's steps; the stamp slams, the plates go out to the
@@ -878,8 +881,9 @@ export class KitchenScreen extends Screen {
 
   playAnim(s: Seat, name: string, restart: boolean): void { s.anim = name; s.player.play(name, { restart, fallback: 'idle' }); }
 
-  /** idle / walk / stir / reach / chop / eat by what the seat is doing; loops keep their phase, beats play out. */
-  pickAnim(s: Seat): void {
+  /** idle / walk / stir / reach / chop / chomp by what seat `i` is doing; loops keep their phase, beats play out; and
+   *  a seat in a joke with nothing else to do plays the joke's own beat (a cough in the flour, a shake to get it off). */
+  pickAnim(s: Seat, i: number): void {
     if (s.eatT > 0) return;
     let name = 'idle';
     if (s.moving) name = 'walk';
@@ -887,7 +891,7 @@ export class KitchenScreen extends Screen {
       const station = this.currentStation();
       if (s.anim === 'chop' || s.anim === 'reach') return;   // a beat plays out
       name = station === MIX || station === STOVE ? 'stir' : 'reach';
-    }
+    } else name = this.gags.restAnim(i);
     if (name !== s.anim) this.playAnim(s, name, false);
   }
 
@@ -912,34 +916,33 @@ export class KitchenScreen extends Screen {
     if (station >= 0 && !this.served) drawStationFocus(ctx, station, f);
     this.drawStations(ctx, f, st, station);
     particles.draw(ctx, null, 'back');
-    // shadows, then the sorted pass: one feet line, so seat order is the tiebreak (seat 0 in front)
+    this.gags.drawBack(ctx, f);   // the slice stuck to the ceiling and its drips, splats on the floor, the lid on its pot
+    // shadows, then the sorted pass: one feet line, so seat order is the tiebreak (seat 0 in front) - each cook in its
+    // flour if it is floured, and wearing whatever has landed on its head
     for (let i = 0; i < this.seats.length; i++) drawShadow(ctx, this.seats[i].x, ROWS.feet, this.seats[i].rig.width + 6, 0.4, 0);
     for (let i = this.seats.length - 1; i >= 0; i--) {
       const s = this.seats[i], o = s.opts;
       o.x = s.x; o.facing = s.facing;
+      this.gags.dress(s, i, f);
       drawRig(ctx, s.rig, s.player.pose, o);
       jointScreen(s.rig, 'head', s.head);
+      this.gags.undress(ctx, s, i, f);
     }
     this.friends.draw(ctx, this.custs);   // in front of the cooks on the floor, and the bead over the diner ordering
     this.drawFlights(ctx);   // over the cooks: a tossed apple crosses in front of whoever is at the counter
     this.drawServing(ctx);   // and the plates going out, over everything in the room
+    this.gags.drawFront(ctx, this.seats, f);   // the slice and the lid in the air
     particles.draw(ctx, null, 'front');
     for (let i = 0; i < this.steps.length; i++) drawTag(ctx, this.steps[i], this.owners[i], this.segs(this.steps[i]), this.tagFill(i));
     for (let i = this.seats.length - 1; i >= 0; i--) {
-      const s = this.seats[i], py = R(s.head.y - s.rig.p.headR - s.crown) - 14;
+      const s = this.seats[i], py = R(s.head.y - s.rig.p.headR - s.crown) - PLATE_LIFT;
       drawNamePlate(ctx, s.slot, s.name, R(s.head.x), py < PLATE_Y_MAX ? py : PLATE_Y_MAX);
     }
+    drawGags(ctx);   // the jokes' word cards, over the plates and under the papers
     if (!this.served) this.drawWidget(ctx, st, station);
     this.drawHud(ctx, f);
     // between the order ticket and the recipe card, clear of the station signs the player is about to read
     if (!this.served) drawControlCard(ctx, f, f - this.stepFrame, this.schemes, this.keyName, CARD_TOP_Y);
-  }
-
-  /** The pot lid, rattling: an inked enamel disc over the pot that hops on alternate frames, steam getting out under it. */
-  drawLid(ctx: CanvasRenderingContext2D, f: number): void {
-    const x = PROP_X[STOVE], y = ROWS.counterTop - 42, up = ((f >> 1) & 1) ? 5 : 1;
-    ctx.beginPath(); ctx.ellipse(x, y - up, 20, 5, 0, 0, Math.PI * 2); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = PROPS.enamel; ctx.fill();
-    ctx.fillStyle = INK; ctx.fillRect(x - 2, y - up - 6, 4, 3);
   }
 
   /** True once a step at station `k` has been scored and none still to come is at `k`. */
@@ -989,7 +992,6 @@ export class KitchenScreen extends Screen {
     }
     drawBellRing(ctx, this.ringT);
     drawKettleSteam(ctx, f);   // the room's pilot light: one plume that never stops, whatever the party is doing
-    if (this.lidT > 0) this.drawLid(ctx, f);
   }
 
   /** Every unit in the air on its arc; the ones still waiting their turn off the board sit where they were. */
@@ -1097,7 +1099,9 @@ export class KitchenScreen extends Screen {
       onShelf: this.dishes.map((g, k) => this.onShelf(k)), crowd: this.custs.map((c) => [R(c.bx + c.bw / 2), c.opts.margin + c.by, c.scale]),
       step: this.stepIdx, steps: this.stepNames, scores: this.scores.slice(), owners: this.owners.slice(), total: this.total, stars: this.stars, served: this.served,
       phase: this.st.phase, t: this.st.t, count: this.st.count, pulled: this.pulled, pulls: this.kindIcons.length, units: this.pullIcons.length,
-      chops: this.chops, lidT: this.lidT, lids: this.lids, poofs: this.poofs,
+      chops: this.chops,
+      // the jokes: the slice's beat and spot, whose head it is on, the hats and the flour by seat, the lid's clock
+      ...this.gags.summary(this.seats.length),
       at, flying: this.flights.reduce((n, fl) => n + (fl.active ? 1 : 0), 0),
       seats: this.seats.map((s) => [s.slot, R(s.x), s.station, s.anim, s.eatT, s.rig.weapon ? 1 : 0]),
       // the friends riding along: who, where, doing what; whose order is being taken; orders taken, dashes run
@@ -1113,6 +1117,7 @@ export class KitchenScreen extends Screen {
     f.push(this.orders.length, this.stepIdx, this.total, this.st.phase, this.st.t, this.st.count, this.pulled, this.served ? 1 : 0, this.serveT, this.stars);
     for (let i = 0; i < this.steps.length; i++) f.push(this.steps[i], this.scores[i], this.owners[i]);
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.station, s.moving ? 1 : 0, s.actT, s.eatT); }
+    this.gags.checksum(f, this.seats.length);   // the slice lands by these positions, and on Barley it is his eat beat
     return f;
   }
 }

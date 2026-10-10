@@ -296,27 +296,54 @@ never changes — a pear is caught like an apple — but the visit looks like it
 farm's plants, the mill's grain) and where the ingredient is a different kind of thing it plays as one: butter is
 milk and then the churn, salt is a pan that has to crust before it can be scraped.
 
-**Every mini-game has one joke** (the orchard has two), built the same way as the orchard's bomb: a seeded chance
-on the thing you were going to gather anyway, a short held beat on that seat with the stick locked, a sound, and
-then carry on. A joke costs a moment and never a point, and each one is drawn from `rng` inside `update()`, so
-four peers in lockstep see the same hen.
+**Every mini-game has two jokes** (the cove has three), built the way the orchard's bomb is: a seeded chance on the
+thing you were going to gather anyway, and four beats on the seat it lands on — a TELL a sharp eye can see coming (the
+fuse on the apple), a WIND-UP the critter stands in with the stick locked (watching the fuse burn), the BANG (its word
+on a comic card, its own sound, and on the biggest a thump through the world), and a LOOK that stays on the critter
+afterwards (soot, flour, honey or juice it blinks out of, stars round its head, a chick riding it) — and then carry
+on. The bang and the look are drawn with one shared kit (`game/gags.ts`): word cards a size-2 word wide, popped in
+over the name plate and rimmed in the seat's colour, because the size-1 float text the jokes used to shout with was
+the smallest thing on the screen at the one moment it most wanted reading, and the old beats were over in under a
+second. A joke costs a moment and never a point (a joke that is not the ingredient - a bomb, a hatched egg, a
+squashed berry - simply does not score), and each is drawn from `rng` inside `update()`, so four peers in lockstep
+see the same hen. The deals are tuned so a round usually shows at least one of its scene's jokes, and where a joke
+lands on the hungry one and leaves something edible, **Barley eats the evidence**.
 
 | Landmark | The joke | The deal | What plays |
 |---|---|---|---|
-| Orchard | The wormy apple; the bomb | 1 in 10 each | The bump beat; the fuse, the bang, the soot (above) |
-| Pond | The old boot | 1 bite in 8, never two in a row | The same twelve taps; the boot comes up the line to the paw, the rod is set down, it is held out and tipped (drips off the toe) for 30 frames, then lobbed back with a splash. No +1 |
-| Coop | The broody hen | 1 nest egg in 8, sat on for 90 frames | The reach gets a peck: the paw is yanked back, a hop on one foot for 24 frames, OW!; the hen clucks and hops off when her time is up and the egg is there for the next reach. No floor cue under a sat-on nest |
-| Dairy | The tail | Every 20..40 squirts per stall, never on a pail's twelfth | The tail comes across the face: rocked back on the stool and dazed for 20 frames, the pail keeps its count |
-| Mill | The sneeze | 1 sack tied in 6 | As the tie beat ends, 24 frames of wind-up (head back, eyes shut) then ACHOO: the body snaps forward and a cloud of the visit's own dust (chaff on a rice visit) goes up; 36 frames locked, the fresh sack untouched |
-| Hives | The curious bee | 1 dip in 6, 20 frames into the hold | One bee leaves the swarm and lands on the nose: cross-eyed and frozen for 40 frames with the hold paused where it was (the bar keeps its fill, as letting go does), then the bee goes and the hold runs on |
-| Farm | The whopper | 1 top in 8; nothing above ground gives it away | The twelfth press brings out a root nearly three times the size, still +1, and the puller goes over backwards with it for 30 frames, WHOA! |
-| Bramble Bank | The thorn | 1 berry in 8 ripens with a bramble drawn across it | The first reach gets the prick: the paw whipped to the mouth for 24 frames, OW!; the thorn is gone with it and the berry is picked on the next reach. The ring is cream, never `SIGNAL.hot`: nothing on the bank is a danger |
-| Cockle Cove | The pinch | Always, for a crab grabbed while it is still RUNNING (the sparkle says pounce on one that has stopped) | The crab hangs off the paw while the critter runs a circle on the spot for 40 frames, OW!, then drops to the sand beside them, tired, which makes it the easy grab next |
-| Cockle Cove | The seventh wave | Every 600..900 frames | One wave rolls up over the strand line: everyone on the sand hops and drips for 40 frames with the stick locked, and a clump of weed lands on one head |
+| Orchard | The bomb | 1 apple in 10 carries a fuse | '!'; held up 40 frames while the fuse burns (the paw trembles, the face grits, then eyes screwed shut); BOOM! on a starburst, smoke, embers, a flash, the world bumped; 105 frames stood in soot (blinking out of it, stars round the head, smoke off the ears), a COUGH, the soot shaken off in a shower of flakes. Nothing scored, nothing lost |
+| Orchard | The wormy apple | 1 apple in 10 falls bruised with a grub climbing out | '?', held up to the eye; the grub pops up and blows a raspberry, PFFT!; the critter jumps back, flings the apple over its shoulder (the grub crawls off) and shudders, 80 frames, no +1. Barley shrugs and eats it, CHOMP!, and the grub pops back out of his mouth, HI!, and wriggles away (120 frames). Barley never eats a bomb |
+| Pond | The big one | 1 cast in 6, dealt as the float lands; never twice running on a seat, never on a boot | A dark shadow circles under the waiting float, and the bite zips it side to side. The same twelve taps, each dragging the critter a step along the planks toward the edge (leaning back, heels skidding, the rod bending; '!' on the first); the twelfth yanks it into the pond - SPLOOSH!, a thump, 24 frames of bubbles - and it climbs back onto its spot pond-green and dripping, a lily pad and a very small frog on its head (RIBBIT), the fish held up by the tail. The fish goes in the bucket, +1, then it shakes off. 150 frames from the twelfth tap |
+| Pond | The old boot | 1 cast in 8, dealt as the float lands; never two in a row | The waiting float lies still and leans over. The same twelve taps; the boot comes up the line to the paw, the rod is set down, and turned over it pours a torrent for 44 frames - a puddle spreading over the planks and off the edge - while the critter stares (?!); the last thing out is a tiny fish that flops back into the pond, then the boot is lobbed back, SPLOSH! 100 frames. No +1 |
+| Coop | The surprise chick | 1 egg in 6, nest or floor: a size up, a zigzag crack round its middle, rocking on its base every so often | Plucked, it is held up to the face, '?', wobbling harder, crack... crack..., then POP: the top of the shell flies off, CHEEP!, and a chick wearing the other half looks up at its new mum and hops onto its head (70 frames, stick locked). No +1: it hatched. It rides the head for 6 s, cheeping at every real egg, then trots off after a hen |
+| Coop | The broody hen | 1 nest egg in 4 of those that are not a surprise egg, sat on for 210 frames, the egg peeking out from under her | The reach gets her temper: she puffs up to twice her size and glares ('!', 15 frames), then a flurry of pecks, OW!, feathers bursting out of the box and drifting down, and the critter hops round on one foot shaking its paw: 90 frames, stick locked. One temper per hen: she sits on, smug, then flounces off, and the egg is there for the next reach. No floor cue under a sat-on nest |
+| Dairy | The cowlick | 1 pail in 3 per stall carries one of the dairy's two jokes, on squirt 3..10 of it, even odds which (never both at once on a stall) | The cow turns her head round and eyes the milker with her tongue out for 40 frames while the milking goes on; then it unrolls (buttons locked, '!' at the last moment) and SHLURP!: one lick up the face lifts the milker onto its toes. Its fur stands straight up in a giant quiff: it pats it down, BOING, pats it down, BOING, holds it down and it stays. 152 frames locked; the pail keeps its count |
+| Dairy | The tail | The same deal; the tuft twitches for the last 3 squirts before it is due | The tail swings up over the rump faster and faster for 30 frames ('!'), THWAP!: the milker somersaults backward off the stool, lands on its bottom in the straw and sits seeing stars for 48 frames, then climbs back on. 110 frames locked; the pail keeps its count |
+| Mill | The clog | 1 chute wake in 4 | From the moment it pours that chute rattles and coughs, a bulge slipping down its spout and the flour coming out in slugs (it still fills). At the lip it sticks, and the first critter filling under it gets it: the spout shudders and stops, '!' (30 frames looking up as the lump drops), FWUMP! - the world bumps and the critter is gone under a heap of flour (rice or oats on those visits) that slumps until just its ears and eyes poke out (40), then it pops out ghost-white, blinks and shakes it off in a cloud (60). 130 frames locked; the sack keeps its fill. If nobody fills under it, it drops onto the planks with a puff as the pour runs dry |
+| Mill | The sneeze | 1 sack tied in 5 | As the tie beat ends, a false start: AH... (head back, eyes shut, 20 frames), it goes away and the critter relaxes (10), then AH-AH..., bigger, up on its toes (20), then ACHOO!: the world bumps, a cloud of the visit's own dust (chaff on a rice visit) goes up and the critter is blown back a hop (20), then stands dusty and dazed with stars round its head (40). 110 frames locked, the fresh sack untouched |
+| Hives | The honey flood | 1 skep fill in 6 comes in overfull, the five the round opens on included: honey runs down its straw, brims in the doorway and drips into a pool at its foot | A hold there runs as normal until its last 24 frames, when the skep swells and groans ('!'); landed, it is +1 as ever and the skep burps its honey over the dipper — GLOOP!, a bump. The critter is honey all over and stuck to the spot: the stick only strains it (toffee strands from its feet), two bees settle on it, and after 60 frames SHLUP!, it pops free and shakes the honey off (120 frames from the bang). Barley licks his off instead — three noms, MMM! — in 84 |
+| Hives | The curious bee | 1 hold in 8 (never at an overfull skep), 20 frames into the hold | One bee leaves the swarm and circles the head, buzzing louder, with the hold paused; it lands on the nose ('!'), the critter goes cross-eyed and trembles, goes stiff as a board and topples over backwards like a plank — FLUMP!, a bump — and lies on its back with the bee on its nose; the bee buzzes off, the critter springs up and the hold runs on where it was (120 frames; the bar keeps its fill) |
+| Farm | The rocket root | 1 top in 8 (one roll with the whopper, never both); its top shivers over a pale heave of cracked soil | Every tug heaves the bed higher and the eighth puts up a '!'; the twelfth fires the root out like a cork, POP!, off the top of the screen. The trug goes down and the puller stares at the sky, pointing, '?', while a whistle falls; it lands on the head, BONK!, dizzy stars for 40 frames, and bounces into the trug: +1, counted as it lands. 134 frames. Barley catches it in his mouth instead, CHOMP!, and it goes in with a bite out of it, still +1, MMM! |
+| Farm | The whopper | 1 top in 8; nothing above ground gives it away | The twelfth press tears out a root nearly three times the size with a huge pop and throws the puller backwards head over heels; it lands flat on its back with the giant root standing on its belly, legs kicking, WHOA!, for 50 frames, then shoves it off and the root rolls into the trug: +1, counted as it lands. 90 frames |
+| Bramble Bank | The squishy one | 1 berry in 7 ripens swollen: twice the size, glossy, wobbling on its spot (never one with a thorn) | Picked, it comes off the bush and is held up at arm's length to be admired; 14 frames in it starts to wobble and swell ('!'), and at 30 SPLUT!: juice everywhere, a splat on the path, and the picker coated head to toe in the berry's juice (a muted red-pink or purple), blinking out of it and dripping for 70 frames; it licks a paw (MMM!) and shakes it off; 140 frames. Not scored, and its spot is a pea again. Barley licks himself clean instead (nom, nom, nom, a third of the juice at each), 124 frames |
+| Bramble Bank | The thorn | 1 berry in 7 ripens with a bramble drawn across it (an inked cane with two spikes), dealt by the same roll as the squishy one, so never both | The near paw reaches in and the thorn goes in: rigid for 6 frames, then OW!, a leap straight up and a landing, and four hops on one foot blowing on the paw while the bush shakes its leaves out; 70 frames, the basket held in the far paw. The thorn is gone with it and the berry is picked on the next reach. The ring is cream, never `SIGNAL.hot`: nothing on the bank is a danger |
+| Cockle Cove | The gull | Lands on the boat's mooring post 180..360 frames into a visit, then 900..1300 after it last flew off, and watches for up to 300; the first clean grab while it watches is its (never a pinch), on every visit kind | The catch comes up in the paw, held high, while the gull's shadow sweeps across the sand, '!'; it swoops - SQUAWK!, the catch out of the paw, feathers, the critter spun round - and hangs there with it while the critter shakes its basket at it; then it lets go: BONK! on the head, stars, and the catch bounces into the basket: +1, the one grabbed (134 frames). A round that ends mid-snatch banks it |
+| Cockle Cove | The pinch | Always, for a crab grabbed while it is still RUNNING (the sparkle says pounce on one that has stopped) | It grabs back: the basket drops and the critter freezes with the crab clamped on its paw, OW! (8 frames), then runs round in a panic - 32 frames off one way and 32 back, the crab swinging off its outstretched paw, a trail of dust, OW! OW! - until the crab lets go and drops beside them, tired, which makes it the easy grab next |
+| Cockle Cove | The seventh wave | The first 600..900 frames into a visit, then every 900..1300 | The sea draws back first: the water's edge goes up the beach, bare wet sand where the breakers were and a swell standing up behind it, and everyone on the sand stops and stares out at it, '!' (60 frames, stick locked). Then it rolls up over the beach - SPLOOSH! and a thump through the world - and knocks everyone onto their bottoms, weed on every head, a fish flopping on the sand, dripping for 60 frames, then up again |
+| Hazel Holt | The avalanche | 1 crop in 5, dealt as a tree fills; the branches sag under a second crop, clusters dangle, it creaks now and then | The last 30 frames of the bar it groans and the shaker stares up ('!'); at the top the whole crop lets go - CRASH!, the world bumps - buried to the ears 44 frames, out dazed with stars and a nut balanced on the head 44, shaken off (Barley flips it into his mouth: MMM!); 130 frames. Only the ordinary 1..3 shower scores; the rest rolls away |
+| Hazel Holt | The squirrel | 1 crop in 10 (1 in 8 of those not heavy), dealt as a tree fills; its bushy tail hangs out of the leaves | Shaken down it tumbles onto the head ('!'), chatters 36 frames with the stick locked, brings its nut down - BONK! - and bounds off along the lane with it while the critter sees stars, then a shake-off; 92 frames, the shower still landing |
+| Tangle Wood | The tangle | 1 bump in 8 lifts with a curl of vine in the leaves beside it (never a toadstool) | The brush gets the vine round the ankle, ?! (38 frames); WHOOP!, hauled up it to hang upside down from the canopy and swing, the basket left on the litter (52); the vine lets go, FLUMP! on its back in the leaves (the world bumps), up wearing leaves and shaking them off (64). The find is still there for the next brush. No +1 |
+| Tangle Wood | The toadstool | 1 bump in 8 lifts red with white spots (one roll per bump, shared with the vine) | Two sniffs at it (20 frames), then a green-grey stink cloud billows out, PEE-YOO!, and the critter staggers back out of it fanning its nose, queasy green with stink lines coming off it, and shakes its head: 72 frames with the stick locked. The toadstool sinks back into the litter. No +1 |
+| Thyme Terrace | The topiary | One clump grown wild when the truck pulls up in two rounds of three, and one clump in five that grows back to full grows wild (twice the size, sprigs everywhere) | The first snip at it and the shears run away with the critter: 50 frames of a storm of snipping (?!), then TA-DA! - the clump is a hedge statue of that critter on a clipped plinth, and its three snips hop into the basket (+1 each, never past the target). The critter steps back, looks up at it, turns to the room and bows (90 frames); Barley leaps up and bites a mouthful out of its head instead (MMM!). The statue stands, sprouting, until the clump has grown back |
+| Thyme Terrace | The hedgehog | Asleep under a seeded clump in two rounds of three, a Z drifting up off it; woken, it goes to sleep under another clump | The snip there wakes it with a start (!): it curls into a spiky ball and bounces in at the critter's shins, EEK!, and the critter leaps with its fur on end and lands hopping on one foot (80 frames) while the hedgehog uncurls, glares (HMPH) and trundles off. No sprig; the clump keeps its snips |
 
-Every joke has a scenario of its own in `tools/scenarios/` (`pondBoot`, `coopBroody`, `dairySwish`, `millSneeze`,
-`hiveBee`, `gardenWhopper`, `brambleThorn`, `beachPinch`, `beachWave`), and the rules' own scenarios hold the
-jokes off (a boot in the reel test would read as a lost fish).
+Every joke has a scenario of its own in `tools/scenarios/` (the bomb in `orchard`, then `orchardWormy`, `pondBigOne`,
+`pondBoot`, `coopChick`, `coopBroody`, `dairyCowlick`, `dairySwish`, `millClog`, `millSneeze`, `hiveFlood`, `hiveBee`,
+`gardenRocket`, `gardenWhopper`, `brambleSquish`, `brambleThorn`, `beachGull`, `beachPinch`, `beachWave`,
+`holtAvalanche`, `holtSquirrel`, `woodTangle`, `woodToadstool`, `terraceTopiary`, `terraceHedgehog`), each forcing
+its joke through the same fields the roll sets and walking its beats, and the rules' own scenarios hold the jokes
+off (a boot in the reel test would read as a lost fish). `netscenes` holds a two-peer lockstep room on every
+landmark but the orchard (netplay's own), so a joke whose state misses a checksum shows up there.
 
 **Reach is the whole body.** Wherever a scene asks a seat to be "at" something (a chute, a hive, a top, an egg, a
 kitchen station), the test is a strip about a critter wide either side of the object's centre (34–40 px): if any
@@ -330,17 +357,19 @@ or held down with a bar filling under it (HOLD). The key is labelled with the se
 The whole game is built on **three inputs and nothing else**: move left and right, tap ACTION over and over, and
 hold ACTION down. There are no timing windows, no beats to hit and no wrong buttons — a young player can never lose
 what they have gathered, and there is no clock to race: a round lasts as long as it takes. The only hazards left are
-jokes (the orchard's wormy apple and its bomb), and they cost nothing but a moment. The one real cost is Barley's gulp
-(section 5), which takes a pick out of the basket.
+the jokes (the table above), and they cost nothing but a moment. The one real cost is Barley's gulp (section 5), which
+takes a pick out of the basket.
 
 - **Orchard — CATCH** (*move*). Move left/right with a basket held in front. Apples (14 px, so they read from
   across a room) spawn above the canopy every 30–60 frames at a seeded x and fall at 1.4–2.4 px/frame with a small
   sway; caught the moment it overlaps the critter's body (the ring and the +1 are drawn at the basket's rim). A missed
   apple splats on the grass and costs nothing. One in ten is a
-  **wormy** apple: catching it is the bump beat and nothing more. One in ten is a **bomb** — a ripe apple with a
-  burning fuse — and catching it is the scene's joke: the critter holds it up and watches the fuse burn for 40
-  frames, it goes off in smoke and embers, and the critter stands blackened and dazed for 90 frames before shaking
-  it off. Nothing is lost but the time. Four seats use four depth lanes 8 px apart so bodies stack instead of
+  **wormy** apple: catching it is a joke — held up to look ('?'), the grub pops up and blows a raspberry (PFFT!),
+  and the critter jumps back, flings the apple over its shoulder and shudders (80 frames); Barley eats it instead
+  (CHOMP!) and the grub pops back out of his mouth to say HI! (120 frames). One in ten is a **bomb** — a ripe apple
+  with a burning fuse: '!', the critter holds it up and watches the fuse burn for 40 frames, it goes off — BOOM! —
+  and the critter stands in soot for 105 frames, blinking, seeing stars, smoking at the ears, coughs, and shakes it
+  off. Neither scores; nothing is lost but the time. Four seats use four depth lanes 8 px apart so bodies stack instead of
   fusing. A visit for pears, peaches or avocados is the same catch under **that fruit's own trees**: the backdrop's
   canopies are painted per fruit (a pear tree taller and narrower, a peach tree rounder with a pink-tinged leaf,
   an avocado tree one big dark glossy canopy), the fruit hangs on its branch in that canopy in its own colour before
@@ -353,14 +382,19 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
 - **Pond — FISH** (*tap*). Fixed standing spots on a jetty, one float column per seat. `action` casts; the float
   bobs; after a seeded 60–150 frames the fish bites (the float drops, a mint ring) and stays on. Tapping `action`
   twelve times reels it in: every press is one turn of the reel, drawn as a bar over the float. A press during the wait
-  does nothing.
+  does nothing. Each cast is dealt as its float lands: one in six is the big one and one in eight the old boot (the
+  jokes above), never the same one twice running on a seat.
 - **Coop — COLLECT** (*move + tap*). Walk left/right along a depth lane; eggs appear in nests and on the floor in
   front of the lanes every 90–150 frames; `action` with the egg anywhere under the critter (34 px either side) plucks one (a 12-frame reach up into
   a nest from the gold ring on the floor under it, a 12-frame crouch to a floor egg). Five hens potter about the
-  back of the floor and touch nobody.
+  back of the floor and touch nobody. **The jokes:** one egg in six is a surprise egg that hatches in the paw (no
+  +1) and rides its plucker's head before trotting off after a hen; one nest egg in four of the rest has a broody
+  hen on it, whose temper costs a 90-frame hop round on one foot, after which she leaves the egg.
 - **Dairy — PUMP** (*tap*). A stool and a cow per seat, nobody moves. Every `action` press is a squirt; twelve fill a
   pail — +1 milk, the pail hops to the churn rack, a fresh one slides under the cow. Any rhythm works, and the cows
-  never kick. A **butter** visit adds the churn: a barrel churn stands beside every stall, the full pail pours into
+  never kick. A cow does play jokes, though: on one pail in three, the cowlick or the tail (the jokes table), and
+  neither costs a squirt; on a butter visit, a cowlick whose tell runs through the pour lands on the back of the
+  milker's head at the churn. A **butter** visit adds the churn: a barrel churn stands beside every stall, the full pail pours into
   it instead of banking, the milker turns round on the stool and every `action` press is a turn of the crank;
   twelve turns bring a pat of butter (+1 butter, the pat hops to the rack) and the milker turns back to the cow.
   Butter is milk plus the churn, so a pat is exactly two dozen taps.
@@ -374,11 +408,15 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   the chutes pour loose grain instead of dust, a waking spout dribbles grain from its lip, the sacks wear a
   stencilled band and pile on the cart as rice sacks, and the mill's own stock in the corner is straw sheaves and a
   hulling bin (`art/backgrounds/mill.js millLayers('rice')`, cached beside the flour room the way the cove is kept
-  beside the pond). Not a number changes between the two.
+  beside the pond). Not a number changes between the two. **The jokes:** one chute wake in four comes with a clog that sticks at
+  the lip and buries the first critter to fill under it, and one sack tied in five goes up the tier's nose (the
+  table above); neither costs a grain.
 - **Hives — CREEP** (*move + hold*). Five straw skeps on a bench; **holding** `action` anywhere over a full one (36 px either side)
   for 60 frames dips it — a strand of honey climbs the dipper and a bar fills over the skep — then +1 honey, and
   that skep is empty for 150 frames, so the party is pushed along the bench. Letting go early costs nothing. The
-  bees drone over the bench and never turn.
+  bees drone over the bench and never turn. **The jokes:** one hold in eight a curious bee knocks the dipper flat on
+  its back (the hold pauses and runs on), and one skep fill in six comes in overfull — it oozes where everyone can
+  see — and dipping it floods the dipper in honey: still +1, stuck to the spot a moment (Barley licks it off).
 - **Farm — PULL** (*move + tap*). Leafy tops stand in the bed (seven at the start, more every 70–120
   frames up to eight, never closer than 42 px); every one is whatever the visit gathers (a carrot by default), and
   is drawn as that plant (`art/gardenProps.js PLANTS`: a carrot's fern, a potato's flowering haulm, an onion's
@@ -386,15 +424,20 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   cabbage, a strawberry plant with its berries on, a blueberry bush), so a row of leeks never looks like a row of
   carrots. `action` with a top anywhere under the critter (34 px either side) grips it and opens
   a pull gauge above that seat; each further `action` press fills it a twelfth, and the twelfth brings the root out
-  (+1 carrot, a 14-frame pull). 150 frames without a press lets go at no cost.
+  (+1 carrot, a 14-frame pull). 150 frames without a press lets go at no cost. One top in eight is the rocket root
+  and one in eight the whopper (the jokes, above): the same twelve tugs and the same +1, counted when the root lands
+  in the trug.
 
 - **Bramble Bank — PICK** (*move + tap*). Six berry bushes stand along the foot of the bank, three berry spots
   each; six berries are ripe when the truck pulls up and one more ripens every 70–120 frames on a bush with a green
   spot left (the pea turns into the visit's own berry with the gold sparkle over it: strawberries, blueberries, raspberries
   or blackberries, whichever the list is short of; blackberries moved here from Tangle Wood because they grow on brambles). `action` with a bush anywhere
   under the critter (34 px either side) picks its ripe berry (a 12-frame reach up into the bush, the berry hops
-  into the basket, +1); a bush with nothing ripe on it does nothing. The bank used to borrow the farm's bed, and a
-  strawberry pulled out of the ground by its top was the visit that said it should not.
+  into the basket, +1); a bush with nothing ripe on it does nothing. **The jokes:** one ripening berry in seven
+  (the six ripe when the truck pulls up included) has a thorn across it and one in seven is the squishy one,
+  swollen, glossy and wobbling, never both (see the table). Neither costs a berry already picked. The bank used to
+  borrow the farm's bed, and a strawberry pulled out of the ground by its top was the visit that said it should
+  not.
 
 - **Hazel Holt — SHAKE** (*move + hold*). A nut grove in the north-west corner: four nut trees stand at fixed x
   (160 px apart) on the leaf litter, the crew walks the trodden band in front of them, and **holding** `action`
@@ -403,18 +446,28 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   (and a second seat can carry on where the first left off), and at the top a shower of 1..3 nuts comes down into
   the shaker's basket one every 5 frames, each one +1 and never past the target; that tree is bare for 150 frames,
   so the party is pushed along the grove. A visit is for hazelnuts, walnuts or chestnuts (`gatherTarget`), and the
-  nuts in the canopy, in the shower and in the crate wear that nut's glyph. **The joke:** one shake in six brings
-  the squirrel down with the nuts; it lands on the shaker's head, sits there indignant for 40 frames with the stick
-  locked (the nuts still falling), then runs off. Nothing is lost.
+  nuts in the canopy, in the shower and in the crate wear that nut's glyph. **The jokes** are dealt to a tree's crop
+  as it fills (when the truck pulls up and each time a bare tree comes back), one per crop, and show on the tree. One
+  crop in five comes in **heavy** — the branches sag under a second crop with clusters dangling and it creaks now and
+  then — and shaking it down is the **avalanche**: the last 30 frames of the bar the tree groans and the shaker stares
+  up ('!'), then the whole crop lets go, CRASH!, and the shaker is buried to the ears in a heap of nuts (44 frames),
+  pops out dazed with stars and a nut balanced on its head (44) and shakes it off; Barley flips the nut into his mouth
+  instead, MMM! One of the other crops in eight has the **squirrel**'s tail hanging out of the leaves: it comes down
+  onto the shaker's head ('!'), chatters at it, brings a nut down on it, BONK!, and bounds off along the lane with the
+  nut while the critter sees stars (92 frames). The shower under either still lands (1..3, never past the target),
+  and nothing is lost. When the shake that completes the order brings a joke, the sign waits for it to play out.
 
 - **Tangle Wood — FORAGE** (*move + tap*). A dark wood in the north-east corner, on the coop's side of the river:
   things hide in the leaf litter along the band. A **bump** lifts in the leaves every 70..120 frames at a free x
   (four are already showing when the truck pulls up), takes 20 frames to rise, and then SHOWS with the gold
   sparkle over it; `action` with a showing bump anywhere under the critter (34 px either side) brushes the leaves
   off it (a 12-frame crouch), the thing hops into the basket, +1. A showing bump nobody wants sinks back after 900
-  frames. A visit is for mushrooms or wild garlic. **The joke:** one bump in eight lifts as a
-  toadstool, red with white spots; brushing it is a step back with the nose wrinkled, POOH!, 20 frames, and it
-  sinks back. Nothing is lost.
+  frames. A visit is for mushrooms or wild garlic. **The jokes:** one bump in four is dealt one as it is laid, from
+  a single roll. One in eight lifts as a **toadstool**, red with white spots: brushing it is two sniffs, then a stink
+  cloud and PEE-YOO!, and the critter staggers back out of it gone green for 72 frames while the toadstool sinks back
+  into the litter. One in eight lifts with a **curl of vine** in the leaves beside it: the brush gets the vine round
+  the ankle, it hauls the critter up to swing upside down from the canopy, then lets go, FLUMP!, into the leaves —
+  154 frames — and the find is still there for the next brush. Nothing is lost.
 
 - **Thyme Terrace — SNIP** (*move + tap*). A walled herb bed between home and the orchard: six clumps of the visit's
   herb stand along the bed at fixed x (100 px apart), the crew works the gravel walk in front, and `action` with a
@@ -422,10 +475,17 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   10-frame crouch): the sprig hops into the basket, +1, and the clump is a stage shorter. A clump gives three snips
   and then stands as stubble, and grows a stage back every 50 frames, each stage drawn (stubble, shoots, half, full),
   so the party is pushed along the bed and back. A visit is for mint (a round bushy mass), chives (tubes with purple
-  heads) or rosemary (woody sprigs). **The joke:** the hedgehog is asleep under one clump in eight when the truck
-  pulls up, curled at its foot where a sharp eye can spot it; the snip there wakes it - the critter jumps back,
-  EEK!, 20 frames, no sprig - and it trundles off over 40 frames to sleep under another clump. The clump keeps its
-  snips for the next reach.
+  heads) or rosemary (woody sprigs). **The jokes:** the hedgehog is asleep under a seeded clump in two rounds of
+  three when the truck pulls up, curled at its foot with a Z drifting up off it; the snip there wakes it with a
+  start: it curls into a spiky ball and bounces in at the critter's shins - EEK! - and the critter leaps with its
+  fur on end and lands hopping on one foot (80 frames, no sprig) while the hedgehog uncurls, glares (HMPH) and
+  trundles off to sleep under another clump. The clump keeps its snips for the next reach. And a clump that grows
+  back to full grows WILD one time in five (one is wild when the truck pulls up in two rounds of three): twice the
+  size, sprigs sticking out everywhere. The first snip at it and the shears run away with the critter - a 50-frame
+  storm of snipping - then TA-DA!: the clump is a hedge statue of that critter on a clipped plinth, and its three
+  snips hop into the basket, +1 each and never past the target. The critter steps back, looks up at it, turns to the
+  room and takes a bow (90 frames); Barley takes a bite out of its head instead. A statue is not for snipping: it
+  stands, sprouting, until the clump has grown back to full.
 
 - **Cockle Cove — CHASE** (*move + tap*). The crew runs along the dry sand with the sea behind it and the strand
   line in front. Crabs come up out of burrows (three at the start, another every 50–100 frames, five at most) and
@@ -434,7 +494,10 @@ jokes (the orchard's wormy apple and its bomb), and they cost nothing but a mome
   for 110. `action` with a crab anywhere under the critter (34 px either side) grabs it: a 12-frame pounce, the crab
   hops into the basket, +1. A crab nobody catches goes back down after 720 frames. Seaweed visits wash clumps up
   that drift at 0.3 px/frame and are raked with the same grab; salt visits fill four fixed rock pans that crust
-  over 90 frames and are scraped once white. A grab at empty sand does nothing.
+  over 90 frames and are scraped once white. A grab at empty sand does nothing. **The jokes:** a crab grabbed while
+  it still runs grabs back; every so often the sea draws back and the seventh wave knocks the crew flat; and a gull
+  watches from the boat's mooring post and snatches the next catch out of a paw, then drops it on the critter's head
+  and into the basket. Nothing is lost.
 
 ## 6. The kitchen
 
@@ -511,11 +574,23 @@ like the friends.
 
 Nothing can burn or be missed: every completed step scores its full 2, so stars = round(total / max × 3) is always
 3 for a served dish (minimum 1 by the formula).
-The hungry one, when seated, gets a `bite` beat on a seeded 1-in-6 chance each time a step completes: a crumb burst
-and a laugh, no score change. The room has two beats of its own on the same odds, for the crew who are not Barley:
-when a STOVE step completes the pot lid may rattle and lift on its own for 40 frames with steam getting out under
-it, and when an OVEN step completes a cloud of flour may puff out of the door, POOF!. Neither scores; the roll is
-made either way so every peer draws the same day.
+**The kitchen's jokes** (`game/kitchenGags.ts`) follow the orchard bomb's four beats with the shared word cards, and
+keep the kitchen's rule: a joke never holds a player still. Each is one seeded roll made whether it lands or not, and
+none touches a step, a score, a timing or the batch. **The ceiling slice:** one chopping in three (one roll on the
+board's first chop) has a chop between the third and the sixth flick a slice of the ingredient up to stick to the
+ceiling over the board (right of the order ticket). It hangs there dripping, peels off over 90 frames in three
+stages, sagging on a sticky strand of itself, and from 150 frames after the flick dangles until a cook in no other
+joke stands under it. If nobody does within 120 frames more, it drops on the floor, SPLAT!. On a head: PLOP!, worn 90
+frames while the stick still walks, then shaken off onto the floor. The hungry one eats it. **The bite:** when the
+hungry one is seated, a seeded 1-in-6 chance each time a step completes that he helps himself to an ingredient (off
+the order's own list, never out of the batch): CHOMP!, three chews with the crumbs flying, the swallow, MMM!. It lasts
+74 frames, and any push of his stick, press of his button, or hold of it at the step being cooked ends it on that
+frame. **The pot lid:** one stove step in three. It rattles harder and harder for 32 frames with steam squirting out
+under it, blows off with a CLANG!, spins up like a saucer and clatters home onto the pot, where it stays. If a cook
+stands at the pot it comes down on their head instead and sits there 48 frames with the stars going round (OW!)
+before it hops home. **The flour:** one oven step in three. POOF! over the oven, and a cloud engulfs whoever is at
+the oven: flour-white for 150 frames, blinking out of it, coughing twice, cooking on. Never two jokes at once on one
+cook.
 
 ## 7. Results
 
@@ -671,9 +746,30 @@ comes on with the first key or tap, because browsers will not start audio before
   (a rubber boing, no pip), `fuse` and a soft `boom`, `splat` for an apple on the grass; `cast`, `bite`, the reel's
   ratchet (`reel`), the trout in the `bucket`; `squirt` per press; `pour` while the chute runs; `dip`; `grip` and
   `heave`. The round ends on the sign's knock and a four-note `round_over`.
+- **The jokes** — every joke of section 5 and the kitchen's carries sounds of its own, in the gather's soft toy
+  register (the bomb's `boom` is still the loudest thing in it, and still more puff than blast), named for their
+  landmark so the library reads by place: the orchard's grub (`orchard_pop`, `orchard_pfft`, `orchard_hi`), its flung
+  apple (`orchard_fling`) and the bomb's sooty `orchard_cough`; the pond's big one (`pond_zing`, `pond_skid`,
+  `pond_yank`, `pond_sploosh`, `pond_blub`, `pond_ribbit`, `pond_plonk`, `pond_shake`) and the boot's endless torrent
+  (`pond_gush`, `pond_flop`); the coop's surprise egg (`coop_crack`, `coop_hatch`, `coop_cheep`) and broody hen
+  (`coop_puff`, `coop_flurry`); the dairy's cowlick (`dairy_moo`, `dairy_shlurp`, `dairy_boing`) and tail
+  (`dairy_thwap`, `dairy_flump`); the mill's clog (`mill_rattle`, `mill_creak`, `mill_fwump`, `mill_pop`,
+  `mill_shake`) and the sneeze's false start (`mill_ah`, `mill_ahah`); the hives' flood (`hive_groan`, `hive_gloop`, `hive_stretch`,
+  `hive_shlup`) and curious bee (`hive_zoom`, `hive_flump`, `hive_boing`); the farm's rocket root (`garden_pop`,
+  `garden_whistle`, `garden_bonk`) and whopper (`garden_uproot`, `garden_flump`); the bank's squishy one
+  (`bramble_wobble`, `bramble_splut`, `bramble_slurp`, `bramble_shake`) and thorn (`bramble_ow`, `bramble_rustle`,
+  `bramble_blow`); the cove's gull (`beach_cry`, `beach_swoop`, `beach_squawk`, `beach_bonk`), pinch (`beach_yelp`)
+  and wave (`beach_suck`, `beach_sploosh`, `beach_flop`); the holt's avalanche (`holt_creak`, `holt_groan`,
+  `holt_avalanche`, `holt_pop`) and squirrel (`holt_chatter`, `holt_bonk`); the wood's tangle (`wood_creep`,
+  `wood_whoop`, `wood_flump`, `wood_shake`) and toadstool (`wood_sniff`, `wood_peeyoo`); the terrace's topiary
+  (`terrace_frenzy`, `terrace_tada`) and hedgehog (`terrace_boing`, `terrace_eek`, `terrace_hmph`); and the kitchen's
+  ceiling slice (`kitchen_flick`, `kitchen_peel`, `kitchen_plop`), the bite (`kitchen_chomp`, `kitchen_mmm`), the
+  lid (`kitchen_launch`, `kitchen_clang`, `kitchen_clatter`) and the flour (`kitchen_whump`, `kitchen_cough`). The
+  first pass's joke sounds still play inside the bigger beats (`wormy`, `fuse`, `boom`, `boot`, `cluck`, `swish`,
+  `sneeze`, `buzz`, `prick`, `pinch`, `wave`, `chitter`, `pooh`, `snuffle`, `rattle`, `poof`, `nom`).
 - **The kitchen** — the stations. `fridge` per ingredient out, the knife's `chop`, and the three holds each with a noise
   that replays while the button is down (`stir`, `sizzle`, `bake`); `done` for a step, `perfect` with a sparkle on
-  it; `nom` for the hungry one; and the `bell`, the one long ring in the game, because ringing it is the one thing a
+  it; `nom` for each of the hungry one's chews; and the `bell`, the one long ring in the game, because ringing it is the one thing a
   whole order builds toward, then `done` as each plate is taken at the hatch. At the results: `chew` per bite, `stamp`, `coin` as the tip lands, `cheer` from the
   crew; `hello` as each diner in the line waves; `day_done` over the closed board.
 

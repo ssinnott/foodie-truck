@@ -140,9 +140,12 @@ async function pressRight(pages, page, slot, label) {
 
 /**
  * The mini-games a room is held on, by their game/run.js SCENES index. The orchard is netplay's own scene and is
- * covered there; these are the six that never had a room run on them.
+ * covered there; these are the rest. The five landmarks finished after the first pass (the bank, the cove, the
+ * holt, the wood and the terrace) joined the list when every scene grew a second joke: each joke is new sim state
+ * (a deal on the thing gathered, a countdown on the seat), and a field left out of a checksum only shows up here.
  */
-const ROOM_SCENES = Object.freeze([[2, 'pond'], [3, 'coop'], [5, 'dairy'], [6, 'mill'], [7, 'hive'], [8, 'garden']]);
+const ROOM_SCENES = Object.freeze([[2, 'pond'], [3, 'coop'], [5, 'dairy'], [6, 'mill'], [7, 'hive'], [8, 'garden'],
+  [11, 'bramble'], [12, 'beach'], [13, 'holt'], [14, 'wood'], [15, 'terrace']]);
 /** Frames a room runs on each scene. 200 is past six checksum exchanges (one every 30 frames) and past the
  *  telegraph-and-hazard cycle of every scene in the list, so a field left out of a checksum has fired by then. */
 const SCENE_FRAMES = 200;

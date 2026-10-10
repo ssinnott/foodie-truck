@@ -5,14 +5,18 @@
 // TREE, so letting go early keeps the bar for the next hold, and a second seat can carry on where the first left
 // off), and at the top a shower of SHOWER_MIN..SHOWER_MAX nuts comes down into the basket one every SHOWER_EVERY
 // frames, each one +1, and that tree is bare for BARE_FRAMES, so the party is pushed along the grove. Nothing here
-// hurts: THE JOKE is the squirrel - one shake in SQUIRREL_ODDS brings it down with the nuts, and it lands on the
-// shaker's head, sits there indignant for SQUIRREL_FRAMES (the stick locked, the nuts still falling), then runs
-// off. The round ends when the party's total reaches the order's remainder, and not before; the NUTS sign drops,
-// is held, then run.gather() and back to the map.
+// hurts. THE JOKES are dealt to a tree's crop as it fills, and show on the tree before anyone touches it
+// (game/screens/holtGags.ts has the whole of both): an overloaded crop sags the branches and creaks, and shaking
+// it down is the AVALANCHE - the whole crop at once, the shaker buried to the ears, popping out dazed with a nut
+// on its head; a bushy tail hanging out of the leaves is the SQUIRREL, which comes down onto the shaker's head,
+// chatters at it and bonks it with a nut. Either way the shower under it still counts and nothing is lost. The
+// round ends when the party's total reaches the order's remainder, and not before (and not in the middle of a joke:
+// the last shake's plays out first); the NUTS sign drops, is held, then run.gather() and back to the map.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): the trees and the seats are fixed pools of plain sim objects built
-// in enter(); every random number comes from the rng singleton inside update(); the sway, the nut flights and the
-// squirrel's run are draw-side reads of the timers. Everything in the checksum is an integer.
+// in enter(); every random number comes from the rng singleton in enter() (the first deal) and inside update();
+// the sway, the nut flights, the jokes' props, the rolling nuts and the fleeing squirrel are draw-side reads of the
+// timers or cosmetic pools. Everything in the checksum is an integer.
 import { VIEW_W, UI, SIGNAL } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, Input, ScreenParams } from '../game.ts';
@@ -27,12 +31,18 @@ import { INGREDIENTS } from '../../content/recipes.ts';
 import { PLACES } from '../../content/places.ts';
 import { gatherTarget } from '../run.ts';
 import { holtLayers, HOLT, ROWS, TREE_X, CRATE_X } from '../../art/backgrounds/holt.ts';
-import { drawNutTree, drawNutSpark, drawSquirrel, drawNutCrate, HOLT_ANIMS, TREE_Y, TRUNK_H } from '../../art/holtProps.ts';
+import { drawNutTree, drawNutSpark, drawNutCrate, HOLT_ANIMS, TREE_Y, TRUNK_H } from '../../art/holtProps.ts';
 import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
 import { drawHint, drawBar } from '../ui.ts';
+import { clearGags, stepGags, drawGags, gagShakeY } from '../gags.ts';
+import {
+  HEAVY, dealCrop, creakNowAndThen, heavyShake, startJoke, stepAvalanche, stepSquirrel, jokeOn, endJokes, heavySag, drawTailTell, crownLift,
+  drawSeatJoke, drawFallingCrops, makeRolls, stepRolls, drawRolls, makeRuns, stepRuns, drawRuns,
+} from './holtGags.ts';
+import type { NutRoll, SquirrelRun } from './holtGags.ts';
 
 /** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
 const SCHEMES: readonly CardScheme[] = Object.freeze(['move', 'hold']);
@@ -44,8 +54,6 @@ const LANE_Y0 = 322, LANE_GAP = 8;
 const REACH = 36, SHAKE_HOLD = 90, BARE_FRAMES = 150;
 /** The shower: SHOWER_MIN..SHOWER_MAX nuts, one every SHOWER_EVERY frames, each on a NUT_FLIGHT-frame arc into the basket. */
 const SHOWER_MIN = 1, SHOWER_MAX = 3, SHOWER_EVERY = 5, NUT_FLIGHT = 14, MAX_FLIGHTS = 8;
-/** The squirrel: one shake in SQUIRREL_ODDS; it sits on the head SQUIRREL_FRAMES, the last SQUIRREL_RUN of them running off. */
-const SQUIRREL_ODDS = 6, SQUIRREL_FRAMES = 40, SQUIRREL_RUN = 10;
 /** The sway the canopy is drawn with as the bar fills: up to SWAY_MAX px, alternating every 4 frames. */
 const SWAY_MAX = 6;
 const SHAKE_BAR_W = 30, SHAKE_BAR_H = 5, SHAKE_BAR_ABOVE = TRUNK_H + 56;
@@ -54,13 +62,14 @@ const RUSTLE_EVERY = 12;
 const FALLBACK_TARGET = 3;
 const PLUS_ONE = '+1', TITLE = 'HAZEL HOLT';
 const SHAKE_BAR = { color: SIGNAL.holt };
-const HEAD: Point = { x: 0, y: 0 };
 
 export interface HoltSeat extends Seat {
   /** Index into TREE_X of the tree this seat is shaking, -1 for none. */
   tree: number;
-  /** Frames left of the squirrel on the head; the stick is locked while it runs. */
+  /** Frames left of the squirrel's beat (holtGags.ts SQUIRREL_FRAMES..0); the stick is locked while it runs. */
   squirrelT: number;
+  /** Frames left of the avalanche's beat (holtGags.ts AVALANCHE_FRAMES..0); the stick is locked while it runs. */
+  avalancheT: number;
   /** Where the basket is on screen, refilled from the `handN` joint by every drawSeat. */
   basketPt: Point;
 }
@@ -77,6 +86,8 @@ export interface Tree {
   showerT: number;
   /** The party index of the seat the shower falls to. */
   owner: number;
+  /** What this crop was dealt as it filled (holtGags.ts): PLAIN, HEAVY (the avalanche) or SQUIRREL; spent by the shower. */
+  gag: number;
 }
 
 /** A nut on its way from the canopy into a basket (cosmetic). */
@@ -109,8 +120,14 @@ export class HoltScreen extends Screen {
   declare hex: string;
   declare signPrefix: string;
   declare clockIcon: (ctx: CanvasRenderingContext2D, x: number, y: number) => void;
-  /** Squirrels that have come down this round (the joke's count). */
+  /** Squirrels that have come down this round (the old joke's count). */
   declare squirrels: number;
+  /** Avalanches this round: heavy crops shaken down onto somebody (the new joke's count). */
+  declare avalanches: number;
+  /** The nuts rolling away along the litter after an avalanche (holtGags.ts): a cosmetic pool, never read back. */
+  declare rolls: NutRoll[];
+  /** Squirrels making off along the lane after a bonk (holtGags.ts): a cosmetic pool, never read back. */
+  declare runs: SquirrelRun[];
 
   constructor(game: Game) { super(game, 'holt'); this.seats = []; this.trees = []; this.fields = []; }
 
@@ -119,6 +136,7 @@ export class HoltScreen extends Screen {
     const game = this.game, run = game.run;
     this.layers = holtLayers();
     particles.clear();
+    clearGags();
     const place = PLACES.find((p) => p.id === params.place && p.screen === 'holt');
     this.ing = gatherTarget(run, place ? place.id : undefined, 'holt');
     const ing = INGREDIENTS[this.ing] || INGREDIENTS.hazelnut;
@@ -131,20 +149,22 @@ export class HoltScreen extends Screen {
       const s = this.seats[i];
       s.x = TREE_X[n === 1 ? 1 : R(i * (TREE_X.length - 1) / (n - 1))];
       s.rig.basketIcon = this.icon; s.rig.basketHex = this.hex;
-      s.tree = -1; s.squirrelT = 0;
+      s.tree = -1; s.squirrelT = 0; s.avalancheT = 0;
       s.basketPt = { x: s.x, y: s.y - 20 };
       s.player.setOverlay(HOLT_ANIMS);
       seatAnim(s, 'carry');
       for (let k = i * 13; k > 0; k--) s.player.tick();
     }
+    // the four crops the truck pulls up to, each dealt as it would be on refilling (a heavy one, the squirrel's, or plain)
     this.trees = [];
-    for (let i = 0; i < TREE_X.length; i++) this.trees.push({ shake: 0, held: 0, refill: 0, shower: 0, showerT: 0, owner: 0 });
+    for (let i = 0; i < TREE_X.length; i++) { const t = { shake: 0, held: 0, refill: 0, shower: 0, showerT: 0, owner: 0, gag: 0 }; dealCrop(t); this.trees.push(t); }
     this.flights = [];
     for (let i = 0; i < MAX_FLIGHTS; i++) this.flights.push({ t: NUT_FLIGHT, x0: 0, y0: 0, seat: 0 });
     this.flightCursor = 0;
+    this.rolls = makeRolls(); this.runs = makeRuns();
     const need = run ? run.need(this.ing) : null;
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
-    this.total = 0; this.squirrels = 0;
+    this.total = 0; this.squirrels = 0; this.avalanches = 0;
     this.countStr = '0/' + this.target;
     this.hint = 'MOVE: LEFT/RIGHT   SHAKE: HOLD ' + game.input.keyText(0, 'action') + ' AT A TREE';
     this.cardKey = game.input.keyText(0, 'action');
@@ -157,12 +177,15 @@ export class HoltScreen extends Screen {
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
+    stepGags();
+    stepRolls(this.rolls); stepRuns(this.runs);
     for (let i = 0; i < this.flights.length; i++) if (this.flights[i].t < NUT_FLIGHT) this.flights[i].t++;
     const clock = this.clock;
     if (clock.phase === 0) {
       this.updateTrees();
       this.updateSeats(input);
-      if (this.total >= this.target) this.finish();
+      // the order is in: the sign drops - once a joke still playing on a seat has played out (holtGags.ts jokeOn)
+      if (this.total >= this.target && !jokeOn(this.seats)) this.finish();
     } else {
       for (let i = 0; i < this.seats.length; i++) this.seats[i].player.tick();
       if (roundOver(clock)) {
@@ -174,11 +197,15 @@ export class HoltScreen extends Screen {
     tickClock(clock);
   }
 
-  /** The trees: a bare one counts itself back to full, and a shower drops one nut every SHOWER_EVERY frames until it is spent. */
+  /**
+   * The trees: a bare one counts itself back to full and its new crop is dealt (holtGags.ts), a heavy one standing
+   * full creaks now and then, and a shower drops one nut every SHOWER_EVERY frames until it is spent.
+   */
   updateTrees(): void {
     for (let i = 0; i < this.trees.length; i++) {
       const t = this.trees[i];
-      if (t.refill > 0) t.refill--;
+      if (t.refill > 0 && --t.refill === 0) dealCrop(t);
+      else if (t.gag === HEAVY && t.refill === 0 && t.shower === 0 && !t.held) creakNowAndThen(this, i);
       if (t.shower > 0 && --t.showerT <= 0) {
         t.shower--; t.showerT = SHOWER_EVERY;
         this.dropNut(i, t);
@@ -203,13 +230,14 @@ export class HoltScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.bumpT > 0) { s.bumpT--; s.moving = false; s.player.tick(); continue; }
-      // the squirrel on the head: everything waits until it runs off
-      if (s.squirrelT > 0) { if (--s.squirrelT === 0) seatAnim(s, 'carry', true); s.moving = false; s.player.tick(); continue; }
-      const held = input.held(s.slot, 'action');
+      // a joke has the seat (the squirrel on the head, or the avalanche over it): everything waits for its beat
+      if (s.squirrelT > 0) { stepSquirrel(this, s); s.moving = false; s.player.tick(); continue; }
+      if (s.avalancheT > 0) { stepAvalanche(this, s); s.moving = false; s.player.tick(); continue; }
+      const held = input.held(s.slot, 'action') && this.total < this.target;   // nothing more to shake for once the order is in
       if (held) {
         if (s.tree < 0) this.tryShake(s);
         else this.shakeOn(s);
-        if (s.tree >= 0 || s.squirrelT > 0) { s.moving = false; s.player.tick(); continue; }
+        if (s.tree >= 0 || s.squirrelT > 0 || s.avalancheT > 0) { s.moving = false; s.player.tick(); continue; }
       } else if (s.tree >= 0) this.letGo(s);
       const ax = input.axisX(s.slot);
       s.moving = ax !== 0;
@@ -233,18 +261,21 @@ export class HoltScreen extends Screen {
       if (d <= REACH && d < bd) { bd = d; best = i; }
     }
     if (best < 0) return;
-    this.trees[best].held = 1; this.trees[best].shake++;   // the first held frame counts, as the hive's does
+    const t = this.trees[best];
+    t.held = 1; t.shake++;   // the first held frame counts, as the hive's does
     s.tree = best; s.moving = false;
     s.facing = TREE_X[best] >= s.x ? 1 : -1;
     seatAnim(s, 'shake', true);
     this.game.audio.play('shake');
+    if (t.gag === HEAVY) heavyShake(this, s, SHAKE_HOLD - t.shake);
   }
 
-  /** One more held frame: the tree's shake climbs, and the SHAKE_HOLDth brings the shower. */
+  /** One more held frame: the tree's shake climbs (a heavy one creaking, then groaning), and the SHAKE_HOLDth brings the shower. */
   shakeOn(s: HoltSeat): void {
     const t = this.trees[s.tree];
     t.shake++;
     if (t.shake % RUSTLE_EVERY === 0) this.game.audio.play('shake');
+    if (t.gag === HEAVY) heavyShake(this, s, SHAKE_HOLD - t.shake);
     if (t.shake >= SHAKE_HOLD) this.shower(s, s.tree);
   }
 
@@ -255,7 +286,11 @@ export class HoltScreen extends Screen {
     seatAnim(s, 'carry', true);
   }
 
-  /** The shower: SHOWER_MIN..SHOWER_MAX nuts start falling to this seat, the tree goes bare, and one shake in six brings the squirrel. */
+  /**
+   * The shower: SHOWER_MIN..SHOWER_MAX nuts start falling to this seat and the tree goes bare - and whatever its crop
+   * was dealt comes down with them (holtGags.ts startJoke): the whole of a heavy one on the shaker's head, or the
+   * squirrel. The shower is the same either way.
+   */
   shower(s: HoltSeat, i: number): void {
     const t = this.trees[i];
     t.shake = 0; t.held = 0; t.refill = BARE_FRAMES;
@@ -265,26 +300,34 @@ export class HoltScreen extends Screen {
     ringAt(cx, cy, 8, 40, UI.cream, 2, 14, false, true);
     burstSparkle(cx, cy, 6, SIGNAL.holt, true);
     particles.burst('leaf', cx, cy, 8, { speed: 1.4, up: 0.6, color: HOLT.leaf, color2: HOLT.leafDark, size: 3, life: 60, gravity: 0.05, screen: true });
-    if (rng.int(1, SQUIRREL_ODDS) === 1) { s.squirrelT = SQUIRREL_FRAMES; this.squirrels++; seatAnim(s, 'squirrelHat', true); this.game.audio.play('chitter'); }
-    else seatAnim(s, 'carry', true);
+    if (!startJoke(this, s, t, i)) seatAnim(s, 'carry', true);
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
+  /** The round is over: drop the sign; any joke is dropped where it stands, and a seat with nuts cheers. */
   finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.tree >= 0) this.trees[s.tree].held = 0;
-      s.moving = false; s.bumpT = 0; s.tree = -1; s.squirrelT = 0;
+      s.moving = false; s.bumpT = 0; s.tree = -1;
+      endJokes(s);
       seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true);
     }
     for (const t of this.trees) t.shower = 0;
   }
 
+  /**
+   * The world (backdrop, trees, crew, nuts, particles) is drawn shifted by the kit's bump (gags.ts gagShakeY, the
+   * avalanche's CRASH!); the paper over it - plates, bars, word cards, ticket, card, sign - never moves.
+   */
   override draw(ctx: CanvasRenderingContext2D): void {
-    const L = this.layers, f = this.frame;
+    const L = this.layers, f = this.frame, dy = gagShakeY();
+    // the rows a bump uncovers at the top and the bottom: the backdrop's own, unshifted
+    if (dy !== 0) { blitAt(ctx, L.far.L, 0, L.far.y); blitAt(ctx, L.near.L, 0, L.near.y); }
+    ctx.save(); ctx.translate(0, dy);
     blitAt(ctx, L.far.L, 0, L.far.y);
     blitAt(ctx, L.ground.L, 0, L.ground.y);
     particles.draw(ctx, null, 'back');
@@ -294,22 +337,37 @@ export class HoltScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; drawShadow(ctx, s.x, s.y, s.rig.width + 6, 0.4, 0); }
     for (let i = this.seats.length - 1; i >= 0; i--) this.drawSeat(ctx, this.seats[i], f);
     for (let i = 0; i < this.flights.length; i++) this.drawFlight(ctx, this.flights[i]);
+    drawFallingCrops(ctx, this);
+    drawRolls(ctx, this.rolls, this.icon, this.hex);
+    drawRuns(ctx, this.runs, this.icon, this.hex);
     blitAt(ctx, L.near.L, 0, L.near.y);
     particles.draw(ctx, null, 'front');
+    ctx.restore();
+    // the plates, each lifted over whatever a joke has put on that head (a squirrel, a nut, the stars)
     resetPlates();
-    for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
+    for (let i = 0; i < this.seats.length; i++) {
+      const s = this.seats[i], lift = crownLift(s);
+      s.crown += lift; drawSeatPlate(ctx, s, PLATES); s.crown -= lift;
+    }
     for (let i = 0; i < this.trees.length; i++) this.drawShakeBar(ctx, i);
+    drawGags(ctx);
     drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
   }
 
-  /** A tree, swaying with its shake, the nuts in it while it is full, the sparkle over one that can be shaken. */
+  /**
+   * A tree, swaying with its shake, the nuts in it while it is full, the sparkle over one that can be shaken - and
+   * the tell of a dealt crop (holtGags.ts): a heavy one sagging, the squirrel's tail out of the leaves. The nuts
+   * stay up through an ordinary shower; under an avalanche the whole crop is already in the air.
+   */
   drawTreeAt(ctx: CanvasRenderingContext2D, i: number, f: number): void {
     const t = this.trees[i], full = t.refill === 0 && t.shower === 0;
     const amp = t.held ? R(SWAY_MAX * t.shake / SHAKE_HOLD) + 1 : 0, sway = amp ? (((f >> 2) & 1) ? amp : -amp) : 0;
-    drawNutTree(ctx, TREE_X[i], TREE_Y, i, sway, full || t.shower > 0, this.icon, this.hex);
+    const nuts = full || (t.shower > 0 && this.seats[t.owner].avalancheT === 0);
+    if (full) drawTailTell(ctx, t, i, TREE_X[i] + sway, TREE_Y - TRUNK_H, f);
+    drawNutTree(ctx, TREE_X[i], TREE_Y, i, sway, nuts, this.icon, this.hex, full ? heavySag(t, i, f, SHAKE_HOLD - t.shake) : 0);
     if (full && (((f + i * 7) >> 3) & 1)) drawNutSpark(ctx, TREE_X[i], TREE_Y - TRUNK_H - 50, SIGNAL.holt);
   }
 
@@ -326,12 +384,8 @@ export class HoltScreen extends Screen {
     o.x = R(s.x); o.y = s.y; o.facing = s.facing;
     drawRig(ctx, rig, s.player.pose, o);
     jointScreen(rig, 'handN', s.basketPt);
-    // the squirrel on the head, and in its last frames running off it toward the nearest trunk
-    if (s.squirrelT > 0) {
-      const h = jointScreen(rig, 'head', HEAD), top = h.y - rig.p.headR * rig.scale;
-      const run = s.squirrelT < SQUIRREL_RUN ? (SQUIRREL_RUN - s.squirrelT) * 6 : 0;
-      drawSquirrel(ctx, h.x + s.facing * run, top - run * 0.4, s.facing);
-    }
+    // what a joke has put on this seat: the heap over it, a nut on its head, the squirrel, the stars
+    drawSeatJoke(ctx, this, s, f);
   }
 
   /** A nut on its arc from the canopy into the seat's basket. */
@@ -344,18 +398,19 @@ export class HoltScreen extends Screen {
 
   override summary() {
     return {
-      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, ing: this.ing, squirrels: this.squirrels,
-      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), count: s.count, tree: s.tree, squirrelT: s.squirrelT, anim: s.anim })),
-      /** [x, shake, held, refill, shower] per tree. */
-      trees: this.trees.map((t, i) => [TREE_X[i], t.shake, t.held, t.refill, t.shower]),
+      total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, ing: this.ing,
+      squirrels: this.squirrels, avalanches: this.avalanches,
+      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), count: s.count, tree: s.tree, squirrelT: s.squirrelT, avalancheT: s.avalancheT, anim: s.anim })),
+      /** [x, shake, held, refill, shower, gag] per tree. */
+      trees: this.trees.map((t, i) => [TREE_X[i], t.shake, t.held, t.refill, t.shower, t.gag]),
     };
   }
 
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.squirrels);
-    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.count, s.tree, s.squirrelT, s.bumpT, s.moving ? 1 : 0); }
-    for (let i = 0; i < this.trees.length; i++) { const t = this.trees[i]; f.push(t.shake, t.held, t.refill, t.shower, t.showerT, t.owner); }
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.squirrels, this.avalanches);
+    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; f.push(s.x, s.facing, s.count, s.tree, s.squirrelT, s.avalancheT, s.bumpT, s.moving ? 1 : 0); }
+    for (let i = 0; i < this.trees.length; i++) { const t = this.trees[i]; f.push(t.shake, t.held, t.refill, t.shower, t.showerT, t.owner, t.gag); }
     return f;
   }
 }

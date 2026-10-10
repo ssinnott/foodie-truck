@@ -1,15 +1,17 @@
 // The hives' props (docs/ART_STYLE.md section 1, section 7; docs/GDD.md section 5): the straw skep full and empty,
-// the bee, the drifting swarm in its three states, the honey dipper the crew carries, and the crate the party's
-// honey goes into. Drawn like every prop in the rig style - 1 px warm ink round each OBJECT, three tones on a body,
-// a colour change inside one silhouette carrying no line of its own - in screen space at integer coordinates, with
-// no allocation per call. The screen draws drawShadow under each of them before its sorted pass.
+// the bee, the drifting swarm in its three states, the honey dipper the crew carries, the crate the party's honey
+// goes into, and the honey flood's marks (an overfull skep's ooze, its burp, the pool and the toffee strands; the
+// joke itself is screens/hiveGags.ts). Drawn like every prop in the rig style - 1 px warm ink round each OBJECT,
+// three tones on a body, a colour change inside one silhouette carrying no line of its own - in screen space at
+// integer coordinates, with no allocation per call. The screen draws drawShadow under each of them before its
+// sorted pass.
 //
 // DETERMINISM. Every orbit in here is an integer table built at module load (ORB_C / ORB_S, the map screen's
 // BEE_X / BEE_Y pattern) and indexed by a counter the screen advances in update(): nothing in this file calls
 // Math.sin at draw time, and nothing in it touches simulation state. The screen owns WHEN the swarm is calm, wary
 // or alert and passes the shape in; this file never decides when heat shows, exactly as art/hens.js never decides
 // when the rooster's comb goes HOT.
-import { PLUM } from '../constants.ts';
+import { PLUM, UI } from '../constants.ts';
 import { INK } from './layers.ts';
 import { mix } from './palettes.ts';
 import { celBall, celCapsule, tones } from '../lib/art/shading.ts';
@@ -72,25 +74,30 @@ export const SKEP_W = 36, SKEP_H = 34;
  * The coils are a colour change INSIDE the dome's own line (ART_STYLE 0.2), five 2 px bands - a 1 px coil would
  * have been the busiest mark in the scene and is under the floor anyway (0.8). The doorway is a separate object and
  * carries its own ink.
+ *
+ * `swell` (whole px, default 0) is the honey flood's wind-up (screens/hiveGags.ts): the dome grows that much wider
+ * each side and that much taller with its base, its doorway and its coils where they were, so a skep about to burp
+ * strains outward without one fractional pixel - a ctx.scale() of a 36 px dome blurs every 2 px band in it.
  */
-export function drawSkep(ctx, x, y, full) {
+export function drawSkep(ctx, x, y, full, swell = 0) {
   const base = full ? HIVE_PROPS.straw : STRAW_DULL, sh = full ? STRAW_SH : DULL_SH;
+  const w = swell, top = y - SKEP_H - w;
   ctx.beginPath();
-  ctx.moveTo(x - 18, y);
-  ctx.quadraticCurveTo(x - 20, y - 24, x, y - SKEP_H);
-  ctx.quadraticCurveTo(x + 20, y - 24, x + 18, y);
+  ctx.moveTo(x - 18 - w, y);
+  ctx.quadraticCurveTo(x - 20 - w, y - 24 - w, x, top);
+  ctx.quadraticCurveTo(x + 20 + w, y - 24 - w, x + 18 + w, y);
   ctx.closePath();
   ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
   ctx.fillStyle = base; ctx.fill();
   ctx.save(); ctx.clip();
-  ctx.fillStyle = sh; ctx.fillRect(x + 4, y - SKEP_H, 22, SKEP_H);                 // the one shadow band, away from the light
+  ctx.fillStyle = sh; ctx.fillRect(x + 4, top, 22 + w, SKEP_H + w);                 // the one shadow band, away from the light
   ctx.fillStyle = STRAW_COIL;
-  for (let i = 0; i < 5; i++) ctx.fillRect(x - 20, y - 5 - i * 6, 40, 2);          // the coiled rope, five 2 px bands
-  if (full) { ctx.fillStyle = HIVE_PROPS.strawLit; ctx.fillRect(x - 13, y - 27, 9, 2); ctx.fillRect(x - 10, y - 31, 7, 2); }
+  for (let i = 0; i < 5; i++) ctx.fillRect(x - 20 - w, y - 5 - i * 6, 40 + w * 2, 2);   // the coiled rope, five 2 px bands
+  if (full) { ctx.fillStyle = HIVE_PROPS.strawLit; ctx.fillRect(x - 13 - w, y - 27 - w, 9, 2); ctx.fillRect(x - 10 - w, y - 31 - w, 7, 2); }
   ctx.restore();
   // the twisted knob the coil is finished off at: its own object, its own line
-  ctx.fillStyle = INK; ctx.fillRect(x - 5, y - SKEP_H - 5, 10, 6);
-  ctx.fillStyle = full ? HIVE_PROPS.straw : STRAW_DULL; ctx.fillRect(x - 4, y - SKEP_H - 4, 8, 4);
+  ctx.fillStyle = INK; ctx.fillRect(x - 5, top - 5, 10, 6);
+  ctx.fillStyle = full ? HIVE_PROPS.straw : STRAW_DULL; ctx.fillRect(x - 4, top - 4, 8, 4);
   // the doorway, and what is behind it
   ctx.fillStyle = INK; ctx.fillRect(x - 7, y - 10, 14, 10);
   ctx.fillStyle = MOUTH; ctx.fillRect(x - 6, y - 9, 12, 9);
@@ -300,4 +307,152 @@ export function drawHoneyStrand(ctx, x0, y0, x1, y1, k) {
   ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(bx, by, 5, 0, TAU); ctx.fill();
   ctx.fillStyle = HIVE_PROPS.comb; ctx.beginPath(); ctx.arc(bx, by, 3.5, 0, TAU); ctx.fill();
   ctx.fillStyle = HIVE_PROPS.strawLit; ctx.fillRect(bx - 3, by - 3, 2, 2);
+}
+
+// ---------------------------------------------------------------- the honey flood (screens/hiveGags.ts)
+
+/**
+ * The flood's honey is the coat kit's (game/gags.ts COAT.honey, the amber a step under the hive's gold that the
+ * critter it lands on is painted in), and an art module does not reach up into game/, so the screen hands it to
+ * every function below. Its one shade, two value steps toward the plum, is worked out on the first call and kept:
+ * nothing in this section allocates per frame. Every mark is the honey's OWN object on whatever it lies on, so each
+ * carries its own ink (ART_STYLE 0.2) - an un-inked amber run on amber straw was the first thing to vanish at 1x.
+ */
+let honeyHex = '', honeySh = '';
+function shadeOf(hex) {
+  if (hex !== honeyHex) { honeyHex = hex; honeySh = mix(hex, PLUM.shadow, 0.35); }
+  return honeySh;
+}
+
+/**
+ * An overfull skep's two runs of honey as [dx, top dy, length] off its base point: the long one on the lit side.
+ * Both start under the collar of honey round the knob (drawOoze), inside the dome's own outline - at x - 7 the
+ * dome's edge is row y - 29, at x + 3 it is y - 32 - so neither pokes out of the silhouette it is running down.
+ */
+const RUNS = Int8Array.of(-7, -29, 13, 3, -31, 8);
+/** Frames for the glint's slide down the long run, and for the drip on the plank to swell, let go and fall. */
+const GLINT_P = 40, DRIP_P = 34, DRIP_FALL = 8;
+
+/** One run of honey down the straw: an inked 3 px stripe from (x, y) down `len` rows, ending in a fat bead. */
+function honeyRun(ctx, x, y, len, honey, sh) {
+  ctx.fillStyle = INK; ctx.fillRect(x - 1, y - 1, 5, len + 1);
+  ctx.beginPath(); ctx.arc(x + 1.5, y + len + 1, 3.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = honey; ctx.fillRect(x, y, 3, len);
+  ctx.beginPath(); ctx.arc(x + 1.5, y + len + 1, 2.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = sh; ctx.fillRect(x + 1, y + len + 1, 2, 2);
+}
+
+/**
+ * An OVERFULL skep - the honey flood's TELL (screens/hiveGags.ts) - drawn over drawSkep's full skep at the same
+ * base (x, y) and the same `swell`. Four marks, so the skep that is going to burp reads from across the meadow and
+ * not only from beside it, and a child who wants to be flooded can pick it out:
+ *   - a collar of honey welling up round the knob, and two runs from it down the dome, each ending in a bead, a
+ *     cream glint sliding down the long one (the glisten: honey is the one thing on the bench that shines) - the
+ *     runs alone, the first cut, read as two sticks propped against the straw;
+ *   - the doorway brimming, honey over the comb and bulging out over the lip;
+ *   - a pool gathering on the plank at its foot...
+ *   - ...and a drip off the plank's front face that swells, lets go and falls every DRIP_P frames.
+ * `f` is any frame counter: the glint and the drip are draw-only clocks. The runs stretch upward with `swell`, so a
+ * skep that swells takes its honey with it.
+ */
+export function drawOoze(ctx, x, y, swell, f, honey) {
+  const sh = shadeOf(honey);
+  // the pool, first: it lies over the skep's foot and the brim spills into it
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(x + 2, y + 1, 15 + swell, 4, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = honey; ctx.beginPath(); ctx.ellipse(x + 2, y + 1, 14 + swell, 3, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = sh; ctx.fillRect(x - 6, y + 2, 16, 2);
+  // the doorway brimming: the honey stands above the comb and bulges out over the lip into the pool
+  ctx.fillStyle = INK; ctx.fillRect(x - 7, y - 6, 14, 6);
+  ctx.fillStyle = honey; ctx.fillRect(x - 6, y - 5, 12, 6);
+  ctx.fillStyle = UI.cream; ctx.fillRect(x - 4, y - 4, 3, 2);
+  // the drip off the plank's front face: it swells for most of its cycle, then lets go and falls
+  const k = f % DRIP_P, hang = DRIP_P - DRIP_FALL, bead = k < hang ? 2 + ((k * 2 / hang) | 0) : 2;
+  ctx.fillStyle = INK; ctx.fillRect(x + 8, y + 2, 5, 6); ctx.beginPath(); ctx.arc(x + 10.5, y + 8, bead + 1, 0, TAU); ctx.fill();
+  ctx.fillStyle = honey; ctx.fillRect(x + 9, y + 2, 3, 6); ctx.beginPath(); ctx.arc(x + 10.5, y + 8, bead, 0, TAU); ctx.fill();
+  if (k >= hang) {
+    const dy = y + 12 + (k - hang) * 2;
+    ctx.fillStyle = INK; ctx.fillRect(x + 8, dy - 1, 5, 5);
+    ctx.fillStyle = honey; ctx.fillRect(x + 9, dy, 3, 3);
+  }
+  // the runs down the straw, stretched up the dome by the swell, and the collar they spill from over the top of them
+  for (let i = 0; i < RUNS.length; i += 3) honeyRun(ctx, x + RUNS[i], y + RUNS[i + 1] - swell, RUNS[i + 2] + swell, honey, sh);
+  const cy = y - SKEP_H - swell + 3;
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(x, cy, 9, 4, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = honey; ctx.beginPath(); ctx.ellipse(x, cy, 8, 3, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = sh; ctx.fillRect(x + 1, cy + 1, 6, 2);
+  ctx.fillStyle = UI.cream; ctx.fillRect(x - 5, cy - 2, 3, 2);
+  const g = f % GLINT_P, len = RUNS[2] + swell;
+  if (g < len) { ctx.fillStyle = UI.cream; ctx.fillRect(x + RUNS[0], y + RUNS[1] - swell + g, 2, 2); }
+}
+
+/** The burp's arc, sampled into these once per draw (the drawHoneyStrand pattern). */
+const WAVE_N = 8;
+const WAVE_X = new Int16Array(WAVE_N + 1), WAVE_Y = new Int16Array(WAVE_N + 1);
+
+/**
+ * The skep's burp - the honey flood's BANG: a fat tongue of honey arcing up and out of the doorway (x0, y0) and
+ * over onto a head (x1, y1), WAVE_W0 px thick at the skep and WAVE_W1 at the head, its whole ink underlay laid in one
+ * pass before the honey (drawHoneyStrand's reason: no dark knuckle at the joins), with a cap of honey slumped over the
+ * head. `gone` (0..1) is how much of it has already let go of the skep: the arc is drawn from t = gone to the head,
+ * so over the beat it peels off the doorway and pours down on the critter instead of vanishing.
+ *
+ * The arc is thrown WAVE_OUT px out toward the critter's side of the skep and WAVE_UP over the doorway. With the bow
+ * on the chord's normal alone (the strand's rule) a critter standing square under the doorway got a loop straight up
+ * and back down its own line; and the first cut, 9 px thick and bowed 16, read as a second dip strand and not as a
+ * skep throwing up its honey.
+ */
+const WAVE_W0 = 13, WAVE_W1 = 7, WAVE_OUT = 34, WAVE_UP = 22;
+export function drawHoneyWave(ctx, x0, y0, x1, y1, gone, honey) {
+  const sh = shadeOf(honey);
+  const cx = (x0 + x1) / 2 + (x1 >= x0 ? WAVE_OUT : -WAVE_OUT), cy = Math.min(y0, y1) - WAVE_UP;
+  for (let i = 0; i <= WAVE_N; i++) {
+    const t = gone + (1 - gone) * i / WAVE_N, u = 1 - t, a = u * u, b = 2 * u * t, c = t * t;
+    WAVE_X[i] = R(a * x0 + b * cx + c * x1); WAVE_Y[i] = R(a * y0 + b * cy + c * y1);
+  }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let pass = 0; pass < 3; pass++) {
+    // ink, honey, then the shade down the underside of the arc's thick half
+    ctx.strokeStyle = pass === 0 ? INK : pass === 1 ? honey : sh;
+    for (let i = 0; i < (pass === 2 ? WAVE_N >> 1 : WAVE_N); i++) {
+      const w = WAVE_W0 - i * (WAVE_W0 - WAVE_W1) / (WAVE_N - 1);
+      ctx.lineWidth = pass === 0 ? w + 2 : pass === 1 ? w : 3;
+      const dy = pass === 2 ? R(w / 2) - 2 : 0;
+      ctx.beginPath(); ctx.moveTo(WAVE_X[i], WAVE_Y[i] + dy); ctx.lineTo(WAVE_X[i + 1], WAVE_Y[i + 1] + dy); ctx.stroke();
+    }
+  }
+  // one glint riding the top of the arc
+  const gi = WAVE_N >> 2;
+  ctx.fillStyle = UI.cream; ctx.fillRect(WAVE_X[gi] - 2, WAVE_Y[gi] - 3, 4, 2);
+  // the cap it lands as: an inked slump of honey over the crown with its shade under and one glint on top
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(x1, y1, 12, 7, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = honey; ctx.beginPath(); ctx.ellipse(x1, y1, 11, 6, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = sh; ctx.fillRect(x1 - 7, y1 + 2, 14, 3);
+  ctx.fillStyle = UI.cream; ctx.fillRect(x1 - 6, y1 - 4, 4, 2);
+}
+
+/**
+ * A pool of honey on the ground at (x, y), `rx` either side: an inked flat ellipse, the shade along its near rim and
+ * one glint. The flood leaves one under a stuck critter's feet, so the toffee strands have something to come from.
+ */
+export function drawHoneyPool(ctx, x, y, rx, honey) {
+  const sh = shadeOf(honey), ry = rx > 11 ? 3 : 2;
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(x, y, rx + 1, ry + 1, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = sh; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = honey; ctx.beginPath(); ctx.ellipse(x - 1, y - 1, rx - 2, ry - 1, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = UI.cream; ctx.fillRect(x - (rx >> 1), y - 2, 3, 2);
+}
+
+/**
+ * One toffee strand from a stuck foot (x0, y0) down to the honey it is stuck in (x1, y1): 2 px of `toffee` inside
+ * its own ink (4 px, the inked-band floor of ART_STYLE 0.8), sagging off the straight line so it reads as a
+ * stretched string and not a stick. The screen hands it a honey paler than the pool's: honey pulled thin IS paler,
+ * and in the pool's own amber the strands were ink lines only.
+ */
+export function drawToffee(ctx, x0, y0, x1, y1, toffee) {
+  const mx = (x0 + x1) / 2 + (y1 - y0) * 0.2, my = (y0 + y1) / 2;
+  ctx.lineCap = 'round';
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.strokeStyle = pass ? toffee : INK; ctx.lineWidth = pass ? 2 : 4;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(mx, my, x1, y1); ctx.stroke();
+  }
 }

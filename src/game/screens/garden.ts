@@ -9,6 +9,9 @@
 // The round ends when the party's total reaches the order's amount, and not before (there is no clock to run out);
 // the CARROTS sign drops, is held, then run.gather('carrot') and back to the map.
 //
+// One top in four is a joke - the ROCKET ROOT, which fires out of the ground like a cork, and the WHOPPER, which
+// throws its puller head over heels - the same twelve tugs and the same +1, beat by beat in screens/gardenGags.ts.
+//
 // Determinism (docs/ARCHITECTURE.md section 0): the crop is a fixed pool of plain sim objects built in enter() and
 // never grown; every random number - where a top is planted - comes from the rng singleton inside update(); the
 // gauge is an INTEGER press count, not an accumulating float, so four browsers agree to the bit; input is read by
@@ -41,9 +44,16 @@ import {
   CROP, TAG_W, TAG_H, GAUGE_UNITS, GARDEN_TRUG, GARDEN_ANIMS,
   plantFor, drawHole, drawRipeSpark, drawPulledRoot, drawPullGauge, drawBarrow,
 } from '../../art/gardenProps.ts';
+import { GAG_ANIMS, bittenRoot } from '../../art/gardenGags.ts';
 import {
   makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
+import { clearGags, stepGags, drawGags, gagShakeY } from '../gags.ts';
+import {
+  NO_GAG, WHOPPER, GAG_NAMES, dealTop, gripAnim, windUp, stepTells, startGag, stepGag, endGag, endGags,
+  shiver, shiverLift, drawTell, drawGagSeat, drawGagRoots,
+} from './gardenGags.ts';
+import type { GagSeat } from './gardenGags.ts';
 import type { Clock, PlateStack, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
@@ -112,9 +122,11 @@ const PULL_PRESSES = 12, PULL_STEP = GAUGE_UNITS / PULL_PRESSES;
 const GRIP_TIMEOUT = 150;
 /** The pull beat, in frames: the anim's own length. */
 const PULL_FRAMES = 14;
-/** The whopper: one top in WHOPPER_ODDS has a root WHOPPER_SCALE times the size under it, and the puller goes over backwards for WHOPPER_FRAMES. */
-const WHOPPER_ODDS = 8, WHOPPER_FRAMES = 30, WHOPPER_SCALE = 2.6;
-const WHOA = 'WHOA!';
+/**
+ * The scene's poses, the jokes' on top of the pull's (art/gardenProps.ts GARDEN_ANIMS, art/gardenGags.ts
+ * GAG_ANIMS): one overlay table per seat (AnimPlayer.setOverlay), merged once here.
+ */
+const PLAY_ANIMS = Object.freeze({ ...GARDEN_ANIMS, ...GAG_ANIMS });
 
 /**
  * Cosmetic pools, both fixed and neither in the checksum: the hole a pulled root leaves (four steps of 10 frames,
@@ -167,11 +179,12 @@ export interface GardenRig extends Rig {
 }
 
 /**
- * One seat working the row: game/minigame.ts's shared seat plus this scene's own pull state. These are the extra
- * fields `Seat` documents a screen keeping more per seat should declare for itself, and `makeSeats` is generic so
- * enter() gets them back typed.
+ * One seat working the row: game/minigame.ts's shared seat plus this scene's own pull state, and the joke state a
+ * PULL beat carries when the root was one (screens/gardenGags.ts GagSeat). These are the extra fields `Seat`
+ * documents a screen keeping more per seat should declare for itself, and `makeSeats` is generic so enter() gets
+ * them back typed.
  */
-export interface GardenSeat extends Seat {
+export interface GardenSeat extends Seat, GagSeat {
   /** The rig, carrying the garden trug whose fill this screen sets every draw. */
   rig: GardenRig;
   /** IDLE, GRIP or PULL. */
@@ -198,8 +211,10 @@ export interface CropTop {
   x: number;
   /** 1 while a seat has hold of it. A number, not a boolean: checksumFields() hashes it. */
   held: number;
-  /** 1 when the root under it is the whopper (rolled when it is planted; nothing above ground gives it away). */
+  /** 1 when the root under it is the whopper (dealt when it is planted; nothing above ground gives it away). */
   whopper: number;
+  /** 1 when it is the rocket root (dealt on the same roll, so never both): the top shivers over a heave of cracked soil. */
+  rocket: number;
 }
 
 /** The hole a pulled root leaves, in four stepped frames. Cosmetic: a fixed pool, out of the checksum. */
@@ -219,8 +234,6 @@ export interface RootFlight {
   y0: number;
   /** Party index of the seat whose trug it is flying to (an index into `seats`). */
   seat: number;
-  /** 1 for the whopper: drawn WHOPPER_SCALE times the size on its way to the trug. */
-  big: number;
 }
 
 /**
@@ -289,6 +302,10 @@ export class GardenScreen extends Screen {
   declare pulls: number;
   /** Whoppers pulled this round (the joke's count, for the tests and the desync canary). */
   declare whoppers: number;
+  /** Rocket roots fired this round (the other joke's count, likewise). */
+  declare rockets: number;
+  /** The rocket root as Barley leaves it, a bite out of it: painted once per visit's root (art/gardenGags.ts bittenRoot). */
+  declare bitten: HTMLCanvasElement;
   /** The clock's count, rebuilt by setTotal(): 'total/target'. */
   declare countStr: string;
   /** The hint line under the row, built once in enter() with the seat's own action key. */
@@ -309,6 +326,7 @@ export class GardenScreen extends Screen {
     const game = this.game, run = game.run;
     this.layers = gardenLayers();
     particles.clear();
+    clearGags();
     // every options object a per-frame call needs is built HERE and mutated, never in update() or draw()
     this.vis = makeRng(DOWN_SEED);
     this.downOpts = { color: DOWN_PALE, color2: CROP.leafHi, size: 3, life: 150, vx: -0.25, vy: 0.3, screen: true };
@@ -320,6 +338,7 @@ export class GardenScreen extends Screen {
     this.icon = ing.icon; this.hex = ing.hex; this.signPrefix = ing.name + ': ';
     this.title = place ? place.name : TITLE;
     this.plant = plantFor(this.icon);
+    this.bitten = bittenRoot(this.icon, this.hex);
     const icon = this.icon, hex = this.hex;
     this.clockIcon = (c, x, y) => drawFood(c, icon, x, y, 4, hex);
 
@@ -335,8 +354,9 @@ export class GardenScreen extends Screen {
       // note over ITEMS).
       s.rig.weapon = GARDEN_TRUG as RigWeapon; s.rig.trugCount = 0;
       s.rig.basketIcon = this.icon; s.rig.basketHex = this.hex;
-      s.player.setOverlay(GARDEN_ANIMS);
+      s.player.setOverlay(PLAY_ANIMS);
       s.state = IDLE; s.t = 0; s.top = -1; s.grip = 0; s.pull = 0; s.gripX = s.x;
+      s.gag = NO_GAG; s.gt = 0; s.owed = 0; s.jx = 0; s.card = null;
       s.trugPt = { x: s.x, y: s.y - 18 };
       seatAnim(s, 'carry');
       // four people working a row, not one pose printed four times: each seat starts its breath a beat later
@@ -345,7 +365,7 @@ export class GardenScreen extends Screen {
     }
 
     this.tops = [];
-    for (let i = 0; i < MAX_TOPS; i++) this.tops.push({ active: false, x: 0, held: 0, whopper: 0 });
+    for (let i = 0; i < MAX_TOPS; i++) this.tops.push({ active: false, x: 0, held: 0, whopper: 0, rocket: 0 });
     this.plantBed();
     this.nextSpawn = rng.int(SPAWN_MIN, SPAWN_MAX);
 
@@ -353,14 +373,14 @@ export class GardenScreen extends Screen {
     for (let i = 0; i < MAX_HOLES; i++) this.holes.push({ t: HOLE_FRAMES, x: 0 });
     this.holeCursor = 0;
     this.flights = [];
-    for (let i = 0; i < MAX_FLIGHTS; i++) this.flights.push({ t: FLIGHT_FRAMES, x0: 0, y0: 0, seat: 0, big: 0 });
+    for (let i = 0; i < MAX_FLIGHTS; i++) this.flights.push({ t: FLIGHT_FRAMES, x0: 0, y0: 0, seat: 0 });
     this.flightCursor = 0;
 
     const need = run ? run.need(this.ing) : null;
     // the REMAINDER, not the whole line: the map may already have banked some (the other six mini-games agree)
     this.target = need ? Math.max(1, need.amount - need.have) : FALLBACK_TARGET;
     this.total = 0;
-    this.pulls = 0; this.whoppers = 0;
+    this.pulls = 0; this.whoppers = 0; this.rockets = 0;
     this.countStr = '0/' + this.target;
     this.hint = 'MOVE: LEFT/RIGHT   PULL: TAP ' + game.input.keyText(0, 'action') + ' OVER AND OVER';
     this.cardKey = game.input.keyText(0, 'action');
@@ -379,7 +399,7 @@ export class GardenScreen extends Screen {
     const span = TOP_X_MAX - TOP_X_MIN;
     for (let i = 0; i < SEED_TOPS; i++) {
       const t = this.tops[i];
-      t.active = true; t.held = 0; t.whopper = rng.int(1, WHOPPER_ODDS) === 1 ? 1 : 0;
+      t.active = true; t.held = 0; dealTop(t);
       t.x = TOP_X_MIN + R(i * span / (SEED_TOPS - 1)) + rng.int(-10, 10);
       if (t.x < TOP_X_MIN) t.x = TOP_X_MIN; else if (t.x > TOP_X_MAX) t.x = TOP_X_MAX;
     }
@@ -406,6 +426,7 @@ export class GardenScreen extends Screen {
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
+    stepGags();
     if (this.frame % DOWN_EVERY === 0) particles.spawn('leaf', this.vis.int(-20, VIEW_W + 20), this.vis.int(110, 200), this.downOpts);
     for (let i = 0; i < this.holes.length; i++) if (this.holes[i].t < HOLE_FRAMES) this.holes[i].t++;
     for (let i = 0; i < this.flights.length; i++) if (this.flights[i].t < FLIGHT_FRAMES) this.flights[i].t++;
@@ -413,6 +434,7 @@ export class GardenScreen extends Screen {
     if (clock.phase === 0) {
       this.updateSeats(input);
       this.updateTops();
+      stepTells(this);
       if (this.total >= this.target) this.finish();
     } else {
       // the sign hangs: the crew holds its last beat, nothing is stepped, no input counts
@@ -432,7 +454,9 @@ export class GardenScreen extends Screen {
       const s = this.seats[i];
       if (s.t > 0) {
         s.moving = false;
-        if (--s.t === 0) { s.state = IDLE; seatAnim(s, 'carry', true); }
+        // a joke steps its own beat (screens/gardenGags.ts) - the whopper's throw moves the seat, so it is held in the row
+        if (s.gag !== NO_GAG) { stepGag(this, s); if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX; }
+        if (--s.t === 0) { s.state = IDLE; endGag(s); seatAnim(s, 'carry', true); }
         s.player.tick();
         continue;
       }
@@ -479,7 +503,7 @@ export class GardenScreen extends Screen {
     s.gripX = t.x - s.facing * GRIP_DX;
     if (s.gripX < X_MIN) s.gripX = X_MIN; else if (s.gripX > X_MAX) s.gripX = X_MAX;
     s.moving = false;
-    seatAnim(s, 'grip', true);
+    seatAnim(s, gripAnim(t, 0), true);
     this.game.audio.play('grip');
   }
 
@@ -487,25 +511,28 @@ export class GardenScreen extends Screen {
   tug(s: GardenSeat): void {
     s.grip = 0;
     s.pull += PULL_STEP;
-    seatAnim(s, 'grip', true);
+    const t = this.tops[s.top], presses = s.pull / PULL_STEP;
+    // a rocket root's top heaves with every tug, and the critter's eyes go wider with it (screens/gardenGags.ts)
+    seatAnim(s, gripAnim(t, presses), true);
+    if (t.rocket) windUp(s, t, presses);
     this.game.audio.play('heave');
-    if (s.pull >= GAUGE_UNITS) { const t = this.tops[s.top]; t.held = 0; s.top = -1; this.pullRoot(s, t); }
+    if (s.pull >= GAUGE_UNITS) { t.held = 0; s.top = -1; this.pullRoot(s, t); }
   }
 
   /** The root comes free: +1, a hole in the bed, soil everywhere, and the carrot hops into the seat's trug. */
   pullRoot(s: GardenSeat, t: CropTop): void {
     t.active = false;   // the root is out, so the slot is free and the spawner replants it elsewhere
     this.pulls++;
-    // the whopper: the same +1, but the root is enormous and the puller goes over backwards with it
-    const big = t.whopper;
-    if (big) { this.whoppers++; s.state = PULL; s.t = WHOPPER_FRAMES; s.pull = 0; seatAnim(s, 'overBackwards', true); floatText(s.x, s.y - 70, WHOA, UI.cream, 1, true); }
-    else { s.state = PULL; s.t = PULL_FRAMES; s.pull = 0; seatAnim(s, 'pullOut', true); }
+    s.state = PULL; s.pull = 0;
     this.openHole(t.x);
-    burstCrumbs(t.x, ROOT_Y - 2, ROOT_Y + 6, CROP.soil, big ? 20 : 8, true);
+    // a joke plays its own bang, and its root is counted when it lands in the trug (screens/gardenGags.ts)
+    if (t.rocket || t.whopper) { startGag(this, s, t); return; }
+    s.t = PULL_FRAMES; seatAnim(s, 'pullOut', true);
+    burstCrumbs(t.x, ROOT_Y - 2, ROOT_Y + 6, CROP.soil, 8, true);
     if (gulps(s)) { gulp(this.game, s, t.x + s.facing * 14, ROOT_Y - 54); return; }
     s.count++; this.setTotal(this.total + 1);
     const fl = this.flights[this.flightCursor]; this.flightCursor = (this.flightCursor + 1) % this.flights.length;
-    fl.t = 0; fl.x0 = t.x; fl.y0 = ROOT_Y - 12; fl.seat = s.index; fl.big = big;
+    fl.t = 0; fl.x0 = t.x; fl.y0 = ROOT_Y - 12; fl.seat = s.index;
     ringAt(t.x, ROOT_Y - 4, 3, 13, UI.cream, 2, 12, true, true);
     burstSparkle(t.x, ROOT_Y - 18, 4, SIGNAL.garden, true);
     floatText(t.x + s.facing * 14, ROOT_Y - 54, PLUS_ONE, s.colour, 1, true);
@@ -537,7 +564,7 @@ export class GardenScreen extends Screen {
     const x = this.freeX();
     if (x < 0) return;
     const t = this.tops[slot];
-    t.active = true; t.held = 0; t.x = x; t.whopper = rng.int(1, WHOPPER_ODDS) === 1 ? 1 : 0;
+    t.active = true; t.held = 0; t.x = x; dealTop(t);
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
@@ -545,6 +572,8 @@ export class GardenScreen extends Screen {
   /** The round is over: drop the sign; a seat with roots in its trug cheers, one without sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
+    // a joke's root still on its way to a trug is the party's all the same: banked BEFORE the sign is written
+    endGags(this);
     endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
@@ -555,30 +584,50 @@ export class GardenScreen extends Screen {
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
-    const L = this.layers, f = this.frame;
-    blitAt(ctx, L.far.L, 0, L.far.y);
-    blitAt(ctx, L.mid.L, 0, L.mid.y);
-    blitAt(ctx, L.ground.L, 0, L.ground.y);
+    const f = this.frame, shake = gagShakeY();
+    // THE WORLD, nudged by a joke's thump (game/gags.ts gagShakeY); the paper over it - plates, gauges, cards, the
+    // ticket, the sign - stays put. Nothing in this game clears the canvas, so while the world is nudged the backdrop
+    // is first painted where it rests: the rows the nudge uncovers at the frame's edge show the garden, not the
+    // frame before.
+    if (shake) this.drawBackdrop(ctx);
+    ctx.save(); ctx.translate(0, shake);
+    this.drawBackdrop(ctx);
     particles.draw(ctx, null, 'back');
     // the barrow stands on the path behind every lane, so it draws before the cast and never covers a critter
     drawShadow(ctx, BARROW_X - 10, BARROW_Y, 46, 0.35, 0);
     drawBarrow(ctx, BARROW_X, BARROW_Y, this.total, this.icon, this.hex);
-    // ground contact first, then the cast back lane to front lane
+    // ground contact first, then the cast back lane to front lane - all but a seat the whopper has thrown (below)
     for (let i = 0; i < this.seats.length; i++) drawSeatShadow(ctx, this.seats[i]);
-    for (let i = this.seats.length - 1; i >= 0; i--) this.drawSeat(ctx, this.seats[i]);
+    for (let i = this.seats.length - 1; i >= 0; i--) { const s = this.seats[i]; if (s.gag !== WHOPPER) this.drawSeat(ctx, s); }
     // THE CROP ROW, in front of the whole cast: the ripe sparkle is what a player walks toward, so the row is never
     // occluded by anybody. What it does cover is feet and shins, which is exactly where a front row of foliage goes.
     for (let i = 0; i < this.tops.length; i++) { const t = this.tops[i]; if (t.active) drawShadow(ctx, t.x, ROOT_Y + 2, 16, 0.3, 0); }
     for (let i = 0; i < this.holes.length; i++) { const h = this.holes[i]; if (h.t < HOLE_FRAMES) drawHole(ctx, h.x, ROOT_Y, (h.t / HOLE_STEP) | 0); }
     for (let i = 0; i < this.tops.length; i++) this.drawTop(ctx, this.tops[i], i, f);
     for (let i = 0; i < this.flights.length; i++) this.drawFlight(ctx, this.flights[i]);
+    // a seat the whopper has thrown head over heels: in front of the row, because a critter flat on its back at shin
+    // height is otherwise a critter behind a fern, and the joke is the critter
+    for (let i = this.seats.length - 1; i >= 0; i--) { const s = this.seats[i]; if (s.gag === WHOPPER) this.drawSeat(ctx, s); }
     particles.draw(ctx, null, 'front');
+    ctx.restore();
     this.drawPlates(ctx);
+    drawGags(ctx);
+    // the rocket root in the air goes OVER the word cards, as a comic draws the thing bursting through its own POP!
+    // (it climbs straight through the card the bang put over its puller's head), and under the ticket
+    ctx.save(); ctx.translate(0, shake); drawGagRoots(this, ctx); ctx.restore();
     drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
     drawEndSign(ctx, this.clock, f);
     if (this.game.options.debug) this.drawWindows(ctx);
+  }
+
+  /** The pre-rendered garden: the far wall, the mid beds and the ground, in that order. */
+  drawBackdrop(ctx: CanvasRenderingContext2D): void {
+    const L = this.layers;
+    blitAt(ctx, L.far.L, 0, L.far.y);
+    blitAt(ctx, L.mid.L, 0, L.mid.y);
+    blitAt(ctx, L.ground.L, 0, L.ground.y);
   }
 
   drawSeat(ctx: CanvasRenderingContext2D, s: GardenSeat): void {
@@ -587,17 +636,20 @@ export class GardenScreen extends Screen {
     o.x = R(s.x); o.y = s.y; o.facing = s.facing;
     drawRig(ctx, rig, s.player.pose, o);
     jointScreen(rig, 'handN', s.trugPt);
+    if (s.gag !== NO_GAG) drawGagSeat(this, ctx, s);
   }
 
   /** One top: the visit's ripe plant with its gold sparkle blinking above it. */
   drawTop(ctx: CanvasRenderingContext2D, t: CropTop, i: number, f: number): void {
     if (!t.active) return;
+    // the rocket root's tell: the bed heaves up round it, the plant rides up on the heave and shivers (gardenGags.ts)
+    const lift = t.rocket ? drawTell(this, ctx, t, i) + (t.held ? 0 : shiverLift(f, i)) : 0;
     // held: a 2 px shake on alternate frames - the tug, and the only mark that says which top a gauge belongs to
-    const sway = t.held ? (((f >> 1) & 1) ? 2 : -2) : SWAY[((f + i * 13) >> 4) & 3];
-    this.plant.draw(ctx, t.x, ROOT_Y, sway, i & 1);
+    const sway = t.held ? (((f >> 1) & 1) ? 2 : -2) : t.rocket ? shiver(f, i) : SWAY[((f + i * 13) >> 4) & 3];
+    this.plant.draw(ctx, t.x, ROOT_Y - lift, sway, i & 1);
     // 6 above the plant's drawn top: 4 for the mark's own half-height (drawRipeSpark takes its CENTRE) and 2 of
     // clear air, so the one signal in the scene stands off the foliage instead of on it
-    if (((f + i * 7) >> 3) & 1) drawRipeSpark(ctx, t.x + 7, ROOT_Y - this.plant.h - 6);
+    if (((f + i * 7) >> 3) & 1) drawRipeSpark(ctx, t.x + 7, ROOT_Y - lift - this.plant.h - 6);
   }
 
   /** The pulled root's hop from its hole into the seat's trug (the trug point comes from the last drawSeat). */
@@ -606,10 +658,7 @@ export class GardenScreen extends Screen {
     const s = this.seats[fl.seat], k = fl.t / FLIGHT_FRAMES;
     const tx = s.trugPt.x, ty = s.trugPt.y + 10;
     const x = R(fl.x0 + (tx - fl.x0) * k), y = R(fl.y0 + (ty - fl.y0) * k - Math.sin(k * Math.PI) * FLIGHT_LIFT);
-    if (!fl.big) { drawPulledRoot(ctx, x, y, this.icon, this.hex); return; }
-    // the whopper: the same root blown up about its own middle, shrinking back to trug size as it lands
-    const sc = 1 + (WHOPPER_SCALE - 1) * (1 - k);
-    ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); drawPulledRoot(ctx, 0, 0, this.icon, this.hex); ctx.restore();
+    drawPulledRoot(ctx, x, y, this.icon, this.hex);
   }
 
   /**
@@ -644,27 +693,29 @@ export class GardenScreen extends Screen {
   override summary() {
     return {
       total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
-      pulls: this.pulls, whoppers: this.whoppers,
-      // pull is the gauge, 0..GAUGE_UNITS, meaningful while the seat has hold of something (top >= 0)
+      pulls: this.pulls, whoppers: this.whoppers, rockets: this.rockets,
+      // pull is the gauge, 0..GAUGE_UNITS, meaningful while the seat has hold of something (top >= 0); gag/gt/owed
+      // are the joke a PULL beat is playing (screens/gardenGags.ts)
       seats: this.seats.map((s) => ({
         slot: s.slot, x: R(s.x), count: s.count, state: STATE_NAMES[s.state], t: s.t, pull: s.pull, top: s.top, grip: s.grip,
+        gag: GAG_NAMES[s.gag], gt: s.gt, owed: s.owed,
       })),
-      /** [x, held, whopper] per standing top. */
-      tops: this.tops.filter((t) => t.active).map((t) => [t.x, t.held, t.whopper]),
+      /** [x, held, whopper, rocket] per standing top. */
+      tops: this.tops.filter((t) => t.active).map((t) => [t.x, t.held, t.whopper, t.rocket]),
     };
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pulls, this.whoppers);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pulls, this.whoppers, this.rockets);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      f.push(s.x, s.facing, s.count, s.state, s.t, s.grip, s.gripX, s.pull, s.top, s.moving ? 1 : 0);
+      f.push(s.x, s.facing, s.count, s.state, s.t, s.grip, s.gripX, s.pull, s.top, s.moving ? 1 : 0, s.gag, s.gt, s.owed, s.jx);
     }
     for (let i = 0; i < this.tops.length; i++) {
       const t = this.tops[i];
-      f.push(t.active ? 1 : 0, t.x, t.held, t.whopper);
+      f.push(t.active ? 1 : 0, t.x, t.held, t.whopper, t.rocket);
     }
     return f;
   }
