@@ -22,6 +22,8 @@ export const TERRACE = Object.freeze({
 export const ROWS = Object.freeze({ wall: 90, wallFoot: 176, step: 182, ground: 200, bed: 236, band: 290, bandBot: 328, fringe: 332, bottom: VIEW_H });
 /** Where the six clumps stand (centre x of each), 100 px apart. */
 export const CLUMP_X = Object.freeze([70, 170, 270, 370, 470, 570]);
+/** The row the clumps (and the statues cut from them) stand on: the front of the bed, just behind the walk. */
+export const CLUMP_Y = ROWS.band - 10;
 
 function paintFar(g, w, h, rnd) {
   vGradient(g, 0, 0, w, ROWS.wall, [[0, TERRACE.skyTop], [1, TERRACE.skyLow]]);

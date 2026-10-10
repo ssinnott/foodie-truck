@@ -23,6 +23,18 @@ export const FLOAT = Object.freeze({ body: '#F1E4C8', bite: SIGNAL.pond });
 export const BUCKET = Object.freeze({ willow: '#6B4E3A', tip: '#B8C4C9' });
 /** The old boot: a rubber wellington gone green in the pond, its sole a shade darker, weed on the shaft. */
 export const BOOT = Object.freeze({ rubber: '#5E6B4A', sole: '#3F4934', weed: '#3F7A4E' });
+/**
+ * The bucket at a seat's feet (drawBucket): its left edge BUCKET_DX in front of the feet, its middle BUCKET_MID in
+ * from that, a catch dropping in at its rim BUCKET_TOP above them, and the rim squashed for LAND_FRAMES after one
+ * lands, LAND_K a frame (the screen's trout and the big one land in the same bucket, game/screens/pond.ts and
+ * pondGags.ts).
+ */
+export const BUCKET_DX = 20, BUCKET_MID = 7, BUCKET_TOP = 12, LAND_FRAMES = 4, LAND_K = 0.03;
+/**
+ * The arc a catch flies up off the water on (the trout to the bucket, the boot to the paw): its lift, as a fraction
+ * of the cast's. A full 0.8 arc peaks well under the chins.
+ */
+export const CATCH_LIFT = 0.8;
 
 // ---------------------------------------------------------------- tables
 /** Cast arc: 24 steps. PARA_T[i] is the along-track fraction, PARA_H[i] the lift in px (4t(1-t) * 36), integers. */
@@ -171,11 +183,13 @@ export function drawBucket(ctx: CanvasRenderingContext2D, x: number, y: number, 
 }
 
 /**
- * The old boot (the pond's joke, game/screens/pond.ts): a wellington drawn toe-right about (cx, cy) at the middle of
- * its shaft, `tilt` radians about that point (a held boot is tipped to pour the water out), and `drip` true adds
- * a run of water off the toe. About 14 px tall, so it reads as a boot and not a fish from across a room.
+ * The old boot (the pond's joke, game/screens/pondGags.ts): a wellington drawn toe-right about (cx, cy) at the middle
+ * of its shaft, `tilt` radians about that point (a held boot is turned over to pour). About 14 px tall, so it reads
+ * as a boot and not a fish from across a room. Its mouth - where the torrent comes out - is BOOT_MOUTH from (cx, cy)
+ * before the tilt. (It used to drip a run of mint off its toe; the torrent, art/pondGags.ts drawGush, pours water
+ * in water's own blue now, and the mint is the bite's alone.)
  */
-export function drawBoot(ctx: CanvasRenderingContext2D, cx: number, cy: number, tilt = 0, drip = false): void {
+export function drawBoot(ctx: CanvasRenderingContext2D, cx: number, cy: number, tilt = 0): void {
   ctx.save(); ctx.translate(cx, cy); if (tilt) ctx.rotate(tilt);
   ctx.beginPath();
   ctx.moveTo(-4, -8); ctx.lineTo(3, -8); ctx.lineTo(3, 2); ctx.lineTo(9, 4); ctx.lineTo(9, 7); ctx.lineTo(-4, 7); ctx.closePath();
@@ -183,6 +197,7 @@ export function drawBoot(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.fillStyle = BOOT.sole; ctx.fillRect(-4, 5, 13, 2);
   ctx.fillStyle = BOOT.weed; ctx.fillRect(-2, -6, 2, 5); ctx.fillRect(1, -3, 2, 3);   // the weed caught on it
   ctx.fillStyle = UI.cream; ctx.fillRect(-3, -7, 2, 2);
-  if (drip) { ctx.fillStyle = FLOAT.bite; ctx.fillRect(8, 8, 2, 3); ctx.fillRect(9, 12, 1, 2); }
   ctx.restore();
 }
+/** The boot's mouth, the middle of the top of its shaft, from the point drawBoot turns it about (x, y). */
+export const BOOT_MOUTH = Object.freeze({ x: -0.5, y: -8 });

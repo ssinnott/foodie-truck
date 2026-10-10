@@ -31,8 +31,9 @@ import { INGREDIENTS } from '../content/recipes.ts';
 const R = Math.round, TAU = Math.PI * 2;
 
 // ---------------------------------------------------------------- shared tones (built once, never per frame)
-const BEAM_DARK = mix(MILL.beam, PLUM.deep, 0.45);
-const BEAM_LIT = mix(MILL.beam, MILL.flour, 0.2);
+/** The oak's shadow side and its flour-lit edge: exported for the clog's bulge (art/millGags.ts), the same wood. */
+export const BEAM_DARK = mix(MILL.beam, PLUM.deep, 0.45);
+export const BEAM_LIT = mix(MILL.beam, MILL.flour, 0.2);
 const IRON_DARK = mix(MILL.iron, PLUM.deep, 0.4);
 const DUST_SH = mix(MILL.dust, MILL.timber, 0.34);
 const FLOUR_SH = mix(MILL.flour, PLUM.shadow, 0.26);

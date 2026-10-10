@@ -188,7 +188,8 @@ the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above
 - **Cockle Cove**: the pond's golden hour over the cove's own sea (`art/backgrounds/pond.js COVE`: open water
   `#5E93A8` to an inked horizon, the near water `#3F7E8E`), a cream breaker line, wet sand `#A88E66`, the dry sand
   `#D9C393` with the trodden path `#BFA574` (L .63) under the crew's torsos, marram in the corners, a rowing boat
-  and crab pots; the crab in the ingredient's red is the one red object in the scene; signal: the pond's mint on a
+  with its mooring post (the gull's perch) and crab pots; the crab in the ingredient's red is the one red object in
+  the scene; signal: the pond's mint on a
   grab's ring and over a stopped crab or a crusted pan.
 - **Kitchen**: plum wall `#4A3038`, slate counter top `#4F5A62` (rows 200–206), steel counter front `#3E4A55`
   (rows 206–246), floor checker `#4E4450` / `#5A4E5C` (rows 246–340), feet line y 252 so torsos read on the counter
@@ -220,6 +221,10 @@ Paws `handR ≥ 0.33·headR` so they read from across the screen. Draw scales: 1
   { hi: 1.15, sh: 0.74 }`. Shading gates as shipped in `shading.js`: `THIN_R 6.5`, `FLAT_R 5`, `HI_MIN 10`.
 - Far palette: `farPalette(palette, 0.62, 0.25)`; contact shadow off.
 - Hit / pickup flash: while `rig.override` is set every hook draws outline + flat fill and returns.
+- Coat (a joke's aftermath: soot, flour, honey, juice): the same path with `rig.coatEyes` set, which keeps the 1 px ink
+  outline and the face's whites and pupils (`critterRig` in `content/critters/common.js`, `coat` in `game/gags.js`), so
+  a covered critter is still an outlined object and still blinks out of whatever it is covered in. Coats are muted —
+  a step under any scene's signal hex, never `SIGNAL.hot` — because a coat is the size of a whole critter.
 
 ## 4. Palette slots and the player colour
 
@@ -272,6 +277,12 @@ parameter over a per-species hook so a renderer fix reaches the whole cast (ART_
 — because what it replaces is the animal itself; it still draws its apron through the shared `drawApron` and its
 torso from the shared `eggPath`, so the player spot and the body are the cast's. Held items are `ITEMS.*` in
 `content/critters/items.js` and are set at runtime: `rig.weapon = ITEMS.basket; rig.basketFill = 0.5`.
+
+The jokes' word cards (`game/gags.js`) are paper, not light: a cream starburst (the bang) or speech bubble (a
+remark) with a 2–3 px ink line and a band of the seat's player colour inside it — the colour that says whose joke it
+was, like a float cap — and the word in ink at size 2, because a size-1 word is the smallest thing on the screen at the
+one moment a joke most needs reading. A card pops in (a 1.25 overshoot over 5 frames), holds, and shrinks away; it
+never fades. Dizzy stars are three cream five-point stars with an ink line, circling a flat ellipse over the head.
 
 Steam and smoke are the only soft marks (`steamPuff`, the `steam` particle); glow is flat with a 2 px `#FFD27A`
 core, pre-rendered into a sprite and alpha-modulated.

@@ -12,11 +12,16 @@
 // of numbers per ingredient (QUARRY) is the whole difference: a crab is a fast thing that runs from you, weed is a
 // slow thing that does not, a pan is a still thing that has to be ready.
 //
+// The cove's three jokes - THE PINCH (a crab grabbed while it still runs grabs back), THE SEVENTH WAVE (the sea
+// draws back off the beach, then knocks everyone flat) and THE GULL (it watches from the boat's post and snatches
+// the next catch out of a paw) - live in ./beachGags.ts, on this screen's fields: this file deals them their grab
+// and their frame, and draws them where they belong in the scene.
+//
 // Determinism (docs/ARCHITECTURE.md section 0): the quarry is a fixed pool of plain sim objects built in enter()
 // and never grown; every random number - where a crab surfaces, how long it runs, which way it turns - comes from
 // the rng singleton inside update(); movement is + - * on the table's px/frame; input is read by seat slot only.
-// The burrow steps, the catch's flight, the float text and the sea's twinkle are cosmetic and stay out of
-// checksumFields().
+// The burrow steps, the catch's flight, the float text, the sea's twinkle and the jokes' cards, particles and
+// flights are cosmetic and stay out of checksumFields().
 //
 // One signal, and only one (docs/ART_STYLE.md section 4): SIGNAL.pond mint - the cove keeps the pond's accent
 // (content/places.js) - on the ring a grab opens and on the sparkle over a stopped crab or a crusted pan, "the
@@ -40,6 +45,11 @@ import {
   makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
+import { clearGags, stepGags, drawGags, gagShakeY } from '../gags.ts';
+import {
+  AWAY, GULL_STATES, firstWave, firstGull, startPinch, stepPinch, stepWave, stepWet, stepGull, gullWatching, startSnatch, stepSnatch, endJokes,
+  drawSeaBack, drawGullShadowPass, drawSeatJoke, drawJokesFront,
+} from './beachGags.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
 import { drawHint } from '../ui.ts';
@@ -69,17 +79,6 @@ const PAN_X = Int16Array.of(96, 258, 396, 552);
 /** A quarry's states. */
 const EMERGE = 0, RUN = 1, STOP = 2, DIG = 3, HELD = 4;
 const STATE_NAMES = Object.freeze(['emerge', 'run', 'stop', 'dig', 'held']);
-/**
- * THE JOKES. The pinch: the sparkle says pounce on a crab that has STOPPED, and a crab grabbed while it is still
- * RUNNING grabs back - it hangs off the paw (HELD) while the critter runs a circle on the spot for PINCH_FRAMES,
- * then drops to the strand beside the critter, tired, which makes it the easy grab next. The seventh wave: every
- * WAVE_MIN..WAVE_MAX frames one wave rolls up over the strand line; everyone on the sand hops and drips for
- * WAVE_FRAMES, and a clump of weed lands on one of them. Nothing is lost by either but the moment.
- */
-const PINCH_FRAMES = 40, PINCH_TURN = 8, WAVE_MIN = 600, WAVE_MAX = 900, WAVE_FRAMES = 40, DRIP_EVERY = 6;
-const OW = 'OW!';
-/** Scratch for the weed's landing spot: the head joint of the seat being drawn. */
-const HEAD: Point = { x: 0, y: 0 };
 /** The burrow's open and close: three steps of 4 frames each way. */
 const BURROW_STEP = 4, BURROW_FRAMES = 12;
 /**
@@ -126,18 +125,22 @@ const QUARRY: Readonly<Record<string, Quarry>> = Object.freeze({
 });
 function quarryFor(ing: string): Quarry { return QUARRY[ing] || QUARRY.crab; }
 
-/** One seat on the sand: the shared seat plus the pounce beat and the basket point the hop flies to. */
+/** One seat on the sand: the shared seat plus the pounce beat, the jokes' beats, and the points the jokes draw at. */
 export interface BeachSeat extends Seat {
   /** Frames left of the pounce beat; the stick is locked while it runs. */
   pounceT: number;
-  /** Frames left of the pinch: a crab on the paw, the critter running a circle; the stick is locked. */
+  /** Frames left of the pinch (beachGags.ts): a crab on the paw, the critter running round; the stick is locked. */
   pinchT: number;
   /** Index into `things` of the crab on the paw, -1 for none. */
   pinchThing: number;
-  /** Frames left dripping after the wave; the stick is locked while it runs. */
+  /** Frames left of the seventh wave on this seat: staring out to sea, knocked flat, getting up; the stick is locked. */
   wetT: number;
+  /** Frames left of the gull's snatch on this seat (beachGags.ts SNATCH_TOTAL); the stick is locked. */
+  snatchT: number;
   /** Where the basket is on screen, refilled from the `handN` joint by every drawSeat. */
   basketPt: Point;
+  /** Where the head is on screen, refilled from the `head` joint by every drawSeat (the weed, the stars, the BONK). */
+  headPt: Point;
 }
 
 /** One slot of the quarry pool. */
@@ -207,14 +210,20 @@ export class BeachScreen extends Screen {
   declare nextSpawn: number;
   /** The catch hops: a fixed cosmetic pool. */
   declare hops: Hop[];
-  /** Pinches taken and waves rolled this round (the jokes' counts, for the tests and the desync canary). */
+  /** Pinches taken, waves rolled and catches snatched this round (the jokes' counts, for the tests and the desync canary). */
   declare pinches: number;
   declare waves: number;
-  /** Frames until the next wave, and frames left of the one rolling now (0 between waves). */
+  declare gulls: number;
+  /** Frames until the next wave, and frames left of the one rolling now (0 between waves; beachGags.ts WAVE_TOTAL). */
   declare waveIn: number;
   declare waveT: number;
-  /** The party index the wave's weed lands on. */
-  declare weedSeat: number;
+  /** The party index the wave's fish lands beside, and the x it flops at (set as the wave lands). */
+  declare fishSeat: number;
+  declare fishX: number;
+  /** The gull (beachGags.ts): AWAY | ARRIVE | WATCH | LEAVE | BUSY, the frames its state has left, and the party index it is busy with (-1). */
+  declare gullState: number;
+  declare gullT: number;
+  declare gullSeat: number;
   declare hopCursor: number;
   /** What the round is played to: the order's REMAINDER, or FALLBACK_TARGET with no run. */
   declare target: number;
@@ -238,6 +247,7 @@ export class BeachScreen extends Screen {
     const game = this.game, run = game.run;
     this.layers = beachLayers();
     particles.clear();
+    clearGags();
 
     const place = PLACES.find((p) => p.id === params.place && p.screen === 'beach');
     this.ing = gatherTarget(run, place ? place.id : undefined, 'beach');
@@ -254,8 +264,8 @@ export class BeachScreen extends Screen {
       const s = this.seats[i];
       s.x = R(VIEW_W / 2 + (i - (n - 1) / 2) * pitch);
       s.rig.basketIcon = this.icon; s.rig.basketHex = this.hex;
-      s.pounceT = 0; s.pinchT = 0; s.pinchThing = -1; s.wetT = 0;
-      s.basketPt = { x: s.x, y: s.y - 20 };
+      s.pounceT = 0; s.pinchT = 0; s.pinchThing = -1; s.wetT = 0; s.snatchT = 0;
+      s.basketPt = { x: s.x, y: s.y - 20 }; s.headPt = { x: s.x, y: s.y - 50 };
       s.player.setOverlay(BEACH_ANIMS);
       seatAnim(s, 'carry');
       // four people on a beach, not one pose printed four times: each seat starts its breath a beat later (pose
@@ -267,7 +277,9 @@ export class BeachScreen extends Screen {
     for (let i = 0; i < MAX_QUARRY; i++) this.things.push({ active: false, x: 0, dir: 1, state: RUN, t: 0, life: 0, cool: 0, dartT: 0 });
     for (let k = 0; k < this.q.seed; k++) this.spawn();
     this.nextSpawn = rng.int(this.q.spawnMin, this.q.spawnMax);
-    this.pinches = 0; this.waves = 0; this.waveIn = rng.int(WAVE_MIN, WAVE_MAX); this.waveT = 0; this.weedSeat = 0;
+    this.pinches = 0; this.waves = 0; this.gulls = 0;
+    this.waveIn = firstWave(); this.waveT = 0; this.fishSeat = 0; this.fishX = 0;
+    this.gullState = AWAY; this.gullT = firstGull(); this.gullSeat = -1;
 
     this.hops = [];
     for (let i = 0; i < MAX_HOPS; i++) this.hops.push({ t: HOP_FRAMES, x0: 0, y0: 0, seat: 0 });
@@ -328,6 +340,7 @@ export class BeachScreen extends Screen {
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
+    stepGags();
     for (let i = 0; i < this.hops.length; i++) if (this.hops[i].t < HOP_FRAMES) this.hops[i].t++;
     const clock = this.clock;
     if (clock.phase === 0) {
@@ -335,8 +348,10 @@ export class BeachScreen extends Screen {
       this.updateThings();
       if (this.total >= this.target) this.finish();
     } else {
-      // the sign hangs: the crew holds its last beat, nothing is stepped, no input counts
+      // the sign hangs: the crew holds its last beat, nothing is stepped, no input counts (a gull in the air still
+      // flies on, and one on the post sits it out)
       for (let i = 0; i < this.seats.length; i++) this.seats[i].player.tick();
+      stepGull(this, false);
       if (roundOver(clock)) {
         if (game.run) game.run.gather(this.ing, this.total);
         game.replace('map');
@@ -346,34 +361,28 @@ export class BeachScreen extends Screen {
     tickClock(clock);
   }
 
-  /** Every seat: the beat first (it locks the stick), then the stick along the sand, the grab, the anim. */
+  /** Every seat: a beat first (it locks the stick; the jokes' beats step in beachGags.ts), then the stick along the sand, the grab, the anim. */
   updateSeats(input: Input): void {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.pounceT > 0) { s.pounceT--; s.moving = false; s.player.tick(); continue; }
-      if (s.pinchT > 0) {
-        // the circle: about-face every PINCH_TURN frames of the run, and the crab comes off at the end
-        if (--s.pinchT % PINCH_TURN === 0) s.facing = -s.facing;
-        if (s.pinchT === 0) this.dropCrab(s);
-        s.moving = false; s.player.tick(); continue;
-      }
-      if (s.wetT > 0) {
-        if (--s.wetT % DRIP_EVERY === 0) burstDrops(s.x, s.y - 40, 1, true);
-        if (s.player.done) seatAnim(s, 'carry');
-        s.moving = false; s.player.tick(); continue;
-      }
+      if (s.snatchT > 0) { stepSnatch(this, s); s.player.tick(); continue; }
+      if (s.pinchT > 0) { stepPinch(this, s); s.player.tick(); continue; }
+      if (s.wetT > 0) { stepWet(this, s); s.player.tick(); continue; }
       const ax = input.axisX(s.slot);
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x += ax * SPEED;
-        if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
+        s.x = this.clampX(s.x + ax * SPEED);
       }
       if (input.pressed(s.slot, 'action')) this.tryGrab(s);
-      if (s.pounceT === 0 && s.pinchT === 0) seatAnim(s, s.moving ? 'carryWalk' : 'carry');
+      if (s.pounceT === 0 && s.pinchT === 0 && s.snatchT === 0) seatAnim(s, s.moving ? 'carryWalk' : 'carry');
       s.player.tick();
     }
   }
+
+  /** The ends of the beach: a critter's feet stay between X_MIN and X_MAX, walking or run round by a crab. */
+  clampX(x: number): number { return x < X_MIN ? X_MIN : x > X_MAX ? X_MAX : x; }
 
   /** True when a thing can be taken right now: a crab or weed that is up, a pan that has crusted. */
   takeable(t: Thing): boolean {
@@ -382,7 +391,11 @@ export class BeachScreen extends Screen {
     return true;
   }
 
-  /** `action`: the nearest takeable thing inside the reach goes into the basket: the pounce, the hop, +1. */
+  /**
+   * `action`: the nearest takeable thing inside the reach is taken. A crab still RUNNING grabs back (the pinch); a
+   * clean grab while the gull watches is the gull's (the snatch: the catch goes up in the paw, not the basket, and
+   * comes back to it in the end); anything else goes into the basket: the pounce, the hop, +1.
+   */
   tryGrab(s: BeachSeat): void {
     let best = -1, bd = REACH + 1;
     for (let i = 0; i < this.things.length; i++) {
@@ -393,31 +406,24 @@ export class BeachScreen extends Screen {
     }
     if (best < 0) return;
     const t = this.things[best];
-    if (this.q.dart > 0 && t.state === RUN) { this.pinch(s, best); return; }
+    if (this.q.dart > 0 && t.state === RUN) { t.state = HELD; t.t = 0; t.dartT = 0; startPinch(this, s, t.x, best); return; }
     t.active = false;
-    s.count++; this.setTotal(this.total + 1);
+    if (gullWatching(this)) { startSnatch(this, s, t.x); return; }
     s.pounceT = POUNCE_FRAMES; s.moving = false;
     s.facing = t.x >= s.x ? 1 : -1;
     seatAnim(s, 'pounce', true);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     h.t = 0; h.x0 = t.x; h.y0 = QUARRY_Y - 8; h.seat = s.index;
-    ringAt(t.x, QUARRY_Y - 4, 4, 16, SIGNAL.pond, 2, 14, true, true);
     burstDust(t.x, QUARRY_Y, 4, 1.4, true);
-    floatText(t.x, QUARRY_Y - 30, PLUS_ONE, s.colour, 1, true);
-    this.game.audio.play('catch');   // the orchard's basket and its pip: the catch lands in the same basket
+    this.bank(s, t.x, QUARRY_Y - 4);
   }
 
-  /** The pinch: the running crab grabs the paw instead. It hangs there (HELD) while the critter runs its circle. */
-  pinch(s: BeachSeat, i: number): void {
-    const t = this.things[i];
-    t.state = HELD; t.t = 0; t.dartT = 0;
-    s.pinchT = PINCH_FRAMES; s.pinchThing = i; s.moving = false;
-    s.facing = t.x >= s.x ? 1 : -1;
-    this.pinches++;
-    seatAnim(s, 'run', true);
-    ringAt(t.x, QUARRY_Y - 4, 3, 12, UI.cream, 2, 10, true, true);
-    floatText(s.x, s.y - 66, OW, UI.cream, 1, true);
-    this.game.audio.play('pinch');
+  /** A catch into a seat's basket, with the mint ring and the +1 at (x, y): the grab's own, and the gull's in the end. */
+  bank(s: BeachSeat, x: number, y: number): void {
+    s.count++; this.setTotal(this.total + 1);
+    ringAt(x, y, 4, 16, SIGNAL.pond, 2, 14, true, true);
+    floatText(x, y - 26, PLUS_ONE, s.colour, 1, true);
+    this.game.audio.play('catch');   // the orchard's basket and its pip: the catch lands in the same basket
   }
 
   /** The crab lets go: it drops to the strand beside the critter, tired, and will not dart for a while - the easy grab next. */
@@ -432,27 +438,12 @@ export class BeachScreen extends Screen {
     seatAnim(s, 'carry', true);
   }
 
-  /** The seventh wave: everyone on the sand hops, drips for WAVE_FRAMES, and one of them gets the weed. */
-  wave(): void {
-    this.waveIn = rng.int(WAVE_MIN, WAVE_MAX);
-    this.waveT = WAVE_FRAMES; this.waves++;
-    this.weedSeat = rng.int(0, this.seats.length - 1);
-    for (let i = 0; i < this.seats.length; i++) {
-      const s = this.seats[i];
-      if (s.pounceT > 0 || s.pinchT > 0) continue;   // a beat already playing plays out; the wave is over them anyway
-      s.wetT = WAVE_FRAMES; s.moving = false;
-      seatAnim(s, 'hop', true);
-      burstDrops(s.x, s.y - 30, 4, true);
-    }
-    this.game.audio.play('wave');
-  }
-
-  /** Every thing on the strand, then the spawner. */
+  /** Every thing on the strand, the sea and the gull (beachGags.ts), then the spawner. */
   updateThings(): void {
     const q = this.q;
     for (let i = 0; i < this.things.length; i++) { const t = this.things[i]; if (t.active && t.state !== HELD) this.stepThing(t, q); }
-    if (this.waveT > 0) this.waveT--;
-    if (--this.waveIn <= 0) this.wave();
+    stepWave(this);
+    stepGull(this, true);
     if (--this.nextSpawn > 0) return;
     this.nextSpawn = rng.int(q.spawnMin, q.spawnMax);
     this.spawn();
@@ -506,44 +497,56 @@ export class BeachScreen extends Screen {
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
-  /** The round is over: drop the sign; a seat with a catch in its basket cheers, one without sulks. */
+  /**
+   * The round is over: settle the jokes first (a catch the gull still has goes in the basket, so the sign counts it),
+   * drop the sign; a seat with a catch in its basket cheers, one without sulks.
+   */
   finish(): void {
     if (this.clock.phase !== 0) return;
+    endJokes(this);
     endRound(this.clock, this.signPrefix + this.total, this.game.audio);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      if (s.pinchT > 0) { s.pinchT = 0; this.dropCrab(s); }
-      s.pounceT = 0; s.wetT = 0; s.moving = false;
+      s.pounceT = 0; s.moving = false;
       seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true);
     }
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
-    const L = this.layers, f = this.frame;
+    const L = this.layers, f = this.frame, bump = gagShakeY();
+    // the world, nudged by the wave's thump (game/gags.ts gagBump); the paper over it - plates, cards, the ticket,
+    // the card and the sign - never moves. The canvas is never cleared, so while it is nudged the backdrop goes down
+    // at rest first: the rows the nudge uncovers at the top and the bottom are sky and sand, not the last frame.
+    if (bump !== 0) { blitAt(ctx, L.far.L, 0, L.far.y); blitAt(ctx, L.ground.L, 0, L.ground.y); blitAt(ctx, L.near.L, 0, L.near.y); }
+    ctx.save(); ctx.translate(0, bump);
     blitAt(ctx, L.far.L, 0, L.far.y);
     // the sea's twinkle on the swell and the breakers: cream dashes, index-hashed so a third are lit on any frame
     ctx.globalAlpha = 0.7; ctx.fillStyle = BEACH.foam;
     for (let i = 0; i < GLINTS.length; i++) { const g = GLINTS[i]; if ((((f + i * 5) >> 3) % 3) === 0) ctx.fillRect(g[0], g[1], g[2], 2); }
     ctx.globalAlpha = 1;
+    drawSeaBack(ctx, this, f);
     blitAt(ctx, L.mid.L, 0, L.mid.y);
     blitAt(ctx, L.ground.L, 0, L.ground.y);
     particles.draw(ctx, null, 'back');
-    // ground contact first, then the cast back lane to front lane
+    // ground contact first (the gull's shadow sweeping the sand with it), then the cast back lane to front lane
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; drawShadow(ctx, s.x, s.y, s.rig.width + 6, 0.4, 0); }
-    for (let i = this.seats.length - 1; i >= 0; i--) this.drawSeat(ctx, this.seats[i]);
+    drawGullShadowPass(ctx, this, f);
+    for (let i = this.seats.length - 1; i >= 0; i--) this.drawSeat(ctx, this.seats[i], f);
     // THE STRAND, in front of the whole cast: the thing a player is chasing is never hidden by the chaser. What it
     // covers is feet and shins, which is where a crab at your feet goes.
     if (this.q.crust) for (let i = 0; i < PAN_X.length; i++) drawShadow(ctx, PAN_X[i], QUARRY_Y, 30, 0.3, 0);
     for (let i = 0; i < this.things.length; i++) { const t = this.things[i]; if (t.active && t.state !== HELD && !this.q.crust) drawShadow(ctx, t.x, QUARRY_Y + 1, 22, 0.3, 0); }
     if (this.q.crust) this.drawPans(ctx, f); else for (let i = 0; i < this.things.length; i++) this.drawThing(ctx, this.things[i], i, f);
     for (let i = 0; i < this.hops.length; i++) this.drawHop(ctx, this.hops[i]);
-    // the crab on the paw, over everything on the strand: the joke is the crab and not the critter
-    for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; if (s.pinchT > 0) drawCrab(ctx, s.basketPt.x + s.facing * 4, s.basketPt.y + 4, s.facing, (f >> 1) & 1, 1); }
-    if (this.waveT > 0) this.drawWave(ctx, f);
+    // the jokes over everything on the strand - the crab on a paw, the gull, the fish, the wave's water: the joke
+    // is the crab and the bird and the sea, not the critter
+    drawJokesFront(ctx, this, f);
     blitAt(ctx, L.near.L, 0, L.near.y);
     particles.draw(ctx, null, 'front');
+    ctx.restore();
     resetPlates();
     for (let i = 0; i < this.seats.length; i++) drawSeatPlate(ctx, this.seats[i], PLATES);
+    drawGags(ctx);
     drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, this.title);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
@@ -551,27 +554,15 @@ export class BeachScreen extends Screen {
     if (this.game.options.debug) this.drawWindows(ctx);
   }
 
-  drawSeat(ctx: CanvasRenderingContext2D, s: BeachSeat): void {
+  /** One critter, then the two joints the jokes draw at (the basket's paw, the head) and whatever its joke has on it. */
+  drawSeat(ctx: CanvasRenderingContext2D, s: BeachSeat, f: number): void {
     const rig = s.rig, o = s.opts;
     rig.basketFill = this.target ? Math.min(1, s.count / this.target) : 0; rig.basketSquash = 1;
     o.x = R(s.x); o.y = s.y; o.facing = s.facing;
     drawRig(ctx, rig, s.player.pose, o);
     jointScreen(rig, 'handN', s.basketPt);
-    // the wave's weed, on one head, for as long as that seat drips
-    if (s.wetT > 0 && s.index === this.weedSeat) { const h = jointScreen(rig, 'head', HEAD); drawWeed(ctx, h.x, h.y - rig.p.headR * rig.scale + 2, s.facing); }
-  }
-
-  /**
-   * The seventh wave: a band of foam that runs up the sand from the wet row to the strand line and back over
-   * WAVE_FRAMES, its front edge a row of scallops. Draw only: it reads the countdown and nothing else.
-   */
-  drawWave(ctx: CanvasRenderingContext2D, f: number): void {
-    const k = 1 - this.waveT / WAVE_FRAMES, reach = Math.sin(k * Math.PI);
-    const top = ROWS.wet, y = R(top + (ROWS.strand + 6 - top) * reach);
-    ctx.globalAlpha = 0.45; ctx.fillStyle = BEACH.foam; ctx.fillRect(0, top, VIEW_W, y - top);
-    ctx.globalAlpha = 0.9;
-    for (let x = ((f >> 2) & 15) - 16; x < VIEW_W; x += 16) { ctx.beginPath(); ctx.arc(x, y, 8, Math.PI, 0); ctx.fill(); }
-    ctx.globalAlpha = 1;
+    jointScreen(rig, 'head', s.headPt);
+    drawSeatJoke(ctx, this, s, f);
   }
 
   /** A crab or a clump of weed on the strand, with the burrow under a crab that is coming up or going down. */
@@ -622,8 +613,9 @@ export class BeachScreen extends Screen {
   override summary() {
     return {
       total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText, ing: this.ing,
-      pinches: this.pinches, waves: this.waves, waveT: this.waveT,
-      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), count: s.count, pounceT: s.pounceT, anim: s.anim, pinchT: s.pinchT, wetT: s.wetT })),
+      pinches: this.pinches, waves: this.waves, waveT: this.waveT, waveIn: this.waveIn,
+      gulls: this.gulls, gull: GULL_STATES[this.gullState], gullT: this.gullT, gullSeat: this.gullSeat,
+      seats: this.seats.map((s) => ({ slot: s.slot, x: R(s.x), facing: s.facing, count: s.count, pounceT: s.pounceT, anim: s.anim, pinchT: s.pinchT, wetT: s.wetT, snatchT: s.snatchT })),
       /** [x, dir, state, dartT] per thing on the strand. */
       things: this.things.filter((t) => t.active).map((t) => [R(t.x), t.dir, STATE_NAMES[t.state], t.dartT]),
     };
@@ -632,10 +624,11 @@ export class BeachScreen extends Screen {
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pinches, this.waves, this.waveIn, this.waveT, this.weedSeat);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.nextSpawn, this.pinches, this.waves, this.waveIn, this.waveT, this.fishSeat, this.fishX);
+    f.push(this.gulls, this.gullState, this.gullT, this.gullSeat);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      f.push(s.x, s.facing, s.count, s.pounceT, s.moving ? 1 : 0, s.pinchT, s.pinchThing, s.wetT);
+      f.push(s.x, s.facing, s.count, s.pounceT, s.moving ? 1 : 0, s.pinchT, s.pinchThing, s.wetT, s.snatchT);
     }
     for (let i = 0; i < this.things.length; i++) {
       const t = this.things[i];

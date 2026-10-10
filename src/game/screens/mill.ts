@@ -6,10 +6,13 @@
 // the moment it reaches the brim it ties itself off: +1 flour, the sack hops onto the barrow, a ring and a '+1', and
 // a fresh empty sack is in the paw. Letting go early keeps the part sack to be topped up at the next chute (this is
 // the co-op bit). Nothing bursts and nothing is ever lost: the only skill is being under the gold when it pours.
-// THE JOKE: one sack in SNEEZE_ODDS puts the flour up the tier's nose. The moment the tie beat ends the wind-up
-// starts (SNEEZE_UP frames, head back, eyes shut) and then ACHOO: the head snaps forward, a cloud of the visit's own
-// dust (chaff on a rice visit) goes up off the face, and the stick is locked for the whole SNEEZE_FRAMES. Nothing
-// is lost but the moment; the fresh sack is in the paw throughout.
+// THE JOKES (two, as every mini-game has; their beats are game/screens/millGags.ts, their art art/millGags.ts):
+//   the CLOG    one wake in four: that chute rattles and coughs as it pours, a bulge slipping down its spout to
+//               the lip, and the first critter filling under it there gets the whole clog at once - FWUMP!, a heap
+//               with the ears and the eyes poking out, then out it pops ghost-white and shakes it off;
+//   the SNEEZE  one sack tied in five: 'AH...' - nothing - 'AH-AH...' - ACHOO!, blown back a hop in a cloud of the
+//               visit's own dust, and dazed in it.
+// Both lock the stick for a couple of seconds and cost nothing else: the sack in the paw keeps its fill.
 // The round ends when the party's total reaches the order's amount, and not before (there is no clock to run out);
 // the FLOUR sign drops, is held, then run.gather('flour') and back to the map.
 //
@@ -24,11 +27,12 @@
 // checksum reads it.
 //
 // Determinism (docs/ARCHITECTURE.md section 0): the chutes and the seats are fixed pools of plain sim objects, the
-// only randomness is `rng` inside update() (the wake timer and which spout takes it), input is read by seat slot
-// only, and the one place trig touches simulation state is the sack offsets built ONCE in enter() through
-// engine/trig.js. The motes in the light shaft, the dust puffs, the hops, the rings and the float text are cosmetic
-// pools and stay out of checksumFields(). The spur wheel overhead and the sail past the window turn on an index
-// step read from `this.frame` in draw() and touch nothing.
+// only randomness is `rng` inside update() (the wake timer, which spout takes it, the clog and the sneeze deals),
+// input is read by seat slot only, and the one place trig touches simulation state is the sack offsets built ONCE
+// in enter() through engine/trig.js. The motes in the light shaft, the dust puffs, the hops, the rings, the float
+// text, the jokes' word cards and bump and the heap a clog leaves on the bare planks are cosmetic and stay out of
+// checksumFields(). The spur wheel overhead and the sail past the window turn on an index step read from
+// `this.frame` in draw() and touch nothing.
 import { UI } from '../../constants.ts';
 import { Screen } from '../game.ts';
 import type { Game, Input, ScreenParams } from '../game.ts';
@@ -58,6 +62,13 @@ import type { Clock, PlateStack, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
 import { drawHint } from '../ui.ts';
+import { clearGags, stepGags, drawGags, gagShakeY } from '../gags.ts';
+import type { MillGagTones } from '../../art/millGags.ts';
+import { drawSputter } from '../../art/millGags.ts';
+import {
+  MILL_GAG_ANIMS, SNEEZE_ODDS, enterJokes, rollClog, chuteChoked, stepClogChute, catchClog, stepClog, stepSpills,
+  startSneeze, stepSneeze, quietJokes, chuteShake, drawChuteClog, drawClogDrops, drawSpills, drawSeatJoke,
+} from './millGags.ts';
 
 /** The HOW TO PLAY card's pictograms (game/controlcard.ts), in the order they are read. */
 const SCHEMES: readonly CardScheme[] = Object.freeze(['move', 'hold']);
@@ -118,9 +129,6 @@ const POUR_EVERY = 12;
 const BRIM_AT = FULL - BRIM_BAND;
 /** The tie beat (18 frames of the `tie` anim) and the frame of it the sack leaves the paw on. */
 const TIE_FRAMES = 18, TIE_TOSS = 9;
-/** The sneeze: one tie in SNEEZE_ODDS; SNEEZE_UP frames of wind-up and the ACHOO on the frame after, SNEEZE_FRAMES in all. */
-const SNEEZE_ODDS = 6, SNEEZE_UP = 24, SNEEZE_FRAMES = 36;
-const ACHOO = 'ACHOO!';
 /** How far below the near paw the sack's neck hangs, in root space (MILL_SACK's tie band runs y 3..16). */
 const SACK_DROP = 8;
 /**
@@ -155,7 +163,8 @@ const PLUS_ONE = '+1', TITLE = 'WINDLE MILL';
 
 /**
  * The two beats this scene owns, as an AnimPlayer overlay on the shared table (content/critters/common.js is not
- * ours to touch). Everything else is the shared `carry`, `carryWalk`, `bump`, `cheer` and `sad`.
+ * ours to touch), merged with the jokes' own poses (millGags.ts MILL_GAG_ANIMS) into SEAT_ANIMS, the one overlay a
+ * seat carries. Everything else is the shared `carry`, `carryWalk`, `bump`, `cheer` and `sad`.
  *
  * `fill` is NOT the shared `reach`: reach raises the near arm to 112-118 degrees, which would swing the sack - the
  * one thing the player is reading - up beside the muzzle and put it behind the head at the exact moment its level
@@ -176,18 +185,8 @@ const MILL_ANIMS = Object.freeze({
     F(4, { armR: [132, 8], armL: [-152, -12], weapon: -20, torso: -10, head: -12, root: [0, -2], stretch: 1.06, face: 'happy' }, { ease: 'overshoot', smear: { from: 50, to: 150, a: 0.35 } }),
     F(9, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 2, head: 0, root: [0, 1], squash: 1.04, face: 'happy' }, { ease: 'inout' }),
   ] },
-  // the sneeze: the wind-up leans back and back with the eyes shut, in three growing steps (ah... ah... AH...)
-  sneezeUp: { loop: false, frames: [
-    F(8, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: -6, head: -10, root: [0, 0], stretch: 1.02, face: 'closed' }, { ease: 'out' }),
-    F(8, { armR: [62, 50], armL: [-20, 8], weapon: 90, torso: -10, head: -18, root: [0, -1], stretch: 1.04, face: 'closed' }, { ease: 'out' }),
-    F(8, { armR: [64, 50], armL: [-22, 8], weapon: 90, torso: -14, head: -26, root: [0, -2], stretch: 1.06, face: 'closed' }, { ease: 'out' }),
-  ] },
-  // ...and the ACHOO: the whole body snaps forward and down with a smear, then comes back up dazed
-  achoo: { loop: false, frames: [
-    F(3, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 18, head: 26, root: [0, 2], squash: 1.08, face: 'shout' }, { ease: 'overshoot', smear: { from: -30, to: 40, a: 0.35 } }),
-    F(9, { armR: [60, 50], armL: [-18, 8], weapon: 90, torso: 4, head: 6, root: [0, 0], face: 'dazed' }, { ease: 'inout' }),
-  ] },
 });
+const SEAT_ANIMS = Object.freeze({ ...MILL_ANIMS, ...MILL_GAG_ANIMS });
 
 
 /** Reused by pawRoot so the sack-offset maths allocates nothing (it runs once per seat, in enter()). */
@@ -210,6 +209,9 @@ function pawRoot(rig: Rig, torsoRot: number, upper: number, lower: number): Poin
   PAW.x = wx + dsin(l) * p.handR * 0.6; PAW.y = wy + dcos(l) * p.handR * 0.6;
   return PAW;
 }
+
+/** Hold a seat on the boards, X_MIN..X_MAX: the walk's clamp, and the one the sneeze's hop back answers to as well. */
+function clampX(s: MillSeat): void { if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX; }
 
 /**
  * Climb `y` until the box clears every rect already in `stack` - the same walk game/minigame.js drawSeatPlate does,
@@ -325,8 +327,10 @@ export interface MillSeat extends Seat {
   tieT: number;
   /** 1 while the sack just tied has a sneeze coming (rolled at the tie; it starts when the tie beat ends). */
   sneezeDue: number;
-  /** Frames left of the sneeze (wind-up, then the ACHOO at SNEEZE_FRAMES - SNEEZE_UP); the stick is locked while it runs. */
+  /** Frames left of the sneeze (millGags.ts SNEEZE_FRAMES: AH, the lull, AH-AH, ACHOO, dazed); the stick is locked while it runs. */
   sneezeT: number;
+  /** Frames left of the clog's beat on this seat (millGags.ts CLOG_SEAT: the look up, the heap, the ghost); the stick is locked while it runs. */
+  clogT: number;
   /** Where this critter's sack neck hangs, in screen px from its feet: built ONCE in enter() from its own rig. */
   sackDX: number;
   sackDY: number;
@@ -340,6 +344,12 @@ export interface Chute {
   t: number;
   /** Party index of the seat catching this pour, -1 when it is falling on the planks. Refilled every frame. */
   seat: number;
+  /** 1 while this pour carries a clog (rolled at the wake, millGags.ts rollClog), 0 once it has landed. */
+  clog: number;
+  /** Frames left of the clog's timeline (millGags.ts CLOG_FRAMES), counted only while it pours. */
+  clogT: number;
+  /** Party index of the seat the clog is going to land on (the first to fill under it at the lip); -1 for nobody (yet). */
+  victim: number;
 }
 
 /** A tied sack's hop from the paw onto the barrow. Cosmetic: a fixed pool, out of the checksum. */
@@ -426,6 +436,13 @@ export class MillScreen extends Screen {
   declare tied: number;
   /** Sneezes this round (the joke's count, for the tests and the desync canary). */
   declare sneezes: number;
+  /** Clogs that landed on somebody this round, and clogs that landed on the bare planks (the same, for the clog). */
+  declare clogs: number;
+  declare spills: number;
+  /** What the jokes are made of on this visit (art/millGags.ts gagTonesFor), picked once in enter(). */
+  declare jokeTones: MillGagTones;
+  /** Frames since a clog that caught nobody landed under each chute: the heap on the planks. Cosmetic, out of the checksum. */
+  declare spillT: Int16Array;
   /** Sacks the round is played to: the order's REMAINDER, or FALLBACK_TARGET with no run. */
   declare target: number;
   /** Sacks the party has banked this round. */
@@ -458,6 +475,7 @@ export class MillScreen extends Screen {
     const g = this.grain;
     this.layers = millLayers(g.id);
     particles.clear();
+    clearGags();
     this.vis = makeRng(MOTE_SEED);
     // every options object a per-frame call needs is built HERE and mutated, never in update() or draw(). The
     // motes and the puffs take their kind, tone and fall from the visit's record: flour dust hanging in the shaft
@@ -484,8 +502,8 @@ export class MillScreen extends Screen {
       // these keys back off it - so the assertion says what millProps.js cannot yet (garden.ts carries the same
       // note over its trug).
       s.rig.weapon = MILL_SACK as RigWeapon; s.rig.sackFill = 0; s.rig.sackZone = 0; s.rig.sackBlink = 0; s.rig.sackGrain = g;
-      s.player.setOverlay(MILL_ANIMS);
-      s.fill = 0; s.chute = -1; s.tieT = 0; s.count = 0; s.sneezeDue = 0; s.sneezeT = 0;
+      s.player.setOverlay(SEAT_ANIMS);
+      s.fill = 0; s.chute = -1; s.tieT = 0; s.count = 0; s.sneezeDue = 0; s.sneezeT = 0; s.clogT = 0;
       // where this critter's sack neck sits, once, from ITS proportions: the pour column bends to this point and
       // the tie's ring and hop start from it (see the draw pass). Cress's arm is not Barley's.
       const p = pawRoot(s.rig, FILL_POSE.torso, FILL_POSE.upper, FILL_POSE.lower);
@@ -496,12 +514,13 @@ export class MillScreen extends Screen {
     }
 
     this.chutes = [];
-    for (let i = 0; i < CHUTE_X.length; i++) this.chutes.push({ state: DORMANT, t: 0, seat: -1 });
+    for (let i = 0; i < CHUTE_X.length; i++) this.chutes.push({ state: DORMANT, t: 0, seat: -1, clog: 0, clogT: 0, victim: -1 });
     this.wake = TELEGRAPH;
     this.hops = [];
     for (let i = 0; i < MAX_HOPS; i++) this.hops.push({ t: HOP_FRAMES, x0: 0, y0: 0, slot: 0 });
     this.hopCursor = 0;
-    this.tied = 0; this.sneezes = 0;
+    this.tied = 0;
+    enterJokes(this);
 
     const need = run ? run.need(this.ing) : null;
     // the remainder, not the whole order: the map may already have banked some (the three shipped scenes agree)
@@ -520,6 +539,8 @@ export class MillScreen extends Screen {
     const game = this.game, input = game.input;
     if (input.anyPressed('start') >= 0 && !(game.net && game.net.active)) { game.push('pause'); return; }
     particles.update();
+    stepGags();
+    stepSpills(this);
     if (this.frame % MOTE_EVERY === 0) this.spawnMote();
     for (let i = 0; i < this.hops.length; i++) if (this.hops[i].t < HOP_FRAMES) this.hops[i].t++;
     const clock = this.clock;
@@ -560,7 +581,8 @@ export class MillScreen extends Screen {
         const start = rng.int(0, this.chutes.length - 1);
         for (let k = 0; k < this.chutes.length; k++) {
           const c = this.chutes[(start + k) % this.chutes.length];
-          if (c.state === DORMANT) { c.state = WAKING; c.t = TELEGRAPH; break; }
+          // the clog's deal is made as the spout wakes, so the whole pour that follows can tell it
+          if (c.state === DORMANT) { c.state = WAKING; c.t = TELEGRAPH; rollClog(c); break; }
         }
       }
     }
@@ -573,7 +595,8 @@ export class MillScreen extends Screen {
         if ((c.t & 3) === 0) particles.burst(this.grain.puffKind, CHUTE_X[i], ROWS.mouth + 6, 2, this.puffOpts);
         if (--c.t <= 0) { c.state = POURING; c.t = POUR_FRAMES; }
       } else if (c.state === POURING) {
-        if (--c.t <= 0) { c.state = DORMANT; c.t = 0; }
+        if (c.clog) stepClogChute(this, i);
+        if (--c.t <= 0) { c.state = DORMANT; c.t = 0; c.clog = 0; c.clogT = 0; c.victim = -1; }
       }
     }
   }
@@ -583,28 +606,32 @@ export class MillScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
       if (s.bumpT > 0) { s.bumpT--; s.moving = false; s.chute = -1; s.player.tick(); continue; }
-      if (s.tieT > 0) { if (--s.tieT === 0 && s.sneezeDue) this.sneeze(s); s.moving = false; s.chute = -1; s.player.tick(); continue; }
-      if (s.sneezeT > 0) { if (--s.sneezeT === SNEEZE_FRAMES - SNEEZE_UP) this.achoo(s); s.moving = false; s.chute = -1; s.player.tick(); continue; }
+      if (s.tieT > 0) { if (--s.tieT === 0 && s.sneezeDue) startSneeze(this, s); s.moving = false; s.chute = -1; s.player.tick(); continue; }
+      // the two jokes (millGags.ts): the sneeze blows its seat back a hop, so it is held to the floor like a walk
+      if (s.sneezeT > 0) { stepSneeze(this, s); clampX(s); s.moving = false; s.chute = -1; s.player.tick(); continue; }
+      if (s.clogT > 0) { stepClog(this, s); s.moving = false; s.chute = -1; s.player.tick(); continue; }
       const ax = input.axisX(s.slot);
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
         s.x += ax * SPEED;
-        if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
+        clampX(s);
       }
       s.chute = -1;
       if (input.held(s.slot, 'action')) {
         const c = this.chuteUnder(s.x);
-        if (c >= 0 && this.chutes[c].state === POURING) {
+        // a chute choked by its clog pours nothing, so nothing fills from it until the clog has landed
+        if (c >= 0 && this.chutes[c].state === POURING && !chuteChoked(this.chutes[c])) {
           s.chute = c;
           if (this.chutes[c].seat < 0) this.chutes[c].seat = i;
           s.fill += FILL_RATE;
           if ((this.frame % POUR_EVERY) === 0) this.game.audio.play('pour');
           // the brim ties the sack off by itself: there is no release to time and nothing to overfill
           if (s.fill >= FULL) this.tie(s);
+          else catchClog(this, s, c);                 // filling under a clog that is at the lip: it goes on THIS seat
         }
       }
-      if (s.tieT === 0 && s.bumpT === 0 && s.sneezeT === 0) seatAnim(s, s.chute >= 0 ? 'fill' : s.moving ? 'carryWalk' : 'carry');
+      if (s.tieT === 0 && s.bumpT === 0 && s.sneezeT === 0 && s.clogT === 0) seatAnim(s, s.chute >= 0 ? 'fill' : s.moving ? 'carryWalk' : 'carry');
       s.player.tick();
     }
   }
@@ -631,37 +658,28 @@ export class MillScreen extends Screen {
     this.game.audio.play('tie');
   }
 
-  /** The joke, part one: the wind-up. The tie beat is over, the fresh sack is in the paw, and the head goes back and back. */
-  sneeze(s: MillSeat): void {
-    s.sneezeDue = 0; s.sneezeT = SNEEZE_FRAMES; this.sneezes++;
-    seatAnim(s, 'sneezeUp', true);
-  }
-
-  /** Part two: ACHOO. The body snaps forward and a cloud of the visit's own dust goes up off the face. */
-  achoo(s: MillSeat): void {
-    const fx = R(s.x + s.facing * 14), fy = R(s.y - 44);
-    seatAnim(s, 'achoo', true);
-    particles.burst(this.grain.puffKind, fx, fy, 8, this.puffOpts);
-    ringAt(fx, fy, 4, 18, UI.cream, 2, 10, false, true);
-    floatText(s.x, s.y - 70, ACHOO, UI.cream, 1, true);
-    this.game.audio.play('sneeze');
-  }
-
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
 
-  /** The round is over: drop the sign; a seat that tied a sack cheers, one that never did sulks. */
+  /** The round is over: drop the sign; every joke stops where it is; a seat that tied a sack cheers, one that never did sulks. */
   finish(): void {
     if (this.clock.phase !== 0) return;
     endRound(this.clock, this.signPrefix + this.total, this.game.audio);
+    quietJokes(this);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      s.moving = false; s.bumpT = 0; s.tieT = 0; s.chute = -1; s.sneezeT = 0; s.sneezeDue = 0;
+      s.moving = false; s.bumpT = 0; s.tieT = 0; s.chute = -1;
       seatAnim(s, s.count > 0 ? 'cheer' : 'sad', true);
     }
   }
 
   override draw(ctx: CanvasRenderingContext2D): void {
-    const L = this.layers, f = this.frame;
+    const L = this.layers, f = this.frame, bump = gagShakeY();
+    // the WORLD takes the jokes' bump (game/gags.ts gagShakeY): the room, the props, the cast and the dust, and
+    // never the paper - the plates, the tags, the word cards, the ticket and the sign stay where they are read. A
+    // bumped room uncovers a row or three at the top or the bottom of the frame, and no screen clears the canvas, so
+    // on a bump frame the room is laid down once at rest first: the uncovered rows show the room, not the last frame.
+    if (bump !== 0) { blitAt(ctx, L.wall.L, 0, L.wall.y); blitAt(ctx, L.floor.L, 0, L.floor.y); blitAt(ctx, L.beam.L, 0, L.beam.y); }
+    ctx.save(); ctx.translate(0, bump);
     blitAt(ctx, L.wall.L, 0, L.wall.y);
     drawSail(ctx, f);                                   // clipped to the window's opening
     drawGear(ctx, f);                                   // the spur wheel and the stone nut, one index step per 3 frames
@@ -676,9 +694,12 @@ export class MillScreen extends Screen {
     for (let i = 0; i < this.seats.length; i++) { const s = this.seats[i]; drawShadow(ctx, s.x, s.y, s.rig.width + 6, 0.4, 0); }
     for (let i = this.seats.length - 1; i >= 0; i--) this.drawSeat(ctx, this.seats[i], f);
     for (let i = 0; i < this.hops.length; i++) this.drawHop(ctx, this.hops[i]);
+    drawClogDrops(this, ctx);                           // a clog on its way down lands ON somebody: over everybody
     particles.draw(ctx, null, 'front');
     blitAt(ctx, L.beam.L, 0, L.beam.y);                 // the ceiling boards: the gear's teeth run up into them
+    ctx.restore();
     this.drawPlates(ctx);
+    drawGags(ctx);
     drawClock(ctx, this.countStr, this.total / this.target, this.clockIcon, TITLE);
     drawControlCard(ctx, this.frame, this.frame, SCHEMES, this.cardKey);
     drawHint(ctx, this.hint);
@@ -689,29 +710,35 @@ export class MillScreen extends Screen {
    * The four spouts, the flour falling out of the awake ones, and the heap an uncaught pour builds on the planks.
    *
    * The column is drawn FIRST and the spout over it, so the flour comes out from under the lip and the gold mouth -
-   * the one mark in the frame that says which chute is live - is never crossed by the column's own 2 px ink.
+   * the one mark in the frame that says which chute is live - is never crossed by the column's own 2 px ink. A chute
+   * with a clog in it coughs its column out in slugs, pours nothing at all while the clog stops its mouth, and
+   * carries the clog's bulge (or its plug) over the spout (millGags.ts).
    */
   drawChutes(ctx: CanvasRenderingContext2D, f: number): void {
     const g = this.grain;
     for (let i = 0; i < this.chutes.length; i++) {
       const c = this.chutes[i], x = CHUTE_X[i];
-      if (c.state === POURING) {
+      if (c.state === POURING && !chuteChoked(c)) {
         const age = POUR_FRAMES - c.t, k = age < 10 ? age / 10 : 1;
-        if (c.seat >= 0) {
-          const s = this.seats[c.seat];
-          drawPour(ctx, x, ROWS.mouth, R(s.x + s.facing * s.sackDX), R(s.y + s.sackDY), f, k, g);
-        } else {
-          drawPour(ctx, x, ROWS.mouth, x, ROWS.pile, f, k, g);
-          drawPile(ctx, x, ROWS.pile, age / POUR_FRAMES, g);
-        }
+        let x1: number = x, y1: number = ROWS.pile;
+        if (c.seat >= 0) { const s = this.seats[c.seat]; x1 = R(s.x + s.facing * s.sackDX); y1 = R(s.y + s.sackDY); }
+        if (c.clog) drawSputter(ctx, x, ROWS.mouth, x1, y1, f, g); else drawPour(ctx, x, ROWS.mouth, x1, y1, f, k, g);
+        if (c.seat < 0) drawPile(ctx, x, ROWS.pile, age / POUR_FRAMES, g);
       }
-      // the shake is on ALTERNATE frames and only through the telegraph; the mouth strobes on a slower beat so the
-      // two warnings do not read as one flicker
-      drawChute(ctx, x, c.state, c.state === WAKING && (f & 1) ? 1 : 0, (f >> 2) & 1, g);
+      // the shake is on ALTERNATE frames: the telegraph's 1 px, a clog's rattles and its harder shudder (chuteShake);
+      // the mouth strobes on a slower beat so the two warnings do not read as one flicker
+      const shake = chuteShake(c, f);
+      drawChute(ctx, x, c.state, shake, (f >> 2) & 1, g);
+      drawChuteClog(this, ctx, i, shake);
     }
+    drawSpills(this, ctx);                              // a clog that caught nobody, heaped on the planks
   }
 
-  /** One seat, with the state of its sack pushed onto the rig just before it draws (never held on the rig). */
+  /**
+   * One seat, with the state of its sack pushed onto the rig just before it draws (never held on the rig). A seat in
+   * the middle of a joke is drawn by the joke (millGags.ts drawSeatJoke): under its heap, or in the coat the joke
+   * left on it (game/gags.ts coat) with the stars or the stuck grains over it.
+   */
   drawSeat(ctx: CanvasRenderingContext2D, s: MillSeat, f: number): void {
     const rig = s.rig, o = s.opts;
     // through the heft the sack is still full in the paw; it empties on the toss key, with the hop
@@ -720,6 +747,7 @@ export class MillScreen extends Screen {
     rig.sackZone = s.tieT > 0 ? 1 : shown >= FULL ? 2 : shown >= BRIM_AT ? 1 : 0;
     rig.sackBlink = (f >> 2) & 1;
     o.x = s.x; o.y = s.y; o.facing = s.facing;
+    if (drawSeatJoke(this, ctx, s, f)) return;
     drawRig(ctx, rig, s.player.pose, o);
   }
 
@@ -756,25 +784,25 @@ export class MillScreen extends Screen {
   override summary() {
     return {
       total: this.total, target: this.target, elapsed: this.clock.elapsed, phase: this.clock.phase, sign: this.clock.signText,
-      tied: this.tied, wake: this.wake, sneezes: this.sneezes,
+      tied: this.tied, wake: this.wake, sneezes: this.sneezes, clogs: this.clogs, spills: this.spills,
       // fill is rounded to three places so a test can read it without chasing float tails
-      seats: this.seats.map((s) => [s.slot, R(s.x), s.count, Math.round(s.fill * 1000) / 1000, s.chute, s.sneezeT]),
-      // [state, frames left, the seat filling from it, its x]. State is 0 dormant / 1 waking / 2 pouring
-      // (art/millProps.js DORMANT / WAKING / POURING). The x is carried so a headless test can walk a seat under a
-      // spout without a copy of the layout table going stale behind it.
-      chutes: this.chutes.map((c, i) => [c.state, c.t, c.seat, CHUTE_X[i]]),
+      seats: this.seats.map((s) => [s.slot, R(s.x), s.count, Math.round(s.fill * 1000) / 1000, s.chute, s.sneezeT, s.clogT]),
+      // [state, frames left, the seat filling from it, its x, clog, clog frames left, the clog's catch]. State is 0
+      // dormant / 1 waking / 2 pouring (art/millProps.js DORMANT / WAKING / POURING). The x is carried so a headless
+      // test can walk a seat under a spout without a copy of the layout table going stale behind it.
+      chutes: this.chutes.map((c, i) => [c.state, c.t, c.seat, CHUTE_X[i], c.clog, c.clogT, c.victim]),
     };
   }
 
   /** Every sim field that could diverge between peers (net/checksum.js). */
   override checksumFields(): number[] {
     const f = this.fields; f.length = 0;
-    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.wake, this.tied, this.sneezes);
+    f.push(this.clock.elapsed, this.clock.phase, this.clock.signT, this.total, this.wake, this.tied, this.sneezes, this.clogs, this.spills);
     for (let i = 0; i < this.seats.length; i++) {
       const s = this.seats[i];
-      f.push(s.x, s.facing, s.count, s.fill, s.bumpT, s.tieT, s.chute, s.moving ? 1 : 0, s.sneezeDue, s.sneezeT);
+      f.push(s.x, s.facing, s.count, s.fill, s.bumpT, s.tieT, s.chute, s.moving ? 1 : 0, s.sneezeDue, s.sneezeT, s.clogT);
     }
-    for (let i = 0; i < this.chutes.length; i++) { const c = this.chutes[i]; f.push(c.state, c.t, c.seat); }
+    for (let i = 0; i < this.chutes.length; i++) { const c = this.chutes[i]; f.push(c.state, c.t, c.seat, c.clog, c.clogT, c.victim); }
     return f;
   }
 }
