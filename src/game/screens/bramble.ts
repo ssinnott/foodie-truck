@@ -37,7 +37,7 @@ import type { Point } from '../../lib/art/rigParts.ts';
 import { brambleLayers, ROWS, BUSH_X } from '../../art/backgrounds/bramble.ts';
 import { BUSH_H, SPOT, BRAMBLE_ANIMS, drawBush, drawFlyingBerry } from '../../art/brambleProps.ts';
 import {
-  makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
+  makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -278,7 +278,7 @@ export class BrambleScreen extends Screen {
 
   /**
    * `action`: the nearest bush inside the reach with a ripe berry on it gives up its LOWEST ripe spot (no random
-   * number spent on which, so a pick costs the rng stream nothing): the reach beat, the berry's hop, +1.
+   * number spent on which): the reach beat, the berry's hop, +1. Only Barley's seat spends a roll, on the gulp.
    */
   tryPick(s: BrambleSeat): void {
     let best = -1, bd = REACH + 1;
@@ -294,10 +294,11 @@ export class BrambleScreen extends Screen {
     const bx = BUSH_X[best], sx = bx + SPOT[k * 2], sy = BUSH_Y + SPOT[k * 2 + 1];
     if (b.thorn & (1 << k)) { b.thorn &= ~(1 << k); this.prick(s, sx, sy, bx); return; }
     b.ripe &= ~(1 << k);
-    s.count++; this.setTotal(this.total + 1);
     s.reachT = REACH_FRAMES; s.moving = false;
     s.facing = bx >= s.x ? 1 : -1;
     seatAnim(s, 'pick', true);
+    if (gulps(s)) { gulp(this.game, s, sx, sy - 14); return; }
+    s.count++; this.setTotal(this.total + 1);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     h.t = 0; h.x0 = sx; h.y0 = sy; h.seat = s.index;
     ringAt(sx, sy, 3, 10, UI.cream, 2, 12, false, true);

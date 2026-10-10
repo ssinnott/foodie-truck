@@ -28,6 +28,8 @@ import { jointScreen } from '../lib/art/rig.ts';
 import type { DrawRigOpts, Rig, RigWeapon } from '../lib/art/rig.ts';
 import { LIGHT_X, LIGHT_Y } from '../lib/art/shading.ts';
 import { drawText, measureText } from '../engine/text.ts';
+import { floatText } from '../art/fx.ts';
+import { rng } from '../lib/engine/rng.ts';
 import { drawTicket, drawBar, drawSign, drawNamePlate } from './ui.ts';
 import type { Game, Audio } from './game.ts';
 
@@ -124,12 +126,34 @@ export interface Seat {
   crown: number;
   /** Walking speed multiplier for this seat: FORAGER_WALK for a seated Cress, else 1 (set in makeSeats). */
   walk: number;
+  /** Picks this seat gulped down instead of banking (gulp()): never in the basket, never in the party's total. */
+  gulped: number;
   /** This seat's own drawRig options object, mutated per draw instead of allocated. */
   opts: DrawRigOpts;
 }
 
 /** The forager walks every gather game 25% faster: a seated Cress (ride-along friends have no seat, so none). */
 export const FORAGER_WALK = 1.25;
+/** The hungry one's gulp (docs/GDD.md section 5): one pick in twenty goes in Barley's mouth, not his basket. */
+export const GULP_CHANCE = 0.05;
+
+/**
+ * Whether this pick is one Barley gulps down. Only a seat with the hungry one in it draws, so every other pick leaves
+ * the rng stream exactly as it was. Called once per successful pick, after any toadstool or thorn has been ruled out.
+ */
+export function gulps(s: Seat): boolean {
+  return s.critter === 'barley' && rng.chance(GULP_CHANCE);
+}
+
+/**
+ * The gulp in place of a basket beat: the pick never reaches the basket or the party's total. It goes in his mouth,
+ * a NOM over the seat and a chew, and the seat counts it in `gulped` so a scene can tell its own picks from the eaten ones.
+ */
+export function gulp(game: Game, s: Seat, x: number, y: number): void {
+  s.gulped++;
+  floatText(x, y, 'NOM', UI.cream, 1, true);
+  game.audio.play('chew');
+}
 
 /**
  * One seat per party member. `floorY(i)` gives the feet line for party index i. Each seat carries its own draw
@@ -146,7 +170,7 @@ export function makeSeats<S extends Seat = Seat>(game: Game, floorY: (i: number)
       index: i, slot: p.slot, critter: def.id, name: def.name, rig, player, colour: PLAYER_COLORS[p.slot] || UI.paperDark,
       x: 0, y: floorY(i), facing: 1, moving: false, count: 0, bumpT: 0, catchT: 0, anim: '',
       crown: CROWN[def.id] != null ? CROWN[def.id] : 8,
-      walk: def.id === 'cress' ? FORAGER_WALK : 1,
+      walk: def.id === 'cress' ? FORAGER_WALK : 1, gulped: 0,
       opts: { x: 0, y: 0, facing: 1, scale: 1 },
     });
   }

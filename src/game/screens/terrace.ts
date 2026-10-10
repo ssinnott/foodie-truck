@@ -26,7 +26,7 @@ import { PLACES } from '../../content/places.ts';
 import { gatherTarget } from '../run.ts';
 import { terraceLayers, ROWS, CLUMP_X } from '../../art/backgrounds/terrace.ts';
 import { drawClump, drawHedgehog, TERRACE_ANIMS } from '../../art/terraceProps.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
@@ -186,9 +186,10 @@ export class TerraceScreen extends Screen {
     if (this.hog.at === best && this.hog.t === 0) { this.eek(s, best); return; }
     const c = this.clumps[best];
     c.snips--; c.regrow = 0;
-    s.count++; this.setTotal(this.total + 1);
     s.reachT = SNIP_FRAMES;
     seatAnim(s, 'snip', true);
+    if (gulps(s)) { gulp(this.game, s, CLUMP_X[best], CLUMP_Y - 28); return; }
+    s.count++; this.setTotal(this.total + 1);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     h.t = 0; h.x0 = CLUMP_X[best]; h.y0 = CLUMP_Y - 14; h.seat = s.index;
     ringAt(CLUMP_X[best], CLUMP_Y - 10, 3, 12, UI.cream, 2, 12, false, true);

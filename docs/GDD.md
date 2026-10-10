@@ -27,7 +27,7 @@ differences, never gates: anyone can do any job.
 
 | Role | Verb | What the role changes |
 |---|---|---|
-| **The hungry one** | EAT / CARRY | Biggest basket; slowest; in the kitchen a random `bite` beat now and then that costs nothing but makes everyone laugh |
+| **The hungry one** | EAT / CARRY | Biggest basket; slowest; in the kitchen a random `bite` beat now and then that costs nothing but makes everyone laugh. In every gather mini-game one pick in twenty goes in his mouth (NOM) instead of his basket, and never into the party's total (section 5) |
 | **The chef** | CHOP / MIX | Smallest basket; the one who plates with a flourish. Sorrel cooks 25% faster: her holds (MIX, STOVE, OVEN) fill in 192 frames, not 240 (section 6) |
 | **The driver** | DRIVE / HONK | 1.5× steering weight on the map; honks. The hare runs the grass: with Chicory seated, the truck moves 1.4 px/frame off the road instead of 1.0 (section 4; mud and the road are unchanged) |
 | **The forager** | GATHER / CAST | Cress walks 25% faster in every gather mini-game (section 5); longest fishing cast |
@@ -285,7 +285,9 @@ whose bar fills as the party gathers, the target count from the shopping list (t
 round has no time limit**: it ends only when the party's total reaches the target, so one visit always fills that
 line of the list; the scene ends with a sign dropping in (`APPLES: 12`) and a 60-frame hold, then `run.gather` and
 back to the map. All randomness through `rng` inside `update()`. A seated Cress walks 1.25 times as fast as the stick
-says in every game that walks (`FORAGER_WALK`); a ride-along friend has no seat and walks nothing.
+says in every game that walks (`FORAGER_WALK`); a ride-along friend has no seat and walks nothing. A seated Barley gulps
+one successful pick in twenty (`GULP_CHANCE`): the pick goes in his mouth, a NOM and a chew over the seat, and it is
+never banked. Nothing else about the pick changes, and only his seat draws the roll.
 
 A screen whose landmark supplies more than one thing (the orchard, the dairy, the mill, the farm, the bank, the
 cove) asks `run.js gatherTarget` which ingredient this visit is for, and draws that one: its glyph on the tally

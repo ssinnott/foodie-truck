@@ -35,8 +35,11 @@ export type { Decoded } from '../lib/net/protocol.ts';
  * 7: Sorrel cooks 25% faster and Cress walks 25% faster (game/screens/kitchen.ts CHEF_HOLD, game/minigame.ts
  * FORAGER_WALK). A seated Sorrel's holds fill 1.25 a frame and a seated Cress walks the gather games at 1.25 times the
  * stick. Both are simulation rules, so a peer on the old rules runs the same party at different speeds from the first frame.
+ * 8: the hungry one gulps one pick in twenty (game/minigame.ts GULP_CHANCE). A seated Barley's successful picks spend a
+ * roll on the shared rng, so every later draw moves on any peer that does not draw it, and the eaten pick never reaches
+ * the basket or the party's total.
  */
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 if (ACTIONS.length > 16) throw new Error('net/protocol: more than 16 actions no longer fit a uint16 mask');
 /**
  * START: the host's authoritative session parameters. Every peer seeds from this and begins at

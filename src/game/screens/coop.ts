@@ -31,7 +31,7 @@ import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { coopLayers, ROWS, NEST_X, NEST_EGG_Y } from '../../art/backgrounds/coop.ts';
 import { drawHen } from '../../art/hens.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
@@ -352,10 +352,11 @@ export class CoopScreen extends Screen {
     if (e.broody > 0) { this.peck(s, e); return; }
     e.active = false;
     if (e.nest >= 0) this.nestFull[e.nest] = 0;
-    s.count++; this.setTotal(this.total + 1);
     s.reachT = REACH_FRAMES; s.moving = false;
     s.facing = e.x >= s.x ? 1 : -1;
     seatAnim(s, e.nest >= 0 ? 'reachNest' : 'pluck', true);
+    if (gulps(s)) { gulp(this.game, s, e.x, e.y - 12); return; }
+    s.count++; this.setTotal(this.total + 1);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     h.t = 0; h.x0 = e.x; h.y0 = e.y; h.seat = s.index;
     ringAt(e.x, e.y, 3, 10, UI.cream, 2, 12, false, true);

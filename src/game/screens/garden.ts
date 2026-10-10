@@ -42,7 +42,7 @@ import {
   plantFor, drawHole, drawRipeSpark, drawPulledRoot, drawPullGauge, drawBarrow,
 } from '../../art/gardenProps.ts';
 import {
-  makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
+  makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, PlateStack, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -495,16 +495,17 @@ export class GardenScreen extends Screen {
   /** The root comes free: +1, a hole in the bed, soil everywhere, and the carrot hops into the seat's trug. */
   pullRoot(s: GardenSeat, t: CropTop): void {
     t.active = false;   // the root is out, so the slot is free and the spawner replants it elsewhere
-    s.count++; this.setTotal(this.total + 1);
     this.pulls++;
     // the whopper: the same +1, but the root is enormous and the puller goes over backwards with it
     const big = t.whopper;
     if (big) { this.whoppers++; s.state = PULL; s.t = WHOPPER_FRAMES; s.pull = 0; seatAnim(s, 'overBackwards', true); floatText(s.x, s.y - 70, WHOA, UI.cream, 1, true); }
     else { s.state = PULL; s.t = PULL_FRAMES; s.pull = 0; seatAnim(s, 'pullOut', true); }
     this.openHole(t.x);
+    burstCrumbs(t.x, ROOT_Y - 2, ROOT_Y + 6, CROP.soil, big ? 20 : 8, true);
+    if (gulps(s)) { gulp(this.game, s, t.x + s.facing * 14, ROOT_Y - 54); return; }
+    s.count++; this.setTotal(this.total + 1);
     const fl = this.flights[this.flightCursor]; this.flightCursor = (this.flightCursor + 1) % this.flights.length;
     fl.t = 0; fl.x0 = t.x; fl.y0 = ROOT_Y - 12; fl.seat = s.index; fl.big = big;
-    burstCrumbs(t.x, ROOT_Y - 2, ROOT_Y + 6, CROP.soil, big ? 20 : 8, true);
     ringAt(t.x, ROOT_Y - 4, 3, 13, UI.cream, 2, 12, true, true);
     burstSparkle(t.x, ROOT_Y - 18, 4, SIGNAL.garden, true);
     floatText(t.x + s.facing * 14, ROOT_Y - 54, PLUS_ONE, s.colour, 1, true);

@@ -37,7 +37,7 @@ import type { Point } from '../../lib/art/rigParts.ts';
 import { beachLayers, ROWS, GLINTS, BEACH } from '../../art/backgrounds/beach.ts';
 import { BEACH_ANIMS, drawCrab, drawWeed, drawCockle, drawPan, drawBurrow, drawCatchSpark, drawFlyingCatch } from '../../art/beachProps.ts';
 import {
-  makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
+  makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
@@ -395,14 +395,15 @@ export class BeachScreen extends Screen {
     const t = this.things[best];
     if (this.q.dart > 0 && t.state === RUN) { this.pinch(s, best); return; }
     t.active = false;
-    s.count++; this.setTotal(this.total + 1);
     s.pounceT = POUNCE_FRAMES; s.moving = false;
     s.facing = t.x >= s.x ? 1 : -1;
     seatAnim(s, 'pounce', true);
-    const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
-    h.t = 0; h.x0 = t.x; h.y0 = QUARRY_Y - 8; h.seat = s.index;
     ringAt(t.x, QUARRY_Y - 4, 4, 16, SIGNAL.pond, 2, 14, true, true);
     burstDust(t.x, QUARRY_Y, 4, 1.4, true);
+    if (gulps(s)) { gulp(this.game, s, t.x, QUARRY_Y - 30); return; }
+    s.count++; this.setTotal(this.total + 1);
+    const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
+    h.t = 0; h.x0 = t.x; h.y0 = QUARRY_Y - 8; h.seat = s.index;
     floatText(t.x, QUARRY_Y - 30, PLUS_ONE, s.colour, 1, true);
     this.game.audio.play('catch');   // the orchard's basket and its pip: the catch lands in the same basket
   }

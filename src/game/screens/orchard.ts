@@ -41,7 +41,7 @@ import type { Point } from '../../lib/art/rigParts.ts';
 import { F } from '../../content/critters/common.ts';
 import { orchardLayers, ORCHARD, GRASS_Y, FENCE_Y, BLEED_X, PARALLAX } from '../../art/backgrounds/orchard.ts';
 import type { OrchardLayers } from '../../art/backgrounds/orchard.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates, RIBBON_BASKET } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates, RIBBON_BASKET } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
@@ -425,11 +425,14 @@ export class OrchardScreen extends Screen {
         if (a.kind === RIPE) {
           // cherries fall two on one stem (the glyph is the pair), so a catch is +2 while the list wants two more
           const n = this.ing === 'cherry' && this.total + 1 < this.target ? 2 : 1;
-          s.count += n; s.catchT = CATCH_FRAMES;
-          this.setTotal(this.total + n);
-          ringAt(bx, by, 4, 14, UI.cream, 2, 12, false, true);
-          floatText(bx, by - 12, n === 2 ? PLUS_TWO : PLUS_ONE, s.colour, 1, true);
-          this.game.audio.play('catch');
+          if (gulps(s)) gulp(this.game, s, bx, by - 12);
+          else {
+            s.count += n; s.catchT = CATCH_FRAMES;
+            this.setTotal(this.total + n);
+            ringAt(bx, by, 4, 14, UI.cream, 2, 12, false, true);
+            floatText(bx, by - 12, n === 2 ? PLUS_TWO : PLUS_ONE, s.colour, 1, true);
+            this.game.audio.play('catch');
+          }
         } else if (a.kind === WORMY) {
           // the grub: a flinch and a dazed face, and that is all it costs
           s.bumpT = BUMP_FRAMES; s.moving = false;

@@ -25,7 +25,7 @@ import { PLACES } from '../../content/places.ts';
 import { gatherTarget } from '../run.ts';
 import { woodLayers, WOOD, ROWS } from '../../art/backgrounds/wood.ts';
 import { drawBump, drawToadstool, WOOD_ANIMS } from '../../art/woodProps.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
@@ -217,9 +217,10 @@ export class WoodScreen extends Screen {
     b.active = false;
     s.moving = false; s.facing = b.x >= s.x ? 1 : -1;
     if (b.toadstool) { this.pooh(s, b.x); return; }
-    s.count++; this.setTotal(this.total + 1);
     s.reachT = BRUSH_FRAMES;
     seatAnim(s, 'brush', true);
+    if (gulps(s)) { gulp(this.game, s, b.x, BUMP_Y - 20); return; }
+    s.count++; this.setTotal(this.total + 1);
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     h.t = 0; h.x0 = b.x; h.y0 = BUMP_Y - 8; h.seat = s.index;
     ringAt(b.x, BUMP_Y - 4, 3, 12, UI.cream, 2, 12, true, true);

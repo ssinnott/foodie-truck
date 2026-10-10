@@ -40,7 +40,7 @@ function holdTarget(page) {
 function seat0(page) {
   return page.evaluate(() => {
     const sc = window.__game.game.screen, s = sc.seats[0];
-    return { fill: s.fill, count: s.count, bumpT: s.bumpT, anim: s.anim, total: sc.total, phase: s.phase, churn: s.churn, facing: s.facing };
+    return { fill: s.fill, count: s.count, gulped: s.gulped, bumpT: s.bumpT, anim: s.anim, total: sc.total, phase: s.phase, churn: s.churn, facing: s.facing };
   });
 }
 
@@ -70,8 +70,9 @@ export const SCENARIOS = {
         if (i < PUMP_PER_PAIL - 1) assert(mid.fill === i + 1, `tap ${i + 1} is a squirt: the pail is ${i + 1}/${PUMP_PER_PAIL} (fill ${mid.fill})`);
       }
       const filled = await seat0(page);
-      assert(filled.count === before.count + 1, `twelve taps bank a pail (seat 0 ${before.count} -> ${filled.count})`);
-      assert(filled.total === before.total + 1, `and the party's total goes up with it (${before.total} -> ${filled.total})`);
+      // seat 0 is Barley, who gulps one pail in twenty: a full pail is banked (count and total up) or gulped (neither)
+      assert(filled.count + filled.gulped === before.count + before.gulped + 1, `twelve taps bank a pail or Barley gulps it (seat 0 ${before.count} -> ${filled.count}, gulped ${filled.gulped})`);
+      assert(filled.total === before.total + (filled.count - before.count), `and the party's total goes up only when it is banked (${before.total} -> ${filled.total})`);
       assert(filled.fill === 0, `a fresh pail slides in (fill ${filled.fill})`);
       const after = await api.summary();
       assert(JSON.stringify(after.top.seats.slice(1).map((s) => s.count)) === others0, 'the other seats, with no input, milked nothing');
@@ -80,7 +81,8 @@ export const SCENARIOS = {
       const slowBefore = await seat0(page);
       for (let i = 0; i < PUMP_PER_PAIL; i++) await api.press(0, { action: true }, 1, 29);
       const slow = await seat0(page);
-      assert(slow.count === slowBefore.count + 1 && slow.fill === 0, `twelve slow taps fill a pail too (seat 0 ${slowBefore.count} -> ${slow.count}, fill ${slow.fill})`);
+      // seat 0 is Barley here, who gulps one pail in twenty (GULP_CHANCE): a full pail is banked or gulped, never both
+      assert(slow.count + slow.gulped === slowBefore.count + slowBefore.gulped + 1 && slow.fill === 0, `twelve slow taps fill a pail too, banked or gulped (seat 0 ${slowBefore.count} -> ${slow.count}, gulped ${slow.gulped}, fill ${slow.fill})`);
 
       // --- nothing else does anything: `alt` is not a pump, and no cow ever kicks
       // forty taps are three more pails: push the finish line well out so the mash cannot end the round under the assert
@@ -139,7 +141,8 @@ export const SCENARIOS = {
       assert(after.top.seats[0].swishIn >= 20 && after.top.seats[0].swishIn <= 40, `the next swish is seeded 20..40 squirts off (${after.top.seats[0].swishIn})`);
       for (let i = 0; i < 9; i++) await api.press(0, { action: true }, 1, 3);
       const banked = await api.summary();
-      assert(banked.top.seats[0].count === 1 && banked.top.total === 1, `nine more taps bank the pail (count ${banked.top.seats[0].count})`);
+      const pail = await seat0(page);
+      assert(pail.count + pail.gulped === 1 && banked.top.total === pail.count, `nine more taps bank the pail or Barley gulps it (count ${pail.count}, gulped ${pail.gulped}, total ${banked.top.total})`);
     });
   },
   async dairyButter(server) {
