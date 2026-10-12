@@ -1,4 +1,4 @@
-// The front-of-house art: the dusk lane every menu screen is painted on, and the FOODIE TRUCK sign that hangs
+// The front-of-house art: the dusk lane every menu screen is painted on, and the SOUPED UP sign that hangs
 // over the title (docs/ART_STYLE.md sections 1 and 7, the winning proposal's "## UI" logo paragraph).
 //
 // Both are PRE-RENDERED once into offscreen layers and blitted at integer offsets: the only per-frame marks the
@@ -278,8 +278,8 @@ function paintBoard(g) {
   g.fillStyle = UI.woodDark; g.fillRect(3, 44, LOGO_W - 6, 2);
   g.restore();
   // the two words, whole, in the middle of the board: this is the one thing the screen has to say in one look
-  carve(g, 'FOODIE', R(LOGO_W / 2 - measureText('FOODIE', 5) / 2), ROW1_Y);
-  carve(g, 'TRUCK', R(LOGO_W / 2 - measureText('TRUCK', 5) / 2), ROW2_Y);
+  carve(g, 'SOUPED', R(LOGO_W / 2 - measureText('SOUPED', 5) / 2), ROW1_Y);
+  carve(g, 'UP', R(LOGO_W / 2 - measureText('UP', 5) / 2), ROW2_Y);
   // the garnish: a fried egg and a ripe apple in the gaps either side of TRUCK, so the sign says FOOD as well
   const gy = ROW2_Y + 18;
   friedEgg(g, GARNISH_X, gy, FRUIT);

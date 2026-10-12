@@ -1,5 +1,5 @@
 // TITLE (docs/GDD.md section 10): the parked truck on the dusk lane, a crate of produce on the verge, the crew
-// idling beside it, the FOODIE TRUCK sign swinging over the whole picture and a chalk A-frame menu.
+// idling beside it, the SOUPED UP sign swinging over the whole picture and a chalk A-frame menu.
 //
 // Nothing here simulates anything: the only state is which menu row is selected, so `checksumFields` is one
 // number and the screen is trivially net-safe. The lane and the sign are pre-rendered layers (art/logo.js); the

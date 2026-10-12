@@ -1,4 +1,4 @@
-# Foodie Truck — Game Design Document
+# Souped Up — Game Design Document
 
 > **Precedence:** this document owns *design* — names, numbers, rules, what each screen must do. `docs/ARCHITECTURE.md`
 > owns technical matters and wins on them. `docs/ART_STYLE.md` owns how things look and supersedes anything here
@@ -16,8 +16,9 @@ closes.
 
 The *structure* is borrowed from the Sesame Street "Foodie Truck" segments (an order → its ingredient → go to the
 source → cook). Everything else is original: the cast are anthropomorphic countryside animals with their own names,
-silhouettes and colours, and nothing in the game may resemble a Sesame Street character, name or design. Tone:
-warm, silly, unhurried; the joke that never gets old is the big hungry one eating the ingredients.
+silhouettes and colours, and nothing in the game may resemble a Sesame Street character, name or design, the game's
+own title included (it began as Foodie Truck, the segments' own name, and was renamed Souped Up for that reason).
+Tone: warm, silly, unhurried; the joke that never gets old is the big hungry one eating the ingredients.
 
 ## 2. The cast
 
@@ -843,7 +844,7 @@ stock piece the truck is built with and **two to buy** — six pieces in all.
 |---|---|---|
 | **Paint** | Beetroot | Seafoam mint (220), **Ketchup and mustard** (320) — red, with a mustard sill and a red zigzag down it |
 | **Awning** | Mustard stripes | Cherry gingham (200), **Salad** (280) — a lettuce awning with a leafy frill and tomato slices |
-| **Roof** | The FOODIE TRUCK board | Big apple (260), **Hot dog** (360) — bun, sausage and a mustard zigzag, on the board's posts |
+| **Roof** | The SOUPED UP board | Big apple (260), **Hot dog** (360) — bun, sausage and a mustard zigzag, on the board's posts |
 
 **The balance: about one piece a week.** A dish tips 4, 8 or 12 coins by its stars (`TIP_COINS`, game/run.ts),
 and a week is 31 dishes, so a week of two-star cooking tips 248, three stars 372, and a steady two-and-a-half about

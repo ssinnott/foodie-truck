@@ -1,4 +1,4 @@
-# Foodie Truck — Expansion Roadmap
+# Souped Up — Expansion Roadmap
 
 > **Precedence:** this is a plan, not a rule book. `docs/GDD.md` owns the design of anything that ships; when a
 > thing on this list is built, its numbers move into the GDD and its row here is struck through.
