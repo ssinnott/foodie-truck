@@ -1,4 +1,4 @@
-# Foodie Truck — Technical Architecture Contract
+# Lane & Ladle — Technical Architecture Contract
 
 This document is the binding technical contract. Every module, agent and reviewer codes against it. Where it and a
 design document disagree on a *technical* matter, this file wins; on a *design* matter (names, numbers, looks) the

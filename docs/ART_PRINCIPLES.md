@@ -2,7 +2,7 @@
 
 Aether & Brass drew four heroes, thirty-one enemies, eight bosses and sixteen backdrops with nothing but canvas
 primitives, and spent most of its 210 commits on one complaint: *"muddled, hard to pick out arms, legs, items and
-the face."* This document is the distilled answer, written so a **new** procedural-art game — Foodie Truck — starts
+the face."* This document is the distilled answer, written so a **new** procedural-art game — Lane & Ladle — starts
 where that one finished. Every principle names where it came from. Where a number is quoted, it is the number the
 shipped code uses, not the one the docs claimed (the two drifted, which is itself lesson 52).
 
@@ -212,7 +212,7 @@ F process and tooling · G what to do differently this time.
 
 51. **Write the tooling on day one, not after the art.** Server, sheet, capture, build and playtest arrived together
     in the sibling game's first tooling commit and the readability pass could not have happened without them; the
-    invariant suite followed the same day. Foodie Truck starts with all of them in place.
+    invariant suite followed the same day. Lane & Ladle starts with all of them in place.
 52. **Keep the docs honest against the code.** The shipped shading gates, the contact-shadow default, the face pixel
     sizes and the outline width all drifted from the prose; the suite records the drift in a `DOC_BUGS` list. Quote
     the code, and when a number changes, change it in one place.
