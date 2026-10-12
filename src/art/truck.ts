@@ -33,7 +33,7 @@ export interface TruckStyle {
   awning: string;
   roof: string;
 }
-/** The truck as it leaves the works: beetroot, mustard stripes and the wooden FOODIE TRUCK board. */
+/** The truck as it leaves the works: beetroot, mustard stripes and the wooden SOUPED UP board. */
 export const STOCK_STYLE: TruckStyle = Object.freeze({ paint: 'beetroot', awning: 'stripes', roof: 'board' });
 
 /** One paint job: the body's three tones, and the sill band's own fill and the squiggle along it ('' for none). */
@@ -113,7 +113,7 @@ function roofSlab(ctx, ow) { pathRR(ctx, -40, -48, 52, 8, 2); inkFill(ctx, ow, T
 /** The two sign posts a roof sign stands on, drawn before the slab so its ink closes over their feet. */
 function roofPosts(ctx) { ctx.fillStyle = TRUCK.woodDark; ctx.fillRect(-28, -58, 2, 11); ctx.fillRect(24, -58, 2, 11); }
 
-/** The stock roof: two sign posts, the slab, and the wooden FOODIE TRUCK board, lettered from scale 2 up. */
+/** The stock roof: two sign posts, the slab, and the wooden SOUPED UP board, lettered from scale 2 up. */
 function roofBoard(ctx, ow, S, facing) {
   roofPosts(ctx);
   roofSlab(ctx, ow);
@@ -122,7 +122,7 @@ function roofBoard(ctx, ow, S, facing) {
   if (S >= 2) {
     // the lettering is a size-1 pixel font, readable from scale 2 up; below that a cream stripe stands in for it
     ctx.save(); ctx.scale(facing, 1);
-    drawText(ctx, 'FOODIE TRUCK', 0, -58, { size: 1, color: TRUCK.cream, align: 'center', shadow: false });
+    drawText(ctx, 'SOUPED UP', 0, -58, { size: 1, color: TRUCK.cream, align: 'center', shadow: false });
     ctx.restore();
   } else { ctx.fillStyle = TRUCK.cream; ctx.fillRect(-32, -57, 28, 3); ctx.fillRect(2, -57, 30, 3); }
 }

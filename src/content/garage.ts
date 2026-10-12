@@ -37,7 +37,7 @@ export const PARTS: readonly TruckPart[] = Object.freeze([
   Object.freeze({ slot: 'awning' as TruckSlot, id: 'stripes', name: 'MUSTARD STRIPES', price: 0 }),
   Object.freeze({ slot: 'awning' as TruckSlot, id: 'gingham', name: 'CHERRY GINGHAM', price: 200 }),
   Object.freeze({ slot: 'awning' as TruckSlot, id: 'salad', name: 'SALAD', price: 280 }),
-  Object.freeze({ slot: 'roof' as TruckSlot, id: 'board', name: 'FOODIE TRUCK BOARD', price: 0 }),
+  Object.freeze({ slot: 'roof' as TruckSlot, id: 'board', name: 'SOUPED UP BOARD', price: 0 }),
   Object.freeze({ slot: 'roof' as TruckSlot, id: 'apple', name: 'BIG APPLE', price: 260 }),
   Object.freeze({ slot: 'roof' as TruckSlot, id: 'hotdog', name: 'HOT DOG', price: 360 }),
 ]);

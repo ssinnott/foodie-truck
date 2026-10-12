@@ -1,4 +1,6 @@
-# Foodie Truck
+# Souped Up
+
+*Formerly Foodie Truck. The repository, the website's address and the game's save data keep the old name.*
 
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-support-F2C14E?logo=kofi&logoColor=white&labelColor=2A1F1A)](https://ko-fi.com/seansinnott)
 

@@ -72,5 +72,5 @@ export function createServer() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  createServer().listen(PORT, () => console.log(`Foodie Truck dev server: http://localhost:${PORT}/`));
+  createServer().listen(PORT, () => console.log(`Souped Up dev server: http://localhost:${PORT}/`));
 }

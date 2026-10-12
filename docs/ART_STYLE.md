@@ -1,4 +1,4 @@
-# FOODIE TRUCK — Art & Animation Style Guide (binding)
+# SOUPED UP — Art & Animation Style Guide (binding)
 
 > **Precedence:** this guide governs every rig, backdrop and panel. It supersedes anything `docs/GDD.md` says about
 > drawing. `docs/ARCHITECTURE.md` wins on technical matters. `docs/ART_PRINCIPLES.md` is the *why* behind every rule
@@ -130,7 +130,7 @@ horse, the bat) before calling a beat done.
 A rounded 1950s milk-float: beetroot-plum body `#7E3A56` (shadow `#5A2A40`, cap `#9A5470`), cream roof and
 wheel rims `#F1E4C8`, a mustard/cream striped awning (`#E2B44A` / `#F1E4C8`, stripes as a clipped fill) over the
 side hatch, a chalk board hooked on the hatch, brass headlamp `#E2B44A` with a `#FFD27A` core, ink tyres, a wooden
-FOODIE TRUCK roof sign. One inked body path with the cab bump appended. Sizes: map token 40×24 (master 80×48 at
+SOUPED UP roof sign. One inked body path with the cab bump appended. Sizes: map token 40×24 (master 80×48 at
 0.5×), title/results 160×96 (2×), lobby 320×192. On the map the crew's 12 px heads ride in the windows (driver in
 the cab, the rest at the hatch) and inherit the bob; a `HONK!` stamp slams above the cab with a 1.1 squash.
 
