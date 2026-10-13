@@ -6,9 +6,9 @@
 //          once (the whole line's apples, then its eggs) and sends each flying along the counter to the station ITS
 //          dish uses next (a graphic, never a choice); the last one closes the door
 //   CHOP  ten presses (fifteen if anyone ordered EXTRA CRUNCHY), any rhythm: every tap is a chop
-//   MIX   hold for 240 frames while a dial fills; letting go pauses it, and it picks up where it left off
-//   STOVE hold for 240 frames while a bar fills; letting go pauses it the same way
-//   OVEN  hold for 240 frames while the bake runs; letting go pauses it the same way
+//   MIX   hold for 240 frames (192 for Sorrel, the chef: CHEF_HOLD) while a dial fills; letting go pauses it, and it picks up where it left off
+//   STOVE hold for 240 frames (192 for the chef) while a bar fills; letting go pauses it the same way
+//   OVEN  hold for 240 frames (192 for the chef) while the bake runs; letting go pauses it the same way
 //   PLATE a press at the hatch rings the bell: ORDER UP!, and every plate goes out through the hatch
 // THE WHOLE LINE IS COOKED AT THE SAME TIME: ONE GIANT ORDER. The kitchen is handed every order in the line
 // (`orders`: run.lineOrders(), front first) and their steps are MERGED into one run of the counter (`mergeSteps`):
@@ -91,6 +91,8 @@ const FRIDGE_S = 0, CHOP = 1, MIX = 2, STOVE = 3, OVEN_S = 4, PLATE_S = 5;
 const STATION_IDX = { fridge: FRIDGE_S, chop: CHOP, mix: MIX, stove: STOVE, oven: OVEN_S, plate: PLATE_S };
 /** Walking: px/frame along the feet line. */
 const SPEED = 2.0;
+/** The chef cooks 25% faster: a seated Sorrel's holds fill CHEF_HOLD frames for every frame held (a ride-along friend holds nothing). */
+const CHEF_ID = 'sorrel', CHEF_HOLD = 1.25;
 /** The steps' lengths (docs/GDD.md section 6): taps on the board, frames of holding everywhere else; the fridge
  *  takes a tap per ingredient the order wants. */
 const CHOP_HITS = 10;
@@ -690,10 +692,14 @@ export class KitchenScreen extends Screen {
         // is done the frame it fills. Nothing is lost by letting go.
         const need = station === MIX ? MIX_FRAMES : station === STOVE ? STOVE_FRAMES : OVEN_FRAMES;
         if (held) {
-          st.phase = 1; st.t++; s.facing = 1; s.actT = 2;
+          const before = st.t;
+          st.phase = 1; st.t += s.def.id === CHEF_ID ? CHEF_HOLD : 1; s.facing = 1; s.actT = 2;
           if (station === OVEN_S) this.ovenGlow = 60;
-          // the station's own noise, replayed on a period of its own while the button is down
-          if (st.t % HOLD_SOUND_EVERY[station] === 1) audio.play(HOLD_SOUND[station]);
+          // the station's own noise, replayed on a period of its own while the button is down: it sounds each time the
+          // count passes 1, 1 + period, 1 + 2 * period ... A whole-frame count passes those on the frames `st.t % period === 1`
+          // did, and a chef's 1.25 steps pass them too, where an exact-multiple test would skip them
+          const period = HOLD_SOUND_EVERY[station];
+          if (Math.floor((before - 1) / period) !== Math.floor((st.t - 1) / period)) audio.play(HOLD_SOUND[station]);
           if (st.t >= need) this.completeStep(2, s);
         } else st.phase = 0;
         break;

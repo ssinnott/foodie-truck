@@ -111,6 +111,41 @@ async function nudge(api, page) {
 }
 
 export const SCENARIOS = {
+  // the hungry one gulps one pick in twenty (GULP_CHANCE): a gulp is never banked (so the party's total is exactly what
+  // the baskets hold), only Barley's seat gulps, and gulps stay rare. This run gives Barley a handful of picks, too few
+  // for a 5% roll to show a gulp reliably, so it does not assert that one happens: hungryPond (sixty fish) is the test
+  // that the gulp fires
+  async hungry(server) {
+    await withPage(server, 'skipTo=orchard&critters=0,1,2,3&order=1', async (api, page) => {
+      await api.step(2);
+      await page.evaluate(() => { window.__game.game.screen.target = 999; });   // a long round: the test needs many catches
+      for (let i = 0; i < 60; i++) {
+        await api.hold(0, { left: i % 2 === 0, right: i % 2 === 1 });
+        await api.step(120);
+        await api.release(0);
+      }
+      const r = await page.evaluate(() => { const sc = window.__game.game.screen; return { total: sc.total, seats: sc.seats.map((s) => ({ count: s.count, gulped: s.gulped })) }; });
+      const baskets = r.seats.reduce((a, s) => a + s.count, 0), b = r.seats[0];
+      assert(r.total === baskets, `the party's total is what the baskets hold: gulps are never banked (total ${r.total}, baskets ${baskets})`);
+      assert(r.seats.slice(1).every((s) => s.gulped === 0), `only Barley's seat gulps (gulped ${JSON.stringify(r.seats.map((s) => s.gulped))})`);
+      assert(b.count + b.gulped > 0 && b.gulped * 4 < b.count + b.gulped, `Barley's picks stay mostly banked (${b.gulped} gulped of ${b.count + b.gulped})`);
+    });
+  },
+  // the forager walks 1.25 times the stick's pace in every gather game (FORAGER_WALK): the same 40 frames right by
+  // Cress in seat 0 cover 1.25 times the ground Barley covers from the same seat
+  async forager(server) {
+    const walked = {};
+    for (const [critters, who] of [['3,0,1,2', 'Cress'], ['0,1,2,3', 'Barley']]) {
+      await withPage(server, `skipTo=orchard&critters=${critters}&order=1`, async (api) => {
+        await api.step(2);
+        const x0 = (await api.summary()).top.seats[0][1];
+        await api.hold(0, { right: true }); await api.step(40); await api.release(0);
+        walked[who] = (await api.summary()).top.seats[0][1] - x0;
+      });
+    }
+    assert(walked.Barley > 60, `Barley walks the orchard at the stick's pace (${walked.Barley} px in 40 frames)`);
+    assert(Math.abs(walked.Cress - 1.25 * walked.Barley) <= 2, `Cress walks 1.25 times as far as Barley (${walked.Cress} px vs ${walked.Barley} px)`);
+  },
   async orchard(server) {
     // ?order=1 is ORDERS[0], APPLE PIE: apple 4 + egg 2, so `apple` is a real line on the ticket. The orchard now drops
     // pears, peaches and avocados too, and gathers whichever the day is short of (game/run.js gatherTarget); a seed

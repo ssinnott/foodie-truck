@@ -58,7 +58,7 @@ async function stage(api, page, ci, pouring, clog = false) {
     s.x = sc.summary().chutes[i][3]; s.facing = 1; s.moving = false;
     s.fill = 0; s.bumpT = 0; s.tieT = 0; s.chute = -1;
     sc.target = Math.max(sc.target, sc.total + 4); sc.setTotal(sc.total);
-    return { count: s.count, total: sc.total, target: sc.target };
+    return { count: s.count, gulped: s.gulped, total: sc.total, target: sc.target };
   }, [ci, pouring, clog, CLOG_FRAMES]);
   await api.step(1);
   return before;
@@ -68,7 +68,7 @@ async function stage(api, page, ci, pouring, clog = false) {
 function seatOf(page, i) {
   return page.evaluate((k) => {
     const sc = window.__game.game.screen, s = sc.seats[k];
-    return { x: s.x, fill: s.fill, count: s.count, bumpT: s.bumpT, tieT: s.tieT, anim: s.anim, chute: s.chute, total: sc.total, tied: sc.tied, sneezeT: s.sneezeT, sneezes: sc.sneezes, clogT: s.clogT, clogs: sc.clogs, spills: sc.spills };
+    return { x: s.x, fill: s.fill, count: s.count, gulped: s.gulped, bumpT: s.bumpT, tieT: s.tieT, anim: s.anim, chute: s.chute, total: sc.total, tied: sc.tied, sneezeT: s.sneezeT, sneezes: sc.sneezes, clogT: s.clogT, clogs: sc.clogs, spills: sc.spills };
   }, i);
 }
 const seat0 = (page) => seatOf(page, 0);
@@ -151,7 +151,8 @@ export const SCENARIOS = {
    *              rice visit. Writes mill-sneeze-ah, -ahah, -achoo, -dazed, -rice-achoo, -rice-dazed.
    */
   async millSneeze(server) {
-    await withPage(server, 'skipTo=mill&critters=0,1&order=4', async (api, page) => {
+    // Sorrel holds the sack: the sneeze follows a tie that banks, and seat 0 as Barley could gulp that tie
+    await withPage(server, 'skipTo=mill&critters=1,0&order=4', async (api, page) => {
       await waitOutCard(api, page);
       const tied = await sneezeOn(api, page);
       assert(tied.count === 1 && tied.tieT > 0, `the sack tied (count ${tied.count}, tieT ${tied.tieT})`);
@@ -393,8 +394,9 @@ export const SCENARIOS = {
       // --- part three: the brim ties the sack off by itself, with the button still down
       await api.step(TO_FULL);
       const tied = await seat0(page);
-      assert(tied.count === before.count + 1, `reaching the brim ties the sack off without a release (seat 0 ${before.count} -> ${tied.count})`);
-      assert(tied.total === before.total + 1, `and the party's total went up with it (${before.total} -> ${tied.total})`);
+      // seat 0 is Barley here, who gulps one tie in twenty: a sack is banked (count and total up) or gulped (neither)
+      assert(tied.count + tied.gulped === before.count + before.gulped + 1, `reaching the brim ties the sack off without a release, banked or gulped (seat 0 ${before.count} -> ${tied.count}, gulped ${tied.gulped})`);
+      assert(tied.total === before.total + (tied.count - before.count), `and the party's total goes up only when it is banked (${before.total} -> ${tied.total})`);
       assert(tied.fill === 0 && tied.tieT > 0 && tied.anim === 'tie', `a fresh empty sack and the tie beat (fill ${tied.fill}, tieT ${tied.tieT}, anim '${tied.anim}')`);
       await page.evaluate(() => { window.__game.game.screen.seats[0].sneezeDue = 0; });   // the sneeze has a scenario of its own
       await api.release(0);

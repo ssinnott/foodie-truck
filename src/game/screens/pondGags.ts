@@ -42,7 +42,7 @@ import {
 } from '../../art/fishing.ts';
 import { BENT_ROD, bentTip, drawFishShadow, drawBigTrout, drawLilyHat, drawBubbles, gushReach, drawGush, drawPuddle, drawTinyFish } from '../../art/pondGags.ts';
 import { drawFood } from '../../art/food.ts';
-import { seatAnim } from '../minigame.ts';
+import { gulp, gulps, seatAnim } from '../minigame.ts';
 import { gagBurst, gagBubble, gagBump, overHead, coat, COAT } from '../gags.ts';
 import type { PondScreen, PondSeat } from './pond.ts';
 
@@ -299,12 +299,13 @@ function splash(sc: PondScreen, s: PondSeat): void {
 
 /** The fish goes in the bucket: +1, the fish counts, the rim takes the hit, and the critter cheers up. */
 function landBig(sc: PondScreen, s: PondSeat): void {
-  s.count++; sc.setTotal(sc.total + 1);
   s.landT = LAND_FRAMES;
   const bx = s.x + BUCKET_DX + BUCKET_MID, by = s.y - BUCKET_TOP;
+  seatAnim(s, 'drip', true);
+  if (gulps(s)) { gulp(sc.game, s, bx, by - 16); return; }   // the hungry one's gulp: no bucket, no +1
+  s.count++; sc.setTotal(sc.total + 1);
   ringAt(bx, by, 4, 14, UI.cream, 2, 14, true, true);
   floatText(bx, by - 16, PLUS_ONE, UI.cream, 1, true);
-  seatAnim(s, 'drip', true);
   sc.game.audio.play('pond_plonk');
 }
 

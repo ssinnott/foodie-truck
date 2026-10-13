@@ -30,7 +30,8 @@ const PUMP_PER_PAIL = 12;
 /** ?order=5 is ORDERS[4], CUSTARD TART: milk 3 + egg 2, so `milk` is a real line on the ticket. */
 const BOOT = 'skipTo=dairy&critters=0,1,2,3&order=5';
 /** ?recipes=8 fixes the menu to ORDERS[8], PEACH COBBLER: peach 3 + butter 2, so the dairy's visit is for butter. */
-const BOOT_BUTTER = 'skipTo=dairy&critters=0,1&recipes=8';
+// no Barley in the butter party: his one-in-twenty gulp of the only pat would leave the ending with nothing banked
+const BOOT_BUTTER = 'skipTo=dairy&critters=1,2&recipes=8';
 const CHURN_PRESSES = 12;
 /** The frame of the squirt the pump shot is taken on: the jet is still up and the ring has opened. */
 const PUMP_SHOT = 3;
@@ -59,7 +60,7 @@ function seat0(page) {
   return page.evaluate(() => {
     const sc = window.__game.game.screen, s = sc.seats[0];
     return {
-      fill: s.fill, count: s.count, bumpT: s.bumpT, anim: s.anim, total: sc.total, phase: s.phase, churn: s.churn, facing: s.facing,
+      fill: s.fill, count: s.count, gulped: s.gulped, bumpT: s.bumpT, anim: s.anim, total: sc.total, phase: s.phase, churn: s.churn, facing: s.facing,
       jokeIn: s.jokeIn, lickT: s.lickT, swishT: s.swishT, licks: sc.licks, swishes: sc.swishes,
     };
   });
@@ -105,8 +106,9 @@ export const SCENARIOS = {
         if (i < PUMP_PER_PAIL - 1) assert(mid.fill === i + 1, `tap ${i + 1} is a squirt: the pail is ${i + 1}/${PUMP_PER_PAIL} (fill ${mid.fill})`);
       }
       const filled = await seat0(page);
-      assert(filled.count === before.count + 1, `twelve taps bank a pail (seat 0 ${before.count} -> ${filled.count})`);
-      assert(filled.total === before.total + 1, `and the party's total goes up with it (${before.total} -> ${filled.total})`);
+      // seat 0 is Barley, who gulps one pail in twenty: a full pail is banked (count and total up) or gulped (neither)
+      assert(filled.count + filled.gulped === before.count + before.gulped + 1, `twelve taps bank a pail or Barley gulps it (seat 0 ${before.count} -> ${filled.count}, gulped ${filled.gulped})`);
+      assert(filled.total === before.total + (filled.count - before.count), `and the party's total goes up only when it is banked (${before.total} -> ${filled.total})`);
       assert(filled.fill === 0, `a fresh pail slides in (fill ${filled.fill})`);
       const after = await api.summary();
       assert(JSON.stringify(after.top.seats.slice(1).map((s) => s.count)) === others0, 'the other seats, with no input, milked nothing');
@@ -115,7 +117,8 @@ export const SCENARIOS = {
       const slowBefore = await seat0(page);
       for (let i = 0; i < PUMP_PER_PAIL; i++) await api.press(0, { action: true }, 1, 29);
       const slow = await seat0(page);
-      assert(slow.count === slowBefore.count + 1 && slow.fill === 0, `twelve slow taps fill a pail too (seat 0 ${slowBefore.count} -> ${slow.count}, fill ${slow.fill})`);
+      // seat 0 is Barley here, who gulps one pail in twenty (GULP_CHANCE): a full pail is banked or gulped, never both
+      assert(slow.count + slow.gulped === slowBefore.count + slowBefore.gulped + 1 && slow.fill === 0, `twelve slow taps fill a pail too, banked or gulped (seat 0 ${slowBefore.count} -> ${slow.count}, gulped ${slow.gulped}, fill ${slow.fill})`);
 
       // --- nothing else does anything: `alt` is not a pump, and no cow ever kicks
       // forty taps are three more pails: push the finish line well out so the mash cannot end the round under the assert
@@ -127,7 +130,8 @@ export const SCENARIOS = {
       for (let i = 0; i < 40; i++) await api.press(0, { action: true }, 1, 2);
       const mashed = await seat0(page);
       assert(mashed.bumpT === 0 && mashed.anim !== 'bump', `forty taps in a row and nothing kicks (bumpT ${mashed.bumpT}, anim '${mashed.anim}')`);
-      assert(mashed.count === altBefore.count + Math.floor((altBefore.fill + 40) / PUMP_PER_PAIL), `every one of them counted (seat 0 ${altBefore.count} -> ${mashed.count})`);
+      // seat 0 is Barley: each full pail is banked or gulped, so count the two together
+      assert(mashed.count + mashed.gulped === altBefore.count + altBefore.gulped + Math.floor((altBefore.fill + 40) / PUMP_PER_PAIL), `every one of them banked or gulped (seat 0 ${altBefore.count} -> ${mashed.count}, gulped ${mashed.gulped})`);
       assert(mashed.licks === 0 && mashed.swishes === 0 && mashed.lickT === 0 && mashed.swishT === 0, `held off, no joke played in the rules test (licks ${mashed.licks}, swishes ${mashed.swishes})`);
 
       // --- the ending: bring the finish line down to the party's total (there is no clock to force), expect the sign,

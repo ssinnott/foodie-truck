@@ -46,7 +46,7 @@ import {
 } from '../../art/gardenProps.ts';
 import { GAG_ANIMS, bittenRoot } from '../../art/gardenGags.ts';
 import {
-  makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
+  makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import { clearGags, stepGags, drawGags, gagShakeY } from '../gags.ts';
 import {
@@ -465,7 +465,7 @@ export class GardenScreen extends Screen {
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x += ax * SPEED;
+        s.x += ax * SPEED * s.walk;
         if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
       }
       if (input.pressed(s.slot, 'action')) this.tryGrip(s);
@@ -527,11 +527,12 @@ export class GardenScreen extends Screen {
     this.openHole(t.x);
     // a joke plays its own bang, and its root is counted when it lands in the trug (screens/gardenGags.ts)
     if (t.rocket || t.whopper) { startGag(this, s, t); return; }
-    s.count++; this.setTotal(this.total + 1);
     s.t = PULL_FRAMES; seatAnim(s, 'pullOut', true);
+    burstCrumbs(t.x, ROOT_Y - 2, ROOT_Y + 6, CROP.soil, 8, true);
+    if (gulps(s)) { gulp(this.game, s, t.x + s.facing * 14, ROOT_Y - 54); return; }
+    s.count++; this.setTotal(this.total + 1);
     const fl = this.flights[this.flightCursor]; this.flightCursor = (this.flightCursor + 1) % this.flights.length;
     fl.t = 0; fl.x0 = t.x; fl.y0 = ROOT_Y - 12; fl.seat = s.index;
-    burstCrumbs(t.x, ROOT_Y - 2, ROOT_Y + 6, CROP.soil, 8, true);
     ringAt(t.x, ROOT_Y - 4, 3, 13, UI.cream, 2, 12, true, true);
     burstSparkle(t.x, ROOT_Y - 18, 4, SIGNAL.garden, true);
     floatText(t.x + s.facing * 14, ROOT_Y - 54, PLUS_ONE, s.colour, 1, true);

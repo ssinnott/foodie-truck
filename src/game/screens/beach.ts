@@ -42,7 +42,7 @@ import type { Point } from '../../lib/art/rigParts.ts';
 import { beachLayers, ROWS, GLINTS, BEACH } from '../../art/backgrounds/beach.ts';
 import { BEACH_ANIMS, drawCrab, drawWeed, drawCockle, drawPan, drawBurrow, drawCatchSpark, drawFlyingCatch } from '../../art/beachProps.ts';
 import {
-  makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
+  makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates,
 } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { clearGags, stepGags, drawGags, gagShakeY } from '../gags.ts';
@@ -373,7 +373,7 @@ export class BeachScreen extends Screen {
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x = this.clampX(s.x + ax * SPEED);
+        s.x = this.clampX(s.x + ax * SPEED * s.walk);
       }
       if (input.pressed(s.slot, 'action')) this.tryGrab(s);
       if (s.pounceT === 0 && s.pinchT === 0 && s.snatchT === 0) seatAnim(s, s.moving ? 'carryWalk' : 'carry');
@@ -412,9 +412,10 @@ export class BeachScreen extends Screen {
     s.pounceT = POUNCE_FRAMES; s.moving = false;
     s.facing = t.x >= s.x ? 1 : -1;
     seatAnim(s, 'pounce', true);
+    burstDust(t.x, QUARRY_Y, 4, 1.4, true);
+    if (gulps(s)) { gulp(this.game, s, t.x, QUARRY_Y - 30); return; }
     const h = this.hops[this.hopCursor]; this.hopCursor = (this.hopCursor + 1) % this.hops.length;
     h.t = 0; h.x0 = t.x; h.y0 = QUARRY_Y - 8; h.seat = s.index;
-    burstDust(t.x, QUARRY_Y, 4, 1.4, true);
     this.bank(s, t.x, QUARRY_Y - 4);
   }
 

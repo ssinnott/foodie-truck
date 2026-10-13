@@ -29,7 +29,7 @@ import { friendsOf } from '../friends.ts';
 import type { FriendJob } from '../friends.ts';
 import { clearWeek } from '../week.ts';
 import { freshSeed } from '../../lib/engine/rng.ts';
-import { CARD_H, drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.ts';
+import { drawSign, drawStamp, drawHint, drawDim, drawTicket } from '../ui.ts';
 import { drawLane, drawPorthole, PORT_R } from '../../art/logo.ts';
 import { TRUCK } from '../../art/truck.ts';
 
@@ -37,10 +37,11 @@ const R = Math.round, TAU = Math.PI * 2;
 /**
  * Card row: 5 x 116 with 8 px gaps is 612 of the 640, centred by cardX. The kit's 140 px card (game/ui.ts
  * CARD_W, which the day board still pins up three of) fitted four across; the fifth cast member does not, so
- * this screen cuts its own recipe cards a little narrower - the porthole (94 px with its doily) and the pip bars
- * still fit with room either side - and keeps the kit's height.
+ * this screen cuts its own recipe cards a little narrower - the porthole (94 px with its doily) still fits with room
+ * either side. The stat rows are gone, so the card stops at its rule (150 px, not the kit's 200) and the row sits
+ * centred between the header sign and the bio strip.
  */
-const CARD_W = 116, CARD_GAP = 8, CARD_Y = 52;
+const CARD_W = 116, CARD_H = 150, CARD_GAP = 8, CARD_Y = 80;
 /** Left edge of card `i` in a centred row of `n`. */
 function cardX(i: number, n: number): number { const total = n * CARD_W + (n - 1) * CARD_GAP; return R((VIEW_W - total) / 2) + i * (CARD_W + CARD_GAP); }
 /** Where the cursor ring sits on a card, in card space: the top-left corner, clear of the bust. */
@@ -52,24 +53,13 @@ const RING_X = 16, RING_Y = 18;
  */
 const PORT_CY = 58, BUST_SCALE = 1.28, BUST_MARGIN = 4;
 /** Text rows in card space. */
-const NAME_Y = 104, ROLE_Y = 124, RULE_Y = 136, STAT_Y = 148, STAT_PITCH = 15;
-/** Five pips per stat, 6 px each at a 9 px pitch: 42 px of bar, right-aligned in the card. */
-const PIP_X = 66, PIP_N = 5, PIP_W = 6, PIP_PITCH = 9;
+const NAME_Y = 104, ROLE_Y = 124, RULE_Y = 136;
 /**
- * The index-card furniture that makes these five read as RECIPE CARDS rather than stat blocks: a torn top edge
- * (the same 2x2 ink notches every 6 px as the paper ticket in game/ui.js), a beetroot margin rule down the left
- * and a ruled line under every written row. Beetroot is the truck's own body tone, not the orchard's apple red.
+ * The index-card furniture that makes these five read as RECIPE CARDS: a torn top edge (the same 2x2 ink notches
+ * every 6 px as the paper ticket in game/ui.js) and a beetroot margin rule down the left. Beetroot is the truck's own
+ * body tone, not the orchard's apple red.
  */
-const MARGIN_X = 7, TEXT_X = 13, NOTCH_PITCH = 6;
-const STAT_LABELS = ['SPEED', 'KITCHEN', 'FORAGE'];
-/**
- * Role flavour as five-pip bars (docs/GDD.md section 2: roles are flavour and small differences, never gates).
- * The hungry one carries, the chef cooks, the forager is fastest in the mini-games (GDD section 2 puts SPEED on
- * the forager, not the driver), the head chef is steady everywhere and best at the pass - and every bar is 2..5
- * so no card reads as the wrong pick.
- */
-const STATS = { barley: [2, 3, 4], sorrel: [3, 5, 2], chicory: [4, 2, 3], cress: [5, 3, 5], rowan: [3, 5, 3] };
-const STATS_DEFAULT = [3, 3, 3];
+const MARGIN_X = 7, NOTCH_PITCH = 6;
 /** Slot numbers as strings, so the cursor's disc never builds one per frame. */
 const SLOT_TEXT = ['1', '2', '3', '4'];
 /** Header band captions, built here so draw() never joins a string. */
@@ -79,9 +69,9 @@ const SEAT = 0;
 /** The stamp's arrival, and how long the crew hold their READY before the fade. */
 const STAMP_FRAMES = 24, START_HOLD = 30;
 /**
- * Where the stamp lands, in card space: the band between the NAME and the first ruled row, so it crosses the
- * role line and the rule and nothing else. It used to land on the name row - a stamped card then told you
- * neither who was picked nor what the stamp said - and across the pip rows its ink broke up over the pips.
+ * Where the stamp lands, in card space: just under the NAME, across the role line and the rule, and a little over the
+ * card's foot like a rubber stamp. It used to land on the name row - a stamped card then told you neither who was
+ * picked nor what the stamp said.
  */
 const STAMP_ROW = 142;
 /**
@@ -130,8 +120,6 @@ export interface SelectCard {
   player: AnimPlayer;
   /** The first idle frame's pose, which art/portraits.ts anchors the bust's head on; null for a rig without one. */
   anchor: PartialPose | null;
-  /** The three pip counts in STAT_LABELS order (STATS, or STATS_DEFAULT for a card with no entry). */
-  stats: number[];
   /** Per card of the row: the job its cast member does riding along with THIS card's pick, or '' when they do not
    *  come (game/friends.ts friendsOf). Indexed like `cards`. */
   jobs: (FriendJob | '')[];
@@ -171,7 +159,7 @@ export class SelectScreen extends Screen {
       const player = new AnimPlayer(def.anims);
       player.play('idle');
       for (let k = 0; k < i * 11; k++) player.tick();
-      return { def, rigs: [critterRig(def, -1), critterRig(def, SEAT)], player, anchor: idlePoseOf(def), stats: STATS[def.id] || STATS_DEFAULT, jobs: [], friendsText: '' };
+      return { def, rigs: [critterRig(def, -1), critterRig(def, SEAT)], player, anchor: idlePoseOf(def), jobs: [], friendsText: '' };
     });
     // who rides along with each pick, worked out once: the cards they stand on, the job each does, and the strip's row
     for (const c of this.cards) {
@@ -297,24 +285,12 @@ export class SelectScreen extends Screen {
     ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, PORT_R, 0, TAU); ctx.clip();
     drawBust(ctx, c.rigs[slot >= 0 ? 1 : 0], c.player.pose, c.anchor, cx - PORT_R, cy - PORT_R, PORT_R * 2, PORT_R * 2, BUST_SCALE, this.bustOpts);
     ctx.restore();
-    // name, role, and the three pip bars
+    // name, role, and the rule under them
     drawTextOutlined(ctx, c.def.name, cx, y + NAME_Y, { size: 2, color: UI.ink, outline: UI.paperDark, thickness: 1, align: 'center', shadow: false });
     drawText(ctx, c.def.role, cx, y + ROLE_Y, { size: 1, color: UI.wood, align: 'center', shadow: false });
     ctx.fillStyle = UI.paperLine; ctx.fillRect(x + 8, y + RULE_Y, CARD_W - 16, 1);
-    // the margin rule and the ruled lines the rows are written on
+    // the beetroot margin rule down the left of the card
     ctx.fillStyle = TRUCK.bodyHi; ctx.fillRect(x + MARGIN_X, y + 18, 2, CARD_H - 24);
-    for (let k = 0; k < STAT_LABELS.length; k++) {
-      const ry = y + STAT_Y + k * STAT_PITCH;
-      ctx.fillStyle = UI.paperLine; ctx.fillRect(x + TEXT_X - 1, ry + 9, CARD_W - TEXT_X - 8, 1);
-      drawText(ctx, STAT_LABELS[k], x + TEXT_X, ry, { size: 1, color: UI.ink, shadow: false });
-      for (let p = 0; p < PIP_N; p++) {
-        const px = x + PIP_X + p * PIP_PITCH;
-        // filled pips are solid wood, empty ones are hollow paper: a squint counts them without reading them
-        ctx.fillStyle = UI.ink; ctx.fillRect(px - 1, ry - 1, PIP_W + 2, PIP_W + 2);
-        ctx.fillStyle = p < c.stats[k] ? UI.wood : UI.paper;
-        ctx.fillRect(px, ry, PIP_W, PIP_W);
-      }
-    }
   }
 
   override draw(ctx: CanvasRenderingContext2D) {

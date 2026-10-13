@@ -32,7 +32,7 @@ import { PLACES } from '../../content/places.ts';
 import { gatherTarget } from '../run.ts';
 import { holtLayers, HOLT, ROWS, TREE_X, CRATE_X } from '../../art/backgrounds/holt.ts';
 import { drawNutTree, drawNutSpark, drawNutCrate, HOLT_ANIMS, TREE_Y, TRUNK_H } from '../../art/holtProps.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { drawControlCard } from '../controlcard.ts';
 import type { CardScheme } from '../controlcard.ts';
@@ -217,9 +217,11 @@ export class HoltScreen extends Screen {
   dropNut(i: number, t: Tree): void {
     if (this.total >= this.target) { t.shower = 0; return; }
     const s = this.seats[t.owner];
+    const x0 = TREE_X[i] + (((t.shower * 7) % 5) - 2) * 8, y0 = TREE_Y - TRUNK_H - 10;
+    if (gulps(s)) { gulp(this.game, s, x0, y0 - 8); return; }
     s.count++; this.setTotal(this.total + 1);
     const fl = this.flights[this.flightCursor]; this.flightCursor = (this.flightCursor + 1) % this.flights.length;
-    fl.t = 0; fl.x0 = TREE_X[i] + (((t.shower * 7) % 5) - 2) * 8; fl.y0 = TREE_Y - TRUNK_H - 10; fl.seat = s.index;
+    fl.t = 0; fl.x0 = x0; fl.y0 = y0; fl.seat = s.index;
     floatText(fl.x0, fl.y0 - 8, PLUS_ONE, s.colour, 1, true);
     this.game.audio.play('nut');
   }
@@ -241,7 +243,7 @@ export class HoltScreen extends Screen {
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x += ax * SPEED;
+        s.x += ax * SPEED * s.walk;
         if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
       }
       seatAnim(s, s.moving ? 'carryWalk' : 'carry');

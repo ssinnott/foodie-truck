@@ -38,7 +38,7 @@ import { F } from '../../content/critters/common.ts';
 import { INGREDIENTS } from '../../content/recipes.ts';
 import { hiveLayers, HIVE, ROWS, SKEP_X, CRATE_X } from '../../art/backgrounds/hive.ts';
 import { drawSkep, drawOoze, drawSwarm, drawHoneyCrate, drawHoneyStrand, HONEY_DIPPER, SWARM_SHAPE, SWARM_SPIN, SKEP_H } from '../../art/hiveProps.ts';
-import { makeSeats, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
+import { makeSeats, gulp, gulps, seatAnim, drawSeatPlate, makeClock, tickClock, endRound, roundOver, drawClock, drawEndSign, PLATES, resetPlates } from '../minigame.ts';
 import type { Clock, Seat } from '../minigame.ts';
 import { clearGags, stepGags, drawGags, gagShakeY, COAT } from '../gags.ts';
 import {
@@ -343,7 +343,7 @@ export class HiveScreen extends Screen {
       s.moving = ax !== 0;
       if (s.moving) {
         s.facing = ax < 0 ? -1 : 1;
-        s.x += ax * SPEED;
+        s.x += ax * SPEED * s.walk;
         if (s.x < X_MIN) s.x = X_MIN; else if (s.x > X_MAX) s.x = X_MAX;
       }
       seatAnim(s, s.moving ? 'creep' : 'carry');
@@ -391,14 +391,18 @@ export class HiveScreen extends Screen {
   landDip(s: HiveSeat): void {
     const i = s.dipSkep, k = this.skeps[i], x = SKEP_X[i], y = ROWS.bench - 8;
     k.refill = REFILL_FRAMES; k.held = 0;
-    s.count++; this.setTotal(this.total + 1);
     s.dipT = 0; s.dipSkep = -1;
-    ringAt(x, y, 3, 12, UI.cream, 2, 12, false, true);
-    floatText(x, y - 14, PLUS_ONE, s.colour, 1, true);
-    burstSparkle(CRATE_X, CRATE_Y - 14, 3, UI.cream, true);
+    // a gulped dip skips the jar and the +1, but an overfull skep still burps its honey over the dipper
+    if (gulps(s)) gulp(this.game, s, x, y - 14);
+    else {
+      s.count++; this.setTotal(this.total + 1);
+      ringAt(x, y, 3, 12, UI.cream, 2, 12, false, true);
+      floatText(x, y - 14, PLUS_ONE, s.colour, 1, true);
+      burstSparkle(CRATE_X, CRATE_Y - 14, 3, UI.cream, true);
+      this.game.audio.play('jar');
+    }
     if (k.over) { k.over = 0; floodLands(this, s, i); this.game.audio.play('jar', JAR_AFTER_GLOOP); return; }
     seatAnim(s, 'carry', true);
-    this.game.audio.play('jar');
   }
 
   setTotal(n: number): void { this.total = n; this.countStr = n + '/' + this.target; }
