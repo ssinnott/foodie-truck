@@ -118,7 +118,7 @@ interface Quarry {
 }
 const QUARRY: Readonly<Record<string, Quarry>> = Object.freeze({
   crab: { speed: 1.2, dart: 2.8, runMin: 40, runMax: 110, stopMin: 24, stopMax: 60, life: 720, spawnMin: 50, spawnMax: 100, seed: 3, crust: 0, burrows: true },
-  seaweed: { speed: 0.3, dart: 0, runMin: 80, runMax: 200, stopMin: 60, stopMax: 140, life: 1500, spawnMin: 60, spawnMax: 120, seed: 3, crust: 0, burrows: false },
+  seaweed: { speed: 0, dart: 0, runMin: 100000, runMax: 100000, stopMin: 60, stopMax: 140, life: 1500, spawnMin: 60, spawnMax: 120, seed: 3, crust: 0, burrows: false },
   salt: { speed: 0, dart: 0, runMin: 0, runMax: 0, stopMin: 0, stopMax: 0, life: 100000, spawnMin: 70, spawnMax: 130, seed: 2, crust: 90, burrows: false },
   /** Cockles: they hide, a bump in the wet sand that spits now and then gives one away, and they never move; one shows every 40..80 frames. */
   cockle: { speed: 0, dart: 0, runMin: 200, runMax: 400, stopMin: 100, stopMax: 200, life: 1800, spawnMin: 40, spawnMax: 80, seed: 3, crust: 0, burrows: false },
@@ -315,7 +315,7 @@ export class BeachScreen extends Screen {
 
   /**
    * One more thing onto the strand: a crab up out of a burrow at a seeded x (EMERGE, then it runs), a clump of
-   * weed already lying there and drifting, or the tide filling the first empty pan (RUN is its crust timer; STOP is
+   * weed already lying there (weed never moves), or the tide filling the first empty pan (RUN is its crust timer; STOP is
    * "crusted", the state it is taken in). Nothing happens when the pool is full or the strand has no room.
    */
   spawn(): void {

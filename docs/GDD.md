@@ -129,7 +129,7 @@ title -> select -> stage -> map -> (mini-game -> map)* ... pantry full ... -> ma
   Chapel Corner — never a landmark: the countryside is for gathering) and each customer orders one of that day's
   recipes — the menu is dealt round so every recipe is ordered at least once. The plan is drawn from its own
   seeded stream, so every online peer lays the same week out from the START packet, and it never touches the
-  gameplay rng. `RECIPES_PER_DAY` (3), `LINES_PER_DAY` (1) and `LINE_LENGTH` (6) remain the ORDINARY day's
+  gameplay rng. `RECIPES_PER_DAY` (5), `LINES_PER_DAY` (1) and `LINE_LENGTH` (6) remain the ORDINARY day's
   numbers, which is day 2's shape and what a bare `planDay()` still lays out.
 - **Order twists** (`run.ts TWISTS`). One customer in four wants their dish a little different, and the twist is on
   the board, in the bubble at the hatch and in the kitchen: **EXTRA CRUNCHY** (the CHOP step takes 15 taps instead

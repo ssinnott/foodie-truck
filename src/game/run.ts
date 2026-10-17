@@ -52,7 +52,7 @@ export const TIP_COINS: readonly number[] = Object.freeze([0, 4, 8, 12]);
  * One line a day, and a long one: the ordinary day's six dishes (the three queues of two it used to be) stand in a
  * single queue, so what the village wants is one crowd at one stop and not three small ones.
  */
-export const RECIPES_PER_DAY = 3, LINES_PER_DAY = 1, LINE_LENGTH = 6;
+export const RECIPES_PER_DAY = 5, LINES_PER_DAY = 1, LINE_LENGTH = 6;
 /** The longest line the `line` screen can lay out (screens/line.ts queueSpot: three rows of ROW_SLOTS): no day's shape may be longer. */
 export const LINE_MAX = 18;
 /**
@@ -72,9 +72,9 @@ export const LINE_MAX = 18;
 /** The ordinary day's queues, built from the constants above so those two numbers stay load-bearing. */
 const ORDINARY_LINES: readonly number[] = Object.freeze(new Array(LINES_PER_DAY).fill(LINE_LENGTH));
 export const DAY_SHAPES: readonly DayShape[] = Object.freeze([
-  Object.freeze({ name: 'OPENING DAY', lines: Object.freeze([LINE_LENGTH - 2]), recipes: 2, twists: false, weather: 'clear' }),
+  Object.freeze({ name: 'OPENING DAY', lines: Object.freeze([LINE_LENGTH - 2]), recipes: 3, twists: false, weather: 'clear' }),
   Object.freeze({ name: '', lines: ORDINARY_LINES, recipes: RECIPES_PER_DAY, twists: true, weather: 'roll' }),
-  Object.freeze({ name: 'MARKET DAY', lines: ORDINARY_LINES, recipes: 2, twists: true, weather: 'roll' }),
+  Object.freeze({ name: 'MARKET DAY', lines: ORDINARY_LINES, recipes: 3, twists: true, weather: 'roll' }),
   Object.freeze({ name: '', lines: ORDINARY_LINES, recipes: RECIPES_PER_DAY, twists: true, weather: 'wet' }),
   Object.freeze({ name: 'THE FETE', lines: Object.freeze([LINE_LENGTH + 3]), recipes: RECIPES_PER_DAY, twists: true, weather: 'clear', fromWeek: true }),
 ]) as readonly DayShape[];
@@ -165,7 +165,7 @@ function shuffle<T>(r: RngInstance, list: readonly T[]): T[] {
  * replaces the draw with exactly those recipes, so a scenario can keep a day to the landmarks it can play.
  * Every recipe on the menu is ordered at least once (the orders are the menu dealt round until the lines are full).
  */
-function planOneDay(r: RngInstance, shape: DayShape, o: { order?: number; recipes?: number[] }, weekMenu?: readonly string[]): DayPlan {
+function planOneDay(r: RngInstance, shape: DayShape, o: { order?: number; recipes?: number[] }, weekMenu?: readonly string[], seen?: readonly string[]): DayPlan {
   const n = ORDERS.length;
   const want = Math.max(1, Math.min(shape.recipes, n));
   let recipes: number[];
@@ -178,7 +178,10 @@ function planOneDay(r: RngInstance, shape: DayShape, o: { order?: number; recipe
     for (const id of weekMenu) { const i = ORDERS.findIndex((x) => x.id === id); if (i >= 0) pool.push(i); }
     recipes = shuffle(r, pool).slice(0, Math.min(want, pool.length));
   } else {
-    recipes = shuffle(r, ORDERS.map((_, i) => i)).slice(0, want);
+    // the draw favours dishes the week has not served yet, so five days show five menus and not the same few dishes
+    const fresh = shuffle(r, ORDERS.map((_, i) => i));
+    const unseen = fresh.filter((i) => !seen || seen.indexOf(ORDERS[i].id) < 0);
+    recipes = unseen.concat(fresh.filter((i) => unseen.indexOf(i) < 0)).slice(0, want);
   }
   if (o.order != null && o.order > 0) {
     const forced = (o.order - 1) % n;
@@ -272,7 +275,9 @@ export function planWeek(seed: number, o: { order?: number; recipes?: number[]; 
     const shape = DAY_SHAPES[d];
     let served: string[] | undefined;
     if (shape.fromWeek) { served = []; for (const p of week) for (const id of p.recipes) if (served.indexOf(id) < 0) served.push(id); }
-    week.push(planOneDay(r, shape, d === jump ? o : {}, served));
+    const seen: string[] = [];
+    for (const p of week) for (const id of p.recipes) seen.push(id);
+    week.push(planOneDay(r, shape, d === jump ? o : {}, served, seen));
   }
   return week;
 }

@@ -245,11 +245,15 @@ function paintWall(g, w, h, rnd, rice) {
   const W = WINDOW;
   boxShaded(g, W.x - 6, W.y - 6, W.w + 12, W.h + 14, MILL.beam, mix(MILL.beam, PLUM.deep, 0.45), INK, 2, 0.16);
   g.fillStyle = INK; g.fillRect(W.x - 2, W.y - 2, W.w + 4, W.h + 4);
+  // clipped to the opening: the round crowns of the tree line start and end past its edges, and unclipped they
+  // spilled over the ink frame, the timber reveal and the sill (the kitchen's window had the same fault)
+  g.save(); g.beginPath(); g.rect(W.x, W.y, W.w, W.h); g.clip();
   vGradient(g, W.x, W.y, W.w, W.h, [[0, mix(MILL.sky, '#FBE3C4', 0.75)], [1, MILL.sky]]);
   g.fillStyle = mix(MILL.sky, PLUM.shadow, 0.34);                                                // the lane's tree line
   for (let x = W.x - 4; x < W.x + W.w + 4; x += 9) { g.beginPath(); g.arc(x, W.y + W.h - 9, 5 + rnd() * 4, 0, TAU); g.fill(); }
   g.fillRect(W.x, W.y + W.h - 8, W.w, 8);
   g.fillStyle = mix(MILL.sky, '#8FA05A', 0.7); g.fillRect(W.x, W.y + W.h - 4, W.w, 4);            // and the meadow under it
+  g.restore();
   g.fillStyle = INK;
   g.fillRect(W.x + R(W.w / 2) - 1, W.y, 2, W.h); g.fillRect(W.x, W.y + R(W.h / 2) - 1, W.w, 2);
   boxShaded(g, W.x - 8, W.y + W.h + 4, W.w + 16, 5, MILL.beam, mix(MILL.beam, PLUM.deep, 0.45), INK, 1, 0.5);
